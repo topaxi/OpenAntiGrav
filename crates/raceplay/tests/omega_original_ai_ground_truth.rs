@@ -362,13 +362,14 @@ circuit!(
 // stall against it at 10-15 u/s, off at 8569: 92 ticks after the hit. The same hit, wall, off
 // chain, with a longer stall, so this circuit's window is 100 ticks.
 //
-// **Judged on [`crate::perturb::GATE`], at least two of five.** One run here is a coin: over the
-// five `GATE` scales times the nine `perturb::BOUND_OFFSETS`, 8 of 45 runs break the bounds with
-// projectiles launched along the located track's up and 8 of 45 with the craft's own
-// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`, "Turning it on"). The
-// unperturbed run is one of the misses with the track's up: slot 5 scrapes from 92 to 76 shield
-// with no wall or weapon, falls off at tick 5524 and is put back at 5602. At an 18 % miss rate two
-// of five fail to hold under 1 % of the time, and a fault that stops the field fails all five.
+// **Judged on [`crate::perturb::GATE`], at least two of five.** One run here is a draw: over the
+// five `GATE` scales times the nine `perturb::BOUND_OFFSETS` plus the other four `perturb::SCALES`,
+// 11 of 49 runs break the bounds with projectiles launched along the located track's up and 8 of
+// 49 with the craft's own (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`,
+// "Landed"). The unperturbed run is one of the misses with the track's up: slot 5 scrapes from 92
+// to 76 shield with no wall or weapon, falls off at tick 5524 and is put back at 5602. At a 22 %
+// miss rate fewer than two of five hold about 1 % of the time, and a fault that stops the field
+// fails all five.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn the_field_finishes_amphiseum_reversed() {

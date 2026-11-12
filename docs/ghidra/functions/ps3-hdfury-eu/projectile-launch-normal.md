@@ -173,21 +173,25 @@ the one draw each had:
 - **Omega, Amphiseum reversed.** Omega racing is static only (no memory readout; shadPS4's race
   frames are untrusted), so no original number exists to re-measure. Over the five
   `perturb::GATE` scales times the nine `perturb::BOUND_OFFSETS` (45 runs of `fly`'s bounds),
-  **8 of 45 miss with the craft's up and 8 of 45 with the track's up**, so the unperturbed red was
-  a coin. The test is judged on `GATE`, at least two of five hold (the Tower row's rule in
-  `vita_2048_original_ai_ground_truth`): at an 18 % miss rate that fails under 1 % of the time.
-  With the track's up, three of five hold. What slot 5 does in the unperturbed run: from tick 5452
-  it loses 92 to 76 shield in 1-point steps with no wall contact, no beam, no disruption and no
-  roll (a hull scrape in the integrator, by elimination), slows from 156 to 71, leaves the track at
-  5524 and is put back at 5602. The flag-off run's slot 5 was at the same 76 at tick 5568 before
-  its hit, so the scrape is not the law's.
+  **8 of 45 miss with the craft's up and 8 of 45 with the track's up**; with the four other
+  `perturb::SCALES` added, 8 of 49 and 11 of 49 (16 % and 22 %). The unperturbed red was a draw
+  from that. The test is judged on `GATE`, at least two of five hold (the Tower row's rule in
+  `vita_2048_original_ai_ground_truth`): at a 22 % miss rate fewer than two hold about 1 % of the
+  time. With the track's up, three of five hold. What slot 5 does in the unperturbed run with the
+  track's up: from tick 5452 it loses 92 to 76 shield in 1-point steps with no wall contact, no
+  beam, no disruption and no roll (a hull scrape in the integrator, by elimination), slows from 156
+  to 71, leaves the track at 5524 and is put back at 5602. The runs part at tick 1209, so the
+  flag-off run has no comparable moment.
 - **The field, noise method.** Distinct failing tests among the 31 `*_original_ai_ground_truth`
   tests per `OAG_PERTURB` scale (`0, 1e-3, -1e-3, 1e-4, -1e-4, 1e-5, -1e-5, 1e-6, -1e-6`): craft's
-  up `0 0 0 0 0 1 0 0 1` (median 0, max 1), track's up `1 0 2 0 3 1 2 1 0` (median 1, max 3),
-  inside the bar the Turbo's running laws were judged on (median 1, max 4). The failures are
+  up `0 0 0 0 0 1 0 0 1` (median 0, max 1), track's up `1 0 2 0 3 1 2 1 0` (median 1, max 3).
+  Comparable to the bar the Turbo's running laws were judged on (median 1, max 4), not the same
+  measure: that was 49 tests under an airborne pitch-torque perturbation, this is 31 under the
+  airborne-gravity one `perturb` applies. The failures are
   Amphiseum and Ubermall, plus `hd_original_ai_ground_truth::at_the_events_own_skill_the_reference_racer_reads_63`
-  once at `-1e-4`. **Ubermall as Phantoms** is green unperturbed but misses 8 of 45 `GATE x
-  BOUND_OFFSETS` runs with the track's up against 3 of 45 with the craft's: open, not re-based.
+  once at `-1e-4`. **Ubermall as Phantoms** is green unperturbed but misses 10 of 49 runs (the
+  45 `GATE x BOUND_OFFSETS` plus the four other scales) with the track's up against 3 of 49 with
+  the craft's: open, not re-based.
 - **HD Novice pace.** The original's number is one race (Vineta K, nine laps, run 4 of
   `scripts/rpcs3-hd-eliminator-score.py`; [eliminator-score.md](eliminator-score.md)); no second
   RPCS3 race was run. Seeds 1 to 12, laps the leading opponent completed: `4 7 7 7 7 10 10 13 13

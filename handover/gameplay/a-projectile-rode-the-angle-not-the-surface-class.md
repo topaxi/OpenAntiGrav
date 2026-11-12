@@ -42,8 +42,9 @@ nothing on the title axis; the gameplay determinism reference did not move.
   within 0.37 s; ours fly on. The missing law and its wire are
   [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md).
 - **Omega, Ubermall as Phantoms misses more often with the track's up.** Green unperturbed, but
-  over `perturb::GATE` x `perturb::BOUND_OFFSETS` it breaks its bounds in 8 of 45 runs against 3
-  of 45 with the craft's up (Amphiseum reversed: 8 and 8). Not significant on 45 runs; if it
+  over `perturb::GATE` x `perturb::BOUND_OFFSETS` plus the four other `perturb::SCALES` it breaks
+  its bounds in 10 of 49 runs against 3 of 49 with the craft's up (Amphiseum reversed: 11 and 8).
+  The next test likely to redden on an unrelated change; if it
   reddens on an unrelated change, judge it on `GATE` the way Amphiseum is
   (`omega_original_ai_ground_truth.rs`), with its own miss rate, rather than re-picking a seed.
 - **HD's own projectile update is unread.** `ps3-hdfury-eu` is imported; the
