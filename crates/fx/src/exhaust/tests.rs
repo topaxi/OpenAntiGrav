@@ -744,3 +744,27 @@ fn trail_half_width_is_the_widest_layers_runtime_width() {
         exhaust.trail_half_width()
     );
 }
+
+/// A ribbon carried with its craft keeps its shape: the point goes to its new place and the
+/// directions turn with it, the dropped tail included.
+#[test]
+fn moving_a_ribbon_rigidly_turns_its_samples_about_the_pivot() {
+    let mut e = Exhaust::new();
+    for k in 0..e.trail_samples_kept() + 1 {
+        e.push_trail(Vec3::new(10.0 + k as f32, 0.0, 0.0), Vec3::X);
+    }
+    let turn = oag_core::math::Quat::from_rotation_y(core::f32::consts::FRAC_PI_2);
+    e.move_rigidly(turn, Vec3::new(10.0, 0.0, 0.0), Vec3::new(0.0, 5.0, 0.0));
+    let (head, back) = e.newest_trail_sample().expect("a head");
+    let at = e.trail_samples_kept() as f32;
+    assert!(
+        (head - Vec3::new(0.0, 5.0, -at)).length() < 1e-4,
+        "{head:?}"
+    );
+    assert!((back - turn * Vec3::X).length() < 1e-5, "{back:?}");
+    let (tail, _) = e.trail_dropped.expect("the tail a full ring dropped");
+    assert!(
+        (tail - Vec3::new(0.0, 5.0, 0.0)).length() < 1e-4,
+        "{tail:?}"
+    );
+}
