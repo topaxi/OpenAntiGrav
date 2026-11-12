@@ -12,10 +12,13 @@ use oag_assets::Archives;
 use oag_texture::replacer::{self, Replacements};
 use oag_title::Title;
 
+/// What a [`Finder`] returns: each pack that is on, or why it would not open.
+pub type Packs = Vec<Result<Arc<Replacements>, String>>;
+
 /// Opens the packs that are on and made for `title`, on the load thread: the pack list reads
 /// each pack's `textures.ini`, which a front end has no reason to do before a race is asked for.
 #[derive(Clone)]
-pub struct Finder(pub Arc<dyn Fn(&Title) -> Vec<Result<Arc<Replacements>, String>> + Send + Sync>);
+pub struct Finder(pub Arc<dyn Fn(&Title) -> Packs + Send + Sync>);
 
 impl std::fmt::Debug for Finder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

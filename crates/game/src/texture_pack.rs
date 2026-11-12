@@ -32,7 +32,7 @@ pub fn finder(switches: &crate::settings::Mods) -> oag_raceplay::texture_pack::F
 pub fn packs_for(
     mods: &crate::mods::Mods,
     title: &oag_title::Title,
-) -> Vec<Result<Arc<oag_texture::replacer::Replacements>, String>> {
+) -> oag_raceplay::texture_pack::Packs {
     mods.player_for(title)
         .filter(|module| module.manifest.texture_pack.is_some())
         .map(|module| {
