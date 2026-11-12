@@ -321,14 +321,12 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 const WEAPONS: &str = "Weapons_NGP";
 /// The bank slot `Speech_NGP` (patch `DAT_021aaa50`).
 const SPEECH: &str = "Speech_NGP";
+/// Slot 0, `Ship_NGP`, which `SoundManager_Construct` loads without a global.
+const SHIP: &str = "Ship_NGP";
 
 const fn posts(cue: &'static str, slot: &'static str) -> oag_title::WwiseCue {
     oag_title::WwiseCue::Posts { cue, slot }
 }
-
-const HELD: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
-    why: "a held loop (an `_` cue the executable keeps a handle to); the Wwise sound's loop flags are unread, so it would play once",
-};
 
 const NEVER_POSTED: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
     why: "the bank keeps a legacy event of this name, but the executable holds no such cue string and posts none",
@@ -346,6 +344,10 @@ pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
         oag_title::WwiseBank {
             slot: WEAPONS,
             entries: &[r"Data\audio\sound\English(US)\Weapons_NGP.bnk"],
+        },
+        oag_title::WwiseBank {
+            slot: SHIP,
+            entries: &[r"Data\audio\sound\Ship_NGP.bnk"],
         },
         oag_title::WwiseBank {
             slot: SPEECH,
@@ -397,18 +399,26 @@ pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
         ("SHURIKENEXPL", NEVER_POSTED),
         ("SHURIKENHIT", NEVER_POSTED),
         ("REPULSORHIT", NEVER_POSTED),
-        ("~ENGINE", HELD),
-        ("~SHIELD", HELD),
-        ("~AUTOPILOT", HELD),
-        ("~BLOWUP", HELD),
-        ("~ROCKLOCK", HELD),
-        ("~PLASMATVL", HELD),
-        ("~ROCKETTVL", HELD),
-        ("~MISSILETVL", HELD),
-        ("~QUAKETRAVEL", HELD),
-        ("~LEACHATTACH", HELD),
-        ("~SHURIKENTRAVEL", HELD),
-        ("~magstrip01", HELD),
+        (
+            "~ENGINE",
+            oag_title::WwiseCue::Unplayed {
+                why: "the engine is a set of `~Ship<class>_<band>` cues (`LowAcc_%d`, `HighDec_G_%d`, ...) picked by team and acceleration band and steered by `CONTROLLERID_*` game parameters (`0x0130b8c0`); none of it is read",
+            },
+        ),
+        // Held: the executable keeps the post's playing id and stops it with no
+        // fade on release (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
+        // "Held loops").
+        ("~SHIELD", posts("_SHIELD", WEAPONS)),
+        ("~AUTOPILOT", posts("_AUTOPILOT", WEAPONS)),
+        ("~BLOWUP", posts("_NGP_ShipDeath", WEAPONS)),
+        ("~ROCKLOCK", posts("_NGP_MissileLock", WEAPONS)),
+        ("~PLASMATVL", posts("_NGP_Plasmatvl", WEAPONS)),
+        ("~ROCKETTVL", posts("_ROCKETTVL", WEAPONS)),
+        ("~MISSILETVL", posts("_NGP_MissileTravel", WEAPONS)),
+        ("~QUAKETRAVEL", posts("_QUAKETRAVEL", WEAPONS)),
+        ("~LEACHATTACH", posts("_NGP_LEACHATTACH", WEAPONS)),
+        ("~SHURIKENTRAVEL", posts("_SHURIKENTRAVEL", WEAPONS)),
+        ("~magstrip01", posts("_magstrip01", SHIP)),
     ],
 };
 

@@ -79,6 +79,9 @@ pub struct Banks {
     /// Cues whose player version the title authors and this port cannot play:
     /// silent from the player's emitter, never the non-player event in its place.
     pub(super) player_silent: BTreeSet<Cue>,
+    /// Cues loaded from the Wwise event a title posts for them
+    /// ([`Self::load_wwise_cues`]), which [`Self::held_voices`] plays whole.
+    pub(super) wwise: BTreeSet<Cue>,
 }
 
 /// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
@@ -583,6 +586,23 @@ impl Banks {
             return Some(variants[index].voices(rng));
         }
         self.voices(cue, rng)
+    }
+
+    /// Whether any cue plays from a Wwise event.
+    #[must_use]
+    pub fn has_wwise_cues(&self) -> bool {
+        !self.wwise.is_empty()
+    }
+
+    /// Everything a held cue's Wwise event starts, its looping layers held until
+    /// the game releases it and its one-shot layers fired once; `None` for a cue
+    /// not loaded from a Wwise event, which keeps its title's own held path.
+    #[must_use]
+    pub fn held_voices(&self, cue: Cue, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        self.wwise
+            .contains(&cue)
+            .then(|| self.voices(cue, rng))
+            .flatten()
     }
 
     /// The uniform, never-repeating draw among `len` alternates of `cue`.

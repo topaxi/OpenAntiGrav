@@ -191,6 +191,12 @@ pub(super) struct SfxVoices {
     /// `oag_weapons::projectile::leach_beam`); driven directly off
     /// `race.sim.world.leach_beams` (the first locked beam) for this tick's position.
     leach_attach: Option<VoiceId>,
+    /// `~LEACHATTACH`'s voices when its event authors no loop (Omega's
+    /// `_NGP_LEACHATTACH`): held as the handle, played once, stopped on release.
+    leach_once: Vec<VoiceId>,
+    /// Whether this lock has been answered with a loopless start, so it is
+    /// not started again when the one-shot ends.
+    leach_latched: bool,
     /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
     magstrip: magstrip::Voices,
     /// The mods' own sounds that are held, as loops.
@@ -287,6 +293,8 @@ impl Audio {
                 shuriken_travel: TravelVoices::new(),
                 quake_travel: TravelVoices::new(),
                 leach_attach: None,
+                leach_once: Vec::new(),
+                leach_latched: false,
                 magstrip: magstrip::Voices::default(),
                 mod_sounds: mod_sound::Voices::default(),
                 rng: Rng::new(SFX_SEED),
@@ -400,13 +408,19 @@ impl Audio {
                     // The alternate's own loop flag decides, not the cue's: Pulse's
                     // `~SHIELD` is two waveforms and both loop, Pure's four of which
                     // two do, so forcing `Play::looping` would loop a one-shot.
-                    if let Some(started) = banks.voices(Cue::Shield, &mut voices.rng) {
+                    // The player's own shield: Omega posts `_SHIELD_PC`, another tree.
+                    if let Some(started) = banks.voices_for(Cue::Shield, true, &mut voices.rng) {
                         voices.shield =
                             layers::start(mixer, &started, Cue::Shield.bus(), VoicePlace::DRY);
+                        log::trace!("sfx: held Shield opened, {} voice(s)", voices.shield.len());
                     }
                 }
                 (false, true) => {
                     voices.shield_open = false;
+                    log::trace!(
+                        "sfx: held Shield released, {} voice(s)",
+                        voices.shield.len()
+                    );
                     for id in voices.shield.drain(..) {
                         mixer.stop(id);
                     }
@@ -482,9 +496,13 @@ impl Audio {
             match (autopilot_active, voices.autopilot_open) {
                 (true, false) => {
                     voices.autopilot_open = true;
-                    if let Some(started) = banks.voices(Cue::Autopilot, &mut voices.rng) {
+                    if let Some(started) = banks.voices_for(Cue::Autopilot, true, &mut voices.rng) {
                         voices.autopilot =
                             layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
+                        log::trace!(
+                            "sfx: held Autopilot opened, {} voice(s)",
+                            voices.autopilot.len()
+                        );
                     }
                     if let Some(started) = banks.voices(Cue::Engaging, &mut voices.rng) {
                         let _ =
@@ -493,6 +511,10 @@ impl Audio {
                 }
                 (false, true) => {
                     voices.autopilot_open = false;
+                    log::trace!(
+                        "sfx: held Autopilot released, {} voice(s)",
+                        voices.autopilot.len()
+                    );
                     for id in voices.autopilot.drain(..) {
                         mixer.stop(id);
                     }
@@ -579,7 +601,7 @@ impl Audio {
                 .copied()
                 .find(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
-                (Some(beam), None) => {
+                (Some(beam), None) if !voices.leach_latched => {
                     if let Some(started) = banks.voices(Cue::LeachAttach, &mut voices.rng)
                         && let Some(at) = leach_attach_point(&craft, beam)
                     {
@@ -600,7 +622,13 @@ impl Audio {
                         };
                         let (held, once): (Vec<_>, Vec<_>) =
                             started.into_iter().partition(|v| v.looping);
-                        let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                        if held.is_empty() {
+                            voices.leach_once =
+                                layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                            voices.leach_latched = true;
+                        } else {
+                            let _ = layers::start(mixer, &once, Cue::LeachAttach.bus(), place);
+                        }
                         voices.leach_attach = layers::start(
                             mixer,
                             &held[..held.len().min(1)],
@@ -626,11 +654,18 @@ impl Audio {
                     }
                 }
                 (Some(_), Some(_)) => voices.leach_attach = None,
+                (Some(_), None) => {}
                 (None, Some(id)) => {
                     mixer.stop(id);
                     voices.leach_attach = None;
                 }
                 (None, None) => {}
+            }
+            if leach_locked.is_none() {
+                voices.leach_latched = false;
+                for id in voices.leach_once.drain(..) {
+                    mixer.stop(id);
+                }
             }
 
             // Every craft's engine, each off its own emitter. A craft with no pose
@@ -657,7 +692,9 @@ impl Audio {
 
             // HD's engine: same craft and ears, a table instead of a held pitch
             // law ([`xfade`]). Its layers stay resident, beyond the PSP's 32 voices.
-            if voices.xfade.iter().any(Option::is_some) {
+            // A Wwise title's held cues are layered events (a magstrip is six voices
+            // a craft): the PSP's pool would starve the grid, so it takes HD's.
+            if voices.xfade.iter().any(Option::is_some) || banks.has_wwise_cues() {
                 mixer.grow_pool(oag_audio::mixer::HD_VOICES);
             }
             for (slot, craft_xfade) in voices.xfade.iter_mut().enumerate() {
@@ -802,6 +839,10 @@ impl Audio {
                 if let Some(id) = voices.leach_attach.take() {
                     mixer.stop(id);
                 }
+                for id in voices.leach_once.drain(..) {
+                    mixer.stop(id);
+                }
+                voices.leach_latched = false;
                 voices.magstrip.stop_all(mixer);
                 voices.mod_sounds.stop_all(mixer);
                 voices.ambience.stop(mixer);
