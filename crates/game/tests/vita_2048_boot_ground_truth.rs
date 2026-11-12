@@ -290,6 +290,11 @@ fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
+    // A fresh save has Event 1 open and the rank-gated side challenges hidden;
+    // a pass on Event 1 opens Event 2 beside it.
+    frontend.refresh_campaign_progress(|name| {
+        (name == "2048 - Event 1").then_some(frontend::EarnedTier::Pass)
+    });
     assert!(drive_until(
         &mut frontend,
         &[Button::Cross],
@@ -428,27 +433,20 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
     );
 }
 
-/// The 15 events the original's "locked" option (`m_options & 0x10`) hides, off
-/// the authored flag: five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`.
+/// The 15 events the original's "locked" option (`m_options & 0x10`) hides, off the
+/// authored flag: five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
-    let gated: Vec<&str> = loaded
-        .frontend
-        .campaign_events()
-        .iter()
-        .filter(|event| event.rank_gated)
-        .map(|event| event.name.as_str())
-        .collect();
-    assert_eq!(gated.len(), 15, "{gated:?}");
-    assert!(
-        gated
-            .iter()
-            .all(|name| name.contains("P Ship Challenge") || name.contains("S Phantom Challenge")),
-        "{gated:?}"
-    );
+    let events = loaded.frontend.campaign_events();
+    let gated = events.iter().filter(|event| event.rank_gated);
+    let side =
+        |name: &str| name.contains("P Ship Challenge") || name.contains("S Phantom Challenge");
+    assert_eq!(gated.clone().count(), 15);
+    assert!(gated.clone().all(|event| side(&event.name)));
+    assert_eq!(events.iter().filter(|event| side(&event.name)).count(), 15);
 }
 
 /// The map's opening view, rendered, against frame 13
