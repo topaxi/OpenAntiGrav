@@ -931,3 +931,52 @@ fn a_stored_tier_is_read_back_by_name_against_the_campaigns_list() {
         "a list without platinum has no such tier"
     );
 }
+
+#[test]
+fn a_grids_maximum_is_what_its_events_can_award() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    // `a` awards platinum (4), `b` only gold (3).
+    assert_eq!(custom.max_points(&custom.grids[0]), 7);
+    let standard = ladder_campaign("", 3, "").unwrap();
+    assert_eq!(
+        standard.max_points(&standard.grids[0]),
+        0,
+        "no medals, no points"
+    );
+}
+
+#[test]
+fn a_launch_keeps_a_tier_by_name_and_names_the_tiers_the_title_has_no_phrase_for() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let launch = Launch {
+        records_title: custom.records_title.clone(),
+        tiers: custom.tiers.clone(),
+        words: None,
+        tier_targets: custom.events["grid0_1_1"].tier_targets.clone(),
+        ai: Ai::Original,
+        level: None,
+        pilot: None,
+    };
+    let mut records = crate::records::Store::default();
+    launch.record_result(&mut records, "grid0_1_1", Some("platinum"), None);
+    launch.record_result(&mut records, "grid0_1_1", Some("silver"), None);
+    let row = records
+        .campaign_medal(&custom.records_title, "grid0_1_1")
+        .unwrap();
+    assert_eq!(
+        row.best_tier.as_deref(),
+        Some("platinum"),
+        "a later silver is no downgrade"
+    );
+    assert_eq!(
+        row.best_medal,
+        Some(crate::records::Medal::Gold),
+        "the class that stands in"
+    );
+    assert_eq!(row.best_points, Some(4));
+    assert!(launch.own_phrase_tier("platinum").is_some());
+    assert!(
+        launch.own_phrase_tier("gold").is_none(),
+        "the title's own phrase"
+    );
+}

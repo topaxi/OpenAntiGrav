@@ -307,7 +307,7 @@ impl CampaignStage {
             let model = oag_ui_screens::campaign::GridSelection::new(
                 grids
                     .iter()
-                    .map(|grid| Self::grid_summary(grid, &campaign_title, &records, &tiers))
+                    .map(|grid| Self::grid_summary(grid, &campaign_title, &records, &tiers, custom.as_ref()))
                     .collect(),
             )
             .with_tiers(tiers.clone());
@@ -620,10 +620,17 @@ impl CampaignStage {
         title: &str,
         records: &oag_game::records::Store,
         tiers: &race_campaign::MedalTiers,
+        custom: Option<&oag_game::campaign::custom::Custom>,
     ) -> oag_ui_screens::campaign::GridSummary {
-        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, tiers, &|cell_name| {
-            campaign_tier(records.campaign_medal(title, cell_name)?, tiers)
-        })
+        let mut summary = oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+            grid,
+            tiers,
+            &|cell_name| campaign_tier(records.campaign_medal(title, cell_name)?, tiers),
+        );
+        if let Some(custom) = custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
     }
 
     /// Every grid this campaign carries - `crate::main::session::endrace`'s
@@ -699,7 +706,13 @@ impl CampaignStage {
                 let earned = grids
                     .iter()
                     .map(|grid| {
-                        Self::grid_summary(grid, &self.campaign_title, &self.records, &self.tiers).gold_medals
+                        Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ).gold_medals
                     })
                     .sum();
                 let total = grids
@@ -801,7 +814,13 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records, &self.tiers))
+                .map(|grid| Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ))
                 .collect(),
         )
         .with_per_page(1)
@@ -997,7 +1016,13 @@ impl CampaignStage {
         Some((
             which.saturating_sub(self.grid_range.start),
             self.grid_range.len(),
-            Self::grid_summary(grid, &self.campaign_title, &self.records, &self.tiers),
+            Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ),
             self.cell_art(next),
         ))
     }
@@ -1054,7 +1079,13 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records, &self.tiers))
+                .map(|grid| Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ))
                 .collect(),
         )
         .with_medal_art(self.medal_art.clone())

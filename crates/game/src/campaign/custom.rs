@@ -155,6 +155,18 @@ impl TierTargets {
         &self.flat
     }
 
+    /// The best tier this event awards at all: the first whose target is not the never value.
+    #[must_use]
+    pub fn best_awarded(&self, mode: &Mode) -> Option<Medal> {
+        let never = if matches!(mode, Mode::Zone | Mode::Elimination) {
+            i64::MAX
+        } else {
+            0
+        };
+        let at = self.flat.iter().position(|&target| target != never)?;
+        Medal::from_index(at)
+    }
+
     /// The targets of `difficulty`, best tier first.
     #[must_use]
     pub fn for_difficulty(&self, difficulty: Difficulty) -> &[i64] {
@@ -325,6 +337,22 @@ impl Custom {
             .values()
             .filter_map(|event| event.track_title.as_deref())
             .filter(move |slug| *slug != own && seen.insert(*slug))
+    }
+
+    /// The most `grid` can earn: each event's best awarded tier's points, so a grid with a
+    /// platinum on two events and none on the rest is not asked for four points everywhere.
+    #[must_use]
+    pub fn max_points(&self, grid: &Grid) -> u32 {
+        grid.cells
+            .iter()
+            .filter_map(|cell| {
+                let event = self.events.get(&cell.name)?;
+                Some(
+                    self.tiers
+                        .points(event.tier_targets.best_awarded(&cell.mode)?),
+                )
+            })
+            .sum()
     }
 
     /// How grid `which`'s unopened cells show.

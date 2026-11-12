@@ -224,3 +224,33 @@ fn a_target_row_is_tinted_with_its_tiers_colour_and_a_row_with_no_tier_is_not_dr
         "one awarded tier, one target title: {texts:?}"
     );
 }
+
+#[test]
+fn the_points_line_is_out_of_what_the_selected_event_can_award() {
+    let points = |model: &CellSelection| {
+        let layers = cell_draw_list(
+            model,
+            &cell_layout(),
+            &skin(),
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        texts(&layers)
+            .into_iter()
+            .find(|t| t.contains('/') && !t.contains(':'))
+            .cloned()
+    };
+    assert_eq!(
+        points(&timed([13_800, 15_000, 0, 0])).as_deref(),
+        Some("0/4")
+    );
+    assert_eq!(
+        points(&timed([0, 15_000, 0, 0])).as_deref(),
+        Some("0/3"),
+        "no platinum on this event: gold is the most it awards"
+    );
+}

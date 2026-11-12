@@ -317,6 +317,15 @@ pub(super) fn campaign_page(
     let medal_of = |cell_name: &str| {
         campaign_tier(records.campaign_medal(&campaign_title, cell_name)?, &tiers)
     };
+    // A mod campaign's grid asks for what its events can award, not the best tier everywhere.
+    let summarise = |grid: &oag_tables::race_campaign::Grid| {
+        let mut summary =
+            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, &tiers, &medal_of);
+        if let Some(custom) = &custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
+    };
     // [`medal_of`]'s own sibling for `oag_ui_screens::campaign::CellSelection::with_difficulty`
     // - **HD only**, per that method's own doc; read unconditionally here
     // the same way `medal_of` is, since it answers `None` on every non-HD
@@ -444,14 +453,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { tier, .. } => {
                 let mut model = oag_ui_screens::campaign::GridSelection::new(
-                    hd_grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &tiers, &medal_of,
-                            )
-                        })
-                        .collect(),
+                    hd_grids.iter().map(|grid| summarise(grid)).collect(),
                 );
                 model.set_index(tier);
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
@@ -489,11 +491,9 @@ pub(super) fn campaign_page(
                     &campaign_title,
                     true,
                 );
-                let grid_summary =
-                    grid.map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
-                        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                            grid, &tiers, &medal_of,
-                        )
+                let grid_summary = grid
+                    .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
+                        summarise(grid)
                     });
                 oag_ui_screens::campaign::hd::hd_cell_draw_list(
                     &model,
@@ -529,15 +529,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { .. } => {
                 let model = oag_ui_screens::campaign::GridSelection::new(
-                    campaign
-                        .grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &tiers, &medal_of,
-                            )
-                        })
-                        .collect(),
+                    campaign.grids.iter().map(|grid| summarise(grid)).collect(),
                 )
                 .with_medal_art(medal_art.clone())
                 .with_tiers(tiers.clone());

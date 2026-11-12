@@ -338,7 +338,10 @@ pub fn cell_draw_list(
                 model
                     .selected_medal()
                     .map_or(0, |m| model.tiers().points(m)),
-                model.tiers().best_points()
+                rows.as_ref().and_then(|rows| rows.first()).map_or_else(
+                    || model.tiers().best_points(),
+                    |(best, _)| model.tiers().points(*best),
+                )
             )),
             "Line7" if !targets_visible => Some(medal_line(
                 model.selected_medal(),

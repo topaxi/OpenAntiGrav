@@ -483,6 +483,8 @@ ids = [
     "OAG_CAMPAIGN_MODE_UNSUPPORTED",
     "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
     "OAG_CAMPAIGN_NOT_PLAYABLE",
+    # The award line for a campaign mod's own medal tier, new 2026-11-12; no translation pass yet.
+    "OAG_MEDAL_AWARD",
     # Mod campaigns (ADR-0077), new 2026-10-29; no translation pass yet.
     "OAG_CAMPAIGN_EVENT_UNAVAILABLE",
     "OAG_MENU_CAMPAIGN_PICKER",
