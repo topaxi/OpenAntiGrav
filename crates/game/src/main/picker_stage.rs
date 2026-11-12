@@ -702,10 +702,23 @@ impl PickerStage {
             .filter(|_| self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship);
         // The screen's own fit of the craft's depth, where the title has one and the
         // selected model's box is known.
-        let ship_fit = self
-            .ship_fit()
-            .map(|(fit, _)| *fit)
-            .zip(self.fit_motion.map(|player| player.framing()));
+        let frames_craft = self
+            .previews
+            .front_end
+            .is_some_and(|front_end| front_end.ship_preview_fit.is_some());
+        let (ship_fit, scale) = match self.ship_fit().zip(self.fit_motion) {
+            Some(((fit, box_z), player)) => {
+                let (framing, scale) = oag_game::preview::ship_model::placement(
+                    frames_craft,
+                    fit,
+                    space.display_aspect,
+                    box_z,
+                    player.framing(),
+                );
+                (framing.map(|framing| (*fit, framing)), scale)
+            }
+            None => (None, 1.0),
+        };
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
@@ -727,6 +740,7 @@ impl PickerStage {
                     &widget,
                     ship_fit.as_ref().map(|(fit, framing)| (fit, *framing)),
                     space,
+                    scale,
                     safe_area,
                 );
             preview.draw_matrices(
@@ -764,7 +778,11 @@ impl PickerStage {
         if self.model.kind() != picker::Kind::Ship {
             return None;
         }
-        let fit = self.previews.front_end?.ship_preview_fit.as_ref()?;
+        let front_end = self.previews.front_end?;
+        let fit = front_end
+            .ship_preview_fit
+            .as_ref()
+            .or(front_end.ship_preview_settle.as_ref())?;
         let zone_hull = matches!(
             self.sources.get(self.model.index()),
             Some(PreviewSource::Ship {

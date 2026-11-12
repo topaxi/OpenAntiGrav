@@ -390,11 +390,12 @@ the former 1.06 start and the 13-point curve are gone.
 Headless stills: `--menu-page ship-select --menu-picker-seconds T` (entry) and
 `--menu-picker-step-seconds T` (a step; the model stepped from is the entry
 above the selected one, **chosen**: the film's team order is not read).
-Omega: checked, applies, not wired. `ship_preview_hull` is `Some("ship.vex")` there
-(the hull is drawn, on a borrowed pose with no `ShipFit`), the swap's timings
-reach it, and its craft now cuts in at rest size with no settle:
-`FUN_015a3b80` eases its own targets the same way, and playing them needs
-Omega's pose read first (`team-selection-model.md`, "Omega").
+Omega: checked, applies, ported by inheritance. `ship_preview_hull` is
+`Some("ship.vex")` there (the hull is drawn, on a borrowed pose with no `ShipFit`),
+the swap's timings reach it, and `ship_preview_settle` is HD's fit, **inherited
+from HD**: the craft is scaled by the rest depth over the drawn depth on that
+pose. `FUN_015a3b80` eases its own targets the same way; its rates and pose are
+unread (`team-selection-model.md`, "Omega").
 
 **The livery row is the skin axis, as on the original.** `Classic` is the
 disc's own string id for the baseline paint (the Japanese plugin

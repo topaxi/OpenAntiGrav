@@ -280,12 +280,15 @@ first six frames).
   frame of the screen shows a smaller, steeper craft than HD's. Omega's teams definition authors
   the same `<FE length>` (Feisar `3.8`), which the reader now carries. Not followed further:
   Omega keeps the pose it borrows (`oag_omega`'s `ship_preview_pose`).
-- **Omega, the swap's settle: checked, applies, not wired.** `FUN_015a3b80` eases targets
-  `st[0x7b4..0x7b6]` into `st[0x7bb..0x7bd]` and does not reset them on a step, which is the same
-  state, so Omega's craft would start each step at the last model's depth too. Its ease rates are
-  not read, and its pose (the part that differs) is not followed, so `oag_game` plays no settle on
-  Omega: its craft cuts in at rest size after the gap (before this change it played HD's measured
-  curve from a chosen 1.06, which no Omega capture backs). `ship_preview_fit` is `None` there.
+- **Omega, the swap's settle: checked, applies, ported by inheritance.** `FUN_015a3b80` eases
+  targets `st[0x7b4..0x7b6]` into `st[0x7bb..0x7bd]` and does not reset them on a step, which is
+  the same state, so a step plays HD's law on Omega's craft: `oag_omega`'s
+  `ship_preview_settle` is `oag_hd::frontend::SHIP_FIT` (**inherited from HD**; no Omega
+  capture of a step exists), and the craft, posed from the borrowed pose, is drawn at the rest
+  depth over the drawn depth as a scale (`ship_model::settle_scale`). Test:
+  `hd_ship_preview_ground_truth::omega_plays_the_settle_on_its_borrowed_pose` (Piranha's first
+  frame 0.93 of settled, settled by 1.5 s). Still open: Omega's own ease rates and fit
+  constants (HD's are assumed), and its pose, which `ship_preview_fit` is `None` for.
 - **2048: checked, differs.** The window's `535.0` occurs nowhere in the v1.04 `eboot.elf` as a
   literal (a byte search for `00 c0 05 44`; an ARM `movw`/`movt` pair would not show, so this is
   absence of the HD constant run, not proof of no fit), its `<FE>` authors `length` beside

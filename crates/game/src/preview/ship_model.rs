@@ -33,13 +33,15 @@ pub const FAR: f32 = 1000.0;
 pub const NEAR: f32 = 1.0;
 
 /// The view-projection and model matrices of the craft on the widget's own
-/// origin and depth, for a title with no [`ShipFit`].
+/// origin and depth, for a title with no [`ShipFit`], `scale` times its rest size
+/// ([`settle_scale`]).
 #[must_use]
-pub fn matrices(widget: &ShipModel, space: Space) -> (Mat4, Mat4) {
+pub fn matrices(widget: &ShipModel, space: Space, scale: f32) -> (Mat4, Mat4) {
     let projection = camera::perspective(FOV_Y, space.display_aspect, NEAR, FAR);
     let model = Mat4::from_translation(Vec3::new(SLIDE_X, 0.0, widget.z))
         * Mat4::from_rotation_x(PITCH)
-        * Mat4::from_rotation_y(widget.rot_y);
+        * Mat4::from_rotation_y(widget.rot_y)
+        * Mat4::from_scale(Vec3::splat(scale));
     (
         Mat4::from_translation(grid_shift(widget.origin, space)) * projection,
         model,
@@ -314,8 +316,35 @@ pub fn fitted(fit: &ShipFit, framing: Framing, space: Space, safe_area: f32) -> 
     )
 }
 
+/// How large the craft is against its rest size while the fit moves it: the rest depth over
+/// the depth it is drawn at. For a title that poses the craft itself, where the fit's depth
+/// only says how far off rest the last model left it.
+#[must_use]
+pub fn settle_scale(fit: &ShipFit, aspect: f32, box_z: [f32; 2], drawn: Framing) -> f32 {
+    rest(fit, aspect, box_z).depth / drawn.depth
+}
+
+/// Where the fit's depth state puts the craft: `(Some(framing), 1.0)` for a title whose fit frames
+/// it (`frames_craft`, [`oag_title::FrontEnd::ship_preview_fit`]), `(None, scale)` for one that
+/// poses the craft itself and only plays the fit's settle on it
+/// ([`oag_title::FrontEnd::ship_preview_settle`]).
+#[must_use]
+pub fn placement(
+    frames_craft: bool,
+    fit: &ShipFit,
+    aspect: f32,
+    box_z: [f32; 2],
+    drawn: Framing,
+) -> (Option<Framing>, f32) {
+    if frames_craft {
+        (Some(drawn), 1.0)
+    } else {
+        (None, settle_scale(fit, aspect, box_z, drawn))
+    }
+}
+
 /// The matrices the screen draws its craft with: the title's fit when it has
-/// one and the framing is known, else the widget's own pose. `safe_area` is the
+/// one and the framing is known, else the widget's own pose at `scale`. `safe_area` is the
 /// title's `Safe Area Setting` as a scale, which the fit's picture takes when
 /// the widget authors `ObeySafeZone`.
 #[must_use]
@@ -323,6 +352,7 @@ pub fn framed(
     widget: &ShipModel,
     fit: Option<(&ShipFit, Framing)>,
     space: Space,
+    scale: f32,
     safe_area: f32,
 ) -> (Mat4, Mat4) {
     match fit {
@@ -334,7 +364,7 @@ pub fn framed(
             };
             fitted(fit, framing, space, safe_area)
         }
-        None => matrices(widget, space),
+        None => matrices(widget, space, scale),
     }
 }
 
@@ -354,7 +384,7 @@ mod tests {
             rot_y: -0.5,
             obey_safe_zone: true,
         };
-        let (_, model) = matrices(&widget, Space::HD);
+        let (_, model) = matrices(&widget, Space::HD, 1.0);
         let at = model.transform_point3(Vec3::ZERO);
         assert!((at.z + 24.0).abs() < 1e-4);
     }
@@ -422,8 +452,8 @@ mod tests {
             obey_safe_zone: true,
         };
         let framing = rest(&FIT, ASPECT, [-3.8, 3.8]);
-        let authored = framed(&widget, None, Space::HD, 1.0);
-        let fit = framed(&widget, Some((&FIT, framing)), Space::HD, 1.0);
+        let authored = framed(&widget, None, Space::HD, 1.0, 1.0);
+        let fit = framed(&widget, Some((&FIT, framing)), Space::HD, 1.0, 1.0);
         assert_ne!(authored, fit);
         assert_eq!(fit, fitted(&FIT, framing, Space::HD, 1.0));
     }
@@ -442,15 +472,15 @@ mod tests {
         let fit = Some((&FIT, rest(&FIT, ASPECT, [-3.8, 3.8])));
         let at =
             |matrices: (Mat4, Mat4), point: Vec3| (matrices.0 * matrices.1).project_point3(point);
-        let full = framed(&widget, fit, Space::HD, 1.0);
-        let inset = framed(&widget, fit, Space::HD, 0.96);
+        let full = framed(&widget, fit, Space::HD, 1.0, 1.0);
+        let inset = framed(&widget, fit, Space::HD, 1.0, 0.96);
         for point in [Vec3::ZERO, Vec3::new(1.0, 0.5, -3.0)] {
             let (full, inset) = (at(full, point), at(inset, point));
             assert!((inset.x - 0.96 * full.x).abs() < 1e-5);
             assert!((inset.y - 0.96 * full.y).abs() < 1e-5);
         }
         widget.obey_safe_zone = false;
-        assert_eq!(framed(&widget, fit, Space::HD, 0.96), full);
+        assert_eq!(framed(&widget, fit, Space::HD, 1.0, 0.96), full);
     }
 
     /// A step to a model that rests deeper keeps the fit's state: the target
@@ -515,5 +545,28 @@ mod tests {
         let (a, b) = (play(60), play(30));
         assert!((a.depth - b.depth).abs() < 0.05, "{a:?} against {b:?}");
         assert!(a.depth > FIT.floor + 0.05, "{a:?}");
+    }
+
+    /// A title that poses the craft itself plays the same state as a scale of that pose: a step
+    /// to a model resting farther starts the craft larger (nearer than its rest) and the scale
+    /// settles on one, where a title the fit frames takes the framing and no scale.
+    #[test]
+    fn a_title_that_poses_the_craft_plays_the_settle_as_a_scale() {
+        let (from, to) = ([-3.8, 3.8], [-4.5, 4.5]);
+        let mut motion = FitMotion::open(&FIT);
+        for _ in 0..600 {
+            motion.frame(&FIT, ASPECT, from);
+        }
+        let scale = |motion: &FitMotion| placement(false, &FIT, ASPECT, to, motion.framing()).1;
+        for _ in 0..4 {
+            motion.frame(&FIT, ASPECT, to);
+        }
+        assert!(scale(&motion) > 1.05, "{}", scale(&motion));
+        for _ in 0..80 {
+            motion.frame(&FIT, ASPECT, to);
+        }
+        assert!((scale(&motion) - 1.0).abs() < 0.005, "{}", scale(&motion));
+        let (framing, one) = placement(true, &FIT, ASPECT, to, motion.framing());
+        assert_eq!((framing, one), (Some(motion.framing()), 1.0));
     }
 }

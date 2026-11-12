@@ -40,6 +40,9 @@ pub(super) struct PreviewRequest {
     /// model, which frame the hull in place of `ship_model`'s authored pose - see
     /// [`crate::preview::ship_model::framed`].
     pub ship_fit: Option<(oag_title::ShipFit, crate::preview::ship_model::Framing)>,
+    /// How large the craft is against its rest size, for a title that poses it itself: the
+    /// fit's settle, see [`crate::preview::ship_model::placement`]. `1.0` otherwise.
+    pub ship_scale: f32,
     /// HD's `TrackModel` widget: places the circuit model on its own camera,
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
@@ -148,8 +151,13 @@ pub(super) fn draw_preview(
                 .ship_fit
                 .as_ref()
                 .map(|(fit, framing)| (fit, *framing));
-            let (view_projection, model) =
-                crate::preview::ship_model::framed(widget, fit, space, safe_area);
+            let (view_projection, model) = crate::preview::ship_model::framed(
+                widget,
+                fit,
+                space,
+                request.ship_scale,
+                safe_area,
+            );
             preview.draw_matrices(
                 device,
                 queue,

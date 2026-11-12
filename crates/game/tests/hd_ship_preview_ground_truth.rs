@@ -357,7 +357,7 @@ fn silhouette(
     let space = oag_display::space::Space::HD;
     let framing = oag_game::preview::ship_model::rest(fit, space.display_aspect, box_z);
     let (view_projection, placed) =
-        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, safe_area);
+        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, 1.0, safe_area);
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
@@ -385,7 +385,12 @@ fn ship_select_still(
     team: &str,
     step_seconds: &str,
 ) -> oag_texture::replacer::Image {
-    let dir = std::env::temp_dir().join(format!("oag-hd-ship-swap-ground-truth-{team}"));
+    let dir = std::env::temp_dir().join(format!(
+        "oag-hd-ship-swap-ground-truth-{}-{team}",
+        image
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+    ));
     std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
     std::fs::write(
         dir.join("config/oag/settings.toml"),
@@ -555,4 +560,37 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
         (live[1] - at_rest[1]).abs() < 0.04,
         "{live:.4?} against {at_rest:.4?}"
     );
+}
+
+/// Omega's craft is posed on a borrowed pose with no fit, and a step plays HD's depth law on it
+/// as a scale: the first frames after a step are off rest size and settled by 1.5 s, which a
+/// title with no settle (the craft cutting in at rest) does not do. Piranha arrives from Qirex
+/// (4.5) in HD's order, farther than its 3.9, so it starts smaller; Omega's own order puts the
+/// first frame 7 % off.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and a GPU adapter"]
+fn omega_plays_the_settle_on_its_borrowed_pose() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    for team in ["Piranha"] {
+        let empty = ship_select_still(&source, team, "0.03");
+        let width = |step: &str| {
+            f64::from(hull_width(
+                &ship_select_still(&source, team, step),
+                &empty,
+                [740, 200, 1660, 740],
+            ))
+        };
+        let (first, settled, late) = (width("0.07"), width("3"), width("1.5"));
+        eprintln!("omega {team}: {first} px first frame, {settled} settled, 1.5 s {late}");
+        assert!(
+            (first / settled - 1.0).abs() > 0.02,
+            "{team}: {first} against {settled}"
+        );
+        assert!(
+            (late / settled - 1.0).abs() < 0.01,
+            "{team}: {late} against {settled}"
+        );
+    }
 }
