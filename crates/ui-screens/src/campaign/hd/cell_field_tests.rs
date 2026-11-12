@@ -87,6 +87,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     let layers = hd_cell_draw_list(

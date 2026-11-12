@@ -139,6 +139,7 @@ fn a_mod_icon_draws_the_backdrop_and_no_title_icon() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )]);
     let strings = oag_ui::language::StringTable::default();
@@ -297,6 +298,7 @@ fn a_padded_icon_draws_its_art_at_native_size_on_the_frame_centre_and_a_big_one_
                 quad_extent: Some(art),
                 quad_centre: Some(centre),
                 blend: None,
+                scale: [1.0, 1.0],
             },
         )])
     };

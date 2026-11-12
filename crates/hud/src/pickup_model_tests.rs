@@ -50,6 +50,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([50.0, 50.0]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
         (
@@ -62,6 +63,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([31.423_908, 6.484_658_2]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
         (
@@ -74,6 +76,7 @@ fn pure_pickup_sheet() -> crate::sprite::Sheet {
                 quad_extent: Some([56.622_99, 11.677_669]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
     ])
@@ -255,6 +258,7 @@ fn a_mod_icon_on_pure_draws_centred_on_the_backdrop_grid() {
                 quad_extent: Some([70.0, 40.0]),
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
         (
@@ -267,6 +271,7 @@ fn a_mod_icon_on_pure_draws_centred_on_the_backdrop_grid() {
                 quad_extent: None,
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         ),
     ]);

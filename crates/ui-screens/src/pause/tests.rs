@@ -107,6 +107,7 @@ fn frame() -> Frame {
                 quad_extent: None,
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
             fill_alpha: 110.0 / 255.0,
             solid_alpha: 1.0,
@@ -119,6 +120,7 @@ fn frame() -> Frame {
                 quad_extent: None,
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             }),
             fury: false,
         }),
@@ -136,6 +138,7 @@ fn draws(menu: &Menu) -> Layers {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     })
 }

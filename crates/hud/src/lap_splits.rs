@@ -183,6 +183,7 @@ mod tests {
                 quad_extent: None,
                 quad_centre: None,
                 blend: None,
+                scale: [1.0, 1.0],
             },
         )]);
         // The row is under test, not HD's drop shadow, which doubles every string.

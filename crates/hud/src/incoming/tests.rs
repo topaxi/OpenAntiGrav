@@ -264,6 +264,7 @@ fn draws_with_art(
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let mut entries = vec![(oag_pulse::hud::ATLAS, placed(256, 256))];
     entries.extend(art.map(|(w, h)| ("mod:test/portal", placed(w, h))));

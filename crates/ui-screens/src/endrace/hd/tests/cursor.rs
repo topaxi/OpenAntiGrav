@@ -56,6 +56,7 @@ fn placed(x: u32, width: u32, height: u32) -> Placed {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     }
 }
 

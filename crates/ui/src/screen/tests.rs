@@ -413,6 +413,7 @@ fn sprite_draw_samples_a_sub_rect_and_tiles_past_the_placed_rect() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     assert_eq!(
         images[0].sprite_draw(placed, 7.0, 8.0, 0xff80_4020),
@@ -462,6 +463,7 @@ fn plain_draws_are_the_fills_then_the_placed_images() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let draws = screen.plain_draws(&|src| (src == "a.mip").then_some(placed));
     assert_eq!(draws.len(), screen.fills.len() + 1);
