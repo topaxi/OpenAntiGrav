@@ -624,8 +624,9 @@ mod tests {
         // +360 bytes: the LeachBeam pool of eight (was one Option<Beam>); +64: `Held::quake_armed`,
         // one byte per ship; +128: `Ship::muzzle`, the hull's weapon node, 16 bytes per ship;
         // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship;
-        // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft.
-        const LIMIT: usize = 20_264;
+        // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft;
+        // +128: `Ship::track_up`, the located track's up a weapon is born carrying, 16 bytes per ship.
+        const LIMIT: usize = 20_392;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,
