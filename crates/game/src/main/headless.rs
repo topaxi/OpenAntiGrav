@@ -93,6 +93,7 @@ pub(crate) fn run_windowless(
                 records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
             })
     });
+    boot::reveals2048::refresh(&mut loaded.frontend, &options.source, &saved, &title_name);
     boot::tiers2048::refresh_locks(
         &mut loaded.frontend,
         loaded.title,

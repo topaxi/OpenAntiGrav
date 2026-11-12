@@ -44,6 +44,7 @@ fn cell(name: &str, x: f32, y: f32) -> MapEvent {
         card: EventCard::default(),
         role: oag_title::MapRole::default(),
         rank_gated: false,
+        rank_required: None,
     }
 }
 

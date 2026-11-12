@@ -72,6 +72,12 @@ pub const RING: [(i32, i32); 18] = [
 /// The cells of a tile: three columns by two rows from its first cell.
 pub const FOOTPRINT: (i32, i32) = (3, 2);
 
+/// The cells of a hidden prototype event's button, from the first cell of its
+/// footprint: an apex-up triangle of side two (the footprint without its two
+/// upper corners). Read off the live canvas, confidence 80
+/// (`docs/ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md`, section 5).
+pub const HIDDEN_SHAPE: [(i32, i32); 4] = [(1, 0), (0, 1), (1, 1), (2, 1)];
+
 /// A tile's cell priority: state 1 (flat) and state 2 (raised)
 /// (`CanvasItem_Paint` `0x8106fae2`).
 const FLAT_PRIORITY: u8 = 6;

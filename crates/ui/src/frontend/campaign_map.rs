@@ -25,7 +25,7 @@
 //! original here: the season cards and the ground relief are not drawn, and the
 //! side challenges the original hides until the player's rank reaches
 //! `m_RankRequired` ([`MapEvent::rank_gated`]) stay hidden, with no tile, ring or
-//! cursor (this build has no rank). The view's
+//! cursor, until found ([`super::campaign_reveal`]). The view's
 //! travel limits are **chosen, not measured**: any event can be centred, with the
 //! original's 650 px of margin past the outermost ones.
 //!
@@ -164,9 +164,13 @@ pub struct MapEvent {
     /// The event authors the `m_options` bit the original tests as "locked"
     /// (`oag_2048::campaign::OPTION_LOCKED`): it has no tile, no ring and no cursor
     /// until a pass is earned on it. The original raises its progress by player
-    /// rank (`m_RankRequired`, hypothesis); this build has no rank, so it stays
-    /// hidden.
+    /// rank (`m_RankRequired`); until the game says it was found
+    /// ([`super::campaign_reveal`]) it stays hidden.
     pub rank_gated: bool,
+    /// `M_RankRequired`, the player rank the hidden event waits for. The game
+    /// decides whether the profile's rank meets it and tells the map through
+    /// [`Frontend::refresh_campaign_reveals`]; this crate keeps no XP.
+    pub rank_required: Option<i32>,
 }
 
 /// The ring mode of an event's button, the fill its 18 ring cells take
@@ -261,6 +265,12 @@ pub struct CampaignMap {
     pub(super) wave_owed: f32,
     /// Band 1 of the playing track's spectrum, when the music path has one.
     pub(super) band1: Option<f32>,
+    /// How far each rank-gated event has come, indexed like `events`. See
+    /// [`super::campaign_reveal`].
+    pub(super) reveal: Vec<super::campaign_reveal::Reveal>,
+    /// Names of the events found since the game last asked
+    /// ([`Frontend::take_found_events`]).
+    pub(super) found: Vec<String>,
 }
 
 impl CampaignMap {
@@ -434,6 +444,7 @@ impl CampaignMap {
     /// ([`MapEvent::rank_gated`]) that has not been passed.
     pub(super) fn hidden(&self, index: usize) -> bool {
         self.events.get(index).is_some_and(|event| event.rank_gated)
+            && !self.is_found(index)
             && !matches!(
                 self.state_of(index),
                 ProgressState::Passed | ProgressState::Elite
@@ -497,6 +508,7 @@ impl Frontend {
             .or_else(|| events.iter().position(ungated))
             .unwrap_or(0);
         self.campaign.earned = vec![None; events.len()];
+        self.campaign.reveal = vec![Default::default(); events.len()];
         self.campaign.closed = Vec::new();
         self.campaign.events = events;
         self.campaign.open();
@@ -588,6 +600,9 @@ impl Frontend {
             // With the cursor up, Confirm opens what it points at, which the
             // view is not moved for (the cursor would leave the tile).
             if let Some(at) = self.campaign.cursor.at {
+                if self.campaign.reveal_at(at).is_some() {
+                    return;
+                }
                 if let Some(hit) = self.campaign.hit_at(at) {
                     self.campaign.selected = hit;
                     self.open_event_card();
@@ -701,6 +716,9 @@ impl Frontend {
             at.0 * canvas_camera::VIEWPORT.0 / width,
             at.1 * canvas_camera::VIEWPORT.1 / height,
         );
+        if pointer.clicked && self.campaign.reveal_at(at).is_some() {
+            return true;
+        }
         let hit = self.campaign.hit_at(at);
         // Against the selection *before* this tick's hover moved it: a tap
         // arrives with `moved` and `clicked` set together, and reading the

@@ -1633,6 +1633,7 @@ mod provenance;
 pub(crate) mod roster;
 pub mod scene;
 mod screens;
+pub mod reveals2048;
 pub mod tiers2048;
 pub use screens::{PauseScreens, RaceSetup};
 pub(crate) mod sprites;

@@ -609,6 +609,16 @@ impl Session {
                     report(&events, stage.trace);
                     oag_raceplay::loader_log::lines(stage.frontend.take_notes());
                     let boot_navs = stage.frontend.take_nav();
+                    // Hidden campaign events the player just found are kept in the
+                    // profile, off the render thread.
+                    let found = stage.frontend.take_found_events();
+                    if let (false, Some(shell)) = (found.is_empty(), self.shell.as_ref()) {
+                        let title = records::campaign_title(shell.title, shell.platform);
+                        for name in &found {
+                            self.records.record_found(&title, name);
+                        }
+                        records::save_in_background(&self.records);
+                    }
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.

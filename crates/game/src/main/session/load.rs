@@ -251,6 +251,12 @@ impl Session {
             loaded.frontend.select_campaign_event(&name);
         }
         if let Some(race_options) = &self.race_options {
+            boot::reveals2048::refresh(
+                &mut loaded.frontend,
+                &race_options.source,
+                &self.records,
+                &title_name,
+            );
             boot::tiers2048::refresh_locks(
                 &mut loaded.frontend,
                 loaded.title,

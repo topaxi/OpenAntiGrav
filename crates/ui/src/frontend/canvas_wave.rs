@@ -130,8 +130,8 @@ impl Wave {
     /// texture upload, so the drawn height keeps one frame's differential (the
     /// shown height here eases toward the mean the same way). A hidden event's
     /// button is a 4-cell shape; `group` is whatever cells the button owns. The
-    /// caller passes no groups until a hidden event can be at progress 1 (it
-    /// needs the XP model), which leaves every cell moving alone.
+    /// caller passes the cells of each revealable hidden event
+    /// ([`super::campaign_reveal`]); with none, every cell moves alone.
     pub fn flatten(&mut self, group: &[(i32, i32)]) {
         if group.is_empty() {
             return;
