@@ -840,6 +840,18 @@ impl CellSelection {
             .and_then(|(_, difficulty)| *difficulty)
     }
 
+    /// The difficulty block a cell's medal hex is drawn from, by hex position: its saved
+    /// rung ([`Self::difficulty_at`]), else `Medium`. One rule for HD's Cell Selection and
+    /// the Pulse atlas path. **Falls back to `Medium`, not `Hard`**: a medal with no recorded
+    /// rung was judged by the pre-per-difficulty path, always against the medium rung
+    /// (`Cell::evaluate_medal`), and `SaveData_MigrateCellMedalsToHardElite` only lifts the
+    /// AI-independent modes, so crediting `Hard` here would show a harder badge than the disc
+    /// would. A grid tier hex belongs to no single event and draws no atlas medal.
+    #[must_use]
+    pub fn medal_block_at(&self, x: u32, y: u32) -> Difficulty {
+        self.difficulty_at(x, y).unwrap_or(Difficulty::Medium)
+    }
+
     /// Whether the selected cell still shows its `Lock_x_y` glyph -
     /// `CellSelection_PopulateGrid`'s own three-term rule. See
     /// [`Self::cell_shows_lock`] and, for why this is also what gates

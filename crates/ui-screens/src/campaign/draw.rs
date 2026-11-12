@@ -112,15 +112,7 @@ pub fn grid_draw_list(
                     .as_deref()
                     .and_then(|n| hex_slot_xy(n, "Medal_"))
                     .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
-                out.push(medal_hex_draw(
-                    image,
-                    placed,
-                    hex,
-                    medal,
-                    model.medal_art(),
-                    None,
-                    sprites,
-                ));
+                out.push(tinted_medal_draw(image, placed, hex, medal_argb(medal)));
             }
             continue;
         }
@@ -274,7 +266,7 @@ pub fn cell_draw_list(
                     hex,
                     medal,
                     model.medal_art(),
-                    model.difficulty_at(x, y),
+                    model.medal_block_at(x, y),
                     sprites,
                 ),
                 None => tinted_medal_draw(image, placed, hex, 0xffff_ffff),
@@ -632,11 +624,6 @@ pub(super) fn medal_argb(medal: Medal) -> u32 {
     }
 }
 
-/// The difficulty block a medal with no saved difficulty is drawn from. **Chosen, not
-/// measured**: Pulse's own default rung is `Medium` (`CellSelection::difficulty`), and a
-/// tier's hex belongs to no single event.
-const UNRECORDED_DIFFICULTY: Difficulty = Difficulty::Medium;
-
 /// A medal's hex: `art`'s atlas frame for the medal and the difficulty it was earned on when
 /// the atlas is in the sprite sheet, the title's tinted swatch otherwise.
 pub(super) fn medal_hex_draw(
@@ -645,10 +632,10 @@ pub(super) fn medal_hex_draw(
     hex: Option<[f32; 4]>,
     medal: Medal,
     art: &MedalArt,
-    difficulty: Option<Difficulty>,
+    difficulty: Difficulty,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Draw {
-    if let Some(frame) = art.frame(medal, difficulty.unwrap_or(UNRECORDED_DIFFICULTY))
+    if let Some(frame) = art.frame(medal, difficulty)
         && let Some(atlas) = art.image().and_then(sprites)
     {
         let [x, y, width, height] = hex.unwrap_or([image.x, image.y, 32.0, 32.0]);
