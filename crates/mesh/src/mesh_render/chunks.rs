@@ -52,7 +52,7 @@ impl VertexChunks {
     #[must_use]
     pub fn whole(vertices: u32) -> Self {
         Self {
-            ranges: vec![0..vertices],
+            ranges: std::iter::once(0..vertices).collect(),
         }
     }
 

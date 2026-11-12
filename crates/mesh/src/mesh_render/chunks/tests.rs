@@ -22,7 +22,8 @@ fn a_model_that_fits_is_one_chunk() {
     let chunks =
         VertexChunks::plan_ranges(vertices, &indices, draws.into_iter(), bytes(32)).unwrap();
     assert!(chunks.is_whole());
-    assert_eq!(chunks.ranges(), [0..32]);
+    assert_eq!(chunks.len(), 1);
+    assert_eq!(chunks.range(0), 0..32);
 }
 
 #[test]
