@@ -55,7 +55,10 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      60 fps film holds its first size about six frames longer than the law and
      the team it stepped to is unidentified (`docs/ghidra/functions/ps3-hdfury-eu/
      team-selection-model.md`, "The swap against the 60 fps film"); Omega plays
-     no settle now (its rates and pose are item 5).
+     no settle now (its rates and pose are item 5). Found on the live screen
+     (`--drive`): after a press the previous team's hull stays on screen until
+     the new mesh's worker read lands (Assegai's hull under the MIRAGE label at
+     tick 4), drawn at the new team's fit; the gap is not tied to the read.
   3. **The player's own turn, pan and zoom of the craft** (right stick, the
      idle return after 181 frames): read at confidence 65, not exercised, not
      wired; a new input on a screen needs pointer support in the same change.

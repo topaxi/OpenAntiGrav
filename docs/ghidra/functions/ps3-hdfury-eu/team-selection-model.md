@@ -260,7 +260,10 @@ frame to a few per cent. **The film holds its first size for about six frames lo
 law**, and then decays by 0.875 a frame, the ease's own rate. One candidate, not adopted because
 it fits one direction and worsens the other: the fit's model pointer (`st + 0x194`) changes when
 the new craft cuts in, so the fit keeps the old box through the 4-frame gap (Feisar to Auricom
-1.087, 1.068, 1.018, 1.005; back 0.908, 0.925, 0.978, 0.994). Open: which team the film stepped
+1.087, 1.068, 1.018, 1.005; back 0.908, 0.925, 0.978, 0.994). Open: **the live screen keeps the previous team's hull until the new mesh's worker read lands**
+(a `--drive` frame 4 ticks after a press shows Assegai's hull under the MIRAGE label), where the
+film cuts the craft for 3-4 frames and shows the new one; the same read would be the moment the
+fit's box should change if the candidate above is right. Open: which team the film stepped
 to, and a second film of a pair whose lengths are known. Confidence 60 (tails and shape), 40 (the
 first six frames).
 
