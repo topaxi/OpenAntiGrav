@@ -85,7 +85,7 @@ fn a_small_campaign_reads_with_its_defaults() {
     assert_eq!(grid.events[0].reference(grid), "g0/1-2");
     let medals = grid.events[1].medals.as_ref().unwrap();
     assert_eq!(medals.all().gold, Some(90.0));
-    assert_eq!(medals.hard.unwrap().gold, Some(80.0));
+    assert_eq!(medals.hard.as_ref().unwrap().gold, Some(80.0));
     let requires = &grid.events[1].unlock.as_ref().unwrap().requires;
     assert_eq!(requires[0].medal, "gold");
 }
@@ -447,4 +447,106 @@ fn a_written_mod_is_found_opened_and_lists_its_campaign() {
     )
     .unwrap();
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+const WITH_PLATINUM: &str = r##"
+[[medal-tier]]
+name = "platinum"
+points = 4
+colour = "#e5e4e2"
+string_id = "NR_PLATINUM"
+
+[[medal-tier]]
+name = "gold"
+points = 3
+colour = "#faeb38"
+
+[[medal-tier]]
+name = "silver"
+points = 2
+colour = "#dae3e4"
+
+[[medal-tier]]
+name = "bronze"
+points = 1
+colour = "#df942f"
+"##;
+
+fn platinum_campaign() -> String {
+    let body = SMALL.replace(
+        "medals = { gold = 90.0, hard = { gold = 80.0 } }",
+        "medals = { gold = 90.0, extra = [{ tier = \"platinum\", target = 80.0 }], hard = { gold = 80.0, extra = [{ tier = \"platinum\", target = 70.0 }] } }",
+    );
+    with_header(&format!("{WITH_PLATINUM}{body}"))
+}
+
+#[test]
+fn a_campaign_declares_its_medal_tiers_best_first() {
+    let text = platinum_campaign();
+    let def = CampaignDef::parse(&text).expect("parses");
+    let names: Vec<_> = def.medal_tiers.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names, ["platinum", "gold", "silver", "bronze"]);
+    assert_eq!(def.medal_tiers[0].argb(), Some(0xffe5_e4e2));
+    assert_eq!(def.medal_tiers[0].string_id.as_deref(), Some("NR_PLATINUM"));
+    oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    let written = def.write().unwrap();
+    assert_eq!(CampaignDef::parse(&written).unwrap(), def);
+}
+
+#[test]
+fn a_requirement_may_name_a_declared_tier_and_no_other() {
+    let text = platinum_campaign().replace("medal = \"gold\"", "medal = \"platinum\"");
+    assert!(CampaignDef::parse(&text).is_ok());
+    let text = platinum_campaign().replace("medal = \"gold\"", "medal = \"diamond\"");
+    let error = CampaignDef::parse(&text).unwrap_err().to_string();
+    assert!(
+        error.contains("diamond") && error.contains("platinum"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_target_for_an_undeclared_tier_is_refused_by_name() {
+    let text = platinum_campaign().replace(
+        "tier = \"platinum\", target = 80.0",
+        "tier = \"diamond\", target = 80.0",
+    );
+    let error = CampaignDef::parse(&text).unwrap_err().to_string();
+    assert!(error.contains("diamond"), "{error}");
+    let plain = with_header(&SMALL.replace(
+        "gold = 90.0",
+        "gold = 90.0, extra = [{ tier = \"platinum\", target = 80.0 }]",
+    ));
+    assert!(
+        CampaignDef::parse(&plain)
+            .unwrap_err()
+            .to_string()
+            .contains("platinum")
+    );
+}
+
+#[test]
+fn a_bad_tier_list_is_refused() {
+    let twice = platinum_campaign().replace("name = \"silver\"", "name = \"gold\"");
+    assert!(
+        CampaignDef::parse(&twice)
+            .unwrap_err()
+            .to_string()
+            .contains("twice")
+    );
+    let colour = platinum_campaign().replace("#e5e4e2", "silver");
+    assert!(
+        CampaignDef::parse(&colour)
+            .unwrap_err()
+            .to_string()
+            .contains("#RRGGBB")
+    );
+}
+
+#[test]
+fn a_file_without_medal_tiers_reads_as_before() {
+    let def = CampaignDef::parse(&with_header(SMALL)).expect("parses");
+    assert!(def.medal_tiers.is_empty());
+    assert!(!def.write().unwrap().contains("medal-tier"));
 }

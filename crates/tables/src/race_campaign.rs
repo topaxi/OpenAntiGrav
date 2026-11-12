@@ -56,6 +56,8 @@ use crate::handling::SpeedClass;
 
 mod difficulty;
 pub use difficulty::{Difficulty, DifficultyTargets, MedalTargets};
+mod tiers;
+pub use tiers::{Medal, MedalTier, MedalTiers, TiersError, evaluate_targets};
 mod unlock;
 pub use unlock::grid_points_met;
 
@@ -268,16 +270,15 @@ pub struct Grid {
 }
 
 impl Grid {
-    /// The most a grid can earn: `3 * cells.len()`, since `Cell_MedalPoints(cell,
-    /// 0)` is always `3`. `Grid_PointsPossible` (`0x088c0570`) computes it the
-    /// same way; the ground-truth test checks 24/30/36/42/48 across the sixteen
-    /// grids.
+    /// The most a grid can earn: the best tier's points for every cell, which on the standard
+    /// list is `3 * cells.len()` since `Cell_MedalPoints(cell, 0)` is always `3`.
+    /// `Grid_PointsPossible` (`0x088c0570`) computes it the same way; the ground-truth test
+    /// checks 24/30/36/42/48 across the sixteen grids.
     #[must_use]
-    pub fn max_points(&self) -> u32 {
-        // Every cell is worth 3 at best.
+    pub fn max_points(&self, tiers: &MedalTiers) -> u32 {
         u32::try_from(self.cells.len())
             .unwrap_or(u32::MAX)
-            .saturating_mul(3)
+            .saturating_mul(tiers.best_points())
     }
 }
 
@@ -538,52 +539,11 @@ impl Cell {
         }
         let targets = self.targets_for_difficulty(difficulty);
         let flipped = matches!(self.mode, Mode::Zone | Mode::Elimination);
-        for (tier, target) in [
-            (Medal::Gold, targets.gold),
-            (Medal::Silver, targets.silver),
-            (Medal::Bronze, targets.bronze),
-        ] {
-            let met = if flipped {
-                value >= target
-            } else {
-                value <= target
-            };
-            if met {
-                return Some(tier);
-            }
-        }
-        None
-    }
-}
-
-/// The medal tier [`Cell::evaluate_medal`] (`Cell_EvaluateMedal`, `0x088bf620`)
-/// produces: ordinal `0 = gold`, `1 = silver`, `2 = bronze`.
-///
-/// [`Ord`] follows declaration order, so the *smaller* value is the *better*
-/// medal (the original's "0 is best"). **Not the in-race HUD's tier ordinal**,
-/// which runs `0 = BRONZE .. 3 = RECORD` and is unread; see
-/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what is not
-/// determined".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Medal {
-    /// The best tier; declared first for [`Ord`].
-    Gold,
-    /// The middle tier.
-    Silver,
-    /// The worst tier a race can still be awarded.
-    Bronze,
-}
-
-impl Medal {
-    /// `Cell_MedalPoints` (`0x088bf530`): gold 3, silver 2, bronze 1. With
-    /// [`Medal::Gold`] it is what any cell is worth at best, always `3`.
-    #[must_use]
-    pub fn points(self) -> u32 {
-        match self {
-            Self::Gold => 3,
-            Self::Silver => 2,
-            Self::Bronze => 1,
-        }
+        evaluate_targets(
+            &[targets.gold, targets.silver, targets.bronze],
+            value,
+            flipped,
+        )
     }
 }
 

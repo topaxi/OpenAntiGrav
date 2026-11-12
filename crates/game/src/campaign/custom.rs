@@ -11,7 +11,9 @@
 use std::collections::BTreeMap;
 
 use oag_mod::campaign::{CampaignDef, EventDef, MedalsDef, PilotDef, Progression, Reveal, Targets};
-use oag_tables::race_campaign::{Cell, DifficultyTargets, Grid, Medal, MedalTargets, Mode};
+use oag_tables::race_campaign::{
+    Cell, Difficulty, DifficultyTargets, Grid, Medal, MedalTargets, MedalTiers, Mode,
+};
 
 /// The mode words a campaign file may use, and what each runs as.
 pub const MODES: [(&str, Mode); 8] = [
@@ -129,8 +131,49 @@ pub struct Event {
     /// Open from the start.
     pub open: bool,
     /// Each event that must have a medal first, by cell name, with the least
-    /// medal it needs (`None`: any).
+    /// medal it needs (`None`: any), a position in the campaign's [`Custom::tiers`].
     pub requires: Vec<(String, Option<Medal>)>,
+    /// One target per tier of the campaign, best tier first, for every rung.
+    pub tier_targets: TierTargets,
+}
+
+/// What each tier of a campaign asks of one event: [`Cell::gold`], [`Cell::silver`] and
+/// [`Cell::bronze`] hold the three best tiers for the screens' three target rows, and this
+/// holds them all.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TierTargets {
+    /// The medium rung, which is the flat targets when no rung is named.
+    flat: Vec<i64>,
+    /// The easy, medium and hard rungs, when any is named.
+    rungs: Option<[Vec<i64>; 3]>,
+}
+
+impl TierTargets {
+    /// The targets of `difficulty`, best tier first.
+    #[must_use]
+    pub fn for_difficulty(&self, difficulty: Difficulty) -> &[i64] {
+        match (&self.rungs, difficulty) {
+            (None, _) => &self.flat,
+            (Some(rungs), Difficulty::Easy) => &rungs[0],
+            (Some(rungs), Difficulty::Medium) => &rungs[1],
+            (Some(rungs), Difficulty::Hard) => &rungs[2],
+        }
+    }
+
+    /// The tier a result earns on `difficulty`: [`oag_tables::race_campaign::evaluate_targets`]
+    /// with `Cell::evaluate_medal`'s own no-result rule.
+    #[must_use]
+    pub fn evaluate(&self, mode: &Mode, value: i64, difficulty: Difficulty) -> Option<Medal> {
+        if value <= 0 || value == 0xFFFF_FFFF {
+            return None;
+        }
+        let flipped = matches!(mode, Mode::Zone | Mode::Elimination);
+        oag_tables::race_campaign::evaluate_targets(
+            self.for_difficulty(difficulty),
+            value,
+            flipped,
+        )
+    }
 }
 
 impl Event {
@@ -250,6 +293,9 @@ pub struct Custom {
     /// The `title` its medals are kept under in `[[campaign]]`, so they never
     /// meet the original campaign's rows: `<title>/mod:<mod id>/<id>`.
     pub records_title: String,
+    /// The medal tiers, best first: the title's gold, silver and bronze unless the campaign
+    /// declares its own.
+    pub tiers: MedalTiers,
     /// The tiers.
     pub grids: Vec<Grid>,
     /// Each cell's extras, by cell name.
@@ -352,6 +398,10 @@ pub const PILOTS: &str = "pilots";
 pub struct Launch {
     /// See [`Custom::records_title`].
     pub records_title: String,
+    /// See [`Custom::tiers`].
+    pub tiers: MedalTiers,
+    /// What each tier asks of this event ([`Event::tier_targets`]).
+    pub tier_targets: TierTargets,
     /// Whose driver flies.
     pub ai: Ai,
     /// The original driver's rung, in place of the screen's.
@@ -473,6 +523,7 @@ pub fn compile(
         .map_or(&[][..], |classes| classes.names);
     let setting = Setting::of(info, def.grids.iter().map(|grid| grid.events.len()).sum())
         .map_err(|problem| format!("{prefix}: {problem}"))?;
+    let tiers = tiers_of(def).map_err(|problem| format!("{prefix}: {problem}"))?;
     let mut grids = Vec::with_capacity(def.grids.len());
     let mut events = BTreeMap::new();
     let mut ordinal = 0;
@@ -480,7 +531,7 @@ pub fn compile(
         let mut cells = Vec::with_capacity(grid_def.events.len());
         for event_def in &grid_def.events {
             let at = format!("{prefix} grid {:?} event {:?}", grid_def.id, event_def.slot);
-            let (cell, mut event) = compile_event(index, event_def, &names, ladder, pilots, files)
+            let (cell, mut event) = compile_event(index, event_def, &names, &tiers, ladder, pilots, files)
                 .map_err(|problem| format!("{at}: {problem}"))?;
             if let Some(setting) = &setting {
                 event.follow(setting, ordinal);
@@ -542,6 +593,7 @@ pub fn compile(
             .map(|grid| grid.reveal.unwrap_or(info.reveal))
             .collect(),
         records_title: records_title(title, mod_id, &info.id),
+        tiers,
         grids,
         events,
     })
@@ -606,6 +658,7 @@ fn compile_event(
     grid: usize,
     def: &EventDef,
     names: &BTreeMap<String, String>,
+    tiers: &MedalTiers,
     ladder: &[&str],
     pilots: &Pilots,
     files: &Files<'_>,
@@ -740,14 +793,19 @@ fn compile_event(
     let flipped = matches!(mode, Mode::Zone | Mode::Elimination);
     let timed = matches!(mode, Mode::TimeTrial | Mode::SpeedLap);
     if let Some(medals) = &def.medals {
-        let (medium, rungs) = medal_targets(medals, flipped, timed)?;
+        let (medium, rungs, every) = medal_targets(medals, tiers, flipped, timed)?;
         cell.gold = medium.gold;
         cell.silver = medium.silver;
         cell.bronze = medium.bronze;
         cell.difficulty_targets = rungs;
+        event.tier_targets = every;
     } else {
         let never = if flipped { i64::MAX } else { 0 };
         (cell.gold, cell.silver, cell.bronze) = (never, never, never);
+        event.tier_targets = TierTargets {
+            flat: vec![never; tiers.len()],
+            rungs: None,
+        };
     }
 
     if let Some(unlock) = &def.unlock {
@@ -760,10 +818,10 @@ fn compile_event(
                 .get(&requirement.event)
                 .ok_or_else(|| format!("requires {:?}: no such event", requirement.event))?;
             let least = match requirement.medal.as_str() {
-                "gold" => Some(Medal::Gold),
-                "silver" => Some(Medal::Silver),
-                "bronze" => Some(Medal::Bronze),
-                _ => None,
+                "any" => None,
+                word => Some(tiers.find(word).ok_or_else(|| {
+                    format!("requires medal {word:?}: no such tier in this campaign")
+                })?),
             };
             event.requires.push((name.clone(), least));
         }
@@ -796,9 +854,10 @@ fn inline_pilot(cell: &str, table: &toml::Table) -> Result<oag_raceplay::pilots:
 /// positive result meets, and `i64::MAX` on a counting one.
 fn medal_targets(
     medals: &MedalsDef,
+    tiers: &MedalTiers,
     flipped: bool,
     timed: bool,
-) -> Result<(MedalTargets, Option<DifficultyTargets>), String> {
+) -> Result<(MedalTargets, Option<DifficultyTargets>, TierTargets), String> {
     let never = if flipped { i64::MAX } else { 0 };
     let convert = |value: Option<f64>| -> Result<i64, String> {
         let Some(value) = value else {
@@ -814,27 +873,76 @@ fn medal_targets(
         )]
         Ok(scaled.round() as i64)
     };
-    let triple = |targets: Targets| -> Result<MedalTargets, String> {
-        Ok(MedalTargets {
-            gold: convert(targets.gold)?,
-            silver: convert(targets.silver)?,
-            bronze: convert(targets.bronze)?,
-        })
+    let column = |targets: &Targets| -> Result<Vec<i64>, String> {
+        tiers
+            .iter()
+            .map(|(_, tier)| convert(targets.of(&tier.name)))
+            .collect()
+    };
+    let triple = |column: &[i64]| {
+        let at = |index: usize| column.get(index).copied().unwrap_or(never);
+        MedalTargets {
+            gold: at(0),
+            silver: at(1),
+            bronze: at(2),
+        }
     };
     let flat = medals.all();
-    let rung = |own: Option<Targets>| own.filter(|t| !t.is_empty()).unwrap_or(flat);
-    let medium = triple(rung(medals.medium))?;
+    let rung = |own: &Option<Targets>| own.clone().filter(|t| !t.is_empty()).unwrap_or(flat.clone());
+    let medium = column(&rung(&medals.medium))?;
     let per_rung = medals.easy.is_some() || medals.medium.is_some() || medals.hard.is_some();
-    let rungs = if per_rung {
-        Some(DifficultyTargets {
-            easy: triple(rung(medals.easy))?,
-            medium,
-            hard: triple(rung(medals.hard))?,
-        })
+    let (rungs, every) = if per_rung {
+        let easy = column(&rung(&medals.easy))?;
+        let hard = column(&rung(&medals.hard))?;
+        (
+            Some(DifficultyTargets {
+                easy: triple(&easy),
+                medium: triple(&medium),
+                hard: triple(&hard),
+            }),
+            Some([easy, medium.clone(), hard]),
+        )
     } else {
-        None
+        (None, None)
     };
-    Ok((medium, rungs))
+    let shown = triple(&medium);
+    Ok((
+        shown,
+        rungs,
+        TierTargets {
+            flat: medium,
+            rungs: every,
+        },
+    ))
+}
+
+/// The campaign's medal tiers: its `[[medal-tier]]` list, or the title's own three. A tier
+/// named gold, silver or bronze with no string id of its own keeps the title's word for it.
+fn tiers_of(def: &CampaignDef) -> Result<MedalTiers, String> {
+    if def.medal_tiers.is_empty() {
+        return Ok(MedalTiers::standard().clone());
+    }
+    let standard = MedalTiers::standard();
+    let tiers = def
+        .medal_tiers
+        .iter()
+        .map(|tier| {
+            let argb = tier
+                .argb()
+                .ok_or_else(|| format!("medal tier {:?}: colour {:?}", tier.name, tier.colour))?;
+            let string_id = tier.string_id.clone().or_else(|| {
+                let own = standard.get(standard.find(&tier.name)?)?;
+                own.string_id.clone()
+            });
+            Ok(oag_tables::race_campaign::MedalTier {
+                name: tier.name.clone(),
+                points: tier.points,
+                argb,
+                string_id,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    MedalTiers::new(tiers).map_err(|e| e.to_string())
 }
 
 /// What a session's mods add for one title: the campaigns that compiled, a

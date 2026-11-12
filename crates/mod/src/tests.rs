@@ -435,6 +435,10 @@ fn campaign_medals_name_an_atlas_and_a_bad_table_is_refused_by_name() {
     assert_eq!(medals.source, MedalSource::Mod("atlas".into()));
     assert!(!medals.per_difficulty);
     assert_eq!(medals.tiers, ["bronze", "silver", "gold"]);
+    let medals = with("source = { mod = \"atlas\" }\ntiers = [\"platinum\", \"gold\"]")
+        .unwrap()
+        .unwrap();
+    assert_eq!(medals.tiers, ["platinum", "gold"]);
     let text = format!(
         "{}\nneeds-titles = [\"hd\"]\n\n[icons]\natlas = \"a.png\"\n\n[campaign-medals]\nsource = {{ mod = \"atlas\" }}\nper-difficulty = true\ntiers = [\"gold\", \"silver\", \"bronze\"]\n",
         MANIFEST_TEXT.replace(
@@ -452,16 +456,12 @@ fn campaign_medals_name_an_atlas_and_a_bad_table_is_refused_by_name() {
         ),
         ("source = {}", "exactly one"),
         (
-            "source = { title = \"hd\" }\ntiers = [\"gold\", \"silver\", \"platinum\"]",
-            "campaign-defined tiers are not supported yet",
+            "source = { title = \"hd\" }\ntiers = [\"gold\", \"Silver\"]",
+            "not a tier name",
         ),
         (
             "source = { title = \"hd\" }\ntiers = [\"gold\", \"gold\", \"silver\"]",
             "named twice",
-        ),
-        (
-            "source = { title = \"hd\" }\ntiers = [\"gold\", \"silver\"]",
-            "all three",
         ),
     ] {
         let error = with(table).unwrap_err().to_string();

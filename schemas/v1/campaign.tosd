@@ -89,6 +89,25 @@ type = "array"
 itemtype = "types.event"
 minlength = 1
 
+# One medal the campaign awards, best first; absent, gold 3, silver 2, bronze 1.
+[types.medal-tier]
+type = "table"
+
+[types.medal-tier.name]
+type = "string"
+
+[types.medal-tier.points]
+type = "integer"
+min = 0
+
+[types.medal-tier.colour]
+type = "string"
+pattern = "^#[0-9a-fA-F]{6}$"
+
+[types.medal-tier.string_id]
+type = "string"
+optional = true
+
 [types.slot]
 type = "array"
 itemtype = "integer"
@@ -273,6 +292,22 @@ optional = true
 type = "types.number"
 optional = true
 
+[types.targets.extra]
+type = "array"
+itemtype = "types.tier-target"
+optional = true
+
+# A target of a tier a `[[medal-tier]]` declares by name: a table cannot take a key it does not
+# list, so the tiers other than gold, silver and bronze are rows.
+[types.tier-target]
+type = "table"
+
+[types.tier-target.tier]
+type = "string"
+
+[types.tier-target.target]
+type = "types.number"
+
 [types.medals]
 type = "table"
 
@@ -286,6 +321,11 @@ optional = true
 
 [types.medals.bronze]
 type = "types.number"
+optional = true
+
+[types.medals.extra]
+type = "array"
+itemtype = "types.tier-target"
 optional = true
 
 [types.medals.easy]
@@ -303,9 +343,10 @@ type = "table"
 [types.requirement.event]
 type = "string"
 
+# `any`, or a tier of the campaign: gold, silver and bronze, or its `[[medal-tier]]` names. The
+# loader checks it against that list.
 [types.requirement.medal]
 type = "string"
-allowedvalues = ["any", "bronze", "silver", "gold"]
 optional = true
 
 [types.unlock]
@@ -327,6 +368,12 @@ type = "types.toml-schema-reference"
 
 [elements.campaign]
 type = "types.campaign"
+
+[elements.medal-tier]
+type = "array"
+itemtype = "types.medal-tier"
+minlength = 1
+optional = true
 
 [elements.grid]
 type = "array"

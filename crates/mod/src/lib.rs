@@ -32,7 +32,7 @@ pub use discover::{
 };
 pub use manifest::{
     CampaignMedals, Channels, Error as ManifestError, Extension, License, MANIFEST, MAX_CHANNELS,
-    MEDAL_TIERS, Manifest, MedalSource, Rules, SCHEMA_KIND, SCHEMA_MAJOR, TexturePack, Track,
+    Manifest, MedalSource, Rules, SCHEMA_KIND, SCHEMA_MAJOR, TexturePack, Track,
 };
 pub use revision::checkout_head;
 

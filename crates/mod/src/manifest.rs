@@ -120,10 +120,6 @@ pub struct Manifest {
     pub default_enabled: bool,
 }
 
-/// The medal tiers an atlas row order may name, best first: today's campaigns award these three
-/// (`oag_tables::race_campaign::Medal`). A campaign defining its own is a later change.
-pub const MEDAL_TIERS: [&str; 3] = ["gold", "silver", "bronze"];
-
 /// Where `[campaign-medals]` takes its atlas from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MedalSource {
@@ -142,8 +138,10 @@ pub struct CampaignMedals {
     /// The atlas holds one block of tiers per difficulty (easy, medium, hard from the top),
     /// and a cell draws the block of the difficulty its medal was earned on.
     pub per_difficulty: bool,
-    /// The tier of each atlas row, top to bottom. Absent: gold, silver, bronze. A title source
-    /// ignores it: the title's own row order is used.
+    /// The tier of each atlas row, top to bottom, by the names a campaign's tiers carry
+    /// (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of its own). Absent: gold, silver,
+    /// bronze. A title source ignores it: the title's own row order is used. A campaign tier
+    /// no row names draws its colour as a swatch.
     pub tiers: Vec<String>,
 }
 
@@ -281,15 +279,11 @@ fn campaign_medals(
     };
     let mut seen = Vec::new();
     for tier in &table.tiers {
-        if !MEDAL_TIERS.contains(&tier.as_str()) {
-            let problem = if valid_key(tier) {
-                format!(
-                    "{tier:?}: campaign-defined tiers are not supported yet (gold, silver, bronze)"
-                )
-            } else {
-                format!("{tier:?} is not a tier name: gold, silver, bronze")
-            };
-            return Err(bad("campaign-medals.tiers", problem));
+        if !valid_key(tier) || tier.chars().any(|c| c.is_ascii_uppercase()) {
+            return Err(bad(
+                "campaign-medals.tiers",
+                format!("{tier:?} is not a tier name: lowercase letters, digits, '-' and '_'"),
+            ));
         }
         if seen.contains(tier) {
             return Err(bad(
@@ -298,12 +292,6 @@ fn campaign_medals(
             ));
         }
         seen.push(tier.clone());
-    }
-    if !table.tiers.is_empty() && table.tiers.len() != MEDAL_TIERS.len() {
-        return Err(bad(
-            "campaign-medals.tiers",
-            "name all three of gold, silver, bronze, in the atlas's row order",
-        ));
     }
     Ok(CampaignMedals {
         source,
