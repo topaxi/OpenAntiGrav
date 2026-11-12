@@ -300,7 +300,10 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
         "{report:#?}"
     );
     assert!(
-        !sounds.report.iter().any(|l| l.contains("no Wwise cue read for it")),
+        !sounds
+            .report
+            .iter()
+            .any(|l| l.contains("no Wwise cue read for it")),
         "every cue of the 43 has a row: {report:#?}"
     );
     // The player's missile is its own event: a `SetState` beside the relay.
