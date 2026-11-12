@@ -21,6 +21,8 @@ pub(super) struct Slot {
     drives_ai_pickup: bool,
     /// The player's picks on the mod's choice rows (`Source::options`).
     options: super::Picks,
+    /// The names of the mod's `[icons]`: what a `raise-warning` of its own art may name.
+    icons: Vec<String>,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -99,9 +101,9 @@ pub(super) struct On {
     /// Outputs, never hashed: this tick's `hud-*` commands, and the
     /// `fire-effect`s the view has still to draw.
     pub(super) hud: Vec<(usize, Command)>,
-    /// This tick's `raise-warning`s as (module, slot, icon), in module then reply order: the
+    /// This tick's `raise-warning`s as (module, slot, look), in module then reply order: the
     /// race raises them on the viewer's HUD after the call.
-    pub(super) warnings: Vec<(usize, usize, oag_ext_abi::WarningIcon)>,
+    pub(super) warnings: Vec<(usize, usize, oag_hud::incoming::Look)>,
     /// Each module's own text, in the race's language.
     strings: Vec<super::Strings>,
     /// Each module's `[pickup]`, in module order.
@@ -287,6 +289,14 @@ impl On {
         self
     }
 
+    /// Each module's `[icons]` names, in module order.
+    pub(super) fn with_icons(mut self, icons: Vec<Vec<String>>) -> Self {
+        for (slot, icons) in self.slots.iter_mut().zip(icons) {
+            slot.icons = icons;
+        }
+        self
+    }
+
     /// The race's title key, for every observation.
     pub(super) fn with_title(mut self, title: u32) -> Self {
         self.title = title;
@@ -330,6 +340,7 @@ impl On {
                     publishes,
                     drives_ai_pickup,
                     options: super::Picks::default(),
+                    icons: Vec::new(),
                     mod_id,
                     module,
                     faulted: None,
@@ -791,6 +802,16 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
                     ));
                 }
             }
+            Command::RaiseWarning {
+                warning: oag_ext_abi::Warning::Mod { icon, .. },
+                ..
+            } if !module.icons.iter().any(|name| name == icon.as_str()) => {
+                return Some(format!(
+                    "raise-warning names icon {:?}, which its oag-mod.toml [icons] does not (it declares {:?})",
+                    icon.as_str(),
+                    module.icons
+                ));
+            }
             Command::GivePickup { .. }
             | Command::ClearPickup { .. }
             | Command::PickupRoll { .. }
@@ -1115,6 +1136,34 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     }
 }
 
+/// The look a `raise-warning` of module `mod_id` draws: the title's icon, or the mod's own art
+/// under its key in the HUD sheet.
+fn warning_look(mod_id: &str, warning: oag_ext_abi::Warning) -> oag_hud::incoming::Look {
+    use oag_ext_abi::{Warning, WarningIcon as W, WarningSide};
+    use oag_hud::incoming::{Icon, Look, Side};
+    match warning {
+        Warning::Title(icon) => Look::Title(match icon {
+            W::Rocket => Icon::Rocket,
+            W::Missile => Icon::Missile,
+            W::Quake => Icon::Quake,
+            W::Cannon => Icon::Cannon,
+            W::Plasma => Icon::Plasma,
+            W::LeachBeam => Icon::LeachBeam,
+            W::Repulser => Icon::Repulser,
+            W::Shuriken => Icon::Shuriken,
+            W::Mine => Icon::Mine,
+            W::Bomb => Icon::Bomb,
+        }),
+        Warning::Mod { side, icon } => Look::Mod {
+            side: match side {
+                WarningSide::Rear => Side::Rear,
+                WarningSide::Forward => Side::Forward,
+            },
+            src: super::mod_icon_src(mod_id, icon.as_str()),
+        },
+    }
+}
+
 /// The course point a `portal-view` exit names, as a `transit` to it resolves it.
 fn portal_exit(
     course: &oag_race::Course,
@@ -1247,8 +1296,9 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 oag_ext_abi::MAX_FOV_OFFSET_DEG,
             );
         }
-        Command::RaiseWarning { slot, icon } => {
-            sim.extensions.on.warnings.push((index, slot.index(), icon));
+        Command::RaiseWarning { slot, warning } => {
+            let look = warning_look(&sim.extensions.on.slots[index].mod_id, warning);
+            sim.extensions.on.warnings.push((index, slot.index(), look));
         }
         Command::PickupLook { .. }
         | Command::HudTint { .. }

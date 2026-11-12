@@ -20,23 +20,50 @@ fn slot(index: usize) -> Slot {
 /// A module that runs `guard` (WAT, may `return`) and then writes `commands` as its
 /// reply. The guard sees the blob's first word.
 pub(super) fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &[&str]) -> Source {
+    scripted_with_icons(id, guard, commands, publishes, &[])
+}
+
+/// [`scripted`] for a mod that declares `icons` in its `[icons]`; a `raise-warning` of its own
+/// icon among `commands` has its name in the reply's pool.
+pub(super) fn scripted_with_icons(
+    id: &str,
+    guard: &str,
+    commands: &[Command],
+    publishes: &[&str],
+    icons: &[&str],
+) -> Source {
     let mut bytes = (commands.len() as u32).to_le_bytes().to_vec();
+    let mut pool = Vec::new();
     for command in commands {
-        bytes.extend(command.encode());
+        let at = pool.len() as u16;
+        bytes.extend(command.encode_pooled(at));
+        if let Command::RaiseWarning {
+            warning: oag_ext_abi::Warning::Mod { icon, .. },
+            ..
+        } = command
+        {
+            pool.push(icon.as_str().len() as u8);
+            pool.extend(icon.as_str().bytes());
+        }
     }
-    let data: String = bytes.iter().map(|b| format!("\\{b:02x}")).collect();
+    let escaped = |bytes: &[u8]| -> String { bytes.iter().map(|b| format!("\\{b:02x}")).collect() };
+    let (data, pool_data) = (escaped(&bytes), escaped(&pool));
+    let pool_at = REPLY - oag_ext_abi::REPLY_AT as i32 + oag_ext_abi::POOL_AT as i32;
     let wasm = wat::parse_str(format!(
         r#"(module
             (memory (export "memory") 1)
             (data $reply "{data}")
+            (data $pool "{pool_data}")
             (func (export "oag_abi") (result i32) i32.const {word})
             (func (export "oag_io") (result i32) i32.const 1024)
             (func (export "tick") (result i32)
               {guard}
               (memory.init $reply (i32.const {REPLY}) (i32.const 0) (i32.const {len}))
+              (memory.init $pool (i32.const {pool_at}) (i32.const 0) (i32.const {pool_len}))
               i32.const 0))"#,
         word = oag_ext_abi::ABI_WORD,
         len = bytes.len(),
+        pool_len = pool.len(),
     ))
     .unwrap();
     Source {
@@ -50,7 +77,14 @@ pub(super) fn scripted(id: &str, guard: &str, commands: &[Command], publishes: &
         scope: Scope::Rules,
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
-        icons: Vec::new(),
+        icons: icons
+            .iter()
+            .map(|name| crate::extensions::IconSource {
+                name: (*name).to_string(),
+                path: format!("icons/{name}.png"),
+                read: Arc::new(|| Err("no file".into())),
+            })
+            .collect(),
         effects: Vec::new(),
         shaders: Vec::new(),
         sounds: Vec::new(),

@@ -3,8 +3,9 @@
 use oag_ext_abi::{
     Colour, Command, Cue, Distance, Effect, HudElement, HudPlace, HudStr, Icon, MAX_COMMANDS,
     MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE, MAX_PAD_FACTOR,
-    MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, POOL_AT, POOL_LEN,
-    Pickup, REPLY_AT, Rgba, Sections, SoundMode, WarningIcon, Weapon, WeatherKind,
+    MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_THRUST_FACTOR, MAX_TRANSIT_TICKS, ModIcon, POOL_AT,
+    POOL_LEN, Pickup, REPLY_AT, Rgba, Sections, SoundMode, Warning, WarningIcon, WarningSide,
+    Weapon, WeatherKind,
 };
 
 use crate::Craft;
@@ -683,8 +684,34 @@ impl<'a> Reply<'a> {
     pub fn raise_warning(&mut self, craft: &Craft<'_>, icon: WarningIcon) -> Result<(), Refused> {
         self.push(&Command::RaiseWarning {
             slot: craft.slot(),
-            icon,
+            warning: Warning::Title(icon),
         })
+    }
+
+    /// `raise-warning` with the icon named by `name` in the mod's own `[icons]` (a PNG or SVG
+    /// the manifest declares), lighting the `side` group. The art is fitted, aspect kept, to
+    /// the title's warning icon box and drawn on the group's own backdrop; everything else is
+    /// [`Self::raise_warning`]. A name the mod's `[icons]` lacks faults the module, naming it;
+    /// one the host could not read draws no warning, and the load report says so.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Range`] for a name over `MAX_HUD_TEXT` bytes,
+    /// [`Refused::HudItems`] when the string pool is full.
+    pub fn raise_mod_warning(
+        &mut self,
+        craft: &Craft<'_>,
+        side: WarningSide,
+        name: &str,
+    ) -> Result<(), Refused> {
+        let icon = ModIcon::new(name).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::RaiseWarning {
+                slot: craft.slot(),
+                warning: Warning::Mod { side, icon },
+            },
+            name,
+        )
     }
 
     /// `play-mod-sound`: the mod's own sound at place `index` of its `[sounds]` (name

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-12
-summary: "slipstream, shaders, portal-view, route exits, tunnel, raise-warning landed; open: mesh portal, island exit, occlusion, loops, mod warning icon."
+summary: "slipstream, shaders, portal-view, route exits, tunnel, raise-warning landed; open: mesh portal, island exit, occlusion, loops."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -74,12 +74,12 @@ The engine never names the mod.
    `Warnings::raise`; `oag.slipstream` raises the rear Repulser icon once, on the transit, for a person it
    goes in behind and comes out ahead of (proof: `tests::extension_view`, the guest's tests and
    `slipstream_ground_truth::a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and_no_other_does`).
-   Open, small: (a) a mod's own warning icon (a PNG on the warning widget's rect; the warning is a Copy
-   `Icon` enum of the title's ten widgets, a mod PNG would ride the `ext_draws` mod-icon path); (b) the
+   A mod's own warning icon landed (lane mod-warning-icons): `raise-warning` may name an `[icons]` entry and a
+   group (ABI 1 revision 4); `oag.slipstream` raises its own `portal-warning.svg` instead of the Repulser
+   (proof: `tests::extension_view`, `oag_hud::incoming::tests`, the same ground-truth test). Open, small: (b) the
    warnings are drawn on Pulse (PSP, PS2) only, one view, one person, so HD, 2048, Omega, Pure, split screen
    and network seats drop a mod's raise; HD, 2048 and Omega author the same widget names under a different
-   law (`HudArt::incoming_warnings`), so wiring them is a measurement first; (c) Repulser is a chosen
-   stand-in: the rear group has no icon that is not a weapon.
+   law (`HudArt::incoming_warnings`), so wiring them is a measurement first.
 3. **Exit with no spline near it (a floating island).** No lap fix, no AI line, and the
    distance reset would fire. Recommended rule for our track format: the author gives the
    island its own spline path that rejoins the circuit, which makes it item 5. An engine

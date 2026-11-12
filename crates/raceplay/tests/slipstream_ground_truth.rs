@@ -487,7 +487,11 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         }
         race.tick(&throttle());
         let tick = race.sim.world.tick;
-        let lit = race.readout().incoming.rear == Some(oag_hud::incoming::Icon::Repulser);
+        let lit = race.readout().incoming.rear
+            == Some(oag_hud::incoming::Look::Mod {
+                side: oag_hud::incoming::Side::Rear,
+                src: "mod:oag.slipstream/portal-warning".into(),
+            });
         if lit {
             lit_at.push(tick);
         }

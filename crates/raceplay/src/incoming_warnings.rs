@@ -37,7 +37,7 @@ impl Race {
         let gap =
             oag_weapons::projectile::missile::wrapped_gap(here - there, length.unwrap_or(0.0));
         if let Some(icon) = oag_hud::incoming::classify(weapon, gap) {
-            self.view.incoming_raises.push(icon);
+            self.view.incoming_raises.push(icon.into());
         }
     }
 
@@ -58,26 +58,13 @@ impl Race {
             )
     }
 
-    /// A simulation mod's `raise-warning`: lights `icon`'s group on the viewer's HUD for
+    /// A simulation mod's `raise-warning`: lights `look`'s group on the viewer's HUD for
     /// `slot`, as a weapon fired at the viewer would. Dropped for a slot that is not the
     /// viewer and where the warnings are not drawn ([`Self::incoming_warnings_drawn`]).
     #[cfg(feature = "extensions")]
-    pub(super) fn raise_mod_warning(&mut self, slot: usize, icon: oag_ext_abi::WarningIcon) {
-        use oag_ext_abi::WarningIcon as W;
-        use oag_hud::incoming::Icon;
+    pub(super) fn raise_mod_warning(&mut self, slot: usize, look: oag_hud::incoming::Look) {
         if slot == self.player_slot() && self.incoming_warnings_drawn() {
-            self.view.incoming_raises.push(match icon {
-                W::Rocket => Icon::Rocket,
-                W::Missile => Icon::Missile,
-                W::Quake => Icon::Quake,
-                W::Cannon => Icon::Cannon,
-                W::Plasma => Icon::Plasma,
-                W::LeachBeam => Icon::LeachBeam,
-                W::Repulser => Icon::Repulser,
-                W::Shuriken => Icon::Shuriken,
-                W::Mine => Icon::Mine,
-                W::Bomb => Icon::Bomb,
-            });
+            self.view.incoming_raises.push(look);
         }
     }
 }

@@ -7,7 +7,7 @@ use oag_gameplay::PlayerInputs;
 
 use crate::Race;
 
-use super::extension_faults::scripted;
+use super::extension_faults::{scripted, scripted_with_icons};
 use super::extensions::grid;
 use super::extensions::on::{REPLY, STATE, prepared};
 use super::local_seat_fx::local_people;
@@ -241,12 +241,18 @@ fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
 /// warning is raised on the tick of its cause, not every tick, and the viewer's slot 0 has
 /// the title's warnings switched on.
 fn warned_by(command: Command, warnings_drawn: bool) -> Race {
+    warned_by_mod(command, &[], warnings_drawn)
+}
+
+/// [`warned_by`] for a mod that declares `icons`.
+fn warned_by_mod(command: Command, icons: &[&str], warnings_drawn: bool) -> Race {
     let once = format!(
         "(if (i32.load (i32.const {STATE}))
            (then (i32.store (i32.const {REPLY}) (i32.const 0)) (return (i32.const 0))))
          (i32.store (i32.const {STATE}) (i32.const 1))"
     );
-    let mut race = grid(prepared(&[scripted("test.warn", &once, &[command], &[])]));
+    let source = scripted_with_icons("test.warn", &once, &[command], &[], icons);
+    let mut race = grid(prepared(&[source]));
     race.view.huds[0].incoming_enabled = warnings_drawn;
     race
 }
@@ -254,7 +260,7 @@ fn warned_by(command: Command, warnings_drawn: bool) -> Race {
 /// The (forward, rear) icons lit at any point of the 2.0 s the warning runs, ticked 150 times.
 fn lit_while_running(
     mut race: Race,
-) -> (Vec<oag_hud::incoming::Icon>, Vec<oag_hud::incoming::Icon>) {
+) -> (Vec<oag_hud::incoming::Look>, Vec<oag_hud::incoming::Look>) {
     let (mut forward, mut rear) = (Vec::new(), Vec::new());
     for _ in 0..150 {
         race.tick(&PlayerInputs::none());
@@ -268,24 +274,25 @@ fn lit_while_running(
 #[test]
 fn a_raised_warning_blinks_in_the_icons_group_on_the_viewers_hud() {
     use oag_ext_abi::WarningIcon;
-    use oag_hud::incoming::Icon;
+    use oag_hud::incoming::{Icon, Look};
     for (icon, forward, rear) in [
         (WarningIcon::Mine, Some(Icon::Mine), None),
         (WarningIcon::Bomb, Some(Icon::Bomb), None),
         (WarningIcon::Shuriken, None, Some(Icon::Shuriken)),
         (WarningIcon::Missile, None, Some(Icon::Missile)),
     ] {
+        let (forward, rear) = (forward.map(Look::Title), rear.map(Look::Title));
         let race = warned_by(
             Command::RaiseWarning {
                 slot: slot(0),
-                icon,
+                warning: oag_ext_abi::Warning::Title(icon),
             },
             true,
         );
         let (lit_forward, lit_rear) = lit_while_running(race);
         assert_eq!(
-            (lit_forward.first().copied(), lit_rear.first().copied()),
-            (forward, rear),
+            (lit_forward.first().cloned(), lit_rear.first().cloned()),
+            (forward.clone(), rear.clone()),
             "{icon:?}"
         );
         let lit = lit_forward.len() + lit_rear.len();
@@ -297,7 +304,7 @@ fn a_raised_warning_blinks_in_the_icons_group_on_the_viewers_hud() {
             lit_forward
                 .iter()
                 .chain(&lit_rear)
-                .all(|shown| Some(*shown) == forward.or(rear)),
+                .all(|shown| Some(shown) == forward.as_ref().or(rear.as_ref())),
             "{icon:?}: only its own icon"
         );
     }
@@ -310,7 +317,7 @@ fn a_warning_for_another_slot_or_where_none_is_drawn_lights_nothing() {
         let race = warned_by(
             Command::RaiseWarning {
                 slot: slot(slot_index),
-                icon: WarningIcon::Missile,
+                warning: oag_ext_abi::Warning::Title(WarningIcon::Missile),
             },
             drawn,
         );
@@ -329,7 +336,7 @@ fn a_warning_for_another_slot_or_where_none_is_drawn_lights_nothing() {
 fn a_warning_raised_for_a_person_among_several_is_dropped() {
     let once = Command::RaiseWarning {
         slot: slot(0),
-        icon: oag_ext_abi::WarningIcon::Missile,
+        warning: oag_ext_abi::Warning::Title(oag_ext_abi::WarningIcon::Missile),
     };
     let mut race = local_people(2, false);
     race.sim.extensions =
@@ -337,4 +344,73 @@ fn a_warning_raised_for_a_person_among_several_is_dropped() {
     race.view.huds[0].incoming_enabled = true;
     race.tick(&PlayerInputs::none());
     assert!(!race.view.huds[0].incoming.active());
+}
+
+fn raising_portal(side: oag_ext_abi::WarningSide, name: &str) -> Command {
+    Command::RaiseWarning {
+        slot: slot(0),
+        warning: oag_ext_abi::Warning::Mod {
+            side,
+            icon: oag_ext_abi::ModIcon::new(name).unwrap(),
+        },
+    }
+}
+
+#[test]
+fn a_mods_own_icon_lights_the_group_it_chose_with_its_art_under_the_mods_sheet_key() {
+    use oag_ext_abi::WarningSide;
+    use oag_hud::incoming::{Look, Side};
+    for (chosen, side) in [
+        (WarningSide::Rear, Side::Rear),
+        (WarningSide::Forward, Side::Forward),
+    ] {
+        let race = warned_by_mod(raising_portal(chosen, "portal"), &["portal"], true);
+        let (forward, rear) = lit_while_running(race);
+        let lit = if side == Side::Rear { &rear } else { &forward };
+        let other = if side == Side::Rear { &forward } else { &rear };
+        let key = Look::Mod {
+            side,
+            src: "mod:test.warn/portal".into(),
+        };
+        assert!(
+            (50..=62).contains(&lit.len()) && lit.iter().all(|shown| *shown == key),
+            "{chosen:?}: the same blink a weapon's warning has, with the mod's art: {lit:?}"
+        );
+        assert!(other.is_empty(), "{chosen:?}: the other group stays dark");
+    }
+}
+
+#[test]
+fn a_mods_own_icon_is_dropped_where_the_warnings_are_not_drawn() {
+    use oag_ext_abi::WarningSide;
+    let race = warned_by_mod(
+        raising_portal(WarningSide::Rear, "portal"),
+        &["portal"],
+        false,
+    );
+    assert_eq!(lit_while_running(race), (vec![], vec![]));
+}
+
+#[test]
+fn an_icon_the_mod_does_not_declare_faults_the_module_naming_it() {
+    use oag_ext_abi::WarningSide;
+    let mut race = warned_by_mod(
+        raising_portal(WarningSide::Rear, "pootal"),
+        &["portal", "badge"],
+        true,
+    );
+    race.tick(&PlayerInputs::none());
+    let (_, why) = race.extension_reports()[0]
+        .faulted
+        .clone()
+        .expect("faulted");
+    assert!(
+        why.contains("\"pootal\"") && why.contains("[icons]") && why.contains("portal"),
+        "{why}"
+    );
+    let (forward, rear) = lit_while_running(race);
+    assert!(
+        forward.is_empty() && rear.is_empty(),
+        "nothing lit by a faulted module"
+    );
 }

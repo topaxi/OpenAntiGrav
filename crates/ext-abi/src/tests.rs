@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 36] {
+fn every_command() -> [Command; 37] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -185,7 +185,14 @@ fn every_command() -> [Command; 36] {
         },
         Command::RaiseWarning {
             slot: slot(0),
-            icon: WarningIcon::Bomb,
+            warning: Warning::Title(WarningIcon::Bomb),
+        },
+        Command::RaiseWarning {
+            slot: slot(2),
+            warning: Warning::Mod {
+                side: WarningSide::Forward,
+                icon: ModIcon::new("portal").unwrap(),
+            },
         },
     ]
 }
@@ -254,6 +261,10 @@ fn pool_for(command: &Command) -> Vec<u8> {
         Command::HudIcon { sprite, .. } => sprite.as_str(),
         Command::PickupLook {
             icon: Icon::Mod(name),
+            ..
+        }
+        | Command::RaiseWarning {
+            warning: Warning::Mod { icon: name, .. },
             ..
         } => name.as_str(),
         _ => return Vec::new(),
@@ -411,6 +422,7 @@ fn layout_fold() -> u64 {
     .chain([Effect::CollisionSpark, Effect::HitSpark].map(|effect| u32::from(effect.code())))
     .chain([WeatherKind::Rain].map(|kind| u32::from(kind.code())))
     .chain(WarningIcon::ALL.iter().map(|icon| u32::from(icon.code())))
+    .chain(WarningSide::ALL.iter().map(|side| u32::from(side.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
     .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
     .chain(SoundMode::ALL.iter().map(|m| m.code()));
@@ -431,7 +443,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (3, 0xcaf0_696b_14b7_c96b);
+const REVISION_AND_FOLD: (u32, u64) = (4, 0x0348_ffba_7c33_a0fc);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -556,7 +568,7 @@ fn a_record_breaking_its_own_rules_is_malformed() {
     assert_eq!(Command::decode(&cue), Err(Malformed::Cue(6)));
     let mut warning = Command::RaiseWarning {
         slot: slot(0),
-        icon: WarningIcon::Mine,
+        warning: Warning::Title(WarningIcon::Mine),
     }
     .encode();
     warning[COMMAND_ARG] = 10;
@@ -1064,11 +1076,61 @@ fn the_own_flag_rides_bit_15_of_the_argument() {
 fn a_raise_warning_is_kind_37_with_the_icon_code() {
     let bomb = Command::RaiseWarning {
         slot: slot(0),
-        icon: WarningIcon::Bomb,
+        warning: Warning::Title(WarningIcon::Bomb),
     };
     assert_eq!(hex(&bomb.encode()), "250009000000000000000000");
     assert_eq!(Command::decode(&bomb.encode()), Ok(bomb));
     assert_eq!(WarningIcon::ALL.len(), 10);
+}
+
+/// A mod's own icon is the pool entry's offset with the own flag in the argument and the
+/// group in the word; the title's icons keep their groups.
+#[test]
+fn a_mod_raise_warning_names_a_pool_entry_and_a_group() {
+    let portal = Command::RaiseWarning {
+        slot: slot(1),
+        warning: Warning::Mod {
+            side: WarningSide::Forward,
+            icon: ModIcon::new("portal").unwrap(),
+        },
+    };
+    let pool = pool_for(&portal);
+    assert_eq!(hex(&portal.encode_pooled(0)), "250100800000000001000000");
+    assert_eq!(
+        Command::decode_in(&portal.encode_pooled(0), &pool),
+        Ok(portal)
+    );
+    assert_eq!(WarningIcon::Rocket.side(), WarningSide::Rear);
+    assert_eq!(WarningIcon::Mine.side(), WarningSide::Forward);
+    assert_eq!(WarningIcon::Bomb.side(), WarningSide::Forward);
+    assert_eq!(
+        WarningIcon::ALL
+            .iter()
+            .filter(|icon| icon.side() == WarningSide::Rear)
+            .count(),
+        8
+    );
+}
+
+#[test]
+fn a_mod_raise_warning_with_an_unknown_group_or_pool_entry_is_refused() {
+    let mut record = Command::RaiseWarning {
+        slot: slot(0),
+        warning: Warning::Mod {
+            side: WarningSide::Rear,
+            icon: ModIcon::new("portal").unwrap(),
+        },
+    }
+    .encode_pooled(0);
+    let pool = [6, b'p', b'o', b'r', b't', b'a', b'l'];
+    assert!(Command::decode_in(&record, &pool).is_ok());
+    record[COMMAND_WORD..COMMAND_WORD + 4].copy_from_slice(&2u32.to_le_bytes());
+    assert_eq!(
+        Command::decode_in(&record, &pool),
+        Err(Malformed::WarningSide(2))
+    );
+    record[COMMAND_WORD..COMMAND_WORD + 4].copy_from_slice(&0u32.to_le_bytes());
+    assert_eq!(Command::decode_in(&record, &[]), Err(Malformed::Pool(0)));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 //! A mod's vector icons: parsed once at load, rasterised at the exact pixel size the
-//! pickup slot has on screen, and put in the HUD sheet beside the PNG icons.
+//! pickup slot has on screen (and, where the title draws incoming-weapon warnings, in the
+//! warning slots), and put in the HUD sheet beside the PNG icons.
 //!
 //! Nothing here draws a vector per frame. An icon is a texture like any other once
 //! [`place`] has run; a change of resolution or HUD scale runs [`place`] again over the
@@ -8,7 +9,8 @@
 
 use resvg::{tiny_skia, usvg};
 
-use crate::pickup::{IconFrame, mod_icon_size};
+use crate::incoming::{Side, warning_src};
+use crate::pickup::{IconFrame, mod_icon_size, warning_icon_size};
 use crate::sprite::{DecodedImage, Sheet};
 
 /// A parsed `.svg` icon, ready to be rasterised at any size.
@@ -130,6 +132,38 @@ pub fn place(
             blend: None,
         });
         sizes.push((icon.src.clone(), density));
+        // The incoming-warning slots are not the pickup's size: a title that draws warnings
+        // gets the drawing again at each slot's own pixels.
+        let sides: &[Side] = if art.incoming_warnings {
+            &[Side::Rear, Side::Forward]
+        } else {
+            &[]
+        };
+        for &side in sides {
+            let Some(size) = warning_icon_size(frame, side, icon.size()) else {
+                continue;
+            };
+            let longest = size[0].max(size[1]) * pixels_per_unit;
+            let density = pixels_per_unit * (MAX_SIDE / longest).min(1.0);
+            let (width, height) = (
+                (size[0] * density).round().max(1.0) as u32,
+                (size[1] * density).round().max(1.0) as u32,
+            );
+            let Some(rgba) = icon.rasterise(width, height) else {
+                continue;
+            };
+            let src = warning_src(&icon.src, side);
+            images.push(DecodedImage {
+                src: src.clone(),
+                width,
+                height,
+                rgba,
+                quad_extent: Some([width as f32, height as f32]),
+                quad_centre: Some([0.0, 0.0]),
+                blend: None,
+            });
+            sizes.push((src, density));
+        }
     }
     let mut sheet = base.extended_with(&[], images, report);
     for (src, density) in sizes {

@@ -89,7 +89,7 @@ fn lit_frames(frames: usize) -> Vec<bool> {
     (0..frames)
         .map(|_| {
             warnings.advance(DT);
-            warnings.shown().rear == Some(Icon::Rocket)
+            warnings.shown().rear == Some(Look::Title(Icon::Rocket))
         })
         .collect()
 }
@@ -138,7 +138,7 @@ fn the_slot_clears_to_nothing_after_two_seconds() {
         warnings.advance(DT);
     }
     assert!(!warnings.active());
-    assert_eq!(warnings.shown(), Shown::default());
+    assert_eq!(*warnings.shown(), Shown::default());
     // Raising again after it cleared starts from a full timer.
     warnings.raise(Icon::Quake);
     warnings.advance(DT);
@@ -160,7 +160,7 @@ fn a_second_raise_in_the_slot_restarts_it_and_swaps_the_icon() {
         "the raise frame is unlit again"
     );
     warnings.advance(DT);
-    assert_eq!(warnings.shown().rear, Some(Icon::Quake));
+    assert_eq!(warnings.shown().rear, Some(Look::Title(Icon::Quake)));
 }
 
 #[test]
@@ -171,10 +171,10 @@ fn the_two_groups_run_independently() {
     warnings.advance(DT);
     warnings.advance(DT);
     assert_eq!(
-        warnings.shown(),
+        *warnings.shown(),
         Shown {
-            forward: Some(Icon::Mine),
-            rear: Some(Icon::Rocket),
+            forward: Some(Look::Title(Icon::Mine)),
+            rear: Some(Look::Title(Icon::Rocket)),
         }
     );
 }
@@ -218,12 +218,126 @@ fn a_lit_group_draws_its_background_and_its_own_icon_only() {
         incoming: Shown { forward, rear },
         ..crate::Readout::blank()
     };
-    assert_eq!(sprites_drawn(&lit(None, Some(Icon::Rocket))), nothing + 2);
-    assert_eq!(sprites_drawn(&lit(Some(Icon::Mine), None)), nothing + 2);
     assert_eq!(
-        sprites_drawn(&lit(Some(Icon::Mine), Some(Icon::Missile))),
+        sprites_drawn(&lit(None, Some(Look::Title(Icon::Rocket)))),
+        nothing + 2
+    );
+    assert_eq!(
+        sprites_drawn(&lit(Some(Look::Title(Icon::Mine)), None)),
+        nothing + 2
+    );
+    assert_eq!(
+        sprites_drawn(&lit(
+            Some(Look::Title(Icon::Mine)),
+            Some(Look::Title(Icon::Missile))
+        )),
         nothing + 4
     );
     // An icon the layout does not author draws nothing, and not a stand-in.
-    assert_eq!(sprites_drawn(&lit(None, Some(Icon::Quake))), nothing + 1);
+    assert_eq!(
+        sprites_drawn(&lit(None, Some(Look::Title(Icon::Quake)))),
+        nothing + 1
+    );
+}
+
+fn mod_look(side: Side) -> Look {
+    Look::Mod {
+        side,
+        src: "mod:test/portal".into(),
+    }
+}
+
+/// The draws of a readout lighting `forward` and `rear` over a sheet that holds the title's
+/// atlas and, when `art` is given, a mod icon of that size.
+fn draws_with_art(
+    forward: Option<Look>,
+    rear: Option<Look>,
+    art: Option<(u32, u32)>,
+) -> Vec<oag_ui::frontend::Draw> {
+    let layout = warning_layout();
+    let strings = oag_ui::language::StringTable::default();
+    let placed = |width, height| crate::sprite::Placed {
+        x: 0,
+        y: 0,
+        width,
+        height,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+    };
+    let mut entries = vec![(oag_pulse::hud::ATLAS, placed(256, 256))];
+    entries.extend(art.map(|(w, h)| ("mod:test/portal", placed(w, h))));
+    let sheet = crate::sprite::Sheet::placed_at(&entries);
+    let mut cx = crate::tests::context(&layout, &strings);
+    cx.sheet = &sheet;
+    let readout = crate::Readout {
+        incoming: Shown { forward, rear },
+        ..crate::Readout::blank()
+    };
+    let blank = crate::draw_list(&cx, &crate::Readout::blank())
+        .sprites
+        .len();
+    crate::draw_list(&cx, &readout).sprites[blank..].to_vec()
+}
+
+fn rect_of(draw: &oag_ui::frontend::Draw) -> [f32; 4] {
+    let oag_ui::frontend::Draw::Sprite { rect, .. } = draw else {
+        panic!("a sprite: {draw:?}");
+    };
+    *rect
+}
+
+#[test]
+fn a_mods_art_is_fitted_to_the_title_icons_box_on_its_group_and_not_to_its_own_size() {
+    // The rear box is `RearWarningRocketIcon`'s 20 x 20 at (30, 0); art twice as wide as tall
+    // fills its width, aspect kept, centred on the box.
+    let rear = draws_with_art(None, Some(mod_look(Side::Rear)), Some((80, 40)));
+    assert_eq!(rear.len(), 2, "the group's backdrop and the art");
+    assert_eq!(
+        rect_of(&rear[0]),
+        [0.0, 0.0, 20.0, 20.0],
+        "RearWarningBackground"
+    );
+    assert_eq!(rect_of(&rear[1]), [30.0, 5.0, 20.0, 10.0]);
+    // A mod may light the forward group with its own art as well.
+    let forward = draws_with_art(Some(mod_look(Side::Forward)), None, Some((8, 8)));
+    assert_eq!(
+        rect_of(&forward[0]),
+        [90.0, 0.0, 20.0, 20.0],
+        "ForwardWarningBackground"
+    );
+    assert_eq!(
+        rect_of(&forward[1]),
+        [120.0, 0.0, 20.0, 20.0],
+        "ForwardWarningMineIcon's box"
+    );
+}
+
+#[test]
+fn art_the_sheet_lacks_lights_no_group_at_all() {
+    assert!(draws_with_art(None, Some(mod_look(Side::Rear)), None).is_empty());
+}
+
+#[test]
+fn a_mod_look_lights_its_group_and_is_what_the_hud_reads_back() {
+    let mut warnings = Warnings::default();
+    warnings.raise(mod_look(Side::Forward));
+    warnings.advance(DT);
+    warnings.advance(DT);
+    assert_eq!(
+        *warnings.shown(),
+        Shown {
+            forward: Some(mod_look(Side::Forward)),
+            rear: None,
+        }
+    );
+    warnings.raise(Icon::Rocket);
+    warnings.advance(DT);
+    warnings.advance(DT);
+    assert_eq!(
+        warnings.shown().forward,
+        Some(mod_look(Side::Forward)),
+        "a title icon on the other group leaves it alone"
+    );
+    assert_eq!(warnings.shown().rear, Some(Look::Title(Icon::Rocket)));
 }
