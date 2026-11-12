@@ -187,8 +187,9 @@ fn drive_until(race: &mut race::Race, limit: u32, done: impl Fn(&race::Race) -> 
 }
 
 /// Off the grid and `ticks` into the first lap, holding the pickup with the guest's
-/// probe answered; then fires and returns the tick the transit began after.
-fn fire_at(race: &mut race::Race, ticks: u32) {
+/// probe answered; then fires. Returns the craft's progress as the press tick begins, which
+/// is what the guest reads when it places the entrance `AHEAD` of it.
+fn fire_at(race: &mut race::Race, ticks: u32) -> f32 {
     drive_until(race, 3000, |r| {
         r.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
@@ -199,7 +200,9 @@ fn fire_at(race: &mut race::Race, ticks: u32) {
     for _ in 0..4 {
         race.tick(&throttle());
     }
+    let before = progress(race);
     race.tick(&press_fire());
+    before
 }
 
 #[test]
@@ -242,9 +245,8 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let Some(mut race) = race_on(&source, false) else {
         return;
     };
-    fire_at(&mut race, 400);
+    let pressed_at = fire_at(&mut race, 400);
     let pressed = race.sim.world.tick;
-    let pressed_at = progress(&race);
     assert_eq!(ship(&race).transit, None, "not on the press tick");
     // The craft keeps flying, in the world, until it reaches the portal 30 units ahead.
     let mut flying = 0;
