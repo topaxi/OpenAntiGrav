@@ -647,13 +647,11 @@ pub fn load_shell(
             ]
         })
         .unwrap_or_default();
-    // The campaign map's hex art, its four mode icons and the team grid's
-    // `teamgrid/` art: named by no screen, drawn by the executable (see
-    // `oag_ui::frontend::campaign_map::HEX_FILLED`).
+    // The campaign map's selection ring, its four mode icons and the team
+    // grid's `teamgrid/` art: named by no screen, drawn by the executable (see
+    // `oag_ui::frontend::HEX_SELECT`).
     if front_end.touch.is_some() {
         block_textures.extend([
-            oag_ui::frontend::HEX_FILLED,
-            oag_ui::frontend::HEX_OUTLINE,
             oag_ui::frontend::HEX_SELECT,
             oag_ui::frontend::EventIcon::Race.texture_name(),
             oag_ui::frontend::EventIcon::SpeedLap.texture_name(),

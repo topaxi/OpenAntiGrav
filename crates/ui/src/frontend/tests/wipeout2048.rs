@@ -775,6 +775,56 @@ fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
     );
 }
 
+#[test]
+fn a_tile_is_the_baked_prism_in_its_states_colour_and_a_flat_face_without_one() {
+    use crate::frontend::canvas_prism;
+    let tinted = |frontend: &Frontend, colour: [f32; 3]| {
+        let size = canvas_prism::layout().size;
+        frontend
+            .draw_list()
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Sprite { uv, color, .. }
+                    if (uv[2], uv[3]) == (size.0 as f32 - 2.0, size.1 as f32 - 2.0)
+                        && *color == canvas_prism::tint(colour))
+            })
+            .count()
+    };
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    pass_event_one(&mut frontend);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        tinted(&frontend, canvas_prism::colours::PASSED),
+        0,
+        "no baked prism in the sheet: nothing draws it"
+    );
+    let size = canvas_prism::layout().size;
+    frontend.placements.push((
+        canvas_prism::TILE.to_string(),
+        Placed {
+            x: 0,
+            y: 0,
+            width: size.0,
+            height: size.1,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        },
+    ));
+    assert_eq!(
+        tinted(&frontend, canvas_prism::colours::PASSED),
+        1,
+        "the passed event is one green prism"
+    );
+    assert!(
+        tinted(&frontend, canvas_prism::colours::OPEN) >= 1,
+        "an open event is a grey one"
+    );
+}
+
 /// A tap on the event card's Launch button - the centre of its hit rect.
 pub(super) fn launch_button_tap() -> Pointer {
     Pointer {
@@ -1037,21 +1087,19 @@ fn refresh_campaign_progress_opens_a_gated_event_once_its_own_gate_is_passed() {
 }
 
 #[test]
-fn refresh_campaign_progress_colours_a_passed_marker_with_the_discs_own_green() {
+fn refresh_campaign_progress_colours_a_marker_in_the_canvases_own_state_colour() {
     let mut frontend = boot(0);
     frontend.set_campaign(a_gated_event());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
     frontend
         .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Elite));
-    let pass_green = frontend.global_colour("Pass2048");
-    let elite_yellow = frontend.global_colour("ElitePass2048");
-    assert_ne!(pass_green, elite_yellow, "the fixture must tell them apart");
+    let elite = crate::frontend::canvas_prism::tint(crate::frontend::canvas_prism::colours::ELITE);
     let list = frontend.draw_list();
     assert!(
         list.iter()
-            .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite_yellow)),
-        "Event 1's own marker should draw in ElitePass2048"
+            .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite)),
+        "Event 1's own marker should draw in the elite state's colour"
     );
 }
 

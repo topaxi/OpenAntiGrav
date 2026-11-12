@@ -307,6 +307,7 @@
 0x8106fa8c	function	CanvasItem_SetState	80	campaign-map-projection.md
 0x8106fae2	function	CanvasItem_Paint	80	campaign-map-projection.md
 0x8106fbd8	function	CanvasButton_PaintIconAndRing	70	campaign-map-projection.md
+0x81072702	function	CanvasButton_PaintIconCells	70	campaign-map-projection.md
 0x81071560	function	Canvas3D_AddItem	80	campaign-map-projection.md
 0x810712d2	function	Canvas3D_PaintItems	80	campaign-map-projection.md
 0x810739a4	function	Canvas3D_PrepareDraw	75	campaign-map-projection.md
