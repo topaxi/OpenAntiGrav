@@ -582,6 +582,12 @@ Since 2026-11-12 the map hides these 15 (the authored `m_options & 0x10`, which 
 "locked", [campaign-map-projection.md](../ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md),
 "The ring"), so they are not launchable from it until a rank model exists.
 
+**Read 2026-11-12** ([canvas-music-wave.md](../ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md),
+section 3): the rank gate is real. An event is unlockable when the profile's XP total reaches the
+`XPRanks.xml` threshold of its `M_RankRequired` (rank 10 = 420,000 XP) and its `M_PEventRequired` is
+passed; a side challenge then goes to progress 1 (hidden, revealable) and a tap on its spot takes it
+to 2.
+
 ## The event card (2026-09-29)
 
 Tapping an unlocked node on the campaign map opens the original's per-event

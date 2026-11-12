@@ -413,6 +413,12 @@ one is state 1 (flat tint, ring 3 or 1), while a side challenge is not drawn at 
 is raised. The same 15 events carry `m_RankRequired` (10 to 50), so the raising is **hypothesised** to be
 the player rank (confidence 45) ([2048-campaign.md](../../../formats/2048-campaign.md), "The unlock graph"; not read).
 
+**Read (2026-11-12, [canvas-music-wave.md](canvas-music-wave.md)):** the raising is the XP rank
+(`GameModeBase_IsUnlockable` `0x812b3a76`, confidence 80, replacing the 45 above), and it raises
+progress to 1, not 2: the button goes to state 3, which draws nothing (`CanvasItem_Paint` paints states
+1 and 2 only), until a tap on one of its six cells sets progress 2 (`Canvas3D_TapCell` `0x81071de4`).
+The state table's "1, state 3, the ring blinks" therefore never shows a ring for these events.
+
 **Against frame `13`** (Events 1 to 3 passed, Event 4 open): the prediction (rings by the table, a tile's
 cells above rings, the highest fill winning) agrees with the reference's texture class on the
 visible ring cells: 38 of 51 predicted dark-stripe cells carry dark stripes in the frame, and the 13
