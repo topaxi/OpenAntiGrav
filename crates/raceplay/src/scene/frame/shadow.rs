@@ -773,10 +773,10 @@ impl super::super::Scene {
         // the list, so a static draw cast by any route shows up here.
         #[cfg(test)]
         {
-            let track = self.track.caster(Mat4::IDENTITY).vertices;
+            let track = self.track.caster(Mat4::IDENTITY).geometry;
             let ranges: usize = casters
                 .iter()
-                .filter(|caster| std::ptr::eq(caster.vertices, track))
+                .filter(|caster| std::ptr::eq(caster.geometry, track))
                 .map(|caster| caster.ranges.len())
                 .sum();
             self.frame_work.update(|w| FrameWork {

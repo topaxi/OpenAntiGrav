@@ -133,6 +133,7 @@ mod trail_length;
 mod trail_order;
 mod transit;
 mod velocity_gate;
+mod vertex_chunks;
 mod viewer;
 mod viewpoint;
 mod weapons;

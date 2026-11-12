@@ -19,6 +19,22 @@ pub(in crate::mesh_render) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()
 }
 
+/// A device whose `max_buffer_size` is `ceiling`, or `None` where there is no adapter.
+pub(in crate::mesh_render) fn device_with_ceiling(
+    ceiling: u64,
+) -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
+    pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_limits: wgpu::Limits {
+            max_buffer_size: ceiling,
+            ..wgpu::Limits::default()
+        },
+        ..Default::default()
+    }))
+    .ok()
+}
+
 fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {
         quake: 0.0,

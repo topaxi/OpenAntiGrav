@@ -12,6 +12,7 @@
 
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
+use oag_mesh::mesh_render::Geometry;
 use oag_render::shadow::map::{
     ATLAS_HEIGHT, ATLAS_WIDTH, Caster, CraftCaster, DEPTH_SIZE, Fit, Map, RANK_SIDES,
 };
@@ -51,7 +52,7 @@ fn quad() -> ([GpuVertex; 4], [u32; 6]) {
 }
 
 /// The quad's vertex and index buffers, uploaded, and its index count.
-fn quad_buffers(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Buffer, wgpu::Buffer, u32) {
+fn quad_buffers(device: &wgpu::Device, queue: &wgpu::Queue) -> (Geometry, wgpu::Buffer, u32) {
     let (vertices, indices) = quad();
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("caster vertices"),
@@ -67,7 +68,11 @@ fn quad_buffers(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Buffer, wg
         mapped_at_creation: false,
     });
     queue.write_buffer(&index_buffer, 0, bytemuck::cast_slice(&indices));
-    (vertex_buffer, index_buffer, indices.len() as u32)
+    (
+        Geometry::single(vertex_buffer, vertices.len() as u32),
+        index_buffer,
+        indices.len() as u32,
+    )
 }
 
 fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
@@ -125,7 +130,7 @@ fn a_craft_covers_the_middle_of_its_square_and_leaves_the_rest_of_the_atlas_clea
             fit,
             seen: true,
             caster: Caster {
-                vertices: &vertex_buffer,
+                geometry: &vertex_buffer,
                 indices: &index_buffer,
                 ranges,
                 model: Mat4::IDENTITY,
@@ -226,7 +231,7 @@ fn a_craft_out_of_view_keeps_its_record_and_draws_nothing() {
             fit,
             seen: false,
             caster: Caster {
-                vertices: &vertex_buffer,
+                geometry: &vertex_buffer,
                 indices: &index_buffer,
                 ranges,
                 model: Mat4::IDENTITY,
@@ -261,7 +266,7 @@ fn an_empty_depth_pass_over_a_clear_map_is_skipped_and_a_caster_still_draws() {
         queue.submit([encoder.finish()]);
     };
     let caster = || Caster {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         ranges,
         model: Mat4::IDENTITY,
@@ -318,7 +323,7 @@ fn craft_far_apart_each_draw_into_the_square_of_their_own_rank() {
             },
             seen: true,
             caster: Caster {
-                vertices: &vertex_buffer,
+                geometry: &vertex_buffer,
                 indices: &index_buffer,
                 ranges,
                 model,
@@ -442,7 +447,7 @@ fn the_depth_pass_records_the_caster_and_clears_the_rest() {
         &mut encoder,
         &fit,
         &[Caster {
-            vertices: &vertex_buffer,
+            geometry: &vertex_buffer,
             indices: &index_buffer,
             ranges,
             model: Mat4::IDENTITY,
@@ -503,7 +508,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
     let whole = 0..index_count;
     let ranges = std::slice::from_ref(&whole);
     let caster = Caster {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         ranges,
         model,
@@ -616,10 +621,10 @@ fn a_caster_with_nothing_to_draw_is_skipped_rather_than_panicking() {
             mapped_at_creation: false,
         })
     };
-    let vertices = empty(wgpu::BufferUsages::VERTEX);
+    let vertices = Geometry::single(empty(wgpu::BufferUsages::VERTEX), 0);
     let indices = empty(wgpu::BufferUsages::INDEX);
     let caster = Caster {
-        vertices: &vertices,
+        geometry: &vertices,
         indices: &indices,
         ranges: &[],
         model: Mat4::IDENTITY,

@@ -182,8 +182,7 @@ impl Drawable {
             plain_draws: self.plain_draws.clone(),
             hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
-            vertices: self.vertices.clone(),
-            texcoords: self.texcoords.clone(),
+            geometry: self.geometry.clone(),
             indices: self.indices.clone(),
             uniforms,
             uniform_bind,
@@ -217,6 +216,6 @@ impl Drawable {
     /// rather than copies of them.
     #[cfg(test)]
     pub(crate) fn shares_geometry_with(&self, other: &Self) -> bool {
-        self.vertices == other.vertices && self.indices == other.indices
+        self.geometry.shares_buffers_with(&other.geometry) && self.indices == other.indices
     }
 }

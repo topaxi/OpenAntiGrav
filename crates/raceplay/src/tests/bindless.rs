@@ -6,7 +6,7 @@ use super::scene_build::{test_gpu, vertex};
 use super::*;
 use oag_mesh::mesh::{Bounds, DrawCall};
 
-const SIZE: u32 = 64;
+pub(super) const SIZE: u32 = 64;
 /// Strips per drawable; two drawables share the target, one a half each.
 const STRIPS: usize = 8;
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -19,7 +19,7 @@ const UNDECODED: usize = 6;
 /// other strip of either half has, except that slot [`SHARED`] names slot [`SHARED_WITH`]'s
 /// texture (the arrays hold it once) and slot [`UNDECODED`] has none (the white fallback
 /// every such slot shares).
-fn strips(half: usize) -> Model {
+pub(super) fn strips(half: usize) -> Model {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let mut draws = Vec::new();
@@ -91,10 +91,20 @@ pub(super) fn drawable(
     half: usize,
     bindless: bool,
 ) -> Drawable {
+    drawable_of(device, queue, strips(half), bindless)
+}
+
+/// [`drawable`] over `model`.
+pub(super) fn drawable_of(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: Model,
+    bindless: bool,
+) -> Drawable {
     Drawable::new_with(
         device,
         queue,
-        strips(half),
+        model,
         FORMAT,
         oag_gpu::formats::SceneStore::Computed,
         Anisotropy::Off,
@@ -116,14 +126,18 @@ pub(super) fn drawable(
 
 /// `drawables` drawn one after another in one pass with identity matrices, read back row
 /// by row.
-fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawables: &[Drawable]) -> Vec<u8> {
+pub(super) fn pixels(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    drawables: &[Drawable],
+) -> Vec<u8> {
     pixels_with(device, queue, drawables, |drawable, pass| {
         drawable.draw(pass, ViewBlock::NONE, None, None, None, None);
     })
 }
 
 /// [`pixels`] with each drawable drawn by `draw`.
-fn pixels_with(
+pub(super) fn pixels_with(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     drawables: &[Drawable],

@@ -1678,6 +1678,12 @@ triangles, but not their vertices.
 Vertices / triangles / materials (submeshes in brackets). Omega's main model is
 `track.final.rcsmodel`; 2048 ships `track.rcsmodel`.
 
+**`arena` and `square` are the two circuits whose vertex data (293.7 and 295.9 MiB) passes
+wgpu's default 256 MiB buffer ceiling**, so ours cuts their vertex buffer in two on a device
+with that ceiling; 2048's own copies are 51 and 73 MiB. Census of every circuit, and the
+mechanism: [`vertex-buffers.md`](../rendering/vertex-buffers.md). 2048 cross-check: ported
+(2048's circuits all fit one buffer and draw as before).
+
 | circuit | Vita `track` | Omega `track.final` | tri Omega/Vita |
 | --- | --- | --- | --- |
 | altima | 531,735 / 419,023 / 527 [2,817] | 1,928,152 / 1,912,623 / 575 [3,379] | 4.56 |

@@ -50,9 +50,12 @@ pub use vertex_layout::Texcoords;
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
+pub mod chunks;
 pub mod cutout;
 pub mod deferred;
+mod geometry;
 pub use cutout::CutoutPipelines;
+pub use geometry::{Cursor, Geometry};
 mod draw_groups;
 pub use draw_groups::draw_cutout_then_transparent;
 
@@ -187,7 +190,9 @@ pub struct Built {
     /// [`Foliage::takes_part`], which is a Pulse or Pure circuit.
     pub foliage: Option<Foliage>,
     pub bind_group: wgpu::BindGroup,
-    pub vertex_buffer: wgpu::Buffer,
+    /// The vertex buffers: one for a model that fits the device's `max_buffer_size`,
+    /// several cut by [`chunks::VertexChunks`] for one that does not.
+    pub geometry: Geometry,
     pub index_buffer: wgpu::Buffer,
     pub texture_binds: Vec<wgpu::BindGroup>,
     /// Group 1 as arrays, the same materials slot for slot, when the caller asked
@@ -1034,20 +1039,32 @@ pub fn build_with(
         })
     });
 
-    let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vertices"),
-        size: std::mem::size_of_val(&model.vertices[..]) as u64,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
+    let geometry = Geometry::new(device, model, device.limits().max_buffer_size)?;
+    if !geometry.is_whole() {
+        log::debug!(
+            "{}: {} vertices cut into {} buffers of at most {:.1} MiB (the device's max_buffer_size is {:.1} MiB)",
+            model.label,
+            model.vertices.len(),
+            geometry.buffer_count(),
+            geometry.largest_buffer() as f64 / (1 << 20) as f64,
+            device.limits().max_buffer_size as f64 / (1 << 20) as f64,
+        );
+    }
     let deferred = defer_uploads && oag_gpu::deferred_upload::active();
     if !deferred {
-        queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&model.vertices));
+        geometry.write_all(queue, &model.vertices);
     }
 
+    let index_bytes = std::mem::size_of_val(&model.indices[..]) as u64;
+    anyhow::ensure!(
+        index_bytes <= device.limits().max_buffer_size,
+        "{}: {index_bytes} bytes of indices exceed the device's maximum buffer size of {}",
+        model.label,
+        device.limits().max_buffer_size
+    );
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("indices"),
-        size: std::mem::size_of_val(&model.indices[..]) as u64,
+        size: index_bytes,
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1250,7 +1267,7 @@ pub fn build_with(
         stamp_pipeline,
         foliage,
         bind_group,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         bindless,

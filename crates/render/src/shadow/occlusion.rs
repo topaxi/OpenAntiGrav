@@ -91,8 +91,8 @@ const UNIFORM_STRIDE: u64 = 256;
 /// geometry and the bind groups already exist for the main pass.
 #[derive(Debug, Clone, Copy)]
 pub struct Track<'a> {
-    /// The track's vertex buffer, in [`GpuVertex`] layout.
-    pub vertices: &'a wgpu::Buffer,
+    /// The track's vertex buffers, in [`GpuVertex`] layout.
+    pub geometry: &'a oag_mesh::mesh_render::Geometry,
     /// Its index buffer, `u32`.
     pub indices: &'a wgpu::Buffer,
     /// The opaque draw calls, and separately the cutout and the transparent
@@ -334,6 +334,7 @@ impl Maps {
         // The pass runs whatever is near, so the clear lands; the pipeline and buffers
         // are set on the first draw within reach, as a pass with none sets nothing.
         let mut near = 0;
+        let mut cursor = None;
         for draw in track
             .draws
             .iter()
@@ -344,7 +345,7 @@ impl Maps {
             if near == 0 {
                 pass.set_pipeline(&self.pipeline);
                 pass.set_bind_group(0, &self.binds[layer], &[]);
-                pass.set_vertex_buffer(0, track.vertices.slice(..));
+                cursor = Some(track.geometry.cursor(&mut pass));
                 pass.set_index_buffer(track.indices.slice(..), wgpu::IndexFormat::Uint32);
             }
             near += 1;
@@ -353,7 +354,9 @@ impl Maps {
                 continue;
             };
             pass.set_bind_group(1, material, &[]);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            if let Some(cursor) = &mut cursor {
+                cursor.draw(&mut pass, &draw.range);
+            }
         }
         oag_gpu::perfprobe::marks::close(&mut pass);
         drop(pass);

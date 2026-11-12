@@ -170,7 +170,7 @@ pub fn capture_pixels_from(
         unblended_pipeline,
         authored_pipelines,
         bind_group,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         bindless: _,
@@ -315,7 +315,7 @@ pub fn capture_pixels_from(
             // it at `Fog::off`.
             pass.set_bind_group(2, &fog_bind, &[0]);
             pass.set_bind_group(3, &anim_bind, &[]);
-            pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            let mut cursor = geometry.cursor(&mut pass);
             pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
             // One draw per material run. Slot 0 is the white fallback, so a texture
@@ -335,7 +335,7 @@ pub fn capture_pixels_from(
 
             for draw in &model.draws {
                 pass.set_bind_group(1, bind(draw), &[]);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, &draw.range);
             }
 
             // Cutout draws want `fs_main_alpha_test`, not a hardcoded alpha of
@@ -344,6 +344,7 @@ pub fn capture_pixels_from(
             // opaque and a blended pipeline the same way).
             crate::mesh_render::draw_cutout_then_transparent(
                 &mut pass,
+                &mut cursor,
                 model,
                 crate::mesh_render::CutoutPipelines {
                     default: &alpha_test_pipeline,
