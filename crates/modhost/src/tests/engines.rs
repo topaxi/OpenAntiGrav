@@ -15,6 +15,7 @@ fn the_engine_is_the_one_the_build_asked_for() {
     assert_eq!(engine_name(), Some(want));
 }
 
+#[cfg(feature = "pulley")]
 /// A guest that makes NaNs of odd payloads and stores their bits, loops on integer and
 /// float arithmetic, and asks slot 1 for a factor derived from them: the places the
 /// two backends could differ (NaN bits, float rounding, fuel at loop headers).
@@ -52,6 +53,7 @@ fn arithmetic() -> Vec<u8> {
     ))
 }
 
+#[cfg(feature = "pulley")]
 /// What one run of `ticks` ticks returned: the blob, the commands and the cost of each tick.
 fn run(engine: &Engine, wasm: &[u8], ticks: u64) -> (Vec<u8>, Vec<Vec<Command>>, Vec<Cost>) {
     let module = Module::compile_on(engine, wasm, Limits::default()).unwrap();
