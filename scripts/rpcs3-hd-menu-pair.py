@@ -86,14 +86,15 @@ WALK = [
 
 #: The loading walk: Main Menu to a Racebox single race on Vineta K with Feisar, then CROSS on Team Selection starts the
 #: race load, and the one photograph is taken `settle` seconds after it (the old hand-grabbed frame l3 was 4 s after the
-#: CROSS, bar about 15 % filled, `Launch Game` then `InGame` on TTY.log). **The walk is one-way**: the race load ends in a
+#: CROSS, `Launch Game` then `InGame` on TTY.log; the bar then stood at 32 of its 166 columns, which `compare_menu.loading_pair`
+#: counts off every frame and states to ours as a tick count). **The walk is one-way**: the race load ends in a
 #: race, so a later menu walk needs a fresh cold boot. The screen name is declared (`TTY.log` names none for this screen),
 #: the feature is read from the constructor's `Feature type == N` line.
 LOADING_WALK = [
     "cross:5", "cross:5", "cross:5", "circle:5", "circle:5", "circle:5", "right", "cross:5", "cross:5", "cross:6",
     "cross:0.2",
     {"id": "loading", "kind": "loading", "title": "Race loading, Vineta K, Feisar", "screen": "Loading Screen (declared)",
-     "settle": 4.0, "mode": "single_race", "track": "Data\\Environments\\01_Vineta_K\\track.vex", "ticks": 100,
+     "settle": 4.0, "mode": "single_race", "track": "Data\\Environments\\01_Vineta_K\\track.vex",
      "race": {"team": "Feisar", "variant_chosen": True, "track": "01_Track"}},
 ]
 
@@ -169,8 +170,8 @@ def main():
             pdir.mkdir(parents=True, exist_ok=True)
             pair = ce.Pair(args.platform, pdir)
             pair.rec["meta"] = {"id": "hd-loading", "title": item["title"], "track": "Vineta K", "craft": "Feisar",
-                                "note": "Racebox single race, Vineta K, Feisar; ours is `--loading-live` at tick %d, drawn from LoadingScreen_HD.toml. Both sides "
-                                "English, front-end styling %s." % (item["ticks"], args.front_end_style),
+                                "note": "Racebox single race, Vineta K, Feisar; ours states the bar as the original's lit-column count (no `--loading-live`), drawn from LoadingScreen_HD.toml. "
+                                "Both sides English, front-end styling %s." % args.front_end_style,
                                 "state": "cold boot, walked from Main Menu with the pad; photographed %.0f s after CROSS on Team Selection"
                                 % item["settle"]}
             pair.rec["original"]["emulator"] = dict(plat["emulator"])
@@ -187,8 +188,7 @@ def main():
                 cm.loading_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.image, profile_dir=profile,
                                 size=ce.size_text(plat), front_end_style=args.front_end_style, language="English",
                                 original_language=language.split(" ")[0], screen_seen=shot["screen"], screen_wanted=item["screen"],
-                                feature_seen=shot["feature"], mode=item["mode"], track=item["track"],
-                                ticks=item["ticks"], safe_area=safe_area)
+                                feature_seen=shot["feature"], mode=item["mode"], track=item["track"], safe_area=safe_area)
                 pair.finish()
             except SystemExit as exc:
                 if exc.code == 3:
