@@ -38,10 +38,10 @@
 //!   copy of it: a ground pixel is `lattice * sqrt(c)`, written as black with
 //!   alpha `1 - sqrt(c)`.
 //!
-//! **Not read, so not drawn**: the ground relief (the unpainted cells' alpha,
-//! which the music spectrum and ripples move), so the ground is flat; the
-//! occlusion of a vertex shared with a neighbouring tile, which the bake takes
-//! from an isolated tile.
+//! **Not read, so not drawn**: the ripple that also moves the unpainted cells'
+//! alpha (no writer found); the occlusion of a vertex shared with a neighbouring
+//! tile, which the bake takes from an isolated tile. The ground is flat here;
+//! the music wave raises it per frame ([`super::canvas_mesh`]).
 
 use super::canvas_camera::{Camera, TILE_HEIGHT, tile_top};
 use super::canvas_lattice::{CELL_DX, CELL_DY, CORNERS_DOWN, CORNERS_UP, composite_encode};
@@ -61,7 +61,7 @@ const MARGIN: (i32, i32, i32, i32) = (4, 2, 4, 3);
 const SUPER: usize = 3;
 /// The occlusion's six neighbours of a vertex, `(du, dv)` in cells, by the
 /// vertex's `offsetIndices` (`DAT_81732994..`).
-const NEIGHBOURS: [[(i32, i32); 6]; 6] = [
+pub(super) const NEIGHBOURS: [[(i32, i32); 6]; 6] = [
     [(0, 0), (-1, 0), (-2, 0), (0, 1), (-1, 1), (-2, 1)],
     [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)],
     [(-1, 0), (0, 0), (1, 0), (-1, -1), (0, -1), (1, -1)],

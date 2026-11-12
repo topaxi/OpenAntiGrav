@@ -13,6 +13,7 @@ mod aspect;
 mod backdrop;
 mod campaign_cursor;
 mod campaign_tiers;
+mod campaign_wave;
 mod drawing;
 mod event_card;
 mod focus;

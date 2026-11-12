@@ -572,6 +572,7 @@ impl Session {
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }
+                    stage.frontend.set_music_levels(self.audio.music_levels());
                     let events =
                         stage
                             .frontend

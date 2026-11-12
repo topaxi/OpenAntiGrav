@@ -255,6 +255,12 @@ pub struct CampaignMap {
     pub(super) card: Option<super::event_card::CardState>,
     /// The pad's pointer on the map. See [`super::map_cursor`].
     pub(super) cursor: super::map_cursor::MapCursor,
+    /// The music wave round the current event. See [`super::campaign_wave`].
+    pub(super) wave: super::canvas_wave::Wave,
+    /// Seconds the wave has not stepped yet.
+    pub(super) wave_owed: f32,
+    /// Band 1 of the playing track's spectrum, when the music path has one.
+    pub(super) band1: Option<f32>,
 }
 
 impl CampaignMap {
@@ -269,7 +275,7 @@ impl CampaignMap {
         Camera::scrolled(self.scroll())
     }
 
-    fn cell(event: &MapEvent) -> (f32, f32) {
+    pub(super) fn cell(event: &MapEvent) -> (f32, f32) {
         (event.x, event.y)
     }
 
@@ -755,6 +761,31 @@ impl Frontend {
             width / canvas_camera::VIEWPORT.0,
             height / canvas_camera::VIEWPORT.1,
         );
+        for (x, y) in self.lattice_copies() {
+            // One texel in from the picture's edge, so a filtered draw
+            // never reads the sheet's neighbour along a seam.
+            out.push(Draw::Sprite {
+                rect: [
+                    (x + 1.0) * scale.0,
+                    (y + 1.0) * scale.1,
+                    width - 2.0 * scale.0,
+                    height - 2.0 * scale.1,
+                ],
+                uv: picture.sheet_rect([
+                    1.0,
+                    1.0,
+                    picture.width as f32 - 2.0,
+                    picture.height as f32 - 2.0,
+                ]),
+                color: [1.0; 4],
+            });
+        }
+    }
+
+    /// Where the lattice picture's four copies sit, their top left corners in
+    /// viewport pixels, whole pixels: what [`Self::draw_map_lattice`] draws and
+    /// what a raised cell takes its face from ([`super::campaign_wave`]).
+    pub(super) fn lattice_copies(&self) -> [(f32, f32); 4] {
         let (across, down) = Camera::lattice_period();
         let here = self.campaign.camera().project([0.0; 3]);
         let baked = Camera::scrolled(canvas_lattice::BAKED_VIEW).project([0.0; 3]);
@@ -767,29 +798,15 @@ impl Frontend {
         let columns = (canvas_camera::VIEWPORT.0 / across.0).floor();
         let lines = (canvas_camera::VIEWPORT.1 / down.1).floor();
         let slip = lines * down.0 - (lines * down.0 / across.0).round() * across.0;
-        for line in [0.0, 1.0] {
-            for column in [0.0, 1.0] {
-                let x = (origin.0 + column * columns * across.0 + line * slip).round();
-                let y = (origin.1 + line * lines * down.1).round();
-                // One texel in from the picture's edge, so a filtered draw
-                // never reads the sheet's neighbour along a seam.
-                out.push(Draw::Sprite {
-                    rect: [
-                        (x + 1.0) * scale.0,
-                        (y + 1.0) * scale.1,
-                        width - 2.0 * scale.0,
-                        height - 2.0 * scale.1,
-                    ],
-                    uv: picture.sheet_rect([
-                        1.0,
-                        1.0,
-                        picture.width as f32 - 2.0,
-                        picture.height as f32 - 2.0,
-                    ]),
-                    color: [1.0; 4],
-                });
-            }
+        let mut copies = [(0.0, 0.0); 4];
+        for (at, copy) in copies.iter_mut().enumerate() {
+            let (line, column) = ((at / 2) as f32, (at % 2) as f32);
+            *copy = (
+                (origin.0 + column * columns * across.0 + line * slip).round(),
+                (origin.1 + line * lines * down.1).round(),
+            );
         }
+        copies
     }
 
     /// A tile's prism: the baked picture ([`canvas_prism`]) with its anchor on
@@ -835,17 +852,9 @@ impl Frontend {
         }
     }
 
-    /// The canvas's ground cells that are neither lattice nor a raised tile: every
-    /// ring cell and every unreached event's flat tint, by the canvas's priority
-    /// rule ([`canvas_cells::resolve`]), drawn over the lattice and under the
-    /// tiles. A sheet without the cell pictures draws none.
-    fn draw_ground_cells(&self, camera: &Camera, out: &mut Vec<Draw>) {
-        let (width, height) = self.space.size;
-        let scale = (
-            width / canvas_camera::VIEWPORT.0,
-            height / canvas_camera::VIEWPORT.1,
-        );
-        let buttons: Vec<CanvasButton> = (0..self.campaign.events.len())
+    /// Every visible event as the canvas button it paints.
+    pub(super) fn canvas_buttons(&self) -> Vec<CanvasButton> {
+        (0..self.campaign.events.len())
             .filter(|&at| !self.campaign.hidden(at))
             .map(|at| {
                 let event = &self.campaign.events[at];
@@ -861,7 +870,20 @@ impl Frontend {
                     ring: ring_mode(event.role, reached),
                 }
             })
-            .collect();
+            .collect()
+    }
+
+    /// The canvas's ground cells that are neither lattice nor a raised tile: every
+    /// ring cell and every unreached event's flat tint, by the canvas's priority
+    /// rule ([`canvas_cells::resolve`]), drawn over the lattice and under the
+    /// tiles. A sheet without the cell pictures draws none.
+    fn draw_ground_cells(&self, camera: &Camera, out: &mut Vec<Draw>) {
+        let (width, height) = self.space.size;
+        let scale = (
+            width / canvas_camera::VIEWPORT.0,
+            height / canvas_camera::VIEWPORT.1,
+        );
+        let buttons = self.canvas_buttons();
         for painted in canvas_cells::resolve(&buttons) {
             let up = canvas_cells::is_up(painted.cell);
             let Some(picture) = self.placed(canvas_cells::name(painted.fill, up)) else {
@@ -929,6 +951,7 @@ impl Frontend {
         self.draw_map_lattice(out);
         let camera = self.campaign.camera();
         self.draw_ground_cells(&camera, out);
+        self.draw_wave(&camera, out);
         // Far to near, as the canvas's depth buffer would: a nearer tile's wall
         // covers a farther tile's shade.
         let mut order: Vec<usize> = (0..self.campaign.events.len()).collect();

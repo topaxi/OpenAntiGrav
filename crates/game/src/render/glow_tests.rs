@@ -9,19 +9,17 @@ const H: u32 = 272;
 
 /// The frame `list` draws, as RGBA rows; `None` on a machine with no adapter.
 fn frame(list: &[Draw]) -> Option<Vec<u8>> {
+    frame_with(list, &oag_hud::sprite::Sheet::default())
+}
+
+/// [`frame`] over a sprite sheet of the caller's.
+fn frame_with(list: &[Draw], sheet: &oag_hud::sprite::Sheet) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut renderer = Renderer::new(
-        &device,
-        &queue,
-        format,
-        None,
-        Atlas::build(),
-        &oag_hud::sprite::Sheet::default(),
-    )
-    .expect("the ui pipeline");
+    let mut renderer = Renderer::new(&device, &queue, format, None, Atlas::build(), sheet)
+        .expect("the ui pipeline");
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("glow test"),
         size: wgpu::Extent3d {
@@ -180,5 +178,52 @@ fn a_text_stamps_its_glyph_quads_and_blooms() {
         red(&stamped, 20, 20),
         0,
         "far from the text nothing is added"
+    );
+}
+
+/// A sheet of one opaque white texel, so a sheet-textured draw shows its colour alone.
+fn white_sheet() -> oag_hud::sprite::Sheet {
+    let mut sheet = oag_hud::sprite::Sheet::default();
+    sheet.rgba = vec![255; 4];
+    sheet
+}
+
+fn corner(at: [f32; 2], color: [f32; 3]) -> oag_ui::frontend::Corner {
+    oag_ui::frontend::Corner {
+        at,
+        uv: [0.5, 0.5],
+        color,
+    }
+}
+
+/// A `Draw::Triangles` triangle covers its own area and nothing beyond it, and each corner's
+/// colour is interpolated across it.
+#[test]
+fn a_triangle_fills_its_area_with_the_corners_colours() {
+    let list = [Draw::Triangles(vec![[
+        corner([200.0, 100.0], [1.0, 0.0, 0.0]),
+        corner([280.0, 100.0], [0.0, 0.0, 0.0]),
+        corner([200.0, 180.0], [0.0, 0.0, 0.0]),
+    ]])];
+    let Some(frame) = frame_with(&list, &white_sheet()) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert_eq!(
+        red(&frame, 270, 170),
+        0,
+        "beyond the hypotenuse nothing is drawn"
+    );
+    assert_eq!(
+        red(&frame, 190, 90),
+        0,
+        "outside the bounding box nothing is drawn"
+    );
+    let near_red = red(&frame, 206, 106);
+    let far = red(&frame, 255, 112);
+    assert!(near_red > 200, "next to the red corner, got {near_red}");
+    assert!(
+        far < near_red / 2,
+        "the colour fades from the red corner, got {far}"
     );
 }

@@ -786,6 +786,9 @@ impl Renderer {
                     chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
                 }),
+                Draw::Triangles(triangles) => {
+                    self.quads.extend(triangles.iter().map(Quad::triangle));
+                }
                 Draw::TiledSprite {
                     rect,
                     uv,

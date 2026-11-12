@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 map: music wave (.fft band 1, radius 7) wireable now; hidden-event tap reveal and XP rank gate read, need an XP model"
+summary: "2048 map: music wave wired (.fft band 1, radius 7); hidden-event tap reveal and XP rank gate read, need the XP model"
 categories: [audio]
 difficulty: hard (30)
 ---
@@ -27,14 +27,13 @@ confidence is on `docs/ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md`.
 
 ## Next Steps
 
-Step 1 is independent; steps 2 to 4 need the XP model.
+The wave landed (`docs/ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md`, "Wired: the music
+wave"): the `.fft` reader, the music-position output, the law (`canvas_wave`), a generic
+`Draw::Triangles` and the CPU vertex program (`canvas_mesh`). Steps 2 to 4 need the XP model.
 
-1. **The wave.** The music path exposes its playing position per frame (an output, ADR-0018); the
-   front end reads the playing track's own `.fft` (never a spectrum from PCM:
-   `crates/audio/src/spectrum.rs` is not this), samples band 1 at `position * 30`, and applies the law
-   around the current event (`R = 7`, the 230/s decay, the 15 % per-frame ease, the six-cell average
-   for progress-1 events). The baked lattice picture becomes per frame inside that disc: plan the
-   render cost.
+1. ~~The wave.~~ Open edges: the analyser's automatic gain (`MusicAnalysis_Update`, peak-hold unread),
+   `Wave::flatten` is called with no groups until a hidden event can be at progress 1, and no live
+   Vita3K confirmation of the amplitude.
 2. **XP total and rank.** Nothing in this engine keeps 2048's XP
    (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). Minimum: a per-profile XP total, the
    awards the campaign pays, the rank from `XPRanks.xml`. A subsystem of its own; it may deserve its

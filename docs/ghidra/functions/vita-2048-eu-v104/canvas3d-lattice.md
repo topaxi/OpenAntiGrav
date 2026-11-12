@@ -564,3 +564,37 @@ Omega: **checked, applies, not wired.** `canvasTexture.gnf` ships and the reset 
 (`0x018086ec`); Omega's front end is HD's and its composite is `ps4-omega-eu/tonemap.md`'s, so
 whether its pages draw a `Canvas3D` and through which encode was not read (shadPS4 has no memory
 readout; a RenderDoc pass table of an Omega frame is the way). HD: **checked, differs** (no `Canvas3D`).
+
+## Wired: the music wave on the campaign map (lane `w2048-lattice-wave`)
+
+The law is [canvas-music-wave.md](canvas-music-wave.md), "The wave"; this is what draws it.
+
+- **Data**: the track's `*_stereo.fft` sidecar is parsed by `oag_music::spectrum` (`AFEX`, version 1,
+  12 bands, `16 + 4 * 12 * frames` bytes, rows 30 a second, blended linearly between rows, silent
+  outside the track). `oag_title::Music::spectrum_extension` is 2048's `fft` and `None` on every other
+  title. The front end's loop is the only music the map plays over, so only its sidecar is read; the
+  music path exposes the row at the voice's own position each tick (`oag_sound::Audio::music_levels`,
+  an output, never `World` state) and `Frontend::set_music_levels` takes band 1.
+  `crates/game/tests/vita_2048_music_ground_truth.rs` parses the front end's sidecar and all eleven
+  race tracks' (rows cover the track to within 1.5 s).
+- **Law**: `oag_ui::frontend::canvas_wave`: a 30-step band-1 history, per cell
+  `int(600 f (h[k] - h[k+1]))` added and clamped to 0 to 255, 230 alpha a second off every cell, the
+  shown height easing 15 % a step; steps are the original's 60 Hz frames. Cells of priority 5 or more
+  (tiles) never move; ring cells (priority 1 to 4) do. Centre and radius: the first open event's
+  top-face centre and 7.0.
+- **Draw**: `oag_ui::frontend::canvas_mesh` runs the vertex program on the CPU (lift `h = z + alpha/255`,
+  occlusion `1/6 sum max(h_k - h, 0)` over the six cells that share a vertex) and emits
+  `Draw::Triangles`, a generic textured triangle list (`oag_game::render`, `ui.wesl` mode 7). The top
+  face is the picture the cell shows on the ground, moved by the lift (the lattice picture's own pixels
+  for plain ground, the baked ring picture for a ring cell). Walls are drawn only where the cell
+  across the edge is lower, down to that cell's top or one unit, shaded linearly toward the original's
+  foot shade; far-to-near order stands in for the depth buffer. A frame with no triangle list draws
+  as before.
+- **Not ported**: the analyser's automatic gain (`MusicAnalysis_Update`, confidence 60, peak-hold
+  unread), so quiet passages move the cells less than in the original; the hidden-event six-cell
+  average is `Wave::flatten` (confidence 55, called with no groups until the XP model and the
+  maintainer's confirmation exist); the music time of a headless capture is the dump clock, not a
+  Vita's.
+- **Omega**: **checked, differs, unchanged**: no `.fft` ships (Wipeout music is Wwise), so
+  `spectrum_extension` is `None` and the map is the static picture; the loader says nothing because the
+  title declares no sidecar. A missing or unparsable sidecar on a title that declares one is a `warn`.

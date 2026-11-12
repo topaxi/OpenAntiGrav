@@ -931,3 +931,35 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(&menu_sound), Bus::Music)));
     (audio, menu_sound, race_sound)
 }
+
+/// The map's levels are the spectrum row at the music voice's own position, and nothing without
+/// a spectrum or a voice.
+#[test]
+fn the_music_levels_follow_the_voice_through_the_spectrum() {
+    let (mut audio, ..) = psp_boot_fixture();
+    assert_eq!(audio.music_levels(), None, "no sidecar loaded");
+
+    // 300 rows, band 1 rising from 0 to 1 over ten seconds.
+    let mut bytes = b"AFEX".to_vec();
+    for word in [1u32, 12, 300] {
+        bytes.extend(word.to_le_bytes());
+    }
+    for row in 0..300 {
+        for band in 0..12 {
+            let level = if band == 1 { row as f32 / 300.0 } else { 0.0 };
+            bytes.extend(level.to_le_bytes());
+        }
+    }
+    audio.menu_spectrum = Some(oag_music::spectrum::Spectrum::parse(&bytes).unwrap());
+    let voice = audio.music.expect("the fixture plays the menu loop");
+    assert!(audio.output.with_mixer(|mixer| mixer.seek(voice, 5.0)));
+    let levels = audio.music_levels().expect("a spectrum and a voice");
+    assert!(
+        (levels[1] - 0.5).abs() < 0.01,
+        "5 s of 10 s is 0.5, got {}",
+        levels[1]
+    );
+
+    audio.music = None;
+    assert_eq!(audio.music_levels(), None, "no voice, no levels");
+}

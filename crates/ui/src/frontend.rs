@@ -96,9 +96,11 @@ use oag_hd::frontend::states as hd_states;
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
 mod campaign_tiers;
+mod campaign_wave;
 pub mod canvas_camera;
 pub mod canvas_cells;
 pub mod canvas_lattice;
+pub mod canvas_mesh;
 pub mod canvas_prism;
 pub mod canvas_wave;
 mod event_card;
@@ -341,7 +343,7 @@ mod pointer;
 mod rows;
 mod updates;
 
-pub use draw::Draw;
+pub use draw::{Corner, Draw};
 
 /// How the intro state is getting on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -907,6 +909,7 @@ impl Frontend {
         self.on_screen_for += dt;
         self.campaign.tick(dt);
         self.step_map_cursor(dt);
+        self.step_wave(dt);
 
         if self.leg_has_no_picture() {
             input.inject_press(Button::Start);

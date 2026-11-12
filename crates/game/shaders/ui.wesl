@@ -124,8 +124,42 @@ fn to_clip(pixels: vec2<f32>) -> vec4<f32> {
     return pixels_to_clip(pixels, uniforms.screen, uniforms.viewport);
 }
 
+// A `Draw::Triangles` triangle (mode 7): the instance carries three corners packed
+// by `Quad::triangle` in quad.rs. Vertices 0 to 2 are the corners and 3 to 5 repeat
+// corner 0, a degenerate triangle that draws nothing. Comes out as an ordinary sheet
+// quad's vertex (mode 1) with the corner's own colour.
+fn triangle_vertex(index: u32, instance: Instance) -> VertexOut {
+    let v = select(0u, index, index < 3u);
+    let p0 = instance.rect.xy;
+    let p1 = instance.rect.zw;
+    let p2 = instance.uv.xy;
+    let t0 = instance.uv.zw;
+    let t1 = instance.color.xy;
+    let t2 = instance.color.zw;
+    let c0 = instance.border.xyz;
+    let c1 = vec3<f32>(instance.border.w, instance.chamfer.x, instance.chamfer.y);
+    let c2 = vec3<f32>(instance.tile.x, instance.tile.y, instance.rotation);
+    let at = select(select(p0, p1, v == 1u), p2, v == 2u);
+    let sheet = select(select(t0, t1, v == 1u), t2, v == 2u);
+    let shade = select(select(c0, c1, v == 1u), c2, v == 2u);
+    var out: VertexOut;
+    out.position = to_clip(at);
+    out.uv = sheet / uniforms.sprites;
+    out.color = vec4<f32>(shade, 1.0);
+    out.border = out.color;
+    out.mode = 1.0;
+    out.tile_rect = vec4<f32>(0.0);
+    out.tiles = vec2<f32>(0.0);
+    out.texel_pixels = vec2<f32>(1.0);
+    out.texture_size = uniforms.sprites;
+    return out;
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
+    if instance.mode > 6.5 {
+        return triangle_vertex(index, instance);
+    }
     let corner = corner_of(index);
     // The **geometry** turns and the `uv` below does not, so this spins the
     // quad rather than the texture lookup - the difference between drawing one
