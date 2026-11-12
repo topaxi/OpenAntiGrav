@@ -9,8 +9,8 @@ difficulty: medium (45)
 
 # Gemini Dam Black: a tunnel ceiling light flickers rapidly
 
-The maintainer saw this in play on 2026-11-12 (Pulse, PSP, Gemini Dam Black = `12_Track` forward). The tunnel was not named; the
-measure lane (2026-11-12) found the cause at the long tunnel at spline rows about 1,180 to 1,430 and ruled out the time path.
+The maintainer saw this in play on 2026-11-12 (Pulse, PSP, Gemini Dam Black = `12_Track` forward). The maintainer confirmed it is the long
+tunnel's ceiling strips; the measure lane (2026-11-12) found the cause at the long tunnel at spline rows about 1,180 to 1,430 and ruled out the time path.
 
 ## Settled (measured against the original)
 
@@ -44,7 +44,7 @@ measure lane (2026-11-12) found the cause at the long tunnel at spline rows abou
 - **The arch ceiling lights** (`screen1_GLOW` 4 cells at 12.5 frames, `screen3` 60-frame loop; nodes 89, 181, 275, 393, 405)
   were measured in the original's texture updater only; their frames were not compared (they hang above the chase camera).
   They carry no depth bias in the header read here, so they are not this defect; if the maintainer's light is one of them,
-  the next step is a nose-up pose in the original.
+  the next step is a nose-up pose in the original. The maintainer confirmed the long tunnel's strips, not these.
 
 ## Next Steps
 
