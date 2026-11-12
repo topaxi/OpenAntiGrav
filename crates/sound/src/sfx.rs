@@ -412,10 +412,15 @@ impl Audio {
                     if let Some(started) = banks.voices_for(Cue::Shield, true, &mut voices.rng) {
                         voices.shield =
                             layers::start(mixer, &started, Cue::Shield.bus(), VoicePlace::DRY);
+                        log::trace!("sfx: held Shield opened, {} voice(s)", voices.shield.len());
                     }
                 }
                 (false, true) => {
                     voices.shield_open = false;
+                    log::trace!(
+                        "sfx: held Shield released, {} voice(s)",
+                        voices.shield.len()
+                    );
                     for id in voices.shield.drain(..) {
                         mixer.stop(id);
                     }
@@ -494,6 +499,10 @@ impl Audio {
                     if let Some(started) = banks.voices_for(Cue::Autopilot, true, &mut voices.rng) {
                         voices.autopilot =
                             layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
+                        log::trace!(
+                            "sfx: held Autopilot opened, {} voice(s)",
+                            voices.autopilot.len()
+                        );
                     }
                     if let Some(started) = banks.voices(Cue::Engaging, &mut voices.rng) {
                         let _ =
@@ -502,6 +511,10 @@ impl Audio {
                 }
                 (false, true) => {
                     voices.autopilot_open = false;
+                    log::trace!(
+                        "sfx: held Autopilot released, {} voice(s)",
+                        voices.autopilot.len()
+                    );
                     for id in voices.autopilot.drain(..) {
                         mixer.stop(id);
                     }
@@ -679,7 +692,9 @@ impl Audio {
 
             // HD's engine: same craft and ears, a table instead of a held pitch
             // law ([`xfade`]). Its layers stay resident, beyond the PSP's 32 voices.
-            if voices.xfade.iter().any(Option::is_some) {
+            // A Wwise title's held cues are layered events (a magstrip is six voices
+            // a craft): the PSP's pool would starve the grid, so it takes HD's.
+            if voices.xfade.iter().any(Option::is_some) || banks.has_wwise_cues() {
                 mixer.grow_pool(oag_audio::mixer::HD_VOICES);
             }
             for (slot, craft_xfade) in voices.xfade.iter_mut().enumerate() {

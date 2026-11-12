@@ -588,6 +588,12 @@ impl Banks {
         self.voices(cue, rng)
     }
 
+    /// Whether any cue plays from a Wwise event.
+    #[must_use]
+    pub fn has_wwise_cues(&self) -> bool {
+        !self.wwise.is_empty()
+    }
+
     /// Everything a held cue's Wwise event starts, its looping layers held until
     /// the game releases it and its one-shot layers fired once; `None` for a cue
     /// not loaded from a Wwise event, which keeps its title's own held path.

@@ -103,6 +103,7 @@ impl TravelVoices {
                 let place = heard(at, radius, listener);
                 if let Some(event) = banks.held_voices(cue, rng) {
                     *held = layers::start(mixer, &event, cue.bus(), place);
+                    log::trace!("sfx: held {cue:?} opened, {} voice(s)", held.len());
                 } else if let Some((sound, looping)) = banks.pick(cue, rng)
                     && looping
                 {
@@ -130,6 +131,9 @@ impl TravelVoices {
             // linear)`, `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "Held
             // loops"); the mixer's own release is the declick.
             None => {
+                if !held.is_empty() {
+                    log::trace!("sfx: held {cue:?} released, {} voice(s)", held.len());
+                }
                 for id in held.drain(..) {
                     mixer.stop(id);
                 }

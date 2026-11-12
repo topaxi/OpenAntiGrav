@@ -86,12 +86,22 @@ impl Voices {
                 Cue::Magstrip.bus(),
                 heard(slot, listener, craft),
             );
+            log::trace!(
+                "sfx: held Magstrip opened on slot {slot}, {} voice(s)",
+                held.len()
+            );
         }
     }
 
     /// Ends `slot`'s hum.
     pub(super) fn stop(&mut self, slot: usize, mixer: &mut Mixer) {
         if let Some(held) = self.held.get_mut(slot) {
+            if !held.is_empty() {
+                log::trace!(
+                    "sfx: held Magstrip released on slot {slot}, {} voice(s)",
+                    held.len()
+                );
+            }
             for id in held.drain(..) {
                 mixer.stop(id);
             }

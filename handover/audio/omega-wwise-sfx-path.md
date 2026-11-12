@@ -4,7 +4,7 @@ titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-12
-summary: "Omega start and 10 of 43 race cues play their Wwise events; 14 posted cues wait on switch-container play, 12 held loops on loop flags"
+summary: "Omega: 15 of 43 race cues play Wwise events (5 held loops); 20 wait on switch-container play, the engine on its band cues"
 ---
 
 # Omega race sound effects through Wwise
@@ -76,8 +76,22 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
   Plasma hits, both Rocket hits, MissileHitWall, Cannon, CannonHitWall, QuakeHit, ShurikenLaunch). Reading
   each switch group's game-side value (ship class, surface, player) is the next unlock; the loader report
   names each target id.
-- **Held loops (12 cues)**: Omega's `_` cues are kept handles; `wwise_start` reads no loop flags. Read the
-  sound's loop property, then wire them through the held-voice paths (`travel`, `magstrip`, shield).
+- ~~**Held loops (12 cues)**~~ 5 done (2026-11-12, lane `omega-wwise-held-loops`): property 58 is a sound's
+  loop count and a continuous container loops its pick ([wwise.md](../../docs/formats/wwise.md#loops)); a
+  held post stops with no fade (`FUN_0109c140(id, 0, 4)`, `StopPlayingID`'s shape). Shield, Autopilot,
+  Magstrip, ShurikenTravel and LeachAttach (no loop authored: plays once, held) play through the existing
+  held paths (`Banks::held_voices`), pinned by `omega_held_loops_ground_truth` (red on main, green after)
+  and `a_race_plays_its_posted_cues_from_their_wwise_events`. Evidence: wwise-cues.md, "Held loops".
+- **Six held cues stop at switch group `2068003018`** (Plasma, Rocket, Missile and Quake travel, the death
+  `_NGP_ShipDeath`) **or `3202746158`** (`_NGP_MissileLock`). Reading group `2068003018`'s game-side value
+  unlocks five of them at once; it is the same group several one-shot hits switch on.
+- **The engine** is `~Ship<n>_<band>` (`FUN_0130b8c0`: team to `Ship1`..`Ship5`, bands `LowAcc_%d`,
+  `HighDec_G_%d`, ..., `CONTROLLERID_*` game parameters), not `xpress`/`xrelease`. Unread: how the band
+  and `%d` are chosen, and the RTPC curves. A lane of its own.
+- **Held-loop simplifications, chosen**: travel loops play the non-player event (the owner is not passed),
+  the magstrip plays the non-player event from every craft, a continuous random container repeats its
+  first draw, `smpl` loop points are not read (the whole media loops), the `0x0103` stop-on-repost and the
+  `0x1303`/`0x1402`/`0x0803` game-parameter and pitch actions in the held events are reported, not played.
 - **`QUAKELAUNCH`'s media `405228712`** fails `oag_music`'s ATRAC9 decode at frame 0 ("invalid reuse band params").
 - **`NGP_LEACH__Weapons_NGP` and `NGP_LEACHENERGY_PC__Weapons_NGP` start no sound this loader reads**
   (a relay into another bank, a dangling target or state actions alone: unread). The player's LeachEnergy
@@ -91,7 +105,9 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
 1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
 2. ~~Container rules~~ done; the missile launch loads (`omega_countdown_ground_truth::the_missile_launch_plays_one_child_of_each_random_layer`):
    a layer container of five layers, four random containers and a sound, so five media per post, not one.
-   ~~Next: the per-cue table~~ done (above). Next: switch-container play, then the held loops' loop flags.
+   ~~Next: the per-cue table~~ done (above). ~~Held loops' loop flags~~ done (5 of 12). Next:
+   switch-container play (group `2068003018` first: four travel loops, the death and several hits), then
+   the engine's band cues.
    Per-post draws (above) before a cue is audible as random.
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).

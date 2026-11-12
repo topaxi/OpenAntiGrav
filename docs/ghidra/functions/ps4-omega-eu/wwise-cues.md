@@ -12,8 +12,10 @@ are [wwise-sound.md](wwise-sound.md); this page is the per-cue table that page l
 executable posts; 10 of them load and play for every emitter today, plus `NGP_LEACH` for the player
 alone.** The other 16 posted cues stop at a switch container (14), an ATRAC9 frame the decoder rejects
 (1, `QUAKELAUNCH`) or an event that starts no sound this loader reads (1, `NGP_LEACH` for non-player
-emitters; why is unread). The 17 cues with no post are 12 held loops, 4 legacy events the executable never posts, and
-the collision cue, whose choice is unread.
+emitters; why is unread). Of the 12 held cues, **5 play and are held** (shield, autopilot, magstrip,
+shuriken travel, leach attach; "Held loops" below), 6 stop at a switch container and the engine is
+unread. The other 5 cues are 4 legacy events the executable never posts and the collision cue, whose
+choice is unread.
 
 ## How a cue string was read (confidence 80 for the method)
 
@@ -106,18 +108,77 @@ Notes on single rows:
   `NGP_MissileFire_PC__Weapons_NGP` is its own event: three `SetState` (`0x1204`) actions beside its relay,
   where the non-player event is a bare relay (wwise-sound.md, "One weapon sound").
 
+## Held loops (lane `omega-wwise-held-loops`, 2026-11-12)
+
+Omega spells a held cue with a leading `_` (`SoundGroup_PlayCue` turns Pulse's `~` into `_`) and passes a
+handle slot: the request's address is stored in the owner (the shield's at ship `+0x5f10`, the magstrip's
+at `+0x5f30`), the post's flags are `0x100001` (an end-of-event callback), and `SoundManager_Update`
+(patch `0x01780190`) writes the playing id `PostEvent` returns to the request's `+0x5c` and sets its `+0x7c`
+byte while it plays.
+
+### How a held cue stops (confidence 75)
+
+Every release read does the same three steps on the request: find it in its group's list, set flag
+`0x10` (a pending post is dropped), and when it has a playing id and `+0x7c` is set, call
+`FUN_0109c140(playing_id, 0, 4)`. `FUN_0109c140` queues engine message `0x1f` carrying those three values
+(`[msg+8]`, `[msg+0xc]`, `[msg+0x10]`): the shape of Wwise's `StopPlayingID(id, transition ms, curve)`,
+and `0, 4` are its default arguments (no transition, the linear curve). Two independent sites:
+
+| Site | What it releases |
+| --- | --- |
+| `FUN_01339e90` | the magstrip hum: the request at ship `+0x5f30`, then every request on the group at `+0x5f38`, then the group (the 1.07 twin of the base's `Ship_StopMagstripSound`, `0x01312770`) |
+| `FUN_0130b8c0` (the ship's sound update) | the engine's four held requests at `param_2[0xc95]`, `[0xc97]`, `[0xc98]`, ... before posting a new band |
+| `SoundManager_Update` (patch `0x01780190`), a group being torn down | every request on the group |
+
+**So a held cue stops with no fade**: the audible end is Wwise's own declick, which this port's
+`oag_audio::Mixer::stop` release ramp stands for. No `Stop` action and no `_Stop` event pair is involved
+for the 12 (the cannon's `NGP_Cannonfire_LoopStart`/`LoopStop` pair is the exception, not one of this
+port's cues). What is not read: whether `FUN_0109c140` is the SDK's `StopPlayingID` by name (its message
+type `0x1f` is not checked against the SDK; 75 rests on the argument shape and the call sites).
+
+### What each held event authors
+
+Each held event opens with a kind-`0x0103` action on its own target (a stop scoped to the game object,
+read from the action kind's low byte, so a re-post replaces the last), then its `Play`. The loops are
+marked by the sounds' and containers' own loop counts ([wwise.md](../../../formats/wwise.md#loops)).
+Read over the 1.07 banks (`data08`), each with its `_PC` twin; **Plays** is the race load and
+`omega_held_loops_ground_truth`:
+
+| `Cue` | Event | What its `Play` reaches | Plays |
+| --- | --- | --- | --- |
+| `Shield` | `_SHIELD`, `_SHIELD_PC` (relays) | a layer of three one-shot picks, a layer of five sounds at loop `0` | yes: 8 voices, 5 loop (the player's event: the shield path is the player's) |
+| `Autopilot` | `_AUTOPILOT`, `_AUTOPILOT_PC` (relays) | one-shot layers, sounds at loop `0`, a continuous sequence at loop `0`; the player's: loop counts `10` and `2`, a continuous sequence at `200` | yes: 8 voices (player 15), loops held |
+| `Magstrip` | `_magstrip01` on `Ship_NGP` (slot 0) | three continuous random containers at loop `0`, two sounds at loop `0`, one one-shot | yes: 6 voices a craft, 5 loop |
+| `ShurikenTravel` | `_SHURIKENTRAVEL` | a continuous sequence at loop `0`, a sound at loop `0` | yes: 3 voices, all loop |
+| `LeachAttach` | `_NGP_LEACHATTACH` (relay) | a layer of sounds and a one-shot pick, **no loop authored** (13.7 s of media) | yes, once: held as the handle, stopped on release, not restarted |
+| `PlasmaTravel`, `RocketTravel`, `MissileTravel`, `QuakeTravel` | `_NGP_Plasmatvl`, `_ROCKETTVL`, `_NGP_MissileTravel`, `_QUAKETRAVEL` | a **switch container** (group `2068003018`, default `1668749452`) over looping layers | no: switch refused |
+| `LockOn` | `_NGP_MissileLock` | a switch container (group `3202746158`) | no: switch refused |
+| `Blowup` | `_NGP_ShipDeath` | a switch container (group `2068003018`) on its first `Play` | no: switch refused |
+| `Engine` | `~Ship<n>_<band>` | `FUN_0130b8c0` builds `~Ship1_%s` .. `~Ship5_%s` by team (`Feisar`/`Triakis` 1, `Qirex`/`Goteki_45` 2, `Piranha`/`Mirage`/`Harimau` 3, `Auricom`/`Assegai` 4, `AG_Systems`/`EGX`/`Icaras` 5) over bands `LowAcc_%d`, `MidDec_G_%d`, `vHighAcc_%d`, ... and steers `CONTROLLERID_VELOCITY`, `_THRUST`, `_ACCELERATION`, `_ENGINEON` | no: unread. `xpress`/`xpress_low`/`xrelease` are not the loop: `xpress__Ship_NGP` has no action, `xpress_low_PC` one seek, `xrelease` a one-shot pick |
+
+**5 of 12 held cues play.** The switch group `2068003018` holds four travel loops and the death; reading
+its game-side value is the next unlock for six of the seven left.
+
+What the port does with them (`oag_sound::sfx`): the existing held paths (`TravelVoices`, the magstrip's
+per-slot voices, the shield's and autopilot's latches, the leach's held voice) start every voice the event
+starts (`Banks::held_voices`), keep them while the game holds the state and stop them on release. A Wwise
+title grows the voice pool to HD's 128 (eight craft's magstrip is 48 voices). Chosen, not read: the
+travel voices play the non-player event (a projectile's owner is not passed to the sound path), the
+magstrip plays the non-player event from every craft, and a continuous random container repeats its first
+draw.
+
 ## The cues with no post
 
 | `Cue` | Why not played |
 | --- | --- |
-| `Engine`, `Shield`, `Autopilot`, `Blowup`, `LockOn`, `PlasmaTravel`, `RocketTravel`, `MissileTravel`, `QuakeTravel`, `LeachAttach`, `ShurikenTravel`, `Magstrip` | **Held loops.** Omega spells them with a leading `_` (Pulse's `~`, turned into `_` by `SoundGroup_PlayCue`) and keeps a handle: `_SHIELD` (`0x0133e376`), `_AUTOPILOT` (`0x01315911`), `_NGP_MissileLock` (`0x01282e3a`), `_NGP_Plasmatvl` (`0x0138ba47`), `_ROCKETTVL` (`0x01396f5e`), `_NGP_MissileTravel` (`0x0137d13e`), `_QUAKETRAVEL` (`0x0176749d`), `_NGP_LEACHATTACH` (`0x01369e5d`), `_SHURIKENTRAVEL` (`0x0139f08b`), `_magstrip01` (`0x0132b32d`, slot 0); the engine is `Ship_NGP`'s `xpress`/`xpress_low`/`xrelease` set (`FUN_0130b8c0`) and the craft destruction `_NGP_ShipDeath` (`0x0131e922`). `oag_sound::sfx::wwise_start` reads no loop flags, so each would play once: left silent. |
+| `Engine` | **Held, unread.** The engine posts `~Ship<n>_<band>` cues from `FUN_0130b8c0` ("Held loops" above). The other 11 held cues are posted (store sites: `_SHIELD` `0x0133e376`, `_AUTOPILOT` `0x01315911`, `_NGP_MissileLock` `0x01282e3a`, `_NGP_Plasmatvl` `0x0138ba47`, `_ROCKETTVL` `0x01396f5e`, `_NGP_MissileTravel` `0x0137d13e`, `_QUAKETRAVEL` `0x0176749d`, `_NGP_LEACHATTACH` `0x01369e5d`, `_SHURIKENTRAVEL` `0x0139f08b`, `_magstrip01` `0x0132b32d` on slot 0, `_NGP_ShipDeath` `0x0131e922`) and their rows are in "Held loops". |
 | `MissileHitShip` | The missile impact (`FUN_0137d1e0`) names only `MISSILEEXPWALL`; which cue a ship hit posts is unread. `MISSILEEXPSHIP__Weapons_NGP` is in the bank, its string is not in the executable. |
 | `MissileExpire` (`SHURIKENEXPL`), `ShurikenHit` (`SHURIKENHIT`), `RepulsorHit` (`REPULSORHIT`) | **Never posted.** The bank keeps the legacy event; the executable holds no such string. |
 | `Collision` | Posted as `_COLLISIONS_1` or `_COLLSHIELD` (shield up), with `_GRIND`/`_GRINDSHIELD` for scraping, on slot 0 (`FUN_0130b100`, `0x0130b333`, `0x0130b32c`); `_`-prefixed with a kept handle, and the choice between them is unread. |
 
 ## Limits this table meets, not fixed here
 
-* **Switch containers** (14 cues): the child is the game's switch value (ship class, surface, player or
+* **Switch containers** (14 one-shot cues and 6 held ones): the child is the game's switch value (ship class, surface, player or
   not), refused at play ([wwise.md](../../../formats/wwise.md#sound-containers)).
 * **Per-post draws:** a random container's child is drawn once at load, seeded by the event name, so every
   post of a cue plays the same pick.
@@ -143,5 +204,12 @@ Notes on single rows:
 ```sh
 cargo nextest run -p oag-raceplay --run-ignored all a_race_plays_its_posted_cues_from_their_wwise_events
 RUST_LOG=info,oag_sound=debug oag-game --race --no-audio --screenshot out.png --ticks 2 data/extracted/ps4
-# [DEBUG] sfx: 10 of 43 race cues play their Wwise event, 10 with a player version
+# [DEBUG] sfx: 15 of 43 race cues play their Wwise event, 15 with a player version
+cargo nextest run -p oag-game --run-ignored all omega_held_loops_ground_truth::
+# The magstrip held and released in a race (Talons Junction has strips; Tech De Ra, the default, has none):
+RUST_LOG=info,oag_sound=trace oag-game --race --mode single_race --autopilot \
+  --track 'Data\environments\talons_junction\track.vex' --ticks 2400 \
+  --screenshot out.png --dump-audio out.wav data/extracted/ps4
+# [TRACE] sfx: held Magstrip opened on slot 2, 6 voice(s)   (all eight craft, 6 voices each)
+# [TRACE] sfx: held Magstrip released on slot 1, 5 voice(s) (the one-shot layer has ended)
 ```
