@@ -2610,7 +2610,11 @@ bolt's first three probes each returned `0x7f` with the mesh raycast's nearest h
 and the fourth, from 4.93, found the floor. On the mag strip above the same bolt rides on its first
 update. So the gate is where the probe starts against the craft's box, not the bolt's age: confidence
 **88** for the Plasma (three records on one shot, plus 25 of the other weapons'); how far the box
-reaches ahead of the body is not one number (the linked section's table).
+reaches ahead of the body is not one number, and why is settled 2026-11-12: the box is the body's, the
+raycast's gate sees it through the transposed rotation, and on the mag strip's 85 degree roll it rejects
+the start, so the bolt rides at once ([rocket-visuals.md](rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box),
+confidence 90, 2,302 probes replayed with no error; two Outpost 7 Plasma captures re-taken, the first
+probe on the box and the rest clear).
 
 **Two more reads of `Plasma_Update`'s decompile; both wired 2026-11-12** (the floor arm in `pulse-floor-arms` for Pulse and Pure, `FloorArms::SteerToRidePoint`, unit-tested on a flat floor; the launch normal in `launch-normal-wire`). Its travel-sweep floor arm only
 moves: `next = hit + normal * g_ride_height`, with no normal adopted and no velocity written
