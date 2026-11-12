@@ -264,6 +264,17 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, statics);
+    // The UV-distortion banner binds its logo third and writes two consecutive entries.
+    let overlays = super::uv_overlay::uv_overlay(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, overlays);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, mut material_tangent) =

@@ -169,6 +169,7 @@ mod picture_tint;
 mod refraction;
 mod snow_rock;
 mod static_hologram;
+mod uv_overlay;
 mod twin_blend;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;

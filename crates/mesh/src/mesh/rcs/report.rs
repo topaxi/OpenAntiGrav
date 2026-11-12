@@ -280,6 +280,15 @@ pub struct Report {
     /// `dc_hologramwithstatic` materials left as the generic reading drew them: a picture or a
     /// rate did not read, the slot names another family's glow entry, or the table is full.
     pub static_hologram_unread: usize,
+    /// `uvdistortion_*plusoverlay*` materials whose screens, clouds, Ossego logo and
+    /// distortion values were bound - see `super::uv_overlay`.
+    pub uv_overlay_bound: usize,
+    /// `uvdistortion_*plusoverlay*` materials on a program variant that does not declare the
+    /// three pictures (the shadow-mapped and lightmapped variants): drawn as the generic reading.
+    pub uv_overlay_other_shape: usize,
+    /// `uvdistortion_*plusoverlay*` materials left as the generic reading drew them: a picture
+    /// or a value did not read, the slot names another family's glow entry, or the table is full.
+    pub uv_overlay_unread: usize,
     /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
     /// `super::damage_lights`.
     pub damage_lights_bound: usize,
@@ -544,6 +553,16 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} static-hologram material(s) on an unread variant or with a picture or rate missing (drawn as the generic reading)"
+            ),
+        } + &match self.uv_overlay_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} UV-distortion banner material(s) with their screens, clouds and logo bound"
+            ),
+        } + &match self.uv_overlay_other_shape + self.uv_overlay_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} UV-distortion banner material(s) on an unread variant or with a picture or value missing (drawn as the generic reading)"
             ),
         } + &match self.damage_lights_bound {
             0 => String::new(),

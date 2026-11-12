@@ -573,6 +573,34 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let linear = bars * mix(decode(first.rgb), decode(second.rgb), vec3<f32>(w));
         picture = vec4<f32>(encode(linear), first.a);
     }
+    // **HD's `uvdistortion_*plusoverlay*` banner** (`Emissive::program` mode 13,
+    // `oag_mesh::mesh::rcs::uv_overlay`): the grille is the lit albedo and the program adds,
+    // after the light,
+    //
+    //     a    = VertexColour1 * teal * clouds((uv + A t + D clouds(uv).a) S) * grille.a
+    //     b    = logo((uv + B t) R)
+    //     over = a < 0.5 ? 2 a b : 1 - 2 (1 - a)(1 - b)
+    //
+    // the clouds second, the logo third, `teal` and `D` the entry's tint and offset, `A`, `S`,
+    // `B` and `R` the next entry's tint `x`, `y`, `z` and offset. The colour taps are decoded
+    // and the clouds' alpha read raw (chosen, not measured); the sum rides `mag_glow` below.
+    var uv_overlay = vec3<f32>(0.0);
+    let overlay_entry = (in.slots >> 24u) & 127u;
+    if overlay_entry != 0u && row_scale.z > 12.5 && row_scale.z < 13.5 {
+        let values = emissive_tint(overlay_entry + 1u);
+        let clock_now = scene.time.x;
+        let warp = material_sample(MATERIAL_LIGHTMAP, in.texcoord).a;
+        let cloud_uv = (in.texcoord + vec2<f32>(values.x * clock_now + row_tint.w * warp)) * values.y;
+        let cloud = decode(material_sample(MATERIAL_LIGHTMAP, cloud_uv).rgb);
+        let logo_uv = (in.texcoord + vec2<f32>(values.z * clock_now)) * values.w;
+        let logo = decode(material_sample(MATERIAL_PAD_MASK, logo_uv).rgb);
+        let a = in.colour.rgb * row_tint.rgb * cloud * first.a;
+        uv_overlay = select(
+            vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - a) * (vec3<f32>(1.0) - logo),
+            2.0 * a * logo,
+            a < vec3<f32>(0.5),
+        );
+    }
     // **Omega's `2048_shipshield_old` shell** (`Emissive::program` mode 11,
     // `oag_mesh::mesh::rcs::psp2::shield_lightning`), read off its pixel program:
     //
@@ -841,7 +869,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // these surfaces as the ordinary Zone surface and this term, and the floor
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
-    var mag_glow = decode(cell_picture);
+    var mag_glow = decode(cell_picture) + uv_overlay;
     if (in.slots & 131072u) != 0u && !is_cell && zone_on == 0.0 {
         let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
