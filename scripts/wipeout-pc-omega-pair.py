@@ -455,10 +455,15 @@ def main():
     pair.rec["craft_offset_px"] = sp.craft_offset(out / "theirs.png", out / "ours.png")
     pair.rec["craft_offset_px"]["note"] = "informational: the hulls are lit and coloured differently; not a measurement"
     if mode_2048:
+        pair.caveat("ours races its %s rung for 2048's %s, an assumed mapping, and its lap count differs from the original's (the original: 4 laps at C CLASS, 5 at A CLASS on Sol; ours on Sol: venom 3, flash 4, rapier 4, phantom 5)"
+                    % (args.ours_class, args.class_label or "C CLASS"))
         pair.caveat("ours draws HD's HUD (lap hexagon, position disc, BEST and time bar, speed readout) in Omega's 2048 mode; the original draws 2048's (LAP 1/4, TOTAL, CURRENT, POS 8/8, temperature gauge)")
     else:
         pair.caveat("ours' gantry board shows the grid position 8 and never changes; the original's is blank before the red 3 and counts 3, 2, 1, GO")
-    pair.caveat("the original's hull livery varies from boot to boot; ours' is fixed")
+    if mode_2048:
+        pair.caveat("the original's Feisar2048 hull is lit and graded by the scene (orange at a sunset circuit, yellow and white at a grey one) and stands in a white start ring; ours lights it flatter and draws no ring")
+    else:
+        pair.caveat("the original's hull livery varies from boot to boot; ours' is fixed")
     sp.run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         pair.rec["meta"] = json.loads(args.meta)
