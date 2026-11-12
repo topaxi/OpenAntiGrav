@@ -43,7 +43,38 @@ struct Census {
     spawned_points: usize,
     /// The most the wet road reached at `enhanced`, which `original` must never leave `0.0`.
     wettest: f32,
+    /// Per flake that settled ahead of the craft (snow only): the most alpha it drew before
+    /// the craft passed it.
+    ahead_flakes: std::collections::HashMap<[u32; 3], f32>,
 }
+
+/// A snow tick's flakes, one quad each in `drawn` after the original's geometry: notes, for
+/// every flake still ahead of the craft, the most alpha it has drawn so far.
+fn check_flakes_show_before_passed(
+    census: &mut Census,
+    race: &race::Race,
+    splashes: &race::scenery_fx::splash::Splashes,
+    drawn: &[GpuVertex],
+) {
+    assert_eq!(
+        drawn.len(),
+        6 * splashes.len(),
+        "snow draws one quad a flake"
+    );
+    let body = race.ship_tick_body(0);
+    let forward = body.linear_velocity.normalize_or_zero();
+    for (point, quad) in splashes.points().zip(drawn.chunks(6)) {
+        let ahead = (point - body.position).dot(forward);
+        let key = point.to_array().map(f32::to_bits);
+        if ahead > PASSED_BELOW {
+            let seen = census.ahead_flakes.entry(key).or_insert(0.0);
+            *seen = seen.max(quad[0].colour[3]);
+        }
+    }
+}
+
+/// How far ahead of the craft a flake counts as still to be passed, in world units.
+const PASSED_BELOW: f32 = 6.0;
 
 /// Runs an original race and an enhanced one in step and checks, every tick,
 /// that the enhanced draw lists begin with the original's byte for byte and
@@ -58,6 +89,7 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         most_at_once: 0,
         spawned_points: 0,
         wettest: 0.0,
+        ahead_flakes: Default::default(),
     };
     // The lens's boost drift (ours, enhanced only) moves the lens drops, which stay moved for
     // their lives (a lens drop lives at most 80 ticks), so the byte-for-byte prefix holds only
@@ -103,6 +135,14 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
             eprintln!("tick {tick}: {} splashes", splashes.len());
         }
         census.most_at_once = census.most_at_once.max(splashes.len());
+        if enhanced.scenery_fx().weather().is_snow() {
+            check_flakes_show_before_passed(
+                &mut census,
+                &enhanced,
+                splashes,
+                &e_add[o_add.len()..],
+            );
+        }
         for point in splashes.points() {
             census.spawned_points += 1;
             assert!(
@@ -254,6 +294,19 @@ fn snow_settles_on_outpost_7s_road_and_original_draws_none() {
         census.ticks_with_splashes
     );
     assert_eq!(census.wettest, 0.0, "snow leaves the road dry");
+    let reaching = census
+        .ahead_flakes
+        .values()
+        .filter(|&&alpha| alpha >= 0.8 * race::scenery_fx::splash::SNOW_PEAK)
+        .count();
+    let landed = census.ahead_flakes.len();
+    eprintln!(
+        "Outpost 7: {reaching} of {landed} flakes landing ahead of the craft reach 80% of their peak before it passes"
+    );
+    assert!(
+        landed > 30 && reaching * 4 >= landed * 3,
+        "{reaching} of {landed} flakes shown in time"
+    );
     eprintln!(
         "Outpost 7: flakes on {} of 1500 ticks, at most {} at once",
         census.ticks_with_splashes, census.most_at_once

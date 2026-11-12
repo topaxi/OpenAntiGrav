@@ -265,9 +265,9 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
 - **Rain**: a ring flat on the road, fading over 0.35 s, and three droplets thrown up
   and back under a chosen gravity. Sizes (chosen; a quarter of the first version's, on the
   maintainer's play report 2026-10-29): `RING_RADIUS` 0.125 to 0.65, `DROPLET_SIZE` 0.075,
-  `FLAKE_SIZE` 0.105, `LIFT` 0.03, `SPRAY_UP` 1.75 to 3.0, `SPRAY_OUT` 1.0, `GRAVITY`
+  `FLAKE_SIZE` 0.16 (see "Snow melt"), `LIFT` 0.03, `SPRAY_UP` 1.75 to 3.0, `SPRAY_OUT` 1.0, `GRAVITY`
   13.75 (speeds and gravity scale with the lengths, so a droplet's flight time is as before). **Snow**: one flake that settles on the road and
-  fades in and out over 1.6 s. At most `splash::CAPACITY` (48) alive; a hit past it is
+  melts over 0.8 s ("Snow melt" below). At most `splash::CAPACITY` (48) alive; a hit past it is
   dropped. Own `Rng` seed, so the drops' stream is the original's either way.
 - **Art.** The disc has no splash sprite, so the ring and the dot are this project's:
   `assets/fallback/Data/Psys/Tex/OAGSplash.oagmask` (`scripts/gen-fallback-splash-art.py`),
@@ -335,6 +335,44 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   race throws splashes on 1,041 of 1,500 ticks on Fort Gale and 569 on Outpost 7.
 - **PS2** loads the same circuits' weather (`circuit_effects`) and the art (a load test on
   `14_Track`); inherited from the PSP, not seen on a PS2 frame.
+
+### Snow melt (ours, 2026-11-12)
+
+**Chosen, not measured; no confidence score.** The maintainer asked for flakes that hit
+the track and melt, very subtly. The hits were already found (Outpost 7, 1,500 ticks of
+`PlayerInputs::none()` under the autopilot: 61 flakes settle, 51 of them ahead of the
+craft); what failed was the flake's own life, `splash::flake`:
+
+- **A craft passes a flake it has met in 0.3 s (median, 18 ticks) and at most 0.65 s
+  (39 ticks)**, at 450 km/h. The old flake faded in over 0.4 s (a quarter of 1.6 s), so
+  none of the 51 flakes landing ahead of the craft had reached 80 % of its peak alpha
+  before the craft passed it (0 of 51); the 1.6 s of fade-out then played behind the
+  camera. What a player saw: one to two pixel specks (measured in 1280x720 crops), brightest at +186 per pixel
+  on a 255 scale at mid-life, more than three times the falling snow's own +58
+  bound (above), on 10 of 22 frames of a 25-tick grid over ticks 825 to 1350.
+- **Now**: in over 0.06 s (4 ticks), out to nothing over 0.8 s while the half-size
+  shrinks from 0.16 to 0.6 of that; peak alpha 0.35 (`SNOW_PEAK`, additive, about +80 per
+  pixel against the +58 of a falling flake's speck). 40 of the 51 flakes landing ahead
+  reach 80 % of the peak before the craft passes them; the other 11 are passed within a few ticks of landing (not measured further).
+  The same grid: 187 pixels differ from `original` before, 303 after; brightest 186 before,
+  81 after; the same 10 of 22 frames carry a flake, because hits are rare (one per 25 ticks
+  in the open) and none land before tick about 800 (the start sits under cover, where the
+  pool is held at the anchor).
+- Alpha and shrink end at nothing together, so nothing pops.
+- **Test.** `splash::tests::a_snow_hit_shows_within_two_ticks` and
+  `a_flake_melts_away_to_nothing_and_shrinks_as_it_goes` (red on the old constants), and
+  `weather_splash_ground_truth::snow_settles_on_outpost_7s_road_and_original_draws_none`
+  (the 40 of 51, `0 of 51` on the old constants).
+- **Reproduce.** `oag-game --no-audio --race --track 'Data\Environments\07_Track\track.vex'
+  --team FEISAR --autopilot --weather enhanced|original --ticks N --size 1280x720
+  --screenshot F <pulse-psp-usa.chd>` for N in 825, 850 ... 1350, then diff each
+  enhanced frame against its `original` twin.
+- **Cross-title.** Only Pulse plays weather (`Title::weather`: `Played` on Pulse, PSP and
+  PS2; `Unplayed` on Pure, HD, 2048 and Omega). HD authors no `WO_SNOW`
+  (`hd_does_not_ask_for_the_effects_its_disc_does_not_author`). Pulse PS2 EU on `07_Track`
+  loads the same `WO_SNOW` and splash art and draws flakes (15 pixels differ from
+  `original` at tick 1075): **ported**. 2048 and Omega: not checkable, their weather is
+  not played and no snow effect was read there.
 
 ### The lens drops slide outward while boosting (ours, 2026-10-31)
 
