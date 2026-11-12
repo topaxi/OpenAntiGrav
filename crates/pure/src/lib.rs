@@ -314,6 +314,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     now_playing: Some(NOW_PLAYING),
     // Pure's music player is unread for this; it runs Pulse's rule (the same engine, and Pulse's
     // is read). Chosen by inheritance, not measured.
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::inherited(
         oag_title::race_song::RaceSongStart::AtGo,
         "Wipeout Pulse",

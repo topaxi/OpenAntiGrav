@@ -327,6 +327,9 @@ pub struct Music {
     pub state_tracks: Option<StateTracks>,
     /// How the playing song is shown during a race, when the title authors one.
     pub now_playing: Option<now_playing::NowPlaying>,
+    /// The extension of a spectrum sidecar that sits beside the front end's
+    /// track (2048's `.fft`, the band levels its map follows), or `None`.
+    pub spectrum_extension: Option<&'static str>,
     /// When the race song begins to sound, and where that came from.
     pub race_song_start: pre_race::Sourced<race_song::RaceSongStart>,
 }

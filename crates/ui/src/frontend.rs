@@ -100,6 +100,7 @@ pub mod canvas_camera;
 pub mod canvas_cells;
 pub mod canvas_lattice;
 pub mod canvas_prism;
+pub mod canvas_wave;
 mod event_card;
 mod faces;
 mod map_cursor;

@@ -563,6 +563,8 @@ pub struct Audio {
     /// The menu voice's decoded sound, so leaving a race resumes it without
     /// re-reading the disc or re-running `ffmpeg`. `None` with no decodable menu music.
     menu_sound: Option<Arc<Sound>>,
+    /// The front end's spectrum sidecar, when the title ships one and it read.
+    menu_spectrum: Option<oag_music::spectrum::Spectrum>,
     /// The race's held voices and generator. `None` outside a race and when the
     /// banks did not load; made on the first tick with cues, so a silent source
     /// never allocates one.
@@ -659,6 +661,7 @@ impl std::fmt::Debug for Audio {
             .field("race_tracks", &self.race_tracks)
             .field("race_cache", &self.race_cache.is_some())
             .field("menu_sound", &self.menu_sound.is_some())
+            .field("menu_spectrum", &self.menu_spectrum.is_some())
             .field("race_context", &self.race_context.is_some())
             .field("race_prefetch", &self.race_prefetch)
             .field("race_job", &self.race_job)
@@ -731,6 +734,7 @@ impl Audio {
             race_tracks: 0,
             race_cache: None,
             menu_sound: None,
+            menu_spectrum: None,
             race_context: None,
             race_prefetch: None,
             race_job: None,
