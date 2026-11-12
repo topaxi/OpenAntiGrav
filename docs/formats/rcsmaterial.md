@@ -4149,7 +4149,7 @@ three pushbuffer reads and is not used).
   logo tap, `@0x25` `SLT`, `@0x30` `2ab`), with `TC0 = v[3]` and the pair in `TC3.w`, `TC4` (`vp-file` `@0x1580`). Slots 355 and
   445 forward, 357 and 447 reversed (teal `(0, 1, 1)` and `(0.126, 0.148, 0.194)`, grilles `mar_cellular_lamps_blue` and
   `dc_gradient`, logos `feisar_square01` and `mr_line_rgb_clouds_alpha`). Rendered at `--pose=-524,46,-379` (inside the tower;
-  the draw bounds are world space but the visible set follows the craft, so a bare `--camera-pose` showed none): before, the
+  a bare `--camera-pose` ring around the draw bounds' centre showed no pixel of either slot, possibly because the craft stayed at the start): before, the
   window panes carry big white Feisar logos on sky blue; after, a cyan cellular screen with no logo (the logo enters only
   through `2ab`, weighted by the grille's alpha), and the ceiling's dot lamps glow cyan instead of dark. Reading the three taps
   raw changes neither. No capture of the original at this spot exists, so whether the logos should be there is **unmeasured**.
