@@ -580,6 +580,7 @@ pub(super) fn three_events() -> Vec<MapEvent> {
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
+        rank_gated: false,
     })
     .collect()
 }
@@ -606,6 +607,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
             role: oag_title::MapRole::default(),
+            rank_gated: false,
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -618,6 +620,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
             role: oag_title::MapRole::default(),
+            rank_gated: false,
         },
     ]
 }
@@ -924,6 +927,7 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
+        rank_gated: false,
     }]
 }
 
@@ -944,6 +948,7 @@ pub(super) fn a_forced_event() -> Vec<MapEvent> {
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
+        rank_gated: false,
     }]
 }
 
@@ -1215,6 +1220,7 @@ fn a_branch_is_flat_in_its_own_tint_with_light_dots_until_reached_then_dark_dots
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
         role,
+        rank_gated: false,
     };
     let mut frontend = boot(0);
     frontend.set_campaign(vec![
@@ -1272,6 +1278,49 @@ fn a_branch_is_flat_in_its_own_tint_with_light_dots_until_reached_then_dark_dots
         "dark dots once reached"
     );
     assert!(colours_of(&frontend, 1).is_empty());
+}
+
+/// An event that authors the original's "locked" option (a rank-gated side
+/// challenge) has no tile, no ring and no cursor until a pass is earned on it.
+#[test]
+fn a_rank_gated_event_is_hidden_from_the_map_and_the_pad_until_it_is_passed() {
+    let mut events = a_gated_event();
+    events[1].requires = None;
+    events[1].rank_gated = true;
+    let mut frontend = boot(0);
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let tiles = |frontend: &Frontend| {
+        use crate::frontend::canvas_prism::{colours, tint};
+        frontend
+            .draw_list()
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Fill { color, .. }
+                    if *color == tint(colours::OPEN) || *color == tint(colours::PASSED))
+            })
+            .count()
+    };
+    assert_eq!(
+        tiles(&frontend),
+        1,
+        "Event 1 only; the gated event draws nothing"
+    );
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 1"),
+        "the pad does not land on a hidden event"
+    );
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 2").then_some(EarnedTier::Pass));
+    assert_eq!(tiles(&frontend), 2, "a pass earned on it shows it");
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
+    );
 }
 
 #[test]

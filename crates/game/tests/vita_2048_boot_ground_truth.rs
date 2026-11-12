@@ -428,6 +428,29 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
     );
 }
 
+/// The 15 events the original's "locked" option (`m_options & 0x10`) hides, off
+/// the authored flag: five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let gated: Vec<&str> = loaded
+        .frontend
+        .campaign_events()
+        .iter()
+        .filter(|event| event.rank_gated)
+        .map(|event| event.name.as_str())
+        .collect();
+    assert_eq!(gated.len(), 15, "{gated:?}");
+    assert!(
+        gated
+            .iter()
+            .all(|name| name.contains("P Ship Challenge") || name.contains("S Phantom Challenge")),
+        "{gated:?}"
+    );
+}
+
 /// The map's opening view, rendered, against frame 13
 /// (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`, Events 1 to 3
 /// passed): one capture, three named checks.

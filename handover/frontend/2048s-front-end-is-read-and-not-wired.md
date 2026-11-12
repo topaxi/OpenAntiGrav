@@ -163,14 +163,14 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      the chains) is the flat state-1 tint, `e0e0e9` on the main chain and `f3f3fa`
      on a branch, with its light ring; no glyph. Only the 15 side challenges
      (`m_options = 16`, all with `m_RankRequired`) have no tile until their progress is
-     raised, most probably by player rank. **Open**: this build has no rank, so
-     ours draws them as open tiles (frame `12`'s top left tile, `"Feisar - P Ship
-     Challenge"`, the original does not show at rank 1); hiding them would make
-     15 events unplayable, so it is the maintainer's call, one condition in
-     `CampaignMap::state_of`'s callers (`draw_ground_cells`, `draw_campaign_map`). The original's own rule for which events the pad or a tap may select is
+     raised, hypothesised to be player rank. Ours hides them by the authored flag
+     (`MapEvent::rank_gated`, `oag_2048::campaign::is_rank_gated`; maintainer's choice,
+     2026-11-12): no tile, ring or cursor until a pass is earned on one, matching frame
+     `12`. **Open: a player rank model is needed to unlock the 15 rank-gated 2048
+     challenges (`m_RankRequired` 10-50); until then they cannot be launched from the map.**
+     The original's own rule for which events the pad or a tap may select is
      unread (`+0x50` is the paint's alpha snap, not a selection flag: `campaign-map-projection.md`,
-     "The ring"); ours keeps every drawn event, flat or raised, a cursor target as before.
-     Item 3 (season cards) waits on this item's answer.
+     "The ring"); ours keeps every drawn event, flat or raised, a cursor target.
   5. **The scroll's limits** (`0x810ef98c`, 650 px margin; sign and origin not
      read): ours are chosen. The one-second wait and the ease at the open, and
      the ease after a tap, are not played: ours arrives at once.

@@ -24,7 +24,8 @@
 //! both are drawn between the lattice and the prisms. What stands in for the
 //! original here: the season cards and the ground relief are not drawn, and the
 //! side challenges the original hides until the player's rank reaches
-//! `m_RankRequired` are drawn as open events (this build has no rank). The view's
+//! `m_RankRequired` ([`MapEvent::rank_gated`]) stay hidden, with no tile, ring or
+//! cursor (this build has no rank). The view's
 //! travel limits are **chosen, not measured**: any event can be centred, with the
 //! original's 650 px of margin past the outermost ones.
 //!
@@ -152,6 +153,12 @@ pub struct MapEvent {
     /// How the original's chain walk treats it, which decides the ring of cells
     /// painted around its tile.
     pub role: MapRole,
+    /// The event authors the `m_options` bit the original tests as "locked"
+    /// (`oag_2048::campaign::OPTION_LOCKED`): it has no tile, no ring and no cursor
+    /// until a pass is earned on it. The original raises its progress by player
+    /// rank (`m_RankRequired`, hypothesis); this build has no rank, so it stays
+    /// hidden.
+    pub rank_gated: bool,
 }
 
 /// The ring mode of an event's button, the fill its 18 ring cells take
@@ -285,10 +292,10 @@ impl CampaignMap {
     /// outermost events, and [`TRAVEL_MARGIN`] past them.
     pub(super) fn limits(&self, axis: usize) -> (f32, f32) {
         let reset = Camera::scrolled((0.0, 0.0));
-        let (low, high) = self
-            .events
-            .iter()
-            .map(|event| {
+        let (low, high) = (0..self.events.len())
+            .filter(|&at| !self.hidden(at))
+            .map(|at| {
+                let event = &self.events[at];
                 let at = reset.project(canvas_camera::cell_ground(Self::cell(event)));
                 match axis {
                     0 => at.0 - canvas_camera::CENTRE.0,
@@ -393,6 +400,16 @@ impl CampaignMap {
         }
     }
 
+    /// Whether the map shows nothing for the event at `index`: a rank-gated event
+    /// ([`MapEvent::rank_gated`]) that has not been passed.
+    pub(super) fn hidden(&self, index: usize) -> bool {
+        self.events.get(index).is_some_and(|event| event.rank_gated)
+            && !matches!(
+                self.state_of(index),
+                ProgressState::Passed | ProgressState::Elite
+            )
+    }
+
     /// [`ProgressState`] for the event at `index` - `Locked` when
     /// [`MapEvent::requires`] names an event that has not been passed yet
     /// (an unknown name, e.g. one filtered out of the map entirely, reads as
@@ -438,7 +455,7 @@ impl Frontend {
     /// [`Self::refresh_campaign_progress`] is called - a caller with a save
     /// to read should call it once, straight after this.
     pub fn set_campaign(&mut self, events: Vec<MapEvent>) {
-        let ungated = |event: &MapEvent| event.requires.is_none();
+        let ungated = |event: &MapEvent| event.requires.is_none() && !event.rank_gated;
         let gates_another = |event: &MapEvent| {
             events
                 .iter()
@@ -545,7 +562,7 @@ impl Frontend {
             .events
             .iter()
             .enumerate()
-            .filter(|(at, _)| *at != self.campaign.selected)
+            .filter(|(at, _)| *at != self.campaign.selected && !self.campaign.hidden(*at))
             .filter_map(|(at, event)| {
                 let dx = (event.x - from.x) * canvas_lattice::CELL_DX;
                 let dy = (event.y - from.y) * canvas_lattice::CELL_DY;
@@ -640,11 +657,10 @@ impl Frontend {
             at.1 * canvas_camera::VIEWPORT.1 / height,
         );
         let camera = self.campaign.camera();
-        let hit = self
-            .campaign
-            .events
-            .iter()
-            .position(|event| contains(CampaignMap::face(&camera, event), at));
+        let hit = (0..self.campaign.events.len()).find(|&index| {
+            !self.campaign.hidden(index)
+                && contains(CampaignMap::face(&camera, &self.campaign.events[index]), at)
+        });
         // Against the selection *before* this tick's hover moved it: a tap
         // arrives with `moved` and `clicked` set together, and reading the
         // click against the hover it came with would launch on one tap.
@@ -795,6 +811,7 @@ impl Frontend {
             height / canvas_camera::VIEWPORT.1,
         );
         let buttons: Vec<CanvasButton> = (0..self.campaign.events.len())
+            .filter(|&at| !self.campaign.hidden(at))
             .map(|at| {
                 let event = &self.campaign.events[at];
                 let reached = self.campaign.state_of(at) != ProgressState::Locked;
@@ -885,7 +902,7 @@ impl Frontend {
                 .y
                 .total_cmp(&self.campaign.events[b].y)
         });
-        for at in order {
+        for at in order.into_iter().filter(|&at| !self.campaign.hidden(at)) {
             let event = &self.campaign.events[at];
             let face = CampaignMap::face(&camera, event);
             let rect = on_screen(CampaignMap::art(face));

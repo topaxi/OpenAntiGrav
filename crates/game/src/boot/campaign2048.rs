@@ -161,6 +161,7 @@ pub(super) fn map_events(
             forced_craft,
             refused_craft,
             card: event_card(&doc, event, kind, strings),
+            rank_gated: oag_2048::campaign::is_rank_gated(&doc, event),
             role: roles
                 .iter()
                 .find(|(name, _)| *name == event.name)

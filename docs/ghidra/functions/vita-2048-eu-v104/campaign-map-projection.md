@@ -438,9 +438,12 @@ off the lattice beneath, which the outlines hide.
 `13` around a flat tile is missing: our flat tile is flat), the blink between modes 3 and 4 for progress 1
 (`CanvasButton_PaintIconAndRing` swaps `+0x34` each paint of a state-3 button; ours has no event in
 that state), progress 0 on an open event (state 1 with the ring 3, ours has none: an event is reached or
-locked), the 15 rank-gated side challenges' absence: ours draws them as open tiles because this build has
-no player rank, and the reference save (rank 1) shows none of them (frame `12`: the tile at top left of
-ours, `"Feisar - P Ship Challenge"`). That is a departure, chosen so these events stay playable.
+locked). The 15 rank-gated side challenges (`m_options & 0x10`, `MapEvent::rank_gated`) are **hidden**
+as the original hides them at rank 1 (frame `12`: no tile at top left): no tile, no ring, skipped by the pad,
+the pointer and the travel limits, until a pass is earned on one. The original raises their progress by
+player rank (hypothesis, confidence 45); this build has no rank, so until a rank model exists they cannot be
+launched from the map (open: "player rank model needed to unlock the 15 rank-gated 2048 challenges
+(`m_RankRequired` 10-50)").
 The season cards (item 3 of the thread) are still not drawn.
 
 ## Omega

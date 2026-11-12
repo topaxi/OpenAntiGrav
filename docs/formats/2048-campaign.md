@@ -578,6 +578,9 @@ Live verification of the rank gate was not attempted:
 `data/extracted/vita/PCSF00007/base/savedata` ships empty (no progressed
 profile), and reaching rank 10 (Feisar's own Ship Challenge, the lowest of
 the five) needs playing through the campaign, out of this pass's scope.
+Since 2026-11-12 the map hides these 15 (the authored `m_options & 0x10`, which the original tests as
+"locked", [campaign-map-projection.md](../ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md),
+"The ring"), so they are not launchable from it until a rank model exists.
 
 ## The event card (2026-09-29)
 

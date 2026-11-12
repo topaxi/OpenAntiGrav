@@ -763,6 +763,23 @@ pub fn unlock_gates(document: &Document) -> Vec<(String, Option<String>)> {
 /// to the by-name lookup).
 pub const CHAIN_START: &str = "2048 - Event 1";
 
+/// The `m_options` bit `GameModeBase` vtable slot `+0x74` tests (the stub at
+/// `0x813ea23c`): the event is "locked" and the map paints nothing for it until its
+/// progress is raised.
+pub const OPTION_LOCKED: i64 = 0x10;
+
+/// Whether `event` authors [`OPTION_LOCKED`]: on the EU v1.04 package the 15 side
+/// challenges (five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`), each
+/// of which also carries `M_RankRequired`.
+#[must_use]
+pub fn is_rank_gated(document: &Document, event: &Event) -> bool {
+    document
+        .instance(event.instance_id)
+        .and_then(|instance| instance.field("M_OPTIONS"))
+        .and_then(Field::int)
+        .is_some_and(|options| options & OPTION_LOCKED != 0)
+}
+
 /// What every name of the walk's speed-lap table (`0x8151ea78`, 40 strings)
 /// has between the circuit and the class.
 const SPEED_LAP_INFIX: &str = " Speed Lap - ";
