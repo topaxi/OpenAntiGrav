@@ -20,7 +20,8 @@ measure lane (2026-11-12) found the cause at the long tunnel at spline rows abou
   the glow wins; ours reads the byte and does not apply it, so the glow z-fights the ceiling. At a pose matched to about 1 unit
   (spline row 1205, craft held at the lifted sample) the original's band is one continuous cyan strip; ours is cut into dashes
   that **change pattern with a 0.05 unit camera step** (four steps, four different patterns, one with speckle), which is
-  z-fighting, and shimmers in motion. `--pvs false` and `true` give the same picture, so it is not visibility. Each of those
+  z-fighting, and shimmers in motion. A second site (row 1427, nodes 122 and 123) shows the original's strip whole and ours'
+  edges ragged under the same steps, milder; the original's band was seen at two sites, once each. `--pvs false` and `true` give the same picture, so it is not visibility. Each of those
   meshes' batches is also listed twice in list A (`pass 0x1891` alpha-tested and `0x1011` opaque, same vertices) beside a list-B
   copy (`0x1092`); that is an authored triple and may be intended, but it doubles the tie.
 - **The `TEXOFFSET` path is not the cause.** The original's per-frame offsets match `oag_vex::TexTransform::sample` (lerp, same

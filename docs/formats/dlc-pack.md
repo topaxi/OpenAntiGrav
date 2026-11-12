@@ -292,7 +292,8 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
 
 ## Running a pack in the original (PPSSPP)
 
-**Measured 2026-11-12, `gemini-dam-flicker`, Pulse USA and EU boots, confidence 85.** The executable looks for packs under
+**Measured 2026-11-12, `gemini-dam-flicker`, a Pulse USA boot in PPSSPP, confidence 80** (the packs listed by Track Select
+and a race loaded from them; the EU disc was read statically only). The executable looks for packs under
 `msroot:\PSP\GAME\UCES00465\` on **both** discs (the string is in the USA and the EU `BOOT.BIN`), so a USA boot reads the
 European packs; the title-id folder is not the booted disc's. On a private PPSSPP memstick that is
 `PSP/GAME/UCES00465/PACKn.EDAT`, `PACKn_UI1.EDAT` and so on, linked from the unzipped packs.

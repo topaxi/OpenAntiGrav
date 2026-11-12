@@ -114,7 +114,16 @@ depth buffer therefore resolves about 1.2 levels per world unit at 250 units: tw
 surfaces closer than that **tie**, and with a strict test the one drawn first wins.
 
 Ported: no. `oag_vex::vex::Batch::depth_bias` reads it and `oag-view --draws`
-prints it; the renderer does not apply it. Checked on the other titles: Wipeout HD,
+prints it; the renderer does not apply it.
+
+**First on-screen case: Gemini Dam's tunnel ceiling strips (2026-11-12, `gemini-dam-flicker`, confidence 75).** On
+`12_Track` (Harimau DLC), the `Anotherblue_GLOW` ceiling light strips of nodes 121, 122, 123 (`depth_bias 3`) and 133
+(`depth_bias 6`) lie on the ceiling plates. At spline row 1205, craft held at the lifted sample, the original (PPSSPP
+software renderer) draws one continuous band; ours draws it cut into dashes whose pattern changes with a 0.05 unit camera
+step (four steps, four patterns, one speckled) and `--pvs false` and `true` give the same picture, so it is depth fighting
+and not visibility. At row 1427 (nodes 122, 123) the original's strip is whole and ours' edges change ragged with the same
+steps, milder. Not shown: that applying the bias removes it (no test render of the fix). A player sees it as a ceiling
+light that flickers as the craft moves. Checked on the other titles: Wipeout HD,
 2048 and Omega draw `.rcsmodel` chunks and have no such byte, **checked, differs**;
 Pure's `Mesh_InitBatch` is unread (**not checked**), though its `.vex` header is
 the same layout.
