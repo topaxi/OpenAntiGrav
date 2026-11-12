@@ -221,7 +221,7 @@ fn a_vector_icon_is_rasterised_again_at_each_warning_slots_pixels() {
             &mut Vec::new(),
         )
     };
-    let mut art = oag_pulse::hud::ART.clone();
+    let mut art = *oag_pulse::hud::ART;
     art.incoming_warnings = true;
     let sheet = place(&art);
     // A square drawing into a 20 x 10 box is 10 units a side, and into a 30 x 6 box 6: at 2
