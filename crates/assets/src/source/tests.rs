@@ -85,6 +85,7 @@ const TITLE: &Title = &Title {
                 origin: oag_title::Origin::Chosen,
             },
             crossfade: None,
+            wwise: None,
         },
         // Unread here too: nothing in this crate reads the Zone ladder.
         zone_announcer: None,

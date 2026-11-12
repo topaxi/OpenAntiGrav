@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-12
-summary: "HD front end: Ship Select camera and settle wired; hull lighting read, wire with the tone scale open; settle start, craft turn and zoom, Omega pose"
+summary: "HD front end: Ship Select camera, settle and hull lighting wired; settle start, craft turn and zoom, Omega pose open"
 difficulty: medium (30)
 ---
 
@@ -44,29 +44,17 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   Five teams' silhouettes are within 4 px of their RPCS3 rest frames; the
   pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
   in the order a player would notice:
-  1. **The hull is darker than the original** in that box (mean bias R -7.6,
-     G -11.7, B -11.1). READ 2026-11-12 (`hd-ship-select-lighting`), ready to
-     wire with one value open (`docs/ghidra/functions/ps3-hdfury-eu/
-     front-end-model-lighting.md`): the original lights the preview hull (the
-     race `ship.vex` and its programs) with the race's light parameters, filled
-     from `data/fe/fe.fury.EnvSettings` (Fury style; `fe.envsettings` HD style)
-     by `FrontEnd_LoadEnvSettings` (`0x003aa0e8`, Ship Select calls it with 0 at
-     `0x0025379c`). Ours draws `mesh.wesl`'s stand-in rig. Confidence 85.
-     Change: the preview's scene block takes `Light::authored` built through
-     raceplay's `envsettings_light` path from that file (not hand-copied),
-     `with_output_scale(0.5)`, then the front end's tone scale: the menu frame
-     through `oag_post::hd_bloom`'s resolve with the FE constants (boost 35,
-     clamp 3, max 4). Open value: the FE's adapted luma. One frame fits a scale
-     of about 3.45 in linear light (55), predicting `adapted` of about 0.016;
-     read it at `FunkLayer + 0x25c` as `docs/rendering/hd-track-tone.md` did.
-     Box today 14.33; rig with `/2` 14.32 (the linear ratio goes
-     channel-neutral, 3.53/3.46/3.47); rig with `/2` times 3.45 gives 4.62
-     (bias +2.1, +0.7, -1.7). Acceptance: near 4.6, each channel's bias within
-     about 2. The FE's black fog is refused at both levels (6.48 with it).
-     Also open: the left of the box and the darkest pixels still read brighter
-     in the original (parameter 8 reflection, ambient false direction or bloom).
-     Omega: runs the HD style, whose `fe.EnvSettings` differs from HD's
-     (ambient 0.2 0.3 0.32): checked, differs. Medium (45).
+  1. ~~**The hull is darker than the original** in that box~~ (LANDED 2026-11-12, `hd-ship-select-light-wire`):
+     the craft is lit by the front end's own `.envsettings` (`oag_game::preview::model_light`, from
+     `FrontEnd::model_lighting`; Fury style `fe.fury.EnvSettings`, HD style `fe.envsettings`, Omega its own
+     `fe.EnvSettings`) at HD's `0.5` output times `oag_post::hd_bloom::exposure` at the front end's adapted luma,
+     on the capture and the live picker. The live read of `FunkLayer + 0x25c` on Ship Select (compare profile) is
+     **0.0163**, exposure 3.43, against the predicted 0.016; the hull box goes 14.34 to 4.67 (bias +2.1, +0.7,
+     -1.7). Open: the left of the box and the darkest pixels still read brighter in the original (the parameter 8
+     reflection, `Ambient false direction`, which `Light` has no field for, or the front end's bloom, which the
+     preview draws after); the HD style's adapted luma is unread and taken at the clamp (exposure 1, from the law and a white page; no frame of it seen, it needs the plain HD disc); Omega's rig is its own
+     file's with no tone stage and no frame to compare it with (`docs/ghidra/functions/ps3-hdfury-eu/
+     front-end-model-lighting.md`). Small (20).
   2. ~~**The swap's settle is recovered and not played**~~ (LANDED 2026-11-12,
      `hd-ship-swap-settle`): `ship_model::FitMotion` on the picker stage starts
      the new craft at the last model's rest depth and eases it at 0.125 a frame

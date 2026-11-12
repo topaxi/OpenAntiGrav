@@ -311,6 +311,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         oag_title::EndRaceDialect::Pulse,
     )),
     borrows_ps2_split_screens: true,
+    model_lighting: None,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

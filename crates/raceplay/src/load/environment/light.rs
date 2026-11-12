@@ -34,24 +34,35 @@ pub(in crate::load) fn envsettings_light(
     ps4: bool,
     report: &mut Vec<String>,
 ) -> mesh_render::Light {
-    let Some(name) = envsettings_name(track) else {
-        return mesh_render::Light::stand_in();
-    };
-    let Some((_, blob)) = read_circuit_envsettings(archives, &name) else {
-        return mesh_render::Light::stand_in();
-    };
+    envsettings_name(track)
+        .and_then(|name| authored_light(archives, &name, psp2, ps4, report))
+        .unwrap_or_else(mesh_render::Light::stand_in)
+}
+
+/// The rig the `.envsettings` file `name` authors, or `None`: silently for a file the source
+/// does not hold, with a report line for one that is there and yields no rig. What
+/// [`envsettings_light`] reads for a circuit and what a front end reads for its own models
+/// (`oag_game::preview::model_light`); `psp2` and `ps4` pick the key spelling as they do there.
+pub fn authored_light(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    psp2: bool,
+    ps4: bool,
+    report: &mut Vec<String>,
+) -> Option<mesh_render::Light> {
+    let (_, blob) = read_circuit_envsettings(archives, name)?;
     let text = match String::from_utf8(blob) {
         Ok(text) => text,
         Err(_) => {
             report.push(format!("{name}: not text; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
+            return None;
         }
     };
     let env = match EnvSettings::parse(&text) {
         Ok(env) => env,
         Err(e) => {
             report.push(format!("{name}: {e}; lighting with the stand-in rig"));
-            return mesh_render::Light::stand_in();
+            return None;
         }
     };
     use oag_tables::envsettings::{
@@ -78,7 +89,7 @@ pub(in crate::load) fn envsettings_light(
             "{name}: no usable sun direction, colour and ambient; lighting with the \
              stand-in rig"
         ));
-        return mesh_render::Light::stand_in();
+        return None;
     };
     // The prelit curve and the specular weight feed terms whose *combination*
     // is read out of the circuit's own fragment microcode on HD - see
@@ -141,8 +152,7 @@ pub(in crate::load) fn envsettings_light(
         "2048's own: scale * lightmap + bias on the raw atlas (its programs never read the \
          power), no constant ambient on a lightmapped or vertex-lit draw, no specular key"
     } else {
-        "the combination is the microcode's own; the render target's saturation stands in \
-         for HD's tonemap"
+        "the combination is the microcode's own, ahead of the tone stage"
     };
     report.push(format!(
         "{name}: sun [{:.2}, {:.2}, {:.2}] colour [{:.2}, {:.2}, {:.2}] over ambient \
@@ -158,7 +168,7 @@ pub(in crate::load) fn envsettings_light(
         light.ambient[2],
         specular_scale,
     ));
-    light
+    Some(light)
 }
 
 /// Omega's `Tonemap` block, read into [`oag_post::omega_tonemap::Params`].

@@ -102,6 +102,14 @@ pub const ADAPT_LUMINANCE: [f32; 3] = [0.3, 0.59, 0.11];
 /// `0x8b743c`.
 pub const ADAPTION_FADE_SCALE: f32 = 0.25;
 
+/// The resolve's read exposure: `maximum - min(adapted * boost, clamp)`, the `scale` the
+/// resolve pass multiplies the scene by (`hd_bloom.wesl`'s `fs_encode`), for a caller that
+/// applies the same stage to one draw rather than running the chain.
+#[must_use]
+pub fn exposure(adapted: f32, boost: f32, clamp: f32, maximum: f32) -> f32 {
+    maximum - (adapted * boost).min(clamp)
+}
+
 /// The blur kernel of `FunkLayerBloomBlurVertical_fp`/`Horizontal_fp`:
 /// nine taps, weights `1, 0.8, 0.5, 0.2, 0.1` mirrored, divided by exactly
 /// 4.2 (the microcode's final `MUL` by `0.238095`).

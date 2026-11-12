@@ -226,7 +226,7 @@ has it; only its table moves.
 | Absorb | `oag_physics::damage` absorb branch | the table's `absorb`; `Effects` `ShieldAbsorb` with its burst |
 | Slowdown stacking | `oag_weapons::slowdown`, clamped to the table's `Global slowdown_limit` | the table's `slowdown_time` per weapon |
 | Fire law | `oag_ai::weapon_ai`, `oag_raceplay::field::fire_law` (`FireLaw`) | **`Weapons.ai`** (the odds file); `FireLaw::Ours` when it is missing; a mod's own pickup (`Weapon::Extension`) fires through the Turbo's gate, and a module whose manifest sets `[extension] drives_ai_pickup` is raised nothing and decides itself |
-| Sound | `oag_sound::sfx::cue`, push sites in `oag_raceplay::weapons` and `field/opponent_weapons.rs` | the title's `weapons.bnk` path (`SOUND_BANKS` in its `race.rs`) |
+| Sound | `oag_sound::sfx::cue`, push sites in `oag_raceplay::weapons` and `field/opponent_weapons.rs` | the title's `weapons.bnk` path (`SOUND_BANKS` in its `race.rs`); Omega's `SOUND_BANKS.wwise` (`WWISE_CUES`), the cue string and bank slot each cue posts as a Wwise event |
 | EMP, Light Barrier, GiftCannon | none | none: authored, nothing reads them |
 
 ### Behaviour law
@@ -345,13 +345,15 @@ Cue names are Pulse's, looked up in whichever bank the title ships
 ([audio-mix.md](../ghidra/functions/ps3-hdfury-eu/audio-mix.md)). The weapon cue **sites** are Pulse's reading
 applied to the other titles: confirmed on Pure for eight of nine race cues
 (78 to 82, by decompilation only, `psp-pure-usa/rocket-and-collision-fx.md`,
-`shield-sound.md`, `lockon-sound.md`), not located on HD, 2048 or Omega. Which
+`shield-sound.md`, `lockon-sound.md`), not located on HD or 2048. Omega's
+cue strings and slots are read per launcher and impact
+([wwise-cues.md](../ghidra/functions/ps4-omega-eu/wwise-cues.md)). Which
 individual weapon cue a title plays, and whether it plays it at the same
 simulation edge, has not been compared weapon by weapon.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired; a weapon hit also plays `.COLLISIONS` once per spark locator behind the locator's 0.8 s gate (two on a Quake hit), measured 2026-10-26 and wired the same day (`Race::throw_hit_spark`) | I:Pulse; sites confirmed for the cues listed above; the weapon-hit `.COLLISIONS` is **not wired**: it rides the hit spark's locators and gate, and Pure's `Ship_Damage` weapon branch is unread (its executable names the cue) | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired**: the executable names the cue, but the call site of HD's Cannon craft-hit path is unread | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired** (the executable names the cue twice, no call site read) | ?: not investigated |
+| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired; a weapon hit also plays `.COLLISIONS` once per spark locator behind the locator's 0.8 s gate (two on a Quake hit), measured 2026-10-26 and wired the same day (`Race::throw_hit_spark`) | I:Pulse; sites confirmed for the cues listed above; the weapon-hit `.COLLISIONS` is **not wired**: it rides the hit spark's locators and gate, and Pure's `Ship_Damage` weapon branch is unread (its executable names the cue) | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired**: the executable names the cue, but the call site of HD's Cannon craft-hit path is unread | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired** (the executable names the cue twice, no call site read) | M: cue strings and slots read in the 1.07 executable, triggers I:Pulse ([wwise-cues.md](../ghidra/functions/ps4-omega-eu/wwise-cues.md)): the launch cues of Plasma, Rocket, Missile, Mine and Repulsor, the Cannon's ship hit and the LeachBeam's fail and energy play their Wwise events (the player's `_PC` event for the player where authored); the other hits, Quake, Shuriken, Turbo and the Cannon's fire are **not wired** (switch containers, one ATRAC9 decode), travel loops are **not wired** (loop flags unread), and `.COLLISIONS` is **not wired** (choice unread) |
 
 ## 2048 and Omega: the cross-check
 

@@ -68,6 +68,8 @@ unnamed rather than forced.
 - [wwise-sound.md](wwise-sound.md) - the sound path: banks loaded per mode and track,
   the `<cue>[_PC]__<bank>` event name, the legacy bank alias table, the countdown
   and the missile launch followed to their media.
+- [wwise-cues.md](wwise-cues.md) - the per-cue table: which cue string and bank slot the
+  1.07 executable posts for each of this port's 43 race cues, the slot globals, and which load.
 - [ship-collision-fx.md](ship-collision-fx.md) - `ShipCollisionFx_Trigger`/
   `Ship_DispatchCollisionFx`, found independently of `ps3-hdfury-eu`'s own
   reading and agreeing with it - the finding that promoted this binary to an

@@ -215,6 +215,54 @@ walks do not give the side challenges a ring mode. **A state-3 button draws noth
 runs for state 2). No hexagon-or-triangle choice is made per event: the canvas button is always the
 3 x 2 hexagon (`CanvasButton_BuildCellList` `0x813c529c`: cells `(col..col+2) x (row, row+1)`).
 
+## 5. Live check of the flattening (2026-11-12, `w2048-hidden-spot-capture`)
+
+**Verdict: (a). A state-3 hidden spot's cells are one flat value that rises and falls with the wave while the
+ground around it ripples per cell. Confidence on the averaging rule: 55 raised to 80 (cell memory, one
+boot with music; pixels did not separate it).** Vita3K v0.2.1 4095, EU v1.04, private profile, music on (the
+analyser's ring advances at 60 Hz, `.fft` levels non-zero).
+
+Method. Guest memory read through `/proc/<pid>/mem` (`vita3k-mem.py`), the canvas at `*(0x8151d3f4)` (cell
+alpha at `canvas + (row * 401 + col) * 4 + 0xe7`), sampled every 0.5 ms for 3 s of the first map view
+(current event = Event 1, centre (34.0, 28.1), R 7.0, `canvas+0x5ed40` = 1). The hidden Ship Challenge
+(rank 10, `m_RankRequired` +0x2e0) sits at cell (59, 27), 5.9 units from the centre; its button is a
+**4-cell** shape (`+0x40` = 4: (27,59), (28,58), (28,59), (28,60)), not the 3 x 2 hexagon the page's
+section 4 assumes (the five Ship Challenges, vtable `0x8150ac78`, and the ten Phantom ones, `0x8150aca8`,
+carry 4-cell lists; Event 1's button has 6). Same spot twice, same boot: state 0 then state 3.
+
+| Quantity (60 Hz frames, 535 to 550 each) | State 0 (control) | State 3 (progress 1) |
+| --- | --- | --- |
+| H cells' max-min spread, mean | 67 | 14 |
+| H flat (spread 0) share of samples | 8 % | 57 % |
+| Neighbouring ground cells' spread, mean (rows 27/28, cols 55-57, 61-63) | 128 | 72 |
+| H mean level range | 0 to 130 | 0 to 120 |
+
+In state 3 the non-flat samples are 1.0 ms runs (mean; 133 runs) against 21 ms flat runs: the cells are
+raised individually by the wave and averaged within one frame, so the flat value is what persists. Per frame
+the post-flatten level ranges 0 to 111 (a beat jumps it to about 70, then it decays 3.8 a frame, the page's
+230 a second). Validity gate met: the neighbours moved (up to 255). Outside radius 7 a state-3 spot is
+constant: the rank-50 spot 20 units away read 70 on every sample while its neighbours read 0 (a state-3
+button's flat level is not zero when nothing moves; 70 is unexplained, not read).
+
+**What did not come out.** (1) The upload to the texture (15 % ease) runs before the flatten, so what is
+drawn keeps one frame's wave differential: median in-frame spread 11 of 255, 90th percentile 70, so the
+spot is nearly, not exactly, flat on screen. (2) Pixel crops (30 fps, 960x544) could not separate it: the
+spot lay under the map's top edge and a notification banner, the wave there is faint (crop luma 250 to 253
+for both), and the control crop landed on a painted ring tile. Verdicts (b) and (c) are excluded by the
+memory series (state 0 and state 3 differ; the spot moves), not by a picture.
+
+**How the state was reached (not the original's own path).** Writing the XP total (`profile + 0x3257c` =
+3,600,000, rank 50) did **not** promote any hidden event: `Campaign_UnlockEvents` did not run on map entry
+(all 15 stayed at progress 0 with the HUD showing rank 50), so progress 1 and the button state 3 were
+written directly (`event+0x2d8` = 1, `button+0x3c` = 3); the game kept both. Whether the rank-gated
+promotion happens at race end was not tried. Writing `profile+0x32588` (not an event pointer: a key looked
+up by `FUN_812d92ba`) wedges the guest in a `MemoryRead` fault loop and silences the music analyser until
+a restart: never write it. The wave is off on the map's first, zoomed-out view (`+0x5ed40` = 0); it turns
+on after Home then the check mark returns to the focused view.
+
+Reproduce: `vita3k-mem.py serve`, walk to the map, Home then check mark, write the two words, read the
+canvas rows 25 to 38 repeatedly. Omega: checked, differs (no `.fft`, section "Omega"). HD: no `Canvas3D`.
+
 ## Names
 
 | Address | Name | Conf | Evidence |

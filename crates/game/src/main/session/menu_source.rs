@@ -331,6 +331,12 @@ impl Session {
             meshes: front_end.is_some_and(|front_end| front_end.preview_meshes),
             ship_hull: front_end.and_then(|front_end| front_end.ship_preview_hull),
             front_end,
+            title: Some(shell.title),
+            fury: shell
+                .frame
+                .blocks
+                .as_ref()
+                .is_some_and(|blocks| blocks.fury),
             globals: shell.globals.clone(),
             strings: shell.strings.clone(),
         })
