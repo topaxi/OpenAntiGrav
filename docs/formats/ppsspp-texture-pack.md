@@ -469,8 +469,10 @@ the active one, and the decoders ask it:
 - **Not replaced**: particle (`.pob`) textures and ship skins. Each is its own lane's check, in a
   frame. Pulse's loading screen (checked at 1440x816 with `--track 16_Track`, pack on and off) draws
   the tip, the circuit name and the generated wave and no sheet picture, so its picture is the face.
-  The race-box pickers, the end-of-race screens and the campaign draw through the same
-  `Placed::sheet_rect` now but were not captured with a pack on.
+  Track Select and Ship Select (reached after a live MODS toggle on and off, 1440x816) draw the
+  pack's hex panel, arrows and stat bars and the disc's after it is off, matching a boot with the
+  pack on. The end-of-race screens, the campaign, the pause menu and the track panel draw through
+  the same `Placed::sheet_rect` but were not captured with a pack on.
 - **Frames** (Pulse EU, the 2020 reTokyo snapshot, `--race --seed 1 --ticks 600 --size 1280x720`):
   with the pack off the frame is byte-identical to `main`'s (re-checked after the HUD and font
   change: ticks 600 and 1500 `cmp` equal to the frames taken before it); with it on, 453 textures were

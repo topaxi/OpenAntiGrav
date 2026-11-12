@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-11-12
-summary: "HUD, faces, front-end art and the live MODS toggle done; open: Pure, device limits, .pob, ship skins, real ZIM, picker frames"
+summary: "HUD, faces, front-end art and the live MODS toggle done; open: Pure, device limits, .pob, ship skins, real ZIM, end-of-race frames"
 categories: [tooling]
 size: L (60)
 difficulty: medium (60)
@@ -44,7 +44,7 @@ packs; `just push-data` carries them.
   other is reported. Race Remix keys the pack on the track source's serial.
 - ~~Not on the menus' own art~~ and ~~a MODS toggle of a pack applies at the next launch~~: both done 2026-11-12. `switch_selected_mod` reloads the shell (`Session::resupply_language`, which hands the renderer the new sheet) for a pack, so faces and art follow at once (`drive_ground_truth::the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live`).
 - **The front end's sheet is 4096x2372 with the 2020 Pulse folder** (`pulse_assets.mip` and `pulse_logo.mip` at 8x). A device whose textures are 2048 a side (a downlevel web adapter) refuses it in `upload_rgba`; reduce the sheet there (its placements' `scale` moves with it) or pass the device limit into the boot, as the faces' `fit_to_device` does. Same open item as the race HUD sheet above.
-- **Front-end draws not captured with a pack on**: the race-box pickers, the end-of-race screens, the campaign, the pause menu and the track panel go through `Placed::sheet_rect` now (a unit test covers `sprite_draw`; the menu pages, `Show Logo` and the MODS page were captured). A draw that derives a screen rect from a uv's width is the mistake to look for: the stepping arrows' glow was one (fixed). `loading/layout.rs`'s `clamped` compares a uv width with the drawn size and its sheet is not replaced, so it is unaffected today.
+- **Front-end draws not captured with a pack on**: the end-of-race screens, the campaign, the pause menu and the track panel (Track Select and Ship Select were, live and from boot) go through `Placed::sheet_rect` now (a unit test covers `sprite_draw`; the menu pages, `Show Logo` and the MODS page were captured). A draw that derives a screen rect from a uv's width is the mistake to look for: the stepping arrows' glow was one (fixed). `loading/layout.rs`'s `clamped` compares a uv width with the drawn size and its sheet is not replaced, so it is unaffected today.
 - **A live toggle reloads the shell on the UI thread** (about a second in a debug build with the 16x faces); a parked race and the other stages keep what they were built with.
 - **Pure's front-end faces are held off** (`FrontEnd::runtime_palette_faces`): the 2020 Pure folder's `FX300ANG`/`LTe50325` hit by full key but Pure's palette moves at run time and no oracle dump says what the original draws. Take the dump, then flip the flag; the Pure race HUD still asks the pack.
 - Unresolved misses (unchanged): Pulse ship hull texels rewritten after load (167 ship keys), Pure
@@ -62,4 +62,4 @@ packs; `just push-data` carries them.
 2. ~~HUD sheet and fonts.~~ Done for the race HUD.
 3. ~~Read ZIM.~~ Done; get a real pack's `.zim` (the forum's late pack) and run `zim_ground_truth`'s decode over it.
 4. Pure: take a Pure oracle dump the way Pulse's was to confirm the 650, then wire it behind the runtime-palette guard.
-5. ~~Front-end faces.~~ Done. ~~Front-end sheet art and the live MODS toggle.~~ Done. Next: capture the pickers, end-of-race and campaign with a pack on; reduce the sheets to a device's texture limit.
+5. ~~Front-end faces.~~ Done. ~~Front-end sheet art and the live MODS toggle.~~ Done. Next: capture the end-of-race, campaign and pause menu with a pack on; reduce the sheets to a device's texture limit.
