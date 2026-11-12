@@ -168,6 +168,15 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      2026-11-12): no tile, ring or cursor until a pass is earned on one, matching frame
      `12`. **Open: a player rank model is needed to unlock the 15 rank-gated 2048
      challenges (`m_RankRequired` 10-50); until then they cannot be launched from the map.**
+     **Open, from the maintainer's play (2026-11-12): the 15 are hidden prototype
+     races the player FINDS by tapping their spot on the lattice; once found they
+     draw a tile (hexagon or triangle, unread).** The pad's stick cursor and the
+     mouse now reach any spot, but a Confirm on a hidden event's cell does nothing
+     yet: the reveal rule (what raises progress `+0x2d8` on a tap, the hit area,
+     what counts as unlocked given `m_RankRequired`, the found tile's shape) is
+     unread; a `str [rN,#0x2d8]` sweep finds no direct writer and the single-player
+     tap path is not `0x810eecb4`'s callers. Needs an RE pass, then a "found" set
+     persisted with the campaign state.
      The original's own rule for which events the pad or a tap may select is
      unread (`+0x50` is the paint's alpha snap, not a selection flag: `campaign-map-projection.md`,
      "The ring"); ours keeps every drawn event, flat or raised, a cursor target.

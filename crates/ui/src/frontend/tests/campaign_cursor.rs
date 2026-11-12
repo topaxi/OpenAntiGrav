@@ -52,7 +52,9 @@ fn the_stick_moves_the_cursor_off_the_selected_event_and_clamps_it_to_the_view()
     }
     let (width, height) = frontend.space().size;
     let end = frontend.map_cursor().unwrap();
-    assert!((end.0 - width).abs() < 0.01 && (end.1 - height).abs() < 0.01);
+    // Held short of the edges by the arrow's own size, never past them.
+    assert!(end.0 > width * 0.9 && end.0 < width, "{end:?}");
+    assert!(end.1 > height * 0.9 && end.1 < height, "{end:?}");
 }
 
 #[test]

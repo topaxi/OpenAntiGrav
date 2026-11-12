@@ -25,6 +25,11 @@ use oag_2048::frontend::states as w2048;
 /// view width a second.
 pub(super) const MAX_SPEED: f32 = canvas_camera::VIEWPORT.0;
 
+/// How far the arrow's hotspot stops short of the view's right and bottom
+/// edges, in canvas viewport pixels, so the arrow (it hangs right and down
+/// of its tip) is not drawn off the screen when it is pushed to an edge.
+pub(super) const EDGE_INSET: (f32, f32) = (28.0, 36.0);
+
 /// Seconds without a stick push after which the cursor goes.
 pub(super) const IDLE_HIDE: f32 = 3.0;
 
@@ -77,7 +82,10 @@ impl CampaignMap {
             from.0 + sx / norm * speed * dt,
             from.1 - sy / norm * speed * dt,
         );
-        let at = (to.0.clamp(0.0, view_w), to.1.clamp(0.0, view_h));
+        let at = (
+            to.0.clamp(0.0, view_w - EDGE_INSET.0),
+            to.1.clamp(0.0, view_h - EDGE_INSET.1),
+        );
         let over = (to.0 - at.0, to.1 - at.1);
         for (axis, over) in [(0, over.0), (1, over.1)] {
             if over != 0.0 {

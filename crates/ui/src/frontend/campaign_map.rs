@@ -29,6 +29,14 @@
 //! travel limits are **chosen, not measured**: any event can be centred, with the
 //! original's 650 px of margin past the outermost ones.
 //!
+//! # The pad's cursor and the mouse
+//!
+//! The right stick moves an arrow over the map and pushing it past the view's
+//! edge pans, so a pad reaches every event, including ones the d-pad's steps
+//! skip ([`super::map_cursor`]). A held left mouse button drags the view
+//! (`oag_game`'s pointer window turns it into a finger's drag while this map is
+//! up) and the wheel pans a row a detent ([`CampaignMap::pan`]).
+//!
 //! # The card
 //!
 //! A tap on a tile opens the event's card (`event_card`,
