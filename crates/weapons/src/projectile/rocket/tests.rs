@@ -48,6 +48,7 @@ fn tick(projectiles: &mut Projectiles, world: &CollisionWorld) {
         None,
         TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
     );
 }
 

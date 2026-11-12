@@ -420,6 +420,9 @@ pub struct RaceSim {
     /// Whether the weapons are born carrying the located track's up - see
     /// [`Setup::launch_normal_is_track_up`].
     pub(super) launch_normal_is_track_up: bool,
+    /// Whether the projectiles' floor arms are Pulse's decompiled laws - see
+    /// [`Setup::floor_arms_steer_to_ride_point`].
+    pub(super) floor_arms_steer_to_ride_point: bool,
     /// Which ways a craft is put back are on, and their numbers - see
     /// [`Setup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,

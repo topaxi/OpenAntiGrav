@@ -92,6 +92,7 @@ fn tick(
         stats,
         TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
     )[0]
 }
 

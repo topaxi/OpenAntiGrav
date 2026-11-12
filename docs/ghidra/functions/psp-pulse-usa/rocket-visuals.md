@@ -1412,7 +1412,7 @@ the projectile's one-point query uses. The 17 rows of "The cage test reproduced"
 point (0.01 unit) and normal (cosine above 0.9999); the Plasma ends on update 49, the Cannon round
 on 25, the Outpost 7 rocket on 21, each on the original's own per-update `dt` (a single listed `dt`
 drifts a whole update by the Rocket's 15th: 0.0171 against a mean of 0.0166). **The Shuriken
-cannot be chained from update 50**: ours keeps the blade's speed where the original's changes
+could not be chained from update 50** (until the floor arms were wired, below): ours kept the blade's speed where the original's changes
 (item 5 of the thread; 276.9 units/s at update 52, 298.9 at 53), so by update 54 it is 0.3 unit off
 the original's line, meets the kerb's wall at update 58 and bounces instead of ending, and the test re-seeds each update from the original's own state
 instead. `rocket_floor_trace` on `07` and `10`: the rockets that reached their five seconds went
@@ -1448,6 +1448,21 @@ Per title (`Weapons::launch_normal_is_track_up`, `docs/gameplay/weapon-lineage.m
 ([ps3-hdfury-eu/projectile-launch-normal.md](../ps3-hdfury-eu/projectile-launch-normal.md), 86, 80
 and 75). Turning it on there moved three tests at their margins; that page's "Landed" section has
 the distributions they were re-based on.
+
+### Wired: the floor arms (2026-11-12, `pulse-floor-arms`)
+
+`Weapons::floor_arms_steer_to_ride_point` picks `projectile::FloorArms` per title. On Pulse and
+Pure (`SteerToRidePoint`) the Shuriken's probe arm and the Rocket's and Shuriken's travel-sweep arm
+write `(ride point - start) / dt` unrescaled (`start` is the update's entry position), the Missile's
+probe arm steers to the ride point as the Rocket's does, and the Plasma's travel-sweep arm only moves.
+`moa_therma_white_shuriken_ends_at_the_cage` chains the Shuriken from update 50: the velocity at
+each next entry is within 2 units/s of the recorded one and the blade ends on the cage at update 58
+(without the law: 278 against 299 units/s at update 52, and a bounce on the kerb). The other three arms
+are unit tests on a flat floor (`crates/weapons/src/projectile/tests/floor_arms.rs`), not recorded states.
+**Cross-title**: HD's `Plasma_Update` is its own function (ride height 4.0, above) and its travel
+segment only destroys on `0`, `4`, `5` (the pseudocode above writes no floor arm): **checked,
+differs** for the Plasma sweep, and HD, 2048 and Omega keep the parallel turn (**not checkable**
+for their Rocket, Missile and Shuriken arms: unread, named in the thread).
 
 ### Cross-title
 

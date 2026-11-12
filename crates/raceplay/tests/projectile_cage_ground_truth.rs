@@ -283,6 +283,7 @@ fn update(
         cage,
         race.weapon_stats(),
         "VENOM",
+        race.floor_arms(),
         BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut hits,
@@ -396,24 +397,37 @@ fn moa_therma_white_plasma_ends_at_the_cage() {
 fn moa_therma_white_shuriken_ends_at_the_cage() {
     let Some(race) = start("03") else { return };
     let cage = Some(cage_of(&race));
-    // The Shuriken's travel sweep returns 4 at update 58. Its speed is not constant in the
-    // original and ours keeps its length (`docs/ghidra/functions/psp-pulse-usa/shuriken.md`), so
-    // a chain from update 50 drifts off the kerb; each update starts from the original's own
-    // state instead, which isolates this law.
+    // Chained from the original's state at update 50, with its own `dt` each update. The blade's
+    // speed is whatever the step to the ride point was (`shuriken.md`, "on a bank the blade's
+    // speed drifts"), so the chain stays on the kerb and meets the cage at update 58; a blade
+    // that keeps its speed drifts off the original's line and bounces on the kerb's wall instead.
+    let (_, age, position, velocity, surface) = SHURIKEN_STATES[0];
+    let mut world = race.sim.world.clone();
+    world.projectiles.clear();
+    world.projectiles.slots[0] = seeded(Weapon::Shuriken, age, position, velocity, surface, 0.0);
     let mut ended = None;
-    for (index, (dt, age, position, velocity, surface)) in SHURIKEN_STATES.iter().enumerate() {
-        let mut world = race.sim.world.clone();
-        world.projectiles.clear();
-        world.projectiles.slots[0] =
-            seeded(Weapon::Shuriken, *age, *position, *velocity, *surface, 0.0);
+    for (index, (dt, ..)) in SHURIKEN_STATES.iter().enumerate() {
         let impact = update(&race, &mut world, cage, *dt);
+        let last = index == SHURIKEN_STATES.len() - 1;
         assert_eq!(
             impact.is_some(),
-            index == SHURIKEN_STATES.len() - 1,
-            "update {}: {impact:?}",
-            50 + index
+            last,
+            "update {}: {impact:?} at {:?}",
+            50 + index,
+            world.projectiles.slots[0].position
         );
         ended = impact;
+        if let Some((_, _, _, expected, _)) = SHURIKEN_STATES.get(index + 1) {
+            // The original's velocity at the next update's entry: its speed series.
+            let now = world.projectiles.slots[0].velocity;
+            assert!(
+                (now - v3(*expected)).length() < 2.0,
+                "update {}: velocity {now:?} (speed {}), the original's {expected:?} (speed {})",
+                50 + index,
+                now.length(),
+                v3(*expected).length()
+            );
+        }
     }
     let flight = Flight {
         calls: 9,
@@ -518,6 +532,12 @@ fn an_hd_plasma_bolt_rides_the_located_tracks_up() {
     })
     .expect("loading an HD race");
     let race = race::Race::start(loaded.setup);
+    // HD's own floor arms are unread, so it keeps the parallel turn
+    // (`Weapons::floor_arms_steer_to_ride_point`).
+    assert_eq!(
+        race.floor_arms(),
+        oag_weapons::projectile::FloorArms::ParallelToFloor
+    );
     plasma_rides_the_located_up(race, 100, |track_up| {
         let across = track_up.cross(Vec3::X).normalize();
         Quat::from_axis_angle(across, 6f32.to_radians()) * track_up

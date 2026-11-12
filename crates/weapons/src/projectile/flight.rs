@@ -5,9 +5,9 @@
 //! under the 1,000-line ratchet.
 
 use super::{
-    FALL_ACCELERATION, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS, MAX_PROJECTILES,
-    Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon,
-    disruptor, mine, missile, nearest_hit, plasma, rocket, shuriken,
+    FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
+    MAX_PROJECTILES, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit,
+    TriggerRadii, cannon, disruptor, mine, missile, nearest_hit, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -29,8 +29,11 @@ impl Projectiles {
     /// `cage` is the track's collision cage where the title runs one (`None`
     /// elsewhere): a probe or a travel sweep that ends outside it is the
     /// original's collision code `4`, taken before the surface class.
-    // Ten parameters, one table block per weapon that flies at an authored speed;
-    // a parameter struct is deferred until a fourth weapon asks for one.
+    ///
+    /// `floor_arms` is how the title's weapons write their velocity on a floor
+    /// ([`FloorArms`]).
+    // One table block per weapon that flies at an authored speed, plus the cage and
+    // the title's floor arms; a parameter struct is deferred until another asks.
     #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized, S: Craft>(
         &mut self,
@@ -43,6 +46,7 @@ impl Projectiles {
         disruptor: Option<&oag_tables::weapons::DisruptorStats>,
         trigger_radii: TriggerRadii,
         class: &str,
+        floor_arms: FloorArms,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -266,7 +270,12 @@ impl Projectiles {
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,
                     );
-                    if matches!(kind, Weapon::Rocket | Weapon::Plasma) {
+                    let steers = match kind {
+                        Weapon::Rocket | Weapon::Plasma => true,
+                        Weapon::Missile => floor_arms == FloorArms::SteerToRidePoint,
+                        _ => false,
+                    };
+                    if steers {
                         // The Rocket and the Plasma steer toward the ride point:
                         // `Rocket_Update` sets velocity to `(ride point - from) / dt`,
                         // rescales to the class speed and re-integrates from `from`
@@ -275,6 +284,8 @@ impl Projectiles {
                         // (`plasma.md`, "`Plasma_Update` is `Rocket_Update`'s floor
                         // follower"): it is not the parallel-to-the-floor turn below,
                         // which left a Plasma 0.8 unit off the original's line.
+                        // `Missile_Update`'s probe floor arm is the same again
+                        // (`missile.md`, "The probe's floor arm is the Rocket's steer").
                         let toward = (to - from) / dt;
                         if toward.length_squared() > 0.0 {
                             projectile.velocity = toward.normalize() * speed;
@@ -282,6 +293,13 @@ impl Projectiles {
                         } else {
                             projectile.velocity = toward;
                         }
+                    } else if kind == Weapon::Shuriken && floor_arms == FloorArms::SteerToRidePoint
+                    {
+                        // `Shuriken_Update`'s probe floor arm stops at
+                        // `(ride point - from) / dt`: no normalise, no rescale, so
+                        // the blade's speed is whatever the step was
+                        // (`shuriken.md`, "on a bank the blade's speed drifts").
+                        projectile.velocity = (to - from) / dt;
                     } else {
                         let along =
                             projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
@@ -373,29 +391,41 @@ impl Projectiles {
                 }
                 // A floor across the step is ridden, not struck: the original's
                 // travel-segment switch takes a floor code to the same push-out
-                // (`hit + normal * 3.0`) for all four weapons; only a wall (`0`) or the
-                // cage (`4`, above) ends a flight. It carries a projectile over a crest
-                // into the dip.
+                // (`hit + normal * g_ride_height`) for all four weapons; only a wall
+                // (`0`) or the cage (`4`, above) ends a flight. It carries a
+                // projectile over a crest into the dip.
                 //
-                // The Missile only moves: `Missile_Update`'s floor arm writes no
-                // normal or velocity (its guidance rewrites it). `Rocket_Update`
-                // and `Shuriken_Update` adopt the normal and write
-                // `(next - prev) / dt`. This engine has no per-tick rescale for the
-                // Rocket, so velocity is turned parallel with speed kept (chosen,
-                // not measured).
+                // What else the arm writes differs by weapon
+                // (`rocket-visuals.md`, "By-catch in the flight arms"). The Missile
+                // and the Plasma only move: neither writes a normal or a velocity
+                // (a Missile's guidance rewrites it, a Plasma's next probe does).
+                // `Rocket_Update` and `Shuriken_Update` adopt the normal and write
+                // `(next - prev) / dt` raw, which a rocket landing on a ramp face
+                // carries upward. A title that has not measured the arms turns the
+                // velocity parallel with its length kept (chosen, not measured).
                 Some(hit)
                     if kind != Weapon::Cannon
                         && hit.struck.is_none()
                         && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
                     projectile.position = hit.point + hit.normal * ride_height;
-                    if !guided {
-                        projectile.surface = hit.normal;
-                        let along =
-                            projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
-                        if along.length_squared() > 1e-6 {
-                            projectile.velocity = along.normalize() * projectile.velocity.length();
+                    match floor_arms {
+                        FloorArms::SteerToRidePoint => {
+                            if matches!(kind, Weapon::Rocket | Weapon::Shuriken) {
+                                projectile.surface = hit.normal;
+                                projectile.velocity = (projectile.position - from) / dt;
+                            }
                         }
+                        FloorArms::ParallelToFloor if !guided => {
+                            projectile.surface = hit.normal;
+                            let along = projectile.velocity
+                                - hit.normal * projectile.velocity.dot(hit.normal);
+                            if along.length_squared() > 1e-6 {
+                                projectile.velocity =
+                                    along.normalize() * projectile.velocity.length();
+                            }
+                        }
+                        FloorArms::ParallelToFloor => {}
                     }
                 }
                 Some(hit) => {
