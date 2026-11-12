@@ -161,7 +161,7 @@ fn omega_and_2048_index_the_shield_slot_by_skill() {
 }
 
 /// HD's measured body damping reaches the physics' laws, with Omega's own and 2048's inherited
-/// pair; Pulse (no laws) and Pure fly none.
+/// pair, and Pure's own read; Pulse (no laws) flies none.
 #[test]
 fn the_body_damping_follows_the_title() {
     let damped = oag_physics::laws::BodyDamping {
@@ -172,15 +172,14 @@ fn the_body_damping_follows_the_title() {
         &oag_hd::race::CRAFT_LAWS,
         &oag_omega::race::CRAFT_LAWS,
         &oag_2048::race::CRAFT_LAWS,
+        &oag_pure::race::CRAFT_LAWS,
     ] {
         assert_eq!(physics_laws(Some(laws)).body_damping, damped);
     }
-    let none = oag_physics::laws::BodyDamping::NONE;
     assert_eq!(
-        physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).body_damping,
-        none
+        physics_laws(None).body_damping,
+        oag_physics::laws::BodyDamping::NONE
     );
-    assert_eq!(physics_laws(None).body_damping, none);
 }
 
 /// HD's measured one-sided contact reaches the physics' laws, as do Omega's and 2048's own reads;
