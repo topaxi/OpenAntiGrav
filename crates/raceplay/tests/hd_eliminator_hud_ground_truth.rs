@@ -493,11 +493,12 @@ fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
     );
 }
 
-/// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (six
-/// measured; one while the opponent spent every pickup the moment the law let it, which the
-/// twenty-second hold of a fresh pickup stops), and every seed reaches its target. Elite is the
-/// default difficulty, so these twelve races also carry the claim that a finished race leaves a
-/// board ranked on points ([`assert_board_ranked_on_points`]).
+/// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (nine
+/// measured, six with the craft's own up as the launch normal; one while the opponent spent every
+/// pickup the moment the law let it, which the twenty-second hold of a fresh pickup stops), and
+/// every seed reaches its target. Elite is the default difficulty, so these twelve races also
+/// carry the claim that a finished race leaves a board ranked on points
+/// ([`assert_board_ranked_on_points`]).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_elite_score_eliminator_takes_more_than_a_few_laps() {

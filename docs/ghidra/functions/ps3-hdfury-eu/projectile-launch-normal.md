@@ -135,7 +135,7 @@ stores `FloatVectorNeg(craft+0x6e90)` at `+0x110`. `+0x6e90` is cursor `+0x30`, 
 `+0x7820`/`+0x7850` relation with four-byte pointers. Confidence **75**: one init, the writer not
 traced.
 
-## Turning it on in this engine (2026-11-12): not the whole change
+## Turning it on in this engine (2026-11-12)
 
 `Weapons::launch_normal_is_track_up` set to `true` on HD, Omega and 2048 is the law above, and
 the field it gates (`Ship::track_up`) has no reader but `oag_weapons::Craft::launch_normal`. With
@@ -160,3 +160,44 @@ The tests that fail are `hd_eliminator_hud_ground_truth::a_finished_eliminator_l
 `::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace` and
 `omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed`; all three pass with
 the field off, as does the lone-craft regression.
+
+### Landed (2026-11-12, `hd-launch-normal-flip`)
+
+`Weapons::launch_normal_is_track_up` is `measured(true)` on HD, Omega and 2048 (Omega and 2048:
+their `Plasma_Init` read, their Rocket, Missile and Shuriken inits take HD's). Pinned by
+`projectile_cage_ground_truth::an_hd_plasma_bolt_rides_the_located_tracks_up`: the person's craft
+posed 6 degrees off HD sample 100's up, a Plasma press, the charging bolt carries the sample's
+`-down`; red with HD's flag reverted. The three tests were re-based on distributions, not on
+the one draw each had:
+
+- **Omega, Amphiseum reversed.** Omega racing is static only (no memory readout; shadPS4's race
+  frames are untrusted), so no original number exists to re-measure. Over the five
+  `perturb::GATE` scales times the nine `perturb::BOUND_OFFSETS` (45 runs of `fly`'s bounds),
+  **8 of 45 miss with the craft's up and 8 of 45 with the track's up**, so the unperturbed red was
+  a coin. The test is judged on `GATE`, at least two of five hold (the Tower row's rule in
+  `vita_2048_original_ai_ground_truth`): at an 18 % miss rate that fails under 1 % of the time.
+  With the track's up, three of five hold. What slot 5 does in the unperturbed run: from tick 5452
+  it loses 92 to 76 shield in 1-point steps with no wall contact, no beam, no disruption and no
+  roll (a hull scrape in the integrator, by elimination), slows from 156 to 71, leaves the track at
+  5524 and is put back at 5602. The flag-off run's slot 5 was at the same 76 at tick 5568 before
+  its hit, so the scrape is not the law's.
+- **The field, noise method.** Distinct failing tests among the 31 `*_original_ai_ground_truth`
+  tests per `OAG_PERTURB` scale (`0, 1e-3, -1e-3, 1e-4, -1e-4, 1e-5, -1e-5, 1e-6, -1e-6`): craft's
+  up `0 0 0 0 0 1 0 0 1` (median 0, max 1), track's up `1 0 2 0 3 1 2 1 0` (median 1, max 3),
+  inside the bar the Turbo's running laws were judged on (median 1, max 4). The failures are
+  Amphiseum and Ubermall, plus `hd_original_ai_ground_truth::at_the_events_own_skill_the_reference_racer_reads_63`
+  once at `-1e-4`. **Ubermall as Phantoms** is green unperturbed but misses 8 of 45 `GATE x
+  BOUND_OFFSETS` runs with the track's up against 3 of 45 with the craft's: open, not re-based.
+- **HD Novice pace.** The original's number is one race (Vineta K, nine laps, run 4 of
+  `scripts/rpcs3-hd-eliminator-score.py`; [eliminator-score.md](eliminator-score.md)); no second
+  RPCS3 race was run. Seeds 1 to 12, laps the leading opponent completed: `4 7 7 7 7 10 10 13 13
+  17 20` and seed 1 still running at 60,000 ticks on 19, median 10. The test now counts an
+  unended race at the laps it had, the rule
+  [race-modes.md](../../../gameplay/race-modes.md#the-pace-of-a-score-eliminator-2026-11-09)
+  measured its table by, and asserts the median cannot depend on it: fewer than half unended,
+  and each already at or past the median.
+- **The finished board.** Its claim is the board's order, not a pace; seed 1 and the 30,000-tick
+  limit were ours. Elite (the default) seed 1 ends at 40,745 ticks with the track's up. The check
+  now runs on every race the pace tests end: twelve Novice and twelve Elite races. Elite with the
+  track's up: every seed ends, laps `4 5 6 7 7 8 10 11 11 12 16 18`, median 9 (6 with the craft's
+  up; the test's floor is 4).

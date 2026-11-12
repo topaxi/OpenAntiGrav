@@ -1442,18 +1442,12 @@ firing tick, replaces the seed with the floor's normal; the handed-in normal is 
 `rocket::tests::a_rocket_is_seeded_with_the_normal_it_is_handed`.
 
 Per title (`Weapons::launch_normal_is_track_up`, `docs/gameplay/weapon-lineage.md`): Pulse
-**measured** `true`; Pure **inherited** from Pulse (the affected Pure tests stayed green);
-**HD `false`, chosen**: its `Rocket_Init` and siblings are unread, and turning the Pulse law on
-moved its field. With `true` on HD and on Omega (2048's tests stayed green), three tests went red
-that pass with the craft's up: `hd_eliminator_hud_ground_truth::a_finished_eliminator_leaves_a_board_ranked_on_points`
-(seed 1 never ended in 30,000 ticks; 3.5 s became 20 s),
-`::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace` (a seed past 1,000 s; 18 s
-became 76 s) and `omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed` (slot 5
-respawned at tick 5602 with no weapon hit). HD's located up is sound (3,000 ticks of an HD
-Eliminator: within 3 degrees of the craft's up on nearly every tick, worst 10.6, on the same samples
-the magstrip hold reads), so this is a field sensitive to where a rocket leaves, not a bad sample;
-reading HD's `Rocket_Init` decides it. **2048 and Omega `false`, inherited from HD**: **not
-checkable** (their `Rocket_Init` is unread on both), they follow HD's choice and agree with it.
+**measured** `true`; Pure **inherited** from Pulse (the affected Pure tests stayed green); **HD,
+2048 and Omega measured `true`** since 2026-11-12: HD's `Rocket_Init` and its siblings, Omega's and
+2048's `Plasma_Init` store the same located record's down negated
+([ps3-hdfury-eu/projectile-launch-normal.md](../ps3-hdfury-eu/projectile-launch-normal.md), 86, 80
+and 75). Turning it on there moved three tests at their margins; that page's "Landed" section has
+the distributions they were re-based on.
 
 ### Cross-title
 
