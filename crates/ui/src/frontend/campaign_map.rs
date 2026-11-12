@@ -549,6 +549,11 @@ impl Frontend {
         Some(self.campaign.state_of(index))
     }
 
+    /// Whether the campaign map is the screen and no event card is over it.
+    pub(super) fn on_open_map(&self) -> bool {
+        self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none()
+    }
+
     /// The pad on the map: the d-pad moves to the nearest event that way,
     /// cross or start opens the card of the one under the cursor.
     pub(super) fn update_campaign_map(&mut self, input: &mut Input) {

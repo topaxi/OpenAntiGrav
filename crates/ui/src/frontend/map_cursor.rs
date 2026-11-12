@@ -19,7 +19,6 @@
 use super::campaign_map::CampaignMap;
 use super::canvas_camera;
 use super::*;
-use oag_2048::frontend::states as w2048;
 
 /// Cursor speed at full deflection, in canvas viewport pixels a second: one
 /// view width a second.
@@ -115,7 +114,7 @@ impl Frontend {
     /// the campaign map and no card covers it.
     #[must_use]
     pub fn map_cursor(&self) -> Option<(f32, f32)> {
-        if !self.machine.is(w2048::NEW_FE_SHELL) || self.campaign.card.is_some() {
+        if !self.on_open_map() {
             return None;
         }
         let at = self.campaign.cursor.at?;
@@ -129,12 +128,12 @@ impl Frontend {
     /// once: the campaign map with no card over it.
     #[must_use]
     pub fn wants_mouse_pan(&self) -> bool {
-        self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none()
+        self.on_open_map()
     }
 
     /// One tick of the cursor, on the campaign map only.
     pub(super) fn step_map_cursor(&mut self, dt: f64) {
-        if self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none() {
+        if self.on_open_map() {
             #[expect(
                 clippy::cast_possible_truncation,
                 reason = "a tick is a fraction of a second"
