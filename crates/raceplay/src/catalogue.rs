@@ -57,6 +57,33 @@ pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
     mode.laps_target(oag_race::SpeedClass::census(class)?)
 }
 
+/// The lap count a circuit family fixes for a single race on it, if `circuit` is in one
+/// ([`oag_title::race::CircuitLineage::laps_by_class`]); `None` leaves the engine's count.
+#[must_use]
+pub fn lineage_laps(
+    title: &oag_title::Title,
+    circuit: &str,
+    mode: oag_race::Mode,
+    class: &str,
+) -> Option<u32> {
+    let laps = title.race.circuit_lineage(circuit)?.laps_by_class?;
+    (mode == oag_race::Mode::SingleRace)
+        .then(|| oag_race::SpeedClass::census(class))
+        .flatten()
+        .map(|rung| laps[rung.index()])
+}
+
+/// [`race_laps`] for a race on `circuit` of `title`: [`lineage_laps`] where it answers.
+#[must_use]
+pub fn race_laps_on(
+    title: &oag_title::Title,
+    circuit: &str,
+    mode: oag_race::Mode,
+    class: &str,
+) -> Option<u32> {
+    lineage_laps(title, circuit, mode, class).or_else(|| race_laps(mode, class))
+}
+
 #[cfg(feature = "view")]
 /// Lays a title's circuits out the way Wipeout HD/Fury's `Track Creation`
 /// grid does: every forward circuit in list order, then every reverse one in

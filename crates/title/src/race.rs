@@ -152,6 +152,7 @@ impl ShipPaths {
 
 mod announcer;
 mod fresh;
+mod lineage;
 pub mod sound;
 mod transition;
 mod variants;
@@ -161,6 +162,7 @@ pub use announcer::{
     CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
 };
 pub use fresh::FreshVariant;
+pub use lineage::CircuitLineage;
 pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
@@ -209,6 +211,9 @@ pub struct RaceDefaults {
     pub effect_dir: &'static str,
     /// Per-circuit overrides of [`Self::effect_dir`]; see [`Self::effect_dir_for`].
     pub effect_dir_by_circuit: &'static [(&'static str, &'static str)],
+    /// Circuit families raced under another game's HUD and lap counts; see
+    /// [`Self::circuit_lineage`]. Empty on a title with one game in it.
+    pub circuit_lineages: &'static [CircuitLineage],
     /// How this title names the circuit a Zone race runs on. See [`ZoneCircuit`].
     pub zone: ZoneCircuit,
     /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].

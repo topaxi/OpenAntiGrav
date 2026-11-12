@@ -32,12 +32,17 @@ pub(super) fn track_entries(
     } else {
         (labelled, 0)
     };
-    let laps = oag_raceplay::catalogue::race_laps(mode, settings.race.class.trim());
     let (entries, previews): (Vec<Entry>, Vec<Option<String>>) = labelled
         .iter()
         .map(|(track, label)| {
             // A capture keeps no records store; the distance is the
             // caller's, for the selected circuit only.
+            let laps = oag_raceplay::catalogue::race_laps_on(
+                title,
+                &track.id,
+                mode,
+                settings.race.class.trim(),
+            );
             let measured = distance.filter(|_| track.id == settings.race.track);
             let empty = || {
                 title

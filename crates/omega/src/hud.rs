@@ -31,9 +31,9 @@
 //! reads, as HD's does. **The `2048_hud\` set is reached through virtual
 //! methods only** (`FUN_015ae4d0`, `FUN_015ac880`, no direct caller), which is
 //! this title's 2048-lineage managers; which race selects them is not read, so
-//! it is an open item and `Title::hud` stays one set per title, not per circuit
-//! (compare `oag_omega::race::DEFAULTS`' particle directory, chosen the same
-//! way). See `docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`.
+//! the circuit's directory chooses ([`LAYOUTS_2048`], `crate::race::LINEAGES`,
+//! as `DEFAULTS`' particle directory is chosen). See
+//! `docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`.
 //!
 //! # Art
 //!
@@ -119,6 +119,66 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     absorb_glow: None,
     ..*ART
 };
+
+/// The `2048_hud\` set Omega ships beside HD's roots, read by a race on a 2048-era circuit
+/// ([`crate::race::LINEAGES`]).
+///
+/// The executable names `Data\XML\2048_hud\Arcade_HUD.xml` and `Zone_HUD.xml` in managers it
+/// reaches only through virtual dispatch (`docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`);
+/// the other three files are 2048's own roots at the same names (the Vita's race managers, same
+/// page). Which circuits select it is the Race Box's `GAME MODE`, which our one circuit list
+/// stands in for by the circuit's directory.
+pub const LAYOUTS_2048: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    arcade: r"Data\XML\2048_hud\Arcade_HUD.xml",
+    time_trial: r"Data\XML\2048_hud\SpeedLap_TimeTrial_HUD.xml",
+    speed_lap: r"Data\XML\2048_hud\SpeedLap_HUD.xml",
+    zone: r"Data\XML\2048_hud\Zone_HUD.xml",
+    elimination: r"Data\XML\2048_hud\Elimination_HUD.xml",
+    split: None,
+    split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
+    player_tags: None,
+    skins: &[],
+};
+
+/// [`ART`] for the `2048_hud\` set: 2048's dialect (always-on sprites, `%` on the shield,
+/// hundredths on TOTAL, its own font role and no shield or lap arcs, which that set does not
+/// author) over Omega's own executable readings (the message drain, `lap_hud`, the sway).
+///
+/// **2048's values are inherited, checked against Omega's files** for every widget name they
+/// carry (`omega_2048_mode_hud_names_are_authored_by_its_layouts`); the dialect is selected by
+/// widget names, so Omega's copy of the set runs the same code. **Not carried**: 2048's
+/// `pickup_icon_uv` (the rectangles are in the Vita atlas's pixels; Omega's `.gnf` repaints it)
+/// and its `assist` icon, so a held weapon and Pilot Assist draw nothing yet. **Chosen, not
+/// measured**: `speed_full_kmh` stays at Omega's value.
+pub const ART_2048: &oag_title::HudArt = &oag_title::HudArt {
+    always_on: ALWAYS_ON_2048,
+    ink_aligned_text: false,
+    half_unit_glyph_quads: false,
+    lit_alpha: None,
+    text_shadow: None,
+    pickup_colours: None,
+    pickup_fade: None,
+    shield_percent: true,
+    sub_weapon_line: false,
+    hud_font_role: "2048HUD",
+    hud_small_font_role: None,
+    total_time_hundredths: true,
+    runtime: None,
+    assist: None,
+    ..*ART
+};
+
+/// The sprite widgets the Vita's 2048 HUD keeps up on every frame of every state captured
+/// (`oag_2048::hud::ALWAYS_ON`, `docs/formats/2048-hud.md`), duplicated here because Omega's
+/// copy of the set is checked against its own files.
+const ALWAYS_ON_2048: &[&str] = &[
+    "ThrustBarBG",
+    "EnergyBgFrame",
+    "EnergyBg",
+    "EnergyBar",
+    "EnergyBarDelay",
+    "ZoneCounterBG",
+];
 
 /// The default skin's roots with no skin list, what every other skin overrides.
 const BASE: oag_title::HudLayouts = oag_title::HudLayouts {

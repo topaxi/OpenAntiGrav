@@ -36,6 +36,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    circuit_lineages: &[],
     // `true`: unverified, see `ZONE_TRACKS`'s own docs and
     // `oag_title::ZoneCircuit::Separate`'s - a play-based lead says ordinary
     // HD/Fury circuits belong in the Zone picker too, not just these four.

@@ -1003,6 +1003,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.language.as_deref(),
         options.hud_style.as_deref(),
         options.add_on_campaign.as_deref(),
+        &track,
         crate::hud::SplitViews {
             count: options.views,
             people: usize::from(options.people_flying()),
@@ -1110,7 +1111,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         setup: Setup {
             mode: options.mode,
             eliminator_kill_target: rule.target,
-            laps_override: options.laps_override,
+            laps_override: options.laps_override.or_else(|| {
+                crate::catalogue::lineage_laps(title, &track, options.mode, &options.class)
+            }),
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
             finished_thrust,

@@ -24,6 +24,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    circuit_lineages: &[],
     zone: oag_title::ZoneCircuit::Prefixed(ZONE_TRACK_PREFIX),
     // The one variant with a recovered selector behind it rather than a name
     // probe: `Ship_LoadModel`'s `case 6`. See `ships::ZONE_HULL`.

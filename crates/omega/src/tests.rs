@@ -161,3 +161,22 @@ fn omega_names_a_loading_screen_of_gnf_files() {
     );
     assert!(loading.layout.is_some());
 }
+
+/// A 2048-era circuit (either slash, any case) is in the lineage that carries 2048's HUD set and
+/// laps; an HD-era circuit and the Zone circuits are in none.
+#[test]
+fn only_the_2048_era_circuits_are_in_the_2048_lineage() {
+    let race = TITLE.race;
+    let found = race
+        .circuit_lineage("Data/Environments2048/Altima/track.vex")
+        .expect("a 2048-era circuit");
+    assert_eq!(found.layouts.arcade, r"Data\XML\2048_hud\Arcade_HUD.xml");
+    assert_eq!(found.laps_by_class, Some([4, 4, 5, 5]));
+    assert_eq!(found.grid, Some(oag_title::Platform::Vita));
+    for hd in [
+        r"Data\environments\tech_de_ra\track.vex",
+        r"Data\environments\zone_1\track.vex",
+    ] {
+        assert!(race.circuit_lineage(hd).is_none(), "{hd}");
+    }
+}

@@ -138,8 +138,10 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   values), split-screen families, `duel_hud\`, and a **`2048_hud\` set** (the
   Vita's 26 file names plus `_HD` variants and `_VR` ones in `data08`) reached only
   through virtual dispatch. It composes whole on Omega and every atlas it names
-  resolves (`the_2048_hud_set_omega_also_ships_composes_whole`); **which race
-  selects it is not read**, so `Title::hud` stays one set per title (open).
+  resolves (`the_2048_hud_set_omega_also_ships_composes_whole`). **A race on a
+  `Data\Environments2048\` circuit draws it** (2026-11-12, `omega-2048-hud-laps`,
+  `RaceDefaults::circuit_lineages`, [below](#2048-mode-hud-and-laps-2026-11-12-omega-2048-hud-laps)); the
+  executable's selector (the Race Box's GAME MODE) is not read, the circuit's directory stands in.
 - **Nine atlases, all `.gnf`, all BC7**, under `Data\HUD\Textures\` (and
   `Data\FE\Images\voiceCom.gnf`). The XML names them `.gtf`/`.mip` (HD's spelling),
   so the PS4 spelling (`oag_assets::texture_name`) is `.gnf` - none resolves under its authored
@@ -178,8 +180,46 @@ skin.
 
 **Cross-check against 2048: checked, differs.** 2048's race reads its
 `2048_hud` skin off `.gxt` atlases; Omega's played skin is the bare root HD
-set off `.gnf`. Omega also ships the `2048_hud` XML and it composes, so wiring
-it per circuit lineage is *checked, applies, not wired* (open, above).
+set off `.gnf`. Omega also ships the `2048_hud` XML and it composes; wired per circuit
+lineage since 2026-11-12 (below).
+
+## 2048 mode: HUD and laps (2026-11-12, `omega-2048-hud-laps`)
+
+**A race on a `Data\Environments2048\` circuit draws 2048's HUD and runs the original's lap counts.**
+`oag_omega::race::LINEAGES` (`oag_title::race::CircuitLineage`, read through
+`RaceDefaults::circuit_lineage`, the same key `effect_dir_by_circuit` uses) carries, per circuit family: the
+layouts (`oag_omega::hud::LAYOUTS_2048`, `Data\XML\2048_hud\*_HUD.xml`), the art (`ART_2048`: 2048's
+dialect over Omega's own readings), the layout grid and the laps. `oag_raceplay::hud::hud_roots` takes the
+lineage ahead of any `HUD Style` skin and the add-on campaign path; `oag_raceplay::catalogue::lineage_laps`
+resolves the count into `Setup::laps_override` at load, so a replay (which records the options) rebuilds
+with the same count.
+
+- **Grid.** Omega's copy of the set is authored for the Vita's 960x544, not for 1920x1080 (the reticle
+  placeholder is still `(-480, 272)`, atlases `.gxt` spelling); the original draws it scaled to the screen
+  (`LAP` at about x=30 at 1080p, 2x the Vita's `(15, 10)`). The lineage names the grid as
+  `Platform::Vita` and `load_hud` takes `Space::of` it. Omega's `2048HUD` font role resolves and draws at
+  the right size with no extra scale (the glyph run `LAP` is 90 px wide in the original's frame and ours).
+- **Laps.** The Race Box authors none (`racebox.xml`: `m_numOfLaps` is `0` on all nine `* 2048` entries, so
+  the count is the executable's). Measured on the original (the `wipeout_pc` port): `LAP 1/4` at C CLASS on
+  seven circuits, `LAP 1/5` at A CLASS on Sol (confidence 70, `gallery-omega-2048`), `LAP 1/4` at B CLASS on
+  Altima (one boot, confidence 55: the pair was refused on its name-crop check, which fired during the walk
+  and not on the HUD; the Race Box frame shows B CLASS selected). **A+ CLASS is unmeasured**: the one boot
+  stalled before the race, its Race Box frame reads C CLASS, so the walk's class presses had been lost.
+  The table is `[4, 4, 5, 5]`, A+ **chosen** equal to A. Single race only; the Time Trial and Speed Lap
+  counts of 2048 mode are not measured. The class mapping C, B, A, A+ to the ladder's venom, flash, rapier,
+  phantom is the ladder's order, assumed.
+- **Not carried over from 2048's art**: `pickup_icon_uv` (the rectangles are in the Vita atlas's pixels and
+  Omega's `.gnf` is repainted) and the Pilot Assist icon, so a held weapon's icon and the assist plate draw
+  nothing in 2048 mode yet. The Zone and Time Trial roots are wired by name, not looked at.
+- **Frame** (`--race --track Data\Environments2048\altima\track.vex --ticks 100/400`, 1920x1080, Venom): `LAP 1/4`,
+  `TOTAL`, `CURRENT`, `POS 8/8`, the `100%` shield silhouette and the thrust bar are all drawn where the
+  original has them; ours sits about 8 px right of the original's labels (not explained; a candidate is the
+  shared safe-area slider's 1:1 inset).
+- **Tests**: `omega_hud_ground_truth::a_2048_era_circuit_draws_2048s_hud_and_an_hd_era_one_keeps_hds`,
+  `a_2048_era_circuit_runs_the_original_s_laps_per_class`,
+  `omega_2048_mode_hud_names_are_authored_by_its_layouts` (the first two fail with `circuit_lineages: &[]`).
+- **2048 cross-check: checked, differs.** 2048 (Vita) has no Race Box (`GAME MODE` is Omega's), its laps are
+  the event's `m_numOfLaps` (`SP.xml`), and its HUD is already this set; nothing to wire there.
 
 ## The menu backdrop (2026-09-30, `omega-menu-backdrop`)
 
