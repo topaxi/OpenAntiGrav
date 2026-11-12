@@ -66,6 +66,14 @@ With `Laws::PULSE.body_damping = BodyDamping::PULSE` (first measured 2026-11-12 
 | `autopilot_original_ground_truth::..._without_a_rescue_05` | ours (the original's driver on our physics) | pass, 4 of 5 clean | 2 of 5 clean, every rescue the first jump's pit | **the original falls there too**: re-based, below |
 | `ai_dekonstruct_symptoms_ground_truth::de_konstruct_symptoms_phantom` | ours | pass, field 2 stops, 4 respawns | pass, field 3 stops, 7 respawns (bound 6 stops) | no longer moves past its bound, below |
 
+Three more moved in the affected test-data run on `8b0581a74`:
+
+| Test | Compares against | Damping off | Damping on | Verdict |
+| --- | --- | --- | --- | --- |
+| `slipstream_ground_truth::a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed` | ours (the official mod) | pass, transit `31.1` units after the press | fail, `29.67` | **the test's reference**: the guest places the entrance 30 units on from the progress it reads as the press tick begins, the test measured from the tick after (one tick's travel); from the guest's reading `32.6` and `31.1`. Re-based on that reading |
+| `ai_pair_contact_push_ground_truth::two_opponents_forced_side_by_side_push_their_lanes_apart` | ours (`Ai_PlanLane`'s push) | pass, rival placed and touching on the left | fail, rival placed on the right, touching on the left | **the test's reference**: the push reads the rival's side at the contact, and the closing craft is past the centre line by then; the test now judges "away" from the side at the first contact |
+| `speed_plan_ground_truth::speed_plan_rapier_forward` | our plan | pass, `06_Track` clean on 15 of 17 offsets | fail, 2 of the 5 gate builds, 11 of 17 offsets | **open**: the landing coin after `06_Track`'s gap at 1196-1200; walls at 1232-1242 stay unresolved in clean builds both ways |
+
 **Plasma.** Our craft's lead over the original's at the release frame falls from `3.1` units to
 `1.7` (x `240.66` and `239.21` against `237.5`); the first three unpinned updates fly `2.205` a tick
 against the original's `2.19` (`2.216` off); the bolt detonates on tick 76, the original's frame,
@@ -92,10 +100,10 @@ climb over the strip's convex top.
 
 **The capture.** PPSSPP v1.20.4, software renderer, muted, `pulse-psp-usa` (`UCUS98712`), Time
 Trial, de Konstruct Black, VENOM, the profile's Assegai, from the grid save state. Per run
-`psp-trace.py --warmup 2 --hold cross --place=<pose> --place-repeat 2 --ticks 180`: the body is
+`psp-trace.py --warmup 2 --hold cross --mag-lock --place=<pose> --place-repeat 2 --ticks 180`: the body is
 written to a pose before the ramp, facing along it at a set speed with no rotation, and recorded
 with the throttle held and no steer. Never the Autopilot. The capture also read the magnet-lock
-blend `craft+0x280` per frame (a `mag_lock` column; `oag_trace::Trace` ignores it). Ours is
+blend `craft+0x280` per frame (`--mag-lock`'s column; `oag_trace::Trace` reads past it). Ours is
 `oag-trace run --hold cross` over the same rows (seeded once from row 0, the recording's frame
 times). The line pose is the spline's racing line at `(-407.91, -5.23, -530.12)`, tangent
 `(-0.9952, -0.0826, 0.0517)`; "right 6" is six units along the sample's lateral, onto the ramp's
@@ -123,8 +131,8 @@ frame at `125.9` with `74.6` and the same apex, without it at `126.8` with `75.1
 the original's lock is off from frame 42, it takes off with `85.1` of climb and clears.
 
 So **on the authored line, under player input, the original's craft falls short from every
-placement up to 145 units/s and clears from 146** (148 went either way on two captures: the band
-is chaotic), and **six units off the strip it clears at 125 and 130**: confidence **85** (twenty-one
+placement up to 145 units/s**, goes either way from 146 to 148 (146 cleared twice, 147 fell, 148
+fell once and cleared once: a chaotic band) and clears at 150, and **six units off the strip it clears at 125 and 130**: confidence **85** (twenty-one
 placements, one emulator, no hardware). Ours agrees with the damping on 20 of the 21 (the miss is
 the 148 that went short once), without it on 15: the damping is what puts
 our threshold in the original's band. This also measures [ai.md](../gameplay/ai.md)'s chosen

@@ -7,9 +7,9 @@
 //! (`psp-trace.py --place ... --place-repeat 2`) and recorded for 180 frames. Ours is seeded
 //! from the first row and driven by the same held input over the same frame times.
 //!
-//! On the authored line the original falls short from every placement up to 145 units/s and
-//! clears from 146; six units right, off the strip, it clears from 130. The body damping decides
-//! the band in between: without it ours clears from 143 (`docs/physics/body-damping.md`, "De
+//! On the authored line the original falls short from every placement up to 145 units/s; from
+//! 146 to 148 it goes either way, and at 150 it clears. Six units right, off the strip, it clears
+//! at 130. The body damping decides where that band sits: without it ours clears from 143 (`docs/physics/body-damping.md`, "De
 //! Konstruct Black's first jump, under player input").
 
 use oag_gameplay::{collision_world, handling_for};

@@ -118,8 +118,12 @@ fn finishes_without_a_rescue(id: &str) {
 /// original's craft meets the lip at y `60` and falls, as ours does
 /// (`dekonstruct-takeoff-port-2652.csv`, `oag-trace`'s `dekonstruct_takeoff_ground_truth`;
 /// `docs/physics/body-damping.md`, "De Konstruct Black's first jump, under player input").
+/// Below y `55`, under the upper road: the port's rescues there leave from y `29` to `36`.
 fn the_original_falls_here_too(id: &str, at: Vec3) -> bool {
-    id == "05" && (-665.0..=-615.0).contains(&at.x) && (-535.0..=-490.0).contains(&at.z)
+    id == "05"
+        && (-665.0..=-615.0).contains(&at.x)
+        && (-535.0..=-490.0).contains(&at.z)
+        && at.y < 55.0
 }
 
 macro_rules! finishes_test {
