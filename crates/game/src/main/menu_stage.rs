@@ -339,20 +339,20 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.menu.tick_scroll(dt as f32);
-        // The picker's own clock - the turntable - off the same fixed tick.
-        if let Some(picker) = &mut self.picker {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a tick is milliseconds; f32 holds it exactly"
-            )]
-            picker.model.tick(dt as f32);
-        }
-        if let Some(partner) = &mut self.partner {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "a tick is milliseconds; f32 holds it exactly"
-            )]
-            partner.model.tick(dt as f32);
+        // The picker's own clock - the turntable - off the same fixed tick, and the
+        // craft's depth fit, which the original steps once a frame.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        let dt = dt as f32;
+        let aspect = self.skin.space().display_aspect;
+        for picker in [self.picker.as_mut(), self.partner.as_deref_mut()]
+            .into_iter()
+            .flatten()
+        {
+            picker.model.tick(dt);
+            picker.tick_fit(aspect, dt);
         }
     }
 

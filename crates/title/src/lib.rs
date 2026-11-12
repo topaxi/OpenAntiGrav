@@ -687,8 +687,13 @@ pub struct ShipFit {
     pub window: [f32; 2],
     /// How far the depth moves in one frame, model units.
     pub step: f32,
-    /// The depth the screen opens at.
+    /// The depth target the screen opens at.
     pub start: f32,
+    /// The fraction of the way to the depth target the drawn depth moves each
+    /// frame.
+    pub depth_ease: f32,
+    /// The same for the origin slide's target.
+    pub slide_ease: f32,
     /// The nearest the fit brings the craft.
     pub floor: f32,
     /// The box's fore and aft extent in a Zone race, in place of the model's

@@ -1047,12 +1047,44 @@ pub(super) fn picker_page(
                 .and_then(|front_end| front_end.ship_preview_fit)
                 .filter(|_| kind == Kind::Ship)
                 .and_then(|fit| {
-                    let zone_hull = teams.get(picker.index()).is_some_and(|team| {
-                        crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
-                    });
-                    let length = oag_ui_screens::picker::hd::selected_length(&picker);
-                    crate::preview::ship_model::box_z(&fit, zone_hull, length)
-                        .map(|box_z| (fit, box_z))
+                    let box_of = |index: usize, length: Option<f32>| {
+                        let zone_hull = teams.get(index).is_some_and(|team| {
+                            crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
+                        });
+                        crate::preview::ship_model::box_z(&fit, zone_hull, length)
+                    };
+                    let aspect = skin.space().display_aspect;
+                    let now = box_of(
+                        picker.index(),
+                        oag_ui_screens::picker::hd::selected_length(&picker),
+                    )?;
+                    let frames = step_seconds
+                        .filter(|since| *since < seconds.unwrap_or(SETTLED_SECONDS))
+                        .map(|since| (since / crate::preview::ship_model::FRAME_SECONDS).round());
+                    let framing = match frames {
+                        // The model before a step, which a right press arrives from: the
+                        // entry above, wrapping. Which neighbour is chosen; the film's
+                        // team order is not read.
+                        Some(frames) => {
+                            let before = (picker.index() + picker.entries().len() - 1)
+                                % picker.entries().len();
+                            let from = box_of(
+                                before,
+                                oag_ui_screens::picker::hd::entry_length(&picker, before),
+                            )
+                            .unwrap_or(now);
+                            crate::preview::ship_model::FitMotion::stepped(
+                                &fit,
+                                aspect,
+                                from,
+                                now,
+                                frames as usize,
+                            )
+                            .framing()
+                        }
+                        None => crate::preview::ship_model::rest(&fit, aspect, now),
+                    };
+                    Some((fit, framing))
                 }),
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),

@@ -409,6 +409,8 @@ pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
     window: [535.0, 389.0],
     step: 0.1,
     start: 13.0,
+    depth_ease: 0.125,
+    slide_ease: 0.0625,
     floor: 11.0,
     zone_box: [-4.2, 4.2],
 };

@@ -354,13 +354,10 @@ fn silhouette(
 ) -> [f32; 4] {
     let model =
         oag_game::preview::model(archives, entry).unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-    let (view_projection, placed) = oag_game::preview::ship_model::framed(
-        widget,
-        Some((fit, box_z)),
-        oag_display::space::Space::HD,
-        1.0,
-        safe_area,
-    );
+    let space = oag_display::space::Space::HD;
+    let framing = oag_game::preview::ship_model::rest(fit, space.display_aspect, box_z);
+    let (view_projection, placed) =
+        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, safe_area);
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
