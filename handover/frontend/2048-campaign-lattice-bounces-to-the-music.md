@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 map: music wave wired (.fft band 1, radius 7); hidden-event tap reveal and XP rank gate read, need the XP model"
+summary: "2048 map: music wave and hidden-event reveal wired; unlock on race end, the ground bump and live checks open"
 categories: [audio]
 difficulty: hard (30)
 ---

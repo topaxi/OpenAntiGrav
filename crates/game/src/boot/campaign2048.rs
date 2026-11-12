@@ -18,6 +18,12 @@ use oag_ui::language::StringTable;
 /// The campaign file's entry name.
 const SP_XML: &str = oag_2048::campaign::SP_XML;
 
+/// This title's own `XPRanks.xml`, which ranks the profile's shared XP total
+/// ([`super::reveals2048`]).
+pub(super) fn xp_ranks(archives: &mut oag_assets::Archives) -> Option<oag_tables::xp::Ranks> {
+    oag_2048::campaign::xp_tables(archives).map(|(_, ranks)| ranks)
+}
+
 /// Every `SP.xml` event that has a map cell, as the map draws it.
 ///
 /// **Filtered by what the file says, not by a save.** The 21 instances with
@@ -162,6 +168,7 @@ pub(super) fn map_events(
             refused_craft,
             card: event_card(&doc, event, kind, strings),
             rank_gated: oag_2048::campaign::is_rank_gated(&doc, event),
+            rank_required: event.rank_required,
             role: roles
                 .iter()
                 .find(|(name, _)| *name == event.name)

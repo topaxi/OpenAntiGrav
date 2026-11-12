@@ -393,6 +393,16 @@ rows, or a grid a mod removed, open on the defaults. Page:
 [`docs/ui/campaign-screens.md`](../ui/campaign-screens.md), "Where the
 campaign reopens".
 
+## The hidden events a player found (2026-11-12)
+
+A `[[campaign_found]]` table in `records.toml`: one row per hidden 2048
+campaign event the player has tapped (`title` is `campaign_title`, lower-cased;
+`event` the map's event name). Written the moment the tap lands, on a
+background thread (`records::save_in_background`); a file without the table is
+an empty set. Page:
+[`canvas-music-wave.md`](../ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md),
+"Wired: the reveal".
+
 ## The browsed campaign difficulty (2026-10-26)
 
 The rung a player last stepped to on the campaign's cell screen (the `AI

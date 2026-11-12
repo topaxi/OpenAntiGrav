@@ -118,6 +118,7 @@ use serde::{Deserialize, Serialize};
 
 mod cursor;
 mod difficulty;
+mod found;
 mod loyalty;
 
 mod medal;
@@ -551,6 +552,15 @@ pub struct CampaignDifficultyRecord {
     pub difficulty: Difficulty,
 }
 
+/// A hidden campaign event the player found - see `found.rs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignFoundRecord {
+    /// [`campaign_title`]'s string, lower-cased.
+    pub title: String,
+    /// The event's name on the campaign map.
+    pub event: String,
+}
+
 /// Where a campaign's screens last stood - see `cursor.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CampaignCursorRecord {
@@ -595,6 +605,9 @@ pub struct Store {
     /// One row per campaign whose screens the player has left. Absent in every
     /// file written before it existed.
     campaign_cursor: Vec<CampaignCursorRecord>,
+    /// One row per hidden campaign event found. Absent in every file written
+    /// before it existed.
+    campaign_found: Vec<CampaignFoundRecord>,
 }
 
 impl Store {
@@ -968,6 +981,23 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign_cursor.sort_by(|a, b| a.title.cmp(&b.title));
 
+    let mut campaign_found = Vec::new();
+    match table.get("campaign_found") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<CampaignFoundRecord>() {
+                    Ok(record) => campaign_found.push(record),
+                    Err(e) => notes.push(format!("campaign_found[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => {
+            notes.push("`campaign_found` is not an array of tables; ignoring it".to_string())
+        }
+        None => {}
+    }
+    campaign_found.sort_by(|a, b| (&a.title, &a.event).cmp(&(&b.title, &b.event)));
+
     let xp = table
         .get("xp")
         .and_then(toml::Value::as_integer)
@@ -981,6 +1011,7 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
             loyalty,
             campaign_difficulty,
             campaign_cursor,
+            campaign_found,
         },
         notes,
     ))

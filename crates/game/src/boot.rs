@@ -1630,6 +1630,7 @@ mod movies;
 mod options;
 mod progress;
 mod provenance;
+pub mod reveals2048;
 pub(crate) mod roster;
 pub mod scene;
 mod screens;

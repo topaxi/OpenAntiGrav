@@ -194,6 +194,7 @@ fn node(
         ),
         role: oag_title::MapRole::default(),
         rank_gated: false,
+        rank_required: None,
     })
 }
 

@@ -12,6 +12,7 @@
 mod aspect;
 mod backdrop;
 mod campaign_cursor;
+mod campaign_reveal;
 mod campaign_tiers;
 mod campaign_wave;
 mod drawing;

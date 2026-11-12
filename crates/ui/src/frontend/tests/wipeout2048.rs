@@ -581,6 +581,7 @@ pub(super) fn three_events() -> Vec<MapEvent> {
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
         rank_gated: false,
+        rank_required: None,
     })
     .collect()
 }
@@ -608,6 +609,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             card: crate::frontend::EventCard::default(),
             role: oag_title::MapRole::default(),
             rank_gated: false,
+            rank_required: None,
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -621,6 +623,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             card: crate::frontend::EventCard::default(),
             role: oag_title::MapRole::default(),
             rank_gated: false,
+            rank_required: None,
         },
     ]
 }
@@ -928,6 +931,7 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
         rank_gated: false,
+        rank_required: None,
     }]
 }
 
@@ -949,6 +953,7 @@ pub(super) fn a_forced_event() -> Vec<MapEvent> {
         card: crate::frontend::EventCard::default(),
         role: oag_title::MapRole::default(),
         rank_gated: false,
+        rank_required: None,
     }]
 }
 
@@ -1221,6 +1226,7 @@ fn a_branch_is_flat_in_its_own_tint_with_light_dots_until_reached_then_dark_dots
         card: crate::frontend::EventCard::default(),
         role,
         rank_gated: false,
+        rank_required: None,
     };
     let mut frontend = boot(0);
     frontend.set_campaign(vec![

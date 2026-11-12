@@ -352,3 +352,60 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
     assert_eq!(store.xp(), before + expected);
     assert_eq!(store.xp_rank(&ranks), ranks.rank(store.xp()));
 }
+
+/// The rank gate reaches the map: the 15 hidden side challenges author the rank they wait for,
+/// and the profile's XP against this package's own `XPRanks.xml` decides which one is
+/// revealable (`boot::reveals2048::refresh`); a find kept in the save reads as found.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_xp_total_decides_which_hidden_events_are_revealable() {
+    use oag_ui::frontend::Reveal;
+    let Some(source) = source() else { return };
+    let text = source.display().to_string();
+    let mut loaded = boot::load(&options(&source)).expect("the whole boot");
+    let hidden: Vec<_> = loaded
+        .frontend
+        .campaign_events()
+        .iter()
+        .filter(|event| event.rank_gated)
+        .map(|event| (event.name.clone(), event.rank_required))
+        .collect();
+    assert_eq!(hidden.len(), 15);
+    assert!(hidden.iter().all(|(_, rank)| rank.is_some()));
+    let feisar = "Feisar - P Ship Challenge";
+    assert!(hidden.contains(&(feisar.to_string(), Some(10))));
+
+    let mut archives = oag_2048::open(&text).expect("this is 2048");
+    let (_, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+    let (mut store, _) = records::parse("").expect("an empty file parses");
+    let revealable = |frontend: &mut frontend::Frontend, store: &records::Store| {
+        boot::reveals2048::refresh(frontend, &text, store, "wipeout 2048");
+        hidden
+            .iter()
+            .filter(|(name, _)| frontend.campaign_reveal(name) == Some(Reveal::Revealable))
+            .count()
+    };
+    assert_eq!(
+        revealable(&mut loaded.frontend, &store),
+        0,
+        "no XP, nothing to find"
+    );
+
+    let rank_10 = ranks.threshold_xp(10, 0);
+    store.bank_xp(rank_10 - 1);
+    assert_eq!(
+        revealable(&mut loaded.frontend, &store),
+        0,
+        "one XP short of rank 10"
+    );
+    store.bank_xp(1);
+    assert_eq!(
+        revealable(&mut loaded.frontend, &store),
+        hidden.iter().filter(|(_, rank)| *rank <= Some(10)).count(),
+        "rank 10 reveals exactly the challenges needing 10 or less"
+    );
+
+    assert!(store.record_found("wipeout 2048", feisar));
+    boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
+    assert_eq!(loaded.frontend.campaign_reveal(feisar), Some(Reveal::Found));
+}

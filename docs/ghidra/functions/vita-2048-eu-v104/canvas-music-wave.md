@@ -298,6 +298,39 @@ evidence. Its row is left to that page's owner.
 - [2048-campaign.md](../../../formats/2048-campaign.md), "The unlock graph": the "likely also
   rank-gates them" is read: it does, and they then wait at progress 1 for a tap.
 
+## Wired: the reveal (lane `w2048-tap-reveal`)
+
+- **Gate**: `oag_game::boot::reveals2048::refresh` asks `Store::rank_reveals` (the profile's one XP total
+  against this title's own `XPRanks.xml`) for every event that authors `m_options & 0x10`; the map
+  receives `Reveal::{Hidden, Revealable, Found}` through `Frontend::refresh_campaign_reveals`, on both
+  the window's load and `--screenshot`. `MapEvent::rank_required` is `M_RankRequired` (15 of 15 side
+  challenges author it, `vita_2048_boot_ground_truth`).
+- **The spot**: a revealable event draws nothing, is not in pad navigation, not under the cursor and not
+  a wave centre. Its four cells are `canvas_cells::HIDDEN_SHAPE` from the event's cell, read for the
+  Feisar ship challenge (cell (59, 27), rank 10): (59, 27), (58, 28), (59, 28), (60, 28), an apex-up
+  triangle of side two. The other fourteen are taken to share the shape (the page's section 5 says
+  all fifteen carry 4-cell lists, the layout of the other fourteen is unread). Those cells go to
+  `Wave::flatten` every step, so the spot rises and falls as one while the ground round it ripples
+  (`oag-ui` test `a_revealable_spot_rises_and_falls_as_one_flat_piece_and_an_unmet_one_does_not`).
+- **The tap**: a left click on a spot's cell, or Confirm with the right-stick cursor on it, marks the event
+  found, selects it and queues its name (`Frontend::take_found_events`); the session files it in
+  `records.toml` (`[[campaign_found]]`, `title` and `event`, `Store::record_found`, written off the render
+  thread). A found event is the ordinary grey prism: pad navigation reaches it and a second tap opens
+  its card. An unmet rank leaves ordinary ground that does nothing on click. A tap off every spot is not
+  the ground bump yet (gains and caps in section 2 are not ported).
+- **Chosen, not measured**: an event is revealable as soon as the rank is met (the original did not promote
+  on map entry at rank 50, so when progress reaches 1 is open); the touch is a mouse click or Confirm
+  (which Vita panel is open).
+- **Seen**: with 420,000 XP (rank 10) a scratch profile shows the Feisar spot as plain ground (identical
+  to a profile with no XP, byte for byte, as designed: the state-3 button draws nothing); the same
+  profile with the event in `campaign_found` shows the grey prism at its cell. A headless capture
+  cannot show the flat motion: with `--no-audio` no band levels reach the map, so the wave is the
+  static picture there.
+- **Omega**: **checked, differs**. The map is `newFEshell`'s `Canvas3D`; `oag_omega::frontend` declares
+  `touch: None` (Omega's front end is HD's `PI001`), so the map, the reveal and the found set never run
+  there, and the shared XP total only feeds 2048. The shared `records.toml` rows are filed under
+  `campaign_title`, so a future Omega map would not see 2048's finds.
+
 ## What to wire, in order
 
 1. The XP total and the rank (`XPRanks.xml`); without it no hidden event becomes revealable.

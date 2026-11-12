@@ -66,8 +66,15 @@ impl Frontend {
         } else {
             owed - steps as f32 * canvas_wave::STEP
         };
+        let spots: Vec<[(i32, i32); 4]> = self
+            .campaign
+            .spots()
+            .into_iter()
+            .map(|(_, cells)| cells)
+            .collect();
+        let flat: Vec<&[(i32, i32)]> = spots.iter().map(|cells| cells.as_slice()).collect();
         for _ in 0..steps {
-            self.campaign.wave.step(band1, centre, &priority, &[]);
+            self.campaign.wave.step(band1, centre, &priority, &flat);
         }
     }
 
