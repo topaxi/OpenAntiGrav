@@ -66,13 +66,13 @@ impl Wave {
     /// `centre` (a lattice point, as [`super::canvas_camera::tile_top`] gives),
     /// decays and eases. `priority` is the canvas's priority of a cell, 0 for
     /// plain ground ([`super::canvas_cells::priorities`]). `flat` lists the
-    /// six-cell groups that average ([`flatten`]).
+    /// cell groups that average ([`flatten`]).
     pub fn step(
         &mut self,
         band1: f32,
         centre: Option<(f32, f32)>,
         priority: &dyn Fn((i32, i32)) -> u8,
-        flat: &[[(i32, i32); 6]],
+        flat: &[&[(i32, i32)]],
     ) {
         self.history.copy_within(0..HISTORY - 1, 1);
         self.history[0] = band1;
@@ -122,21 +122,27 @@ impl Wave {
         }
     }
 
-    /// Averages the shown height of six cells and writes the mean back to all
-    /// of them: how a hidden prototype event moves as one flat hexagon.
+    /// Averages the alpha of a hidden spot's cells and writes the mean back to
+    /// all of them: it moves as one flat value while the ground round it ripples.
     ///
-    /// **Confidence 55** that this is what a player sees of such a spot
-    /// (`CanvasButton_FlattenCells` `0x813c5164`, read at 85; the picture is
-    /// unconfirmed). Kept in one place so a measurement can flip
-    /// it: the caller passes no groups to leave every cell moving alone.
-    pub fn flatten(&mut self, group: &[(i32, i32); 6]) {
+    /// Measured live, confidence 80 (`canvas-music-wave.md`, section 5): the
+    /// cells are raised individually and averaged within the frame, after the
+    /// texture upload, so the drawn height keeps one frame's differential (the
+    /// shown height here eases toward the mean the same way). A hidden event's
+    /// button is a 4-cell shape; `group` is whatever cells the button owns. The
+    /// caller passes no groups until a hidden event can be at progress 1 (it
+    /// needs the XP model), which leaves every cell moving alone.
+    pub fn flatten(&mut self, group: &[(i32, i32)]) {
+        if group.is_empty() {
+            return;
+        }
         let mean = group
             .iter()
-            .map(|cell| self.cells.get(cell).map_or(0.0, |c| c.shown))
-            .sum::<f32>()
-            / 6.0;
+            .map(|cell| self.cells.get(cell).map_or(0, |c| c.alpha))
+            .sum::<i32>()
+            / group.len() as i32;
         for cell in group {
-            self.cells.entry(*cell).or_default().shown = mean;
+            self.cells.entry(*cell).or_default().alpha = mean;
         }
     }
 

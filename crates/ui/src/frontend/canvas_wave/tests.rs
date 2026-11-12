@@ -104,21 +104,16 @@ fn the_alpha_is_clamped_and_decays_at_230_a_second() {
 }
 
 #[test]
-fn a_flat_group_moves_as_one_height() {
+fn a_flat_group_of_any_shape_moves_as_one_alpha() {
     let mut wave = run(&[0.0, 1.0], &ground);
     let group = [
         cell_at(0),
         cell_at(1),
-        cell_at(2),
-        (cell_at(0).0, cell_at(0).1 + 1),
         (cell_at(1).0, cell_at(1).1 + 1),
         (cell_at(2).0, cell_at(2).1 + 1),
     ];
     wave.flatten(&group);
-    let first = wave.height(group[0]);
-    assert!(
-        group
-            .iter()
-            .all(|&cell| (wave.height(cell) - first).abs() < 1e-6)
-    );
+    let first = wave.cells[&group[0]].alpha;
+    assert!(first > 0);
+    assert!(group.iter().all(|cell| wave.cells[cell].alpha == first));
 }

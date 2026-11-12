@@ -591,9 +591,9 @@ The law is [canvas-music-wave.md](canvas-music-wave.md), "The wave"; this is wha
   foot shade; far-to-near order stands in for the depth buffer. A frame with no triangle list draws
   as before.
 - **Not ported**: the analyser's automatic gain (`MusicAnalysis_Update`, confidence 60, peak-hold
-  unread), so quiet passages move the cells less than in the original; the hidden-event six-cell
-  average is `Wave::flatten` (confidence 55, called with no groups until the XP model and the
-  maintainer's confirmation exist); the music time of a headless capture is the dump clock, not a
+  unread), so quiet passages move the cells less than in the original; the hidden-event averaging is
+  `Wave::flatten` (measured live, confidence 80, `canvas-music-wave.md` section 5; any cell set, a hidden
+  event's button has 4 cells; called with no groups until the XP model exists); the music time of a headless capture is the dump clock, not a
   Vita's.
 - **Omega**: **checked, differs, unchanged**: no `.fft` ships (Wipeout music is Wwise), so
   `spectrum_extension` is `None` and the map is the static picture; the loader says nothing because the
