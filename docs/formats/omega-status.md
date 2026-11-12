@@ -1608,7 +1608,15 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   the original** in the right and ahead boxes (right was 8 over, is now 13 under; ahead was 29 under, is 41
   under) and whole-frame RMSE moves 0.216 to 0.218: either the dirt's weight is too strong in our
   domain (the splat is grey 33 to 132 with alpha mean 96/255, mixed here on gamma values) or the
-  original's diffuse is brighter than ours before the layers. The painted symbols (`KEEP CLEAR`,
+  original's diffuse is brighter than ours before the layers. **Isolated** (a temporary per-layer
+  weight and a linear-domain switch, not kept): dirt alone gives the whole move (boxes (72,111,105)
+  (117,125,118) (83,114,107)); markings alone change nothing in these three boxes (no painted symbol
+  there); dirt mixed in the linear domain gives (73,113,106) (122,130,121) (85,116,109), still under
+  the original's (86,122,114) (131,138,128) (124,132,123). **The programs do not square or root the
+  taps**: the unlit combine is plain `v_sub`/`v_mac` lerps on the sampled rgb (read in full, see
+  above), so a gamma-domain blend is not what the program asks; whether the hardware decodes the
+  `.gnf` as sRGB before the lerp is not read. The box 720,330 was already 29 red under before the
+  layers, so part of the gap is not the layers. The painted symbols (`KEEP CLEAR`,
   arrows, dashes, in the atlas) are not seen in this frame. Confidence in the combine 85; in the
   rendered match, none: not isolated further.
 - **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**

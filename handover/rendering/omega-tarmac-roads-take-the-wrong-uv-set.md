@@ -12,7 +12,7 @@ families draw the wrong coordinate set" and "The `tarmac_*` pixel programs combi
 
 ## Next Steps
 
-1. Find why `arena-2048` reads darker than the original after the layers (right box 131,138,128
+1. Isolated: dirt alone causes the darkening, markings change nothing in the boxes, the linear domain closes about a third of it, the program squares nothing. Still open: why `arena-2048` reads darker than the original after the layers (right box 131,138,128
    theirs, 117,125,118 ours; ahead 124,132,123 against 83,114,107). Candidates: the dirt's weight
    (mixed on gamma-domain taps; try the linear domain), the diffuse being brighter in the original,
    the lighting term. Isolate by drawing the dirt alone then the markings alone (`OAG_ONLY_MATERIAL`
