@@ -228,17 +228,13 @@ impl Race {
         if self.sim.world.projectiles.live() >= oag_weapons::projectile::MAX_PROJECTILES {
             return false;
         }
-        let physics = self.sim.world.ships[slot].physics;
-        let dimensions = self.sim.world.ships[slot].handling.dimensions;
         let Some(thrown) = oag_weapons::projectile::shuriken::fire(
             &mut self.sim.world.projectiles,
-            &physics,
-            &dimensions,
+            &self.sim.world.ships[slot],
             &stats,
             &self.sim.class,
             &mut self.sim.world.rng,
             slot as u8,
-            self.sim.world.ships[slot].launch_normal(),
         ) else {
             return false;
         };

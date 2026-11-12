@@ -76,16 +76,7 @@ fn a_shuriken_thrown_from_a_banked_craft_rides_the_craft_up() {
     .expect("a Shuriken");
     let mut projectiles = Projectiles::new();
     let mut rng = oag_core::rng::Rng::new(1);
-    let thrown = shuriken::fire(
-        &mut projectiles,
-        &ships[0].physics,
-        &ships[0].handling.dimensions,
-        &stats,
-        "VENOM",
-        &mut rng,
-        0,
-        ships[0].launch_normal(),
-    );
+    let thrown = shuriken::fire(&mut projectiles, &ships[0], &stats, "VENOM", &mut rng, 0);
     assert_eq!(thrown, Some(true));
     assert_riding_up(&projectiles.slots[0], &ships[0]);
 }

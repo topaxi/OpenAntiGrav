@@ -393,24 +393,16 @@ impl Race {
                     {
                         return;
                     }
-                    // Copied out before the draw because `launch` borrows the
-                    // world's generator mutably and the ship state immutably at
-                    // once; both are small `Copy` structs.
-                    let physics = self.sim.world.ships[slot].physics;
-                    let normal = self.sim.world.ships[slot].launch_normal();
-                    let dimensions = self.sim.world.ships[slot].handling.dimensions;
                     // **One blade, twenty degrees off the nose, side chosen by
                     // a coin.** See `oag_weapons::projectile::shuriken::launch`
                     // and `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
                     let Some(thrown) = oag_weapons::projectile::shuriken::fire(
                         &mut self.sim.world.projectiles,
-                        &physics,
-                        &dimensions,
+                        &self.sim.world.ships[slot],
                         &stats,
                         &self.sim.class,
                         &mut self.sim.world.rng,
                         slot as u8,
-                        normal,
                     ) else {
                         return;
                     };

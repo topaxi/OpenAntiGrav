@@ -90,21 +90,19 @@ pub fn launch(
 
 /// Throws one blade: [`launch`], then the slot, carrying `normal` as its
 /// ridden normal: `Shuriken_Init` stores `-craft+0xb10` at `+0x150`, the located
-/// track sample's up.
+/// track sample's up ([`crate::Craft::launch_normal`]).
 ///
 /// One entry point for both halves, as [`super::rocket::fire`] is, so dropping
 /// the seed fails a test. `None` is [`launch`]'s: the table authors no speed for
 /// this class. `Some(false)` is a full array, after the coin was already drawn.
 pub fn fire(
     projectiles: &mut super::Projectiles,
-    state: &ShipState,
-    dimensions: &Dimensions,
+    craft: &impl crate::Craft,
     stats: &ShurikenStats,
     class: &str,
     rng: &mut Rng,
     owner: u8,
-    normal: Vec3,
 ) -> Option<bool> {
-    let (position, velocity) = launch(state, dimensions, stats, class, rng)?;
-    Some(projectiles.throw(position, velocity, owner, stats.fuse, normal))
+    let (position, velocity) = launch(craft.physics(), &craft.dimensions(), stats, class, rng)?;
+    Some(projectiles.throw(position, velocity, owner, stats.fuse, craft.launch_normal()))
 }
