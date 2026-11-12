@@ -242,6 +242,10 @@ pub fn borrowed_zoom_ring() -> &'static oag_title::ZoomRing {
     &oag_hd::race::ZOOM_RING
 }
 
+/// The medal atlas a mod's `[campaign-medals]` may borrow, Wipeout HD's `Hexmedal_HD.gtf`
+/// (`oag_hd::campaign::MEDAL_ATLAS`). Here for the reason [`borrowed_zoom_ring`] is.
+pub const MEDAL_ATLAS: &str = oag_hd::campaign::MEDAL_ATLAS;
+
 /// Whether `title` is the one a trail-hit burst is preferably lent from
 /// (`graphics.trail_hits`, `oag_raceplay::TrailHits`): Wipeout HD/Fury, whose
 /// `WO_TRAIL_HITSHIP` the burst is read from. Here for the reason

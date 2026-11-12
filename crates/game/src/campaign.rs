@@ -383,7 +383,7 @@ fn read_hd_texture(
     archives: &mut oag_assets::Archives,
     path: &str,
 ) -> Result<Vec<u8>, oag_assets::Error> {
-    if path == oag_hd::campaign::MEDAL_ATLAS
+    if path == oag_source::title::MEDAL_ATLAS
         && let Some((_, blob)) = archives
             .read_every_name(path)
             .into_iter()

@@ -50,8 +50,8 @@ pub fn resolve(
     let mut archives = oag_source::title::open_source(&row.source, Vec::new(), Vec::new())
         .map_err(|e| format!("{mod_id}: {}: {e}", row.source))?
         .archives;
-    let blob = super::read_hd_texture(&mut archives, oag_hd::campaign::MEDAL_ATLAS)
-        .map_err(|e| format!("{mod_id}: {}: {e}", oag_hd::campaign::MEDAL_ATLAS))?;
+    let blob = super::read_hd_texture(&mut archives, oag_source::title::MEDAL_ATLAS)
+        .map_err(|e| format!("{mod_id}: {}: {e}", oag_source::title::MEDAL_ATLAS))?;
     if medals.per_difficulty {
         let height = oag_texture::gtf::Gtf::parse(&blob)
             .ok()
@@ -63,7 +63,7 @@ pub fn resolve(
             ));
         }
     }
-    let image = oag_hd::campaign::MEDAL_ATLAS.to_string();
+    let image = oag_source::title::MEDAL_ATLAS.to_string();
     Ok(Resolved {
         art: MedalArt::Atlas(Atlas {
             image: image.clone(),
