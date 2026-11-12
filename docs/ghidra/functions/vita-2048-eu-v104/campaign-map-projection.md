@@ -417,7 +417,7 @@ frame `13` 20.6 for dark stripes, 8.4 dark dots, 3.5 light stripes, 0.3 plain la
 (`crates/game/tests/vita_2048_boot_ground_truth.rs`: red on `e7eede403`, dark stripes 1.7 against 10).
 
 **Wired.** `oag_2048::campaign::map_roles` (24 chain, 36 branch, 40 speed laps on the EU v1.04 package,
-`crates/2048/tests/campaign_ground_truth.rs`), `oag_ui::frontend::MapRole` on every `MapEvent`,
+`crates/2048/tests/campaign_ground_truth.rs`), `oag_title::MapRole` (the role type, shared by the title package and the front end) on every `MapEvent`,
 `oag_ui::frontend::canvas_cells` (the 18-cell ring, the priority rule, the ten cell pictures baked off
 the atlas by the lattice's own sampler with the fill's shift, placed by the camera), drawn between the
 lattice and the prisms. A tile not reached yet is the fill-0 cell picture tinted by the state colour

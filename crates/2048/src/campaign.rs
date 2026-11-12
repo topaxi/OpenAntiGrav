@@ -767,26 +767,7 @@ pub const CHAIN_START: &str = "2048 - Event 1";
 /// has between the circuit and the class.
 const SPEED_LAP_INFIX: &str = " Speed Lap - ";
 
-/// How the original's chain walk treats an event, which decides the ring of
-/// canvas cells painted around its tile (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
-/// "The ring").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MapRole {
-    /// On the main chain: `CHAIN_START` and every event reached from it by
-    /// `M_PNEXTEVENT`. Painted by `0x810ef5fe` itself.
-    Chain,
-    /// Reached from a chain event by `M_PBRANCHEVENT`, and from there by
-    /// `M_PNEXTEVENT`: painted by `0x810ef536`.
-    Branch,
-    /// One of the 40 `"<circuit> Speed Lap - <class>"` events the walk's second
-    /// loop paints (the name table at `0x8151ea78`).
-    SpeedLap,
-    /// The rest (the per-ship and per-circuit side challenges): no ring.
-    #[default]
-    Side,
-}
-
-/// Each event's [`MapRole`], by name, in the document's order: **every event in
+/// Each event's [`oag_title::MapRole`], by name, in the document's order: **every event in
 /// the document**, as [`unlock_gates`] does.
 ///
 /// The main chain is [`CHAIN_START`] and its `M_PNEXTEVENT` successors; a branch
@@ -794,7 +775,8 @@ pub enum MapRole {
 /// EU v1.04 package that is 24 chain and 36 branch events
 /// (`crates/2048/tests/campaign_ground_truth.rs`).
 #[must_use]
-pub fn map_roles(document: &Document) -> Vec<(String, MapRole)> {
+pub fn map_roles(document: &Document) -> Vec<(String, oag_title::MapRole)> {
+    use oag_title::MapRole;
     let all = events(document);
     let index_of = |id: i64| all.iter().position(|event| event.instance_id == id);
     let mut roles = vec![MapRole::Side; all.len()];

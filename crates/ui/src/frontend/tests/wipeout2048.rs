@@ -579,7 +579,7 @@ pub(super) fn three_events() -> Vec<MapEvent> {
         forced_craft: None,
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
-        role: crate::frontend::MapRole::default(),
+        role: oag_title::MapRole::default(),
     })
     .collect()
 }
@@ -605,7 +605,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
-            role: crate::frontend::MapRole::default(),
+            role: oag_title::MapRole::default(),
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -617,7 +617,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
-            role: crate::frontend::MapRole::default(),
+            role: oag_title::MapRole::default(),
         },
     ]
 }
@@ -923,7 +923,7 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
         forced_craft: None,
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
-        role: crate::frontend::MapRole::default(),
+        role: oag_title::MapRole::default(),
     }]
 }
 
@@ -943,7 +943,7 @@ pub(super) fn a_forced_event() -> Vec<MapEvent> {
         forced_craft: Some("Qirex2048\\1".to_string()),
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
-        role: crate::frontend::MapRole::default(),
+        role: oag_title::MapRole::default(),
     }]
 }
 
@@ -1121,7 +1121,7 @@ fn an_unreached_event_is_a_flat_tint_with_a_light_ring_and_the_reached_one_a_pri
     let mut frontend = boot(0);
     let mut events = a_gated_event();
     for event in &mut events {
-        event.role = crate::frontend::MapRole::Chain;
+        event.role = oag_title::MapRole::Chain;
     }
     frontend.set_campaign(events);
     let mut input = Input::new();

@@ -49,6 +49,8 @@
 use crate::kinetic::{Bounds, Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
+use oag_title::MapRole;
+
 use super::canvas_camera::{self, Camera};
 use super::canvas_cells::{self, CanvasButton, Tile};
 use super::canvas_lattice;
@@ -152,38 +154,19 @@ pub struct MapEvent {
     pub role: MapRole,
 }
 
-/// Which walk of the original's campaign painter reaches an event
-/// (`TouchCampaign_PaintChainRings` `0x810ef5fe`): the main chain, a branch off
-/// it, one of the speed-lap events its second loop paints, or none.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum MapRole {
-    /// On the main chain.
-    Chain,
-    /// On a branch.
-    Branch,
-    /// One of the speed-lap events.
-    SpeedLap,
-    /// None: no ring.
-    #[default]
-    Side,
-}
-
-impl MapRole {
-    /// The ring mode of an event's button, the fill its 18 ring cells take
-    /// (`canvas_cells::SHIFTS`): the chain's dark stripes (4) once the event is
-    /// reached, light stripes (3) before; a branch's dark dots (2) and light
-    /// dots (1); a speed lap's light stripes once reached. 0 is none.
-    /// `0x810ef5fe`, `0x810ef536` and the loop over the name table.
-    #[must_use]
-    pub fn ring(self, reached: bool) -> u8 {
-        match (self, reached) {
-            (Self::Chain, true) => 4,
-            (Self::Chain, false) => 3,
-            (Self::Branch, true) => 2,
-            (Self::Branch, false) => 1,
-            (Self::SpeedLap, true) => 3,
-            (Self::SpeedLap, false) | (Self::Side, _) => 0,
-        }
+/// The ring mode of an event's button, the fill its 18 ring cells take
+/// (`canvas_cells::SHIFTS`): the chain's dark stripes (4) once the event is
+/// reached, light stripes (3) before; a branch's dark dots (2) and light dots (1);
+/// a speed lap's light stripes once reached. 0 is none. `0x810ef5fe`, `0x810ef536`
+/// and the loop over the name table.
+fn ring_mode(role: MapRole, reached: bool) -> u8 {
+    match (role, reached) {
+        (MapRole::Chain, true) => 4,
+        (MapRole::Chain, false) => 3,
+        (MapRole::Branch, true) => 2,
+        (MapRole::Branch, false) => 1,
+        (MapRole::SpeedLap, true) => 3,
+        (MapRole::SpeedLap, false) | (MapRole::Side, _) => 0,
     }
 }
 
@@ -823,7 +806,7 @@ impl Frontend {
                     } else {
                         Tile::Flat(Self::unreached_colour(event))
                     },
-                    ring: event.role.ring(reached),
+                    ring: ring_mode(event.role, reached),
                 }
             })
             .collect();

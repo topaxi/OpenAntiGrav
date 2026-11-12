@@ -878,6 +878,22 @@ impl NodeMap {
     }
 }
 
+/// Which walk of a title's campaign map painter reaches an event, which decides
+/// the ring of canvas cells painted around its tile: the main chain, a branch off
+/// it, one of the speed-lap events a second loop paints, or none.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MapRole {
+    /// On the main chain.
+    Chain,
+    /// On a branch off the chain.
+    Branch,
+    /// One of the speed-lap events.
+    SpeedLap,
+    /// None: no ring.
+    #[default]
+    Side,
+}
+
 /// A serial positively identified as belonging to some other title.
 ///
 /// **This rules a source out, never in.** The serials a title has been verified

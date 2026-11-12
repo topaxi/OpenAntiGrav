@@ -108,9 +108,7 @@ mod team;
 mod team_info;
 mod touch;
 mod wipeout2048;
-pub use campaign_map::{
-    CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent, MapRole, ProgressState,
-};
+pub use campaign_map::{CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent, ProgressState};
 pub use campaign_tiers::Tier;
 pub use event_card::{
     CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,

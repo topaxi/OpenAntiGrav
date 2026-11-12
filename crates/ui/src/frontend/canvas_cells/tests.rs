@@ -118,7 +118,12 @@ fn gradient() -> (Vec<u8>, u32, u32) {
 }
 
 fn mean_red(picture: &Picture) -> f32 {
-    let texels = picture.rgba.chunks_exact(4).filter(|t| t[3] == 255);
+    let texels = picture
+        .rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|t| t[3] == 255);
     let (sum, count) = texels.fold((0.0, 0.0), |(s, n), t| (s + f32::from(t[0]), n + 1.0));
     sum / count
 }
@@ -163,7 +168,13 @@ fn a_picture_is_clear_outside_its_cell_and_the_anchor_is_inside_it() {
             255,
             "the centre of a cell is in it"
         );
-        let covered = picture.rgba.chunks_exact(4).filter(|t| t[3] == 255).count();
+        let covered = picture
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|t| t[3] == 255)
+            .count();
         // A cell is about 60 x 48 px, half of that as a triangle.
         assert!((1200..2000).contains(&covered), "{covered} px");
     }

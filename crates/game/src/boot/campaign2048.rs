@@ -10,9 +10,9 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
-use oag_2048::campaign::EClass;
 use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
-use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent, MapRole};
+use oag_2048::campaign::{EClass, EventKind};
+use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
 /// The campaign file's entry name.
@@ -95,9 +95,9 @@ pub(super) fn map_events(
         let kind = match event.typedef_id {
             oag_tables::mjolnir::campaign::typedef::RACE_A => EventIcon::SpeedLap,
             _ => match event.kind {
-                oag_2048::campaign::EventKind::Zone => EventIcon::Zone,
-                oag_2048::campaign::EventKind::Elimination => EventIcon::Elimination,
-                oag_2048::campaign::EventKind::Race => EventIcon::Race,
+                EventKind::Zone => EventIcon::Zone,
+                EventKind::Elimination => EventIcon::Elimination,
+                EventKind::Race => EventIcon::Race,
             },
         };
         let mut detail = format!("{circuit} / {}", mode.replace('_', " "));
@@ -161,15 +161,10 @@ pub(super) fn map_events(
             forced_craft,
             refused_craft,
             card: event_card(&doc, event, kind, strings),
-            role: roles.iter().find(|(name, _)| *name == event.name).map_or(
-                MapRole::Side,
-                |(_, role)| match role {
-                    oag_2048::campaign::MapRole::Chain => MapRole::Chain,
-                    oag_2048::campaign::MapRole::Branch => MapRole::Branch,
-                    oag_2048::campaign::MapRole::SpeedLap => MapRole::SpeedLap,
-                    oag_2048::campaign::MapRole::Side => MapRole::Side,
-                },
-            ),
+            role: roles
+                .iter()
+                .find(|(name, _)| *name == event.name)
+                .map_or(oag_title::MapRole::Side, |(_, role)| *role),
         });
     }
     report.push(format!(

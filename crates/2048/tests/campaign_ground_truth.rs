@@ -337,7 +337,7 @@ fn the_weapon_callout_census_over_every_event_is_pinned() {
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn the_chain_walk_finds_24_chain_36_branch_and_40_speed_lap_events() {
-    use oag_2048::campaign::MapRole;
+    use oag_title::MapRole;
 
     let Some(mut archives) = open() else {
         return;

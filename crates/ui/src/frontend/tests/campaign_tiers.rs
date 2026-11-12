@@ -42,7 +42,7 @@ fn cell(name: &str, x: f32, y: f32) -> MapEvent {
         forced_craft: None,
         refused_craft: Vec::new(),
         card: EventCard::default(),
-        role: crate::frontend::MapRole::default(),
+        role: oag_title::MapRole::default(),
     }
 }
 

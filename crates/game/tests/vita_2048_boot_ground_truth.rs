@@ -561,7 +561,9 @@ fn check_ring_cells(pixels: &[u8]) {
     // Ring fill 4 (dark stripes) around the passed and the open chain tiles;
     // fill 2 (dark dots) around the open branch tiles; fill 3 (light stripes)
     // around the chain event not reached yet.
-    let groups: [(&str, &[(f32, f32)], f32); 3] = [
+    /// A ring fill's name, its probe cell centres and the least mean energy.
+    type Group<'a> = (&'a str, &'a [(f32, f32)], f32);
+    let groups: [Group; 3] = [
         (
             "dark stripes",
             // (70,35) (78,35) (74,37) (77,37) (78,39) (82,39)
