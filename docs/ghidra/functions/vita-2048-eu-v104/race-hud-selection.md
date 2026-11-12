@@ -126,7 +126,7 @@ is a cold boot, so the claim "the HD and Fury Campaigns draw neither" is 75, not
 Tests: `crates/hud/src/campaign_event_tests.rs` (fixture), `crates/raceplay/src/tests/campaign_event.rs`
 (`Setup` to readout), `crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs` (the disc's own
 `Arcade_HUD.xml`, an event against the DLC's Vineta K). The XP **value** is not drawn: ours keeps no per-race XP
-tally (`2048-and-omega-xp-is-read-not-kept`), so a campaign event shows `XP` alone where the original shows `XP 0`.
+tally (`xp-award.md`, "Wired"), so a campaign event shows `XP` alone where the original shows `XP 0`.
 
 ### Omega: checked, differs
 

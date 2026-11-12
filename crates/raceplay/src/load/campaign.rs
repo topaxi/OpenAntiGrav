@@ -267,10 +267,14 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     {
         loaded.setup.campaign_event = true;
     }
+    let (objectives, xp_awards, xp_column) =
+        oag_2048::campaign::event_progress(&mut archives, &doc, &event);
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
-        objectives: oag_2048::campaign::event_objectives(&doc, &event),
+        objectives,
         ai,
+        xp_awards,
+        xp_column,
     });
     Ok(loaded)
 }

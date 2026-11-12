@@ -3433,6 +3433,7 @@ dependencies = [
  "oag-2048",
  "oag-assets",
  "oag-hd",
+ "oag-tables",
  "oag-testdata",
  "oag-title",
 ]

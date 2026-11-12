@@ -1095,6 +1095,12 @@ impl Session {
                         observation.campaign_medal,
                         None,
                     );
+                    let xp = self.records.bank_event_xp(
+                        progress,
+                        observation.campaign_medal,
+                        observation.place,
+                    );
+                    log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
                 }
                 // A title whose EndRace screens do not bank the award (Pure, 2048
                 // and Omega read none of Pulse's or HD's) is paid here, under the

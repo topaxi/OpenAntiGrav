@@ -310,3 +310,45 @@ fn load_event_wires_2048_event_6s_own_weapon_set_onto_setup() {
     let resolved = race::load_event(&options, "2048 - Event 6").expect("\"2048 - Event 6\" loads");
     assert_eq!(resolved.setup.allowed_weapons, expected);
 }
+
+/// One finished 2048 event raises the stored XP by what `XPAwards.xml` authors for it: the
+/// completion award of its tier plus `Finished Nth`, in the event's mode column. Expected values
+/// come from the parsed disc table, through the same `Store::bank_event_xp` the session's finish
+/// site calls.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
+    let Some(source) = source() else { return };
+    let options = race::Options {
+        source: source.display().to_string(),
+        ..race::Options::default()
+    };
+    let progress = race::load_event(&options, "2048 - Event 1")
+        .expect("the event loads")
+        .campaign_2048_event
+        .expect("load_event always fills this");
+    let mut archives = oag_2048::open(&source.display().to_string()).expect("this is 2048");
+    let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+    let column = oag_tables::xp::Column::Race;
+    assert_eq!(progress.xp_column, column);
+
+    let (mut store, _) = records::parse("").expect("an empty file parses");
+    assert_eq!(store.xp(), 0);
+
+    // Third place clears the pass bar only.
+    let paid = store.bank_event_xp(&progress, Some(records::Medal::Bronze), Some(3));
+    let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
+    let third = awards.xp(oag_tables::xp::award::FINISHED_1ST + 2, column);
+    assert!(pass > 0 && third > 0, "the table authors both rows");
+    assert_eq!(paid, pass + third);
+    assert_eq!(store.xp(), pass + third);
+
+    // First place is elite; the stored total accumulates.
+    let before = store.xp();
+    let paid = store.bank_event_xp(&progress, Some(records::Medal::Gold), Some(1));
+    let expected = awards.xp(oag_tables::xp::award::EVENT_ELITE, column)
+        + awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
+    assert_eq!(paid, expected);
+    assert_eq!(store.xp(), before + expected);
+    assert_eq!(store.xp_rank(&ranks), ranks.rank(store.xp()));
+}

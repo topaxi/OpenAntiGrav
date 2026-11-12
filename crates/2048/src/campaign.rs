@@ -27,6 +27,49 @@ pub use oag_tables::mjolnir::{Document, Field, Instance, Reference, parse};
 /// census.
 pub const SP_XML: &str = r"Data\xml\SP.xml";
 
+/// The XP award table (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`).
+pub const XP_AWARDS_XML: &str = r"Data\xml\XPAwards.xml";
+
+/// The XP rank thresholds.
+pub const XP_RANKS_XML: &str = r"Data\xml\XPRanks.xml";
+
+/// What a finished `event` is graded and paid by: its pass/elite bars, the package's
+/// `XPAwards.xml`, and the award column its kind pays. The column is **chosen, not measured**: the
+/// original's mode to column map is unread.
+#[must_use]
+pub fn event_progress(
+    archives: &mut oag_assets::Archives,
+    doc: &Document,
+    event: &Event,
+) -> (
+    Option<EventObjectives>,
+    Option<oag_tables::xp::Awards>,
+    oag_tables::xp::Column,
+) {
+    use oag_tables::xp::Column;
+    let column = match event.kind {
+        EventKind::Race => Column::Race,
+        EventKind::Elimination => Column::Elim,
+        EventKind::Zone => Column::Zone,
+    };
+    let awards = xp_tables(archives).map(|(awards, _)| awards);
+    (event_objectives(doc, event), awards, column)
+}
+
+/// Both XP tables from the package, or `None` when either is absent or unreadable.
+#[must_use]
+pub fn xp_tables(
+    archives: &mut oag_assets::Archives,
+) -> Option<(oag_tables::xp::Awards, oag_tables::xp::Ranks)> {
+    let mut text = |name: &str| {
+        let bytes = archives.read_name(name).ok()?;
+        oag_tables::fexml::text(&bytes).ok()
+    };
+    let awards = oag_tables::xp::Awards::parse(&text(XP_AWARDS_XML)?)?;
+    let ranks = oag_tables::xp::Ranks::parse(&text(XP_RANKS_XML)?)?;
+    Some((awards, ranks))
+}
+
 /// **Not `SP.xml`'s schema.** 289 instances measured, but only
 /// [`typedef::GAME_MODE_OBJECTIVE`] (59 of them) is shared; the other 230
 /// are two typedefs `SP.xml` carries none of - `1114956821` x210, a
