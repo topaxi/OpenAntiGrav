@@ -194,7 +194,9 @@ pub const TITLE: &Title = &Title {
         // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
         // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
-        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+        // Read statically off this title's own `Plasma_Init`, confidence 75; its Rocket, Missile
+        // and Shuriken inits are not located and take HD's (`ps3-hdfury-eu/projectile-launch-normal.md`).
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

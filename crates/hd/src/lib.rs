@@ -245,7 +245,9 @@ pub const TITLE: &Title = &Title {
         // instrument (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Fury is
         // the same disc and file.
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
-        launch_normal_is_track_up: oag_title::pre_race::Sourced::chosen(false),
+        // Read statically off HD's `Rocket_Init` (`0x00124d90`) and its siblings, confidence 86:
+        // `ps3-hdfury-eu/projectile-launch-normal.md`.
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,

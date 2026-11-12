@@ -1,7 +1,8 @@
 //! A projectile whose probe or travel sweep ends outside the track's collision cage ends there,
 //! as in Pulse PSP (`Collision_SweepSegment`'s second query, code 4).
 //!
-//! **`#[ignore]`d and never run in CI**: needs `data/images/pulse-psp-usa.chd`.
+//! **`#[ignore]`d and never run in CI**: needs `data/images/pulse-psp-usa.chd` (and the HD disc
+//! for the launch normal's HD case).
 //!
 //! The rows are the original's own: 17 queries that returned `4`, recorded from PPSSPP on Moa
 //! Therma White (`03`) and Outpost 7 (`07`), and the five states a shot is seeded from, with the
@@ -486,20 +487,60 @@ fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
-    let sample = *race
-        .spline()
-        .sample(186)
-        .expect("Outpost 7 has 186 samples");
-    let track_up = -v3(sample.down).normalize();
+    let race = race::Race::start(loaded.setup);
+    let craft_up = Vec3::new(-0.014, 0.996, -0.090).normalize();
+    let track_up = plasma_rides_the_located_up(race, 186, |_| craft_up);
     // The recorded normal prints as `(-0.000, 1.000, 0.000)`: the sample is 0.26 degrees from
     // world up, so the bound against `Vec3::Y` is the print's, and the law's is the sample's own
-    // `-down` below.
+    // `-down`.
     assert!(
         track_up.angle_between(Vec3::Y).to_degrees() < 0.5,
         "sample 186 is not the level ramp the capture was fired on: up {track_up:?}"
     );
-    let craft_up = Vec3::new(-0.014, 0.996, -0.090).normalize();
+}
+
+/// HD's launch normal is the located track's up too: its `Rocket_Init`, `Missile_Init`,
+/// `Plasma_Init` and `Shuriken_Init` store the located sample's down negated
+/// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`). No capture poses the craft
+/// here, so it is tilted 6 degrees off the sample's up and the Plasma press must still carry the
+/// sample's. Drops with `oag_hd`'s `Weapons::launch_normal_is_track_up`.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_plasma_bolt_rides_the_located_tracks_up() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading an HD race");
+    let race = race::Race::start(loaded.setup);
+    plasma_rides_the_located_up(race, 100, |track_up| {
+        let across = track_up.cross(Vec3::X).normalize();
+        Quat::from_axis_angle(across, 6f32.to_radians()) * track_up
+    });
+}
+
+/// Poses the person's craft three units above spline sample `sample` with the up `craft_up` makes
+/// of the sample's own, one tick locates it, and a Plasma press goes through the real
+/// `spend_pickup` path: the charging bolt is reseated every held tick with `launch_normal`, so its
+/// `surface` is what the Plasma carries (a Rocket's would already be the floor's by the end of
+/// the firing tick). Asserts the bolt carries the sample's `-down`, not the craft's up, and
+/// answers that up.
+fn plasma_rides_the_located_up(
+    mut race: race::Race,
+    sample: usize,
+    craft_up: impl Fn(Vec3) -> Vec3,
+) -> Vec3 {
+    let sample = *race
+        .spline()
+        .sample(sample)
+        .expect("the circuit has the sample");
+    let track_up = -v3(sample.down).normalize();
+    let craft_up = craft_up(track_up);
 
     let craft = &mut race.sim.world.ships[0];
     craft.physics.body.position = v3(sample.pos) + track_up * 3.0;
@@ -508,7 +549,7 @@ fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
     craft.pickup.weapon = Some(Weapon::Plasma);
     assert!(
         (craft.physics.body.up() - craft_up).length() < 1e-4,
-        "the craft is posed at the capture's up"
+        "the craft is posed at the chosen up"
     );
     assert!(craft_up.angle_between(track_up).to_degrees() > 5.0);
 
@@ -553,4 +594,5 @@ fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
             > 3.0,
         "the bolt must not be riding the craft's own up"
     );
+    track_up
 }

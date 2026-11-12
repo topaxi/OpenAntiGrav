@@ -1096,10 +1096,15 @@ seed for the length table.
 
 The pins take the median over the twelve seeds, not one seed's race. Novice
 (`hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`):
-every seed reaches 200 and the median is 6 to 12 laps, a third either way of the original's 9
-(measured 8). Elite
+the median is 6 to 12 laps, a third either way of the original's 9 (measured 10 since projectiles
+launch along the located track's up, 9 before). A race still running at 1,000 s counts at the laps
+it had, and the median must not depend on it: fewer than half unended, each at or past the median
+(seed 1, at 19). Elite
 (`an_elite_score_eliminator_takes_more_than_a_few_laps`): every seed reaches 200 and the median is
-at least 4 (measured 6; 1 before the hold). Between seeds the same tier spans 2 to 17 laps, so a
+at least 4 (measured 9, 6 before the launch normal moved; 1 before the hold). Every race either
+pin ends is also checked for a board ranked on points
+([projectile-launch-normal.md](../ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md),
+"Landed"). Between seeds the same tier spans 2 to 17 laps, so a
 single seed's bound fell out when the shield moved one seed from 11 laps to 7.
 
 ### Firing on the original's law (2026-10-03)
