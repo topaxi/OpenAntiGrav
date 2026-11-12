@@ -246,3 +246,189 @@ such override, and its sixteen have non-numbered ids. **Checked, differs**.
 | `PIItem_LoadLocationStringTable` | `0x810663ae` | `0x81065666` |
 
 The base-build names are not applied: `names.tsv` covers v1.04 only.
+
+## The card's key: the track alias table (2026-11-12, `vita-2048-card-title-key`)
+
+Read statically on `/2048/eboot-vita-2048-eu-v104.elf`. This section answers
+what the section above left open ("What the original shows for the sixteen"):
+which key the event card, the mode card over the load and the pause-style
+callout use. **The key is the HD track id `NN_Track` that a static alias table
+pairs with the `PI_Track` name, one row per direction.** It predicts all three
+photographed strings (`VINETA K`, `ANULPHA PASS`, `THE AMPHISEUM`).
+
+> **title = string table [ case-fold ( alias ( `track` ) ) ]**, where
+> `alias(n)` is the `key` of the table row whose `name` *or* `key` has the same
+> CRC-32 as `n` (raw bytes, so case-sensitive), and `"99_Track"` when no row
+> matches. On a string-table miss the key itself is printed.
+
+Confidence **85**: three independent draw sites use it (below), the table is
+literal data, and it reproduces the three stills. Not higher because no live
+run watched the lookup.
+
+### `g_track_alias_table` - `0x814b1578` (data)
+
+**Confidence: 90.** 102 rows of `{const char *name; u32 reversed; const char
+*key}` (stride 12) in the read-only segment. The rows for every circuit the
+DLC `tracks/Definition.xml` files author (DLC1's sixteen, DLC2's eight and
+`Zone_1`..`Zone_4`), with the English `entries.xml` string each key resolves
+to (patch v1.04 `data2`):
+
+| Row | `name` | `reversed` | `key` | English string |
+| --- | --- | --- | --- | --- |
+| 0 | `Vineta_K` | 0 | `01_Track` | `VINETA K` |
+| 1 | `Anulpha_Pass` | 0 | `08_Track` | `ANULPHA PASS` |
+| 2 | `Moa_Therma` | 0 | `03_Track` | `MOA THERMA` |
+| 3 | `Chenghou_Project` | 0 | `04_Track` | `CHENGHOU PROJECT` |
+| 4 | `Metropia` | 0 | `02_Track` | `METROPIA` |
+| 5 | `Sebenco_Climb` | 0 | `06_Track` | `SEBENCO CLIMB` |
+| 6 | `Ubermall` | 0 | `05_Track` | `UBERMALL` |
+| 7 | `Sol_2` | 0 | `07_Track` | `SOL 2` |
+| 8 | `Vineta_K_R` | 1 | `09_Track` | `VINETA K` |
+| 9 | `Anulpha_Pass_R` | 1 | `16_Track` | `ANULPHA PASS` |
+| 10 | `Moa_Therma_R` | 1 | `11_Track` | `MOA THERMA` |
+| 11 | `Chenghou_Project_R` | 1 | `12_Track` | `CHENGHOU PROJECT` |
+| 12 | `Metropia_R` | 1 | `10_Track` | `METROPIA` |
+| 13 | `Sebenco_Climb_R` | 1 | `14_Track` | `SEBENCO CLIMB` |
+| 14 | `Ubermall_R` | 1 | `13_Track` | `UBERMALL` |
+| 15 | `Sol_2_R` | 1 | `15_Track` | `SOL 2` |
+| 16 | `Talons_Junction` | 0 | `17_Track` | `TALON'S JUNCTION` |
+| 17 | `Talons_Junction_R` | 1 | `18_Track` | `TALON'S JUNCTION` |
+| 18 | `Amphiseum` | 0 | `19_Track` | `THE AMPHISEUM` |
+| 19 | `Amphiseum_R` | 1 | `20_Track` | `THE AMPHISEUM` |
+| 20 | `Modesto_Heights` | 0 | `21_Track` | `MODESTO HEIGHTS` |
+| 21 | `Modesto_Heights_R` | 1 | `22_Track` | `MODESTO HEIGHTS` |
+| 22 | `Tech_De_Ra` | 0 | `23_Track` | `TECH DE RA` |
+| 23 | `Tech_De_Ra_R` | 1 | `24_Track` | `TECH DE RA` |
+| 24 | `Zone_1` | 0 | `25_Track` | `PRO TOZO` |
+| 25 | `Zone_2` | 0 | `26_Track` | `MALLAVOL` |
+| 26 | `Zone_3` | 0 | `27_Track` | `CORRIDON 12` |
+| 27 | `Zone_4` | 0 | `28_Track` | `SYNCOPIA` |
+
+The remaining rows: `Zone_Pad` (`29_Track`), `WV_` twins of rows 0-28 with the
+same keys, 2048's ten (`square` `30_Track` ... `altima` `39_Track`), their
+`WV_` scenes (`50_Track` ... `62_Track`), `WV_track1..10` and `track1..10`
+(`63_track` ... `82_track`), and `Default` (`99_Track`) last. No `entries.xml`
+has an id from `29` up, so those keys print as themselves; 2048's own events
+are titled from `m_displayName` instead (below).
+
+**The key is per direction, not per circuit.** A reverse has its own row and
+its own id (`Vineta_K_R` is `09_Track`, not `01_Track`). English and most
+languages give both ids the same string, but **Russian does not**: patch
+v1.04 `data1` and `data2` Russian `entries.xml` have `03_TRACK` = `МОА THERMA`
+and `11_TRACK` = `MOA THERMA`, and the base `data.psarc` Russian and Japanese
+files differ on all eight forward/reverse pairs (`01_TRACK` `ВИНЕТА К` against
+`09_TRACK` `VINETA K`). Every other language of every package gives the pairs
+`01/09` ... `08/16`, `17/18`, `19/20`, `21/22`, `23/24` the same string
+(census over the 49 `entries.xml` copies of the EU base, patch v1.04 `data1` and `data2`).
+
+**`soundregister` is not the key.** `soundregister + 8 * reversed` happens to
+equal the key's number for DLC1's sixteen, but DLC2 breaks it:
+`Talons_Junction` has `soundregister="12"` and key `17_Track`, `Amphiseum`
+has `10` and `19_Track`, `Modesto_Heights` `9` and `21_Track`.
+
+### `g_track_alias_map` - `0x818bc250` (data)
+
+**Confidence: 85.** BSS, 102 rows of `{name, crc32(name), key, crc32(key)}`,
+filled once from the table by `FUN_81231df6` (`0x81231eb0` writes the base).
+`FUN_81231df6` is the constructor of a larger object at `DAT_818bbf88` (it also
+sets `"VITA_Node"` and `"MPStressVITA"`), so it is **not renamed**. The three
+lookups below take that object as their first argument and read the map.
+
+### `TrackAlias_KeyForHash` - `0x81232400`
+
+**Confidence: 85.** `const char *(void *self, u32 hash)`. Returns row `key`
+for the first row whose `crc32(name)` or `crc32(key)` equals `hash`, else
+`"99_Track"` (the literal is in the function). Matching either hash makes the
+map idempotent on HD ids: `alias("01_Track")` is `01_Track`.
+
+### `TrackAlias_NameForHash` - `0x812323b6`
+
+**Confidence: 85.** Same scan, returns row `name`, else `"Default"`. The card
+uses it to pick the track photo of a tournament's `n`th track.
+
+### `TrackAlias_KeyForName` - `0x81232436`
+
+**Confidence: 80.** `const char *(void *self, const char *name)`. CRC-32 of
+`name`, then the hash scan; on a miss, a second `strcmp` scan over `name` and
+`key`, else `"01_Track"`. Its callers resolve a track item by either spelling
+(`FUN_8105a5d2`).
+
+### `CampaignEventCard_DrawCellPanel` - `0x8105021c`
+
+**Confidence: 75.** The HD/Fury grid's version of
+`CampaignEventCard_DrawPanel` (same 404-wide photo, header panel, title at
+`x=682` `y=100` in `default` at scale `0x3f51eb85`). Its integer argument
+(`r0`) is a `PI_Cell` item. The title:
+
+```
+if cell+0x128 == 0:                              ; not a tournament cell
+    key  = TrackAlias_KeyForHash(&obj, Hash_ComputeCrc32(cell + 0xea))
+    text = StringTable_LookupString(DAT_8151cdb0, key, 0)
+else:                                            ; tournament cell
+    "Tournament", then "%s (%d/%d)" of the same lookup on cell+0x12c[i]
+```
+
+`cell+0xea` is the cell's `track` attribute (below). The photo is
+`TrackAlias_NameForHash` of the same hash. Callers, each passing the current
+cell `DAT_8153fcd4` (`DAT_8153fc40 + 0x94`) or a cell item in `r0`:
+
+| Caller | Screen | Evidence |
+| --- | --- | --- |
+| `0x810f8796` | HD grid cell screen | vtable `0x8150eab4` slot at `0x8150ead0`; the vtable is stored by `TouchCampaignHD_Item_Construct` |
+| `0x810f5620` | Fury grid cell screen | vtable `0x8150ea48` slot at `0x8150ea64`; stored by `TouchCampaignFury_Item_Construct` |
+| `LoadingScreen_Draw` state 4 | mode card over the load | `0x8128435c cmp r0,#0` ... `0x81284370 bl 0x8105021c`, `r0` = `DAT_8153fcd4` (the decompile shows `0` because the prototype is wrong) |
+| `0x81082af4` (no function defined) | `Callout_Item` | vtable `0x8150b370` slot at `0x8150b38c`; stored by `FUN_813c6b58`, which names `Frontend/Items/Callout_Item.cpp`. `0x81082b1e` loads `DAT_8153fc40+0x94` into `r0` |
+
+Which of these the 2026-11-12 pause still shows is not read; the callout
+item is the in-race candidate.
+
+### Two more sites with the same rule
+
+- **`CampaignEventCard_DrawPanel`, no-event branch** (`param_2 == 0`, the
+  pre-race callout and Racebox path): title is
+  `StringTable_LookupString(TrackAlias_KeyForHash(Hash_ComputeCrc32(current
+  track +0x74)))`, tournaments `"%s (%d/%d)"` of the same.
+- **`FUN_810a27f8`** (a lobby or result row; not identified): the label is
+  `StringTable_LookupString(TrackAlias_KeyForHash(row+0x1474))`.
+
+With an event (`param_2 != 0`), `DrawPanel` draws `event + 0x144` unchanged:
+`GameModeBase.m_trackDef` is at `+0x104` and `TrackDefinition.m_displayName`
+at `+0x40` of it. `SP.xml` authors that as text (`METRO PARK`, ten values), so
+2048's own events never touch the alias table.
+
+### `PICell_ParseValues` - `0x810bbfce`
+
+**Confidence: 70.** Parses a grid cell's children: `Values` (attributes
+`Weapons`, `Damage`, `AICount`, `Status`, `Locked`, `ShipChoice`, `Track`,
+`skillEasy`/`Medium`/`Hard`, `Class`, and three literals not resolved), `Gold`/`Silver`/`Bronze`, the
+nine `Easy`/`Medium`/`HardGold`... targets, `NitroElim*` and
+`TournamentTrack` (`track`, hashed into `+0x12c`, count `+0x128`). `Track`
+is copied to `+0xea` (`0x18` bytes). The element set is exactly the
+`<PI_Cell>` grammar of `data/plugins/grids/grid_NN.xml`. Not higher: the
+`PI_Cell` class's vtable was not followed to this function.
+
+### Where the earlier rule still holds
+
+None of the eleven `PI_Track`-name sites of the section above calls the alias
+functions (`TrackAlias_KeyForHash`'s callers are the two card painters and
+`FUN_810a27f8`; `TrackAlias_NameForHash`'s are the two card painters). So the
+case-fold(`name`) rule stands for those sites, and the cards are a separate
+path. `FUN_8100077c`'s `%02d_Track` CRC list and `FUN_81059ebc` (which drops
+the sixteen HD ids from a track list) stay unrelated.
+
+### Omega: checked, applies (table present, card site not read)
+
+`/omega/eboot-ps4-omega-eu-v107.bin` carries the same table at `0x01990120`,
+stride 24 (8-byte pointers): row 0 `Vineta_K` / `0` / `01_Track`, row 1
+`Anulpha_Pass` / `08_Track`, row 2 `Moa_Therma` / `03_Track`, and the strings
+`WV_Vineta_K_R`, `Zone_Pad`, `99_Track` (`0x0189386c`, 25 references, inlined
+in about twelve functions). Which of those is Omega's event card is not read.
+For Omega's numbered circuits the map is idempotent (the key's own hash
+matches), so `oag_raceplay::catalogue::Track::name_key` (`StringTableId`, else
+the `NN_Track` id) gives the same strings it would; no change is implied for
+Omega.
+
+### Base build (v1.00)
+
+The base `eboot.elf` has `99_Track` (file offset `0x4a4bdc`); the table was not
+dumped there.

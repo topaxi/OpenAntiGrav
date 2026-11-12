@@ -345,3 +345,11 @@
 0x810c1f94	function	PITrack_ParseValues	85	circuit-name-key.md
 0x81001ef4	function	RaceSetup_SelectTrackByName	75	circuit-name-key.md
 0x810663ae	function	PIItem_LoadLocationStringTable	75	circuit-name-key.md
+# 2026-11-12 vita-2048-card-title-key: the card title's track alias table (circuit-name-key.md)
+0x814b1578	data	g_track_alias_table	90	circuit-name-key.md
+0x818bc250	data	g_track_alias_map	85	circuit-name-key.md
+0x81232400	function	TrackAlias_KeyForHash	85	circuit-name-key.md
+0x812323b6	function	TrackAlias_NameForHash	85	circuit-name-key.md
+0x81232436	function	TrackAlias_KeyForName	80	circuit-name-key.md
+0x8105021c	function	CampaignEventCard_DrawCellPanel	75	circuit-name-key.md
+0x810bbfce	function	PICell_ParseValues	70	circuit-name-key.md

@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [omega, 2048]
 updated: 2026-11-12
-summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 Vita DLC circuits read VINETA K in the original, ours the id"
+summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 DLC circuit names: alias table read, ready to wire"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -59,10 +59,12 @@ content against `hd-frontend.md`.
   - `soundregister` and `FEModelLocation` are never read for a name.
   - No `stringtable.xml`, `<StringTable>` or `VINETA_K`-style key ships, so those sites would print `Vineta_K`, and `square` for the ten too.
   - **What a player sees, measured 2026-11-12 (`vita-2048-trackname-still`, Vita3K, EU patch 1.04 + DLC1): `VINETA K` and `ANULPHA PASS` as text** on the HD Campaign event card, the mode card over the load and the pause card (never the id; the ten read `METRO PARK`, `UNITY SQUARE` in the same font). So the sixteen are named through a path the `PI_Track` sites do not describe: **re-first**, and ours (which draws `Vineta_K`) does **not** match. Stills `data/reference/2048-circuit-names/`; `docs/formats/omega-status.md`, "2048 Vita's circuit names".
-  - **Not ready:** our `CircuitNames` folds case and falls back to the id, which is the rule the executable's `PI_Track` sites follow but not what the cards draw.
-  - **What remains is a decision, not RE:**
-    - Keying the sixteen to `01_TRACK`..`08_TRACK` would reproduce the photographed HD names (`VINETA K`, `ANULPHA PASS`; `THE AMPHISEUM` is `19_TRACK`) but is a **chosen stand-in** until the title setter is read.
-    - Next RE: read the event card's title setter (the `grid0_3_1` card back to its label string). It is a lookup, not the id re-spelled (`Amphiseum` reads `THE AMPHISEUM`, entries `19_TRACK`). A Vita3K still of a `_R` cell's card (Fury `grid_09`/`grid_10`) says whether the key is per circuit or per direction.
+  - ~~**Not ready**~~ **READY TO WIRE: the card's key is read (2026-11-12, `vita-2048-card-title-key`, `docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`, "The card's key: the track alias table", confidence 85).** The event card, the HD and Fury grid cell screens, the mode card over the load and the `Callout_Item` all title a circuit through a static table in `eboot.elf`, `g_track_alias_table` at `0x814b1578` (102 rows `{name, reversed, key}`), not through the `PI_Track` name.
+    - **Rule to wire:** `title = strings[fold(alias(track))]`, where `alias(n)` is the row whose `name` or `key` equals `n` (byte-exact, CRC-32 in the original) and gives its `key`; no row gives `99_Track`; a string-table miss prints the key.
+    - **Per direction, not per circuit:** `Vineta_K` `01`, `Anulpha_Pass` `08`, `Moa_Therma` `03`, `Chenghou_Project` `04`, `Metropia` `02`, `Sebenco_Climb` `06`, `Ubermall` `05`, `Sol_2` `07`; their `_R` `09`, `16`, `11`, `12`, `10`, `14`, `13`, `15`; `Talons_Junction` `17`/`_R` `18`, `Amphiseum` `19`/`20`, `Modesto_Heights` `21`/`22`, `Tech_De_Ra` `23`/`24`; `Zone_1`..`4` `25`..`28` (all `NN_Track`). Russian v1.04 gives `03_TRACK` and `11_TRACK` different strings, so never strip `_R` and reuse the forward key.
+    - **Do not derive it from `soundregister`:** `soundregister + 8 * reversed` matches DLC1's sixteen only; DLC2 breaks it (`Amphiseum` is `10`, key `19`).
+    - **Wiring:** an `oag-2048` table citing `0x814b1578` (the 28 DLC rows, or all 102), applied where `CircuitNames` resolves an HD-lineage circuit; keep 2048's own ten on `M_DISPLAYNAME` (their events draw `m_displayName`, not the alias). Best with a ground-truth test that re-reads the rows from the decrypted `eboot.elf` when present, so the table stays re-derivable. Acceptance: ours draws `VINETA K`, `ANULPHA PASS`, `THE AMPHISEUM` on the stills' screens.
+    - Omega: the same table is at `0x01990120` (row heads read); its card site is not read. For Omega's `NN_Track` ids the alias is the identity, so Omega's `name_key` is unchanged (**checked, applies, nothing to wire**).
   - Omega: **checked, differs**. It applies the same rule with an authored `StringTableId` override (`FUN_014b1330` stores it at `+0x278`).
   - Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 
