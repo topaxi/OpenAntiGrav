@@ -86,6 +86,10 @@ pub struct Weapons {
     /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The launch normal is the
     /// track's, not the craft's"). The Cannon and the Disruptor are not in that list and keep the
     /// craft's up on every title.
+    ///
+    /// `false` on HD, 2048 and Omega: their own `Rocket_Init` and siblings are unread, and
+    /// turning the Pulse law on moved their opponent fields (`rocket-visuals.md`, "Wired: the
+    /// launch normal"), so they keep the craft's up until read.
     pub launch_normal_is_track_up: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.

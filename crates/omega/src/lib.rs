@@ -194,7 +194,7 @@ pub const TITLE: &Title = &Title {
         // Read in `WeaponPads_TestCraft`: the Eliminator family skips the stamp
         // (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title").
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(false),
-        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
         ),

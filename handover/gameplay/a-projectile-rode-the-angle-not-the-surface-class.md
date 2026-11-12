@@ -41,6 +41,16 @@ nothing on the title axis; the gameplay determinism reference did not move.
   not.** All three rockets of a volley fired up Outpost 7's first ramp ended on the collision cage
   within 0.37 s; ours fly on. The missing law and its wire are
   [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md).
+- **HD, 2048 and Omega keep the craft's up as the launch normal until HD's `Rocket_Init` is read**
+  (`Weapons::launch_normal_is_track_up`, `false`). With the Pulse law on, three tests went red:
+  `hd_eliminator_hud_ground_truth::a_finished_eliminator_leaves_a_board_ranked_on_points` (seed 1 never
+  ended in 30,000 ticks), `::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`
+  (18 s became 76 s, a seed past 1,000 s) and
+  `omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed` (slot 5 respawned at
+  tick 5602, no weapon hit); HD's located up agreed with the craft's within 3 degrees (worst 10.6).
+  Read `Rocket_Init`, `Missile_Init`, `Shuriken_Init` and `Plasma_Launch` on `ps3-hdfury-eu` for the
+  stored normal's source; if it is the located down, flip HD's field and treat the three tests as a
+  field-balance question.
 - **HD's own projectile update is unread.** `ps3-hdfury-eu` is imported; the
   fix is Pulse's model on HD's geometry, which the measurement supports.
 - **The HD autopilot beaches on Sebenco Climb (t=1560), Chenghou Project,

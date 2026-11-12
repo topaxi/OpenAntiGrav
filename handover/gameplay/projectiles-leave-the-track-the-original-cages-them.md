@@ -97,15 +97,17 @@ was not measured.
 - **The launch normal** (2026-11-12, `launch-normal-wire`): a Rocket, Missile, Shuriken or Plasma bolt
   is born carrying the up of the spline sample the craft is located on (`Ship::track_up`, written by
   `step_player` and `step_opponents` from the sample the force law reads; `Craft::launch_normal`),
-  not `body.up()`; per title as `Weapons::launch_normal_is_track_up` (Pulse measured, Pure and HD
-  inherited from Pulse, 2048 and Omega from HD). The Cannon and the Disruptor keep the craft's up.
+  not `body.up()`; per title as `Weapons::launch_normal_is_track_up` (Pulse measured, Pure inherited
+  from Pulse; HD chosen `false` and 2048, Omega inherited `false`: with `true` three HD/Omega field
+  tests go red, see `a-projectile-rode-the-angle-not-the-surface-class.md`). The Cannon and the Disruptor keep the craft's up.
   Test: `projectile_cage_ground_truth::outpost_7_ramp_launch_normal_is_the_tracks_up` (a Plasma
   press from sample 186 with the capture's craft up: 0.05 degrees from the sample's `-down`, over 5
   from the craft's up) and `seed::a_plasma_bolt_is_released_riding_the_located_track_up`. Sample
   186's up is 0.26 degrees from `(0, 1, 0)`. Not observable per weapon in raceplay: a Rocket,
   Missile or Shuriken's first update replaces the seed with the floor's normal, so those three call
   sites are pinned only by the weapons crate's tests of the handed-in normal. Still open from it:
-  HD's, 2048's and Omega's own `Rocket_Init` unread; the Disruptor's advance unread.
+  HD's, 2048's and Omega's own `Rocket_Init` unread (reading HD's decides whether they take the
+  law); the Disruptor's advance unread.
 
 ## Next Steps
 
