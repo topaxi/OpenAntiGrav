@@ -559,6 +559,9 @@ pub struct CellSelection {
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
     tiers: MedalTiers,
+    /// Parallel to [`Self::cells`]: every tier's target for the cell, best tier first, see
+    /// [`Self::with_tier_targets`]. Empty (or `None`) is the title's own three target rows.
+    tier_targets: Vec<Option<Vec<i64>>>,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
     /// The rung the `DifficultyButton` widget's square-button prompt
@@ -656,6 +659,7 @@ impl CellSelection {
             help_open: false,
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
+            tier_targets: Vec::new(),
             pulse: pulse::SelectorPulse::default(),
             difficulty: Difficulty::Medium,
         }
@@ -666,6 +670,40 @@ impl CellSelection {
     pub fn with_tiers(mut self, tiers: MedalTiers) -> Self {
         self.tiers = tiers;
         self
+    }
+
+    /// Names every tier's target of each cell, best tier first, for a campaign whose list is its
+    /// own: the target rows then list the best three tiers the cell awards (a target that is
+    /// `0`, or `i64::MAX` on a counting mode, is not awarded), each in its tier's colour.
+    #[must_use]
+    pub fn with_tier_targets(mut self, targets_of: &dyn Fn(&str) -> Option<Vec<i64>>) -> Self {
+        self.tier_targets = self
+            .cells
+            .iter()
+            .map(|cell| targets_of(&cell.name))
+            .collect();
+        self
+    }
+
+    /// The selected cell's target rows: the tier and its target, best three tiers it awards;
+    /// `None` for the title's own gold, silver and bronze rows.
+    #[must_use]
+    pub fn target_rows(&self) -> Option<Vec<(Medal, i64)>> {
+        let targets = self.tier_targets.get(self.index)?.as_ref()?;
+        let counting = matches!(
+            self.selected()?.mode,
+            oag_tables::race_campaign::Mode::Zone | oag_tables::race_campaign::Mode::Elimination
+        );
+        let awarded = |target: i64| target != if counting { i64::MAX } else { 0 };
+        Some(
+            targets
+                .iter()
+                .enumerate()
+                .filter(|(_, target)| awarded(**target))
+                .filter_map(|(index, target)| Some((Medal::from_index(index)?, *target)))
+                .take(3)
+                .collect(),
+        )
     }
 
     /// The campaign's medal tiers.

@@ -892,7 +892,11 @@ impl CampaignStage {
             .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
             match &self.custom {
-                Some(custom) => model.with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of)),
+                Some(custom) => model
+                    .with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of))
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
                 None => model,
             }
         };

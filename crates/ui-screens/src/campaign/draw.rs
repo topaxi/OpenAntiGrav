@@ -286,6 +286,7 @@ pub fn cell_draw_list(
         return layers;
     };
 
+    let rows = model.target_rows();
     let counting = matches!(cell.mode, Mode::Zone | Mode::Elimination);
     let targets_visible = matches!(
         cell.mode,
@@ -353,11 +354,22 @@ pub fn cell_draw_list(
             // see `difficulty_button_line`'s own doc.
             "DifficultyButton" => Some(difficulty_button_line(model.difficulty(), strings)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
-                Some(strings.get_or_id("IG_HUD_TARGET").to_string())
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                (rows.as_ref().is_none_or(|rows| row < rows.len()))
+                    .then(|| strings.get_or_id("IG_HUD_TARGET").to_string())
             }
-            "Target0" if targets_visible => Some(target_value(cell.gold, &cell.mode)),
-            "Target1" if targets_visible => Some(target_value(cell.silver, &cell.mode)),
-            "Target2" if targets_visible => Some(target_value(cell.bronze, &cell.mode)),
+            "Target0" | "Target1" | "Target2" if targets_visible => {
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                match &rows {
+                    Some(rows) => rows
+                        .get(row)
+                        .map(|(_, target)| target_value(*target, &cell.mode)),
+                    None => Some(target_value(
+                        [cell.gold, cell.silver, cell.bronze][row],
+                        &cell.mode,
+                    )),
+                }
+            }
             "Target0 Title" | "Target1 Title" | "Target2 Title" | "Target0" | "Target1"
             | "Target2" => None,
             _ => text.string.clone(),
@@ -374,7 +386,20 @@ pub fn cell_draw_list(
             let Some(placed) = sprites(&image.src) else {
                 continue;
             };
-            out.push(image_draw(image, placed));
+            let row = usize::from(name.as_bytes()[6] - b'0');
+            match &rows {
+                Some(rows) => {
+                    if let Some((medal, _)) = rows.get(row) {
+                        out.push(image.sprite_draw(
+                            placed,
+                            image.x,
+                            image.y,
+                            model.tiers().argb(*medal),
+                        ));
+                    }
+                }
+                None => out.push(image_draw(image, placed)),
+            }
         }
     }
     let _ = counting; // direction is `Cell::evaluate_medal`'s own concern, not this draw's

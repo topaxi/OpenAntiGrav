@@ -5,6 +5,7 @@
 
 mod medal_art;
 mod tier_medal;
+mod tiers;
 mod tint;
 
 use super::*;

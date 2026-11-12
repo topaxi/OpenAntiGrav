@@ -138,8 +138,8 @@ pub struct Event {
 }
 
 /// What each tier of a campaign asks of one event: [`Cell::gold`], [`Cell::silver`] and
-/// [`Cell::bronze`] hold the three best tiers for the screens' three target rows, and this
-/// holds them all.
+/// [`Cell::bronze`] hold the targets of the tiers named so (what the kill target of an
+/// Eliminator and the HUD's pace ladder read), and this holds every tier's.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TierTargets {
     /// The medium rung, which is the flat targets when no rung is named.
@@ -149,6 +149,12 @@ pub struct TierTargets {
 }
 
 impl TierTargets {
+    /// The medium rung's targets, best tier first: what Cell Selection's target rows list.
+    #[must_use]
+    pub fn flat(&self) -> &[i64] {
+        &self.flat
+    }
+
     /// The targets of `difficulty`, best tier first.
     #[must_use]
     pub fn for_difficulty(&self, difficulty: Difficulty) -> &[i64] {
@@ -915,13 +921,12 @@ fn medal_targets(
             .map(|(_, tier)| convert(targets.of(&tier.name)))
             .collect()
     };
-    let triple = |column: &[i64]| {
-        let at = |index: usize| column.get(index).copied().unwrap_or(never);
-        MedalTargets {
-            gold: at(0),
-            silver: at(1),
-            bronze: at(2),
-        }
+    let triple = |targets: &Targets| -> Result<MedalTargets, String> {
+        Ok(MedalTargets {
+            gold: convert(targets.gold)?,
+            silver: convert(targets.silver)?,
+            bronze: convert(targets.bronze)?,
+        })
     };
     let flat = medals.all();
     let rung = |own: &Option<Targets>| {
@@ -929,25 +934,24 @@ fn medal_targets(
             .filter(|t| !t.is_empty())
             .unwrap_or(flat.clone())
     };
-    let medium = column(&rung(&medals.medium))?;
+    let medium_targets = rung(&medals.medium);
+    let medium = column(&medium_targets)?;
     let per_rung = medals.easy.is_some() || medals.medium.is_some() || medals.hard.is_some();
     let (rungs, every) = if per_rung {
-        let easy = column(&rung(&medals.easy))?;
-        let hard = column(&rung(&medals.hard))?;
+        let (easy, hard) = (rung(&medals.easy), rung(&medals.hard));
         (
             Some(DifficultyTargets {
-                easy: triple(&easy),
-                medium: triple(&medium),
-                hard: triple(&hard),
+                easy: triple(&easy)?,
+                medium: triple(&medium_targets)?,
+                hard: triple(&hard)?,
             }),
-            Some([easy, medium.clone(), hard]),
+            Some([column(&easy)?, medium.clone(), column(&hard)?]),
         )
     } else {
         (None, None)
     };
-    let shown = triple(&medium);
     Ok((
-        shown,
+        triple(&medium_targets)?,
         rungs,
         TierTargets {
             flat: medium,

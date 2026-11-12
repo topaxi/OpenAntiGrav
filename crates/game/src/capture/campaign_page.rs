@@ -275,12 +275,16 @@ pub(super) fn campaign_page(
                 })
             };
             match &custom {
-                Some(custom) => model.with_fixed_locks(&|name| {
-                    custom.fixed_lock(
-                        name,
-                        &crate::unlock::campaign_medal_of(records, &campaign_title, &tiers),
-                    )
-                }),
+                Some(custom) => model
+                    .with_fixed_locks(&|name| {
+                        custom.fixed_lock(
+                            name,
+                            &crate::unlock::campaign_medal_of(records, &campaign_title, &tiers),
+                        )
+                    })
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
                 None => model,
             }
         };

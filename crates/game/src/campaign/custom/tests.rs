@@ -163,7 +163,11 @@ fn an_absent_tier_is_never_awarded_on_either_direction() {
 #[test]
 fn an_event_with_no_medals_awards_none() {
     needs_examples!();
-    let custom = edited("medals = { gold = 10, silver = 6, bronze = 3 }\n", "").unwrap();
+    let custom = edited(
+        "medals = { gold = 10, silver = 6, bronze = 3, extra = [{ tier = \"platinum\", target = 14 }] }\n",
+        "",
+    )
+    .unwrap();
     let cell = &custom.grids[1].cells[1];
     assert_eq!(cell.evaluate_medal(99), None);
 }
@@ -214,24 +218,25 @@ fn the_field_carries_ai_difficulty_pilot_and_teams() {
 fn requirements_name_cells_and_hold_on_the_least_medal() {
     needs_examples!();
     let custom = example();
+    let tier = |name: &str| custom.tiers.find(name);
     let none = |_: &str| None;
     assert_eq!(custom.fixed_lock("grid0_2_1", &none), Some(false));
     assert_eq!(custom.fixed_lock("grid0_2_2", &none), Some(true));
-    let bronze_first = |name: &str| (name == "grid0_2_1").then_some(Medal::Bronze);
+    let bronze_first = |name: &str| (name == "grid0_2_1").then_some(tier("bronze").unwrap());
     assert_eq!(custom.fixed_lock("grid0_2_2", &bronze_first), Some(false));
     // The duel wants silver on the gate.
-    let bronze_gate = |name: &str| (name == "grid0_2_2").then_some(Medal::Bronze);
+    let bronze_gate = |name: &str| (name == "grid0_2_2").then_some(tier("bronze").unwrap());
     assert_eq!(custom.fixed_lock("grid0_3_2", &bronze_gate), Some(true));
-    let gold_gate = |name: &str| (name == "grid0_2_2").then_some(Medal::Gold);
+    let gold_gate = |name: &str| (name == "grid0_2_2").then_some(tier("gold").unwrap());
     assert_eq!(custom.fixed_lock("grid0_3_2", &gold_gate), Some(false));
     // No unlock table: the title's neighbour rule decides.
     assert_eq!(custom.fixed_lock("grid0_3_1", &none), None);
     // Two requirements: both must hold.
-    let sprint_silver = |name: &str| (name == "grid0_1_1").then_some(Medal::Silver);
+    let sprint_silver = |name: &str| (name == "grid0_1_1").then_some(tier("silver").unwrap());
     assert_eq!(custom.fixed_lock("grid1_4_1", &sprint_silver), Some(true));
     let both = |name: &str| match name {
-        "grid0_1_1" => Some(Medal::Silver),
-        "grid1_3_2" => Some(Medal::Bronze),
+        "grid0_1_1" => Some(tier("silver").unwrap()),
+        "grid1_3_2" => Some(tier("bronze").unwrap()),
         _ => None,
     };
     assert_eq!(custom.fixed_lock("grid1_4_1", &both), Some(false));
@@ -757,5 +762,172 @@ fn the_mods_page_says_which_disc_a_mod_needs() {
     assert_eq!(
         listing[0].problems,
         [("NEEDS".to_string(), "WIPEOUT HD DISC".to_string())]
+    );
+}
+
+const PLATINUM_TIERS: &str = r##"
+[[medal-tier]]
+name = "platinum"
+points = 4
+colour = "#e5e4e2"
+string_id = "PLATINUM_WORD"
+
+[[medal-tier]]
+name = "gold"
+points = 3
+colour = "#faeb38"
+
+[[medal-tier]]
+name = "silver"
+points = 2
+colour = "#dae3e4"
+
+[[medal-tier]]
+name = "bronze"
+points = 1
+colour = "#df942f"
+"##;
+
+/// Two timed events on one tier: `a` asks platinum 70 s, gold 80 s, silver 90 s, bronze 100 s,
+/// with a harder rung; `b` needs platinum on `a`.
+fn platinum_campaign(tiers: &str) -> Result<Custom, String> {
+    let text = format!(
+        "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/campaign.tosd\", version = \"1.0.0\" }}\n\
+         {tiers}\n[campaign]\nid = \"plat\"\nname = \"Plat\"\n\n[[grid]]\nid = \"g0\"\n\n\
+         [[grid.event]]\nid = \"a\"\nslot = [1, 1]\nmode = \"time_trial\"\ntrack = \"01_Track\"\nclass = \"venom\"\n\
+         unlock = {{ open = true }}\n\
+         medals = {{ gold = 80.0, silver = 90.0, bronze = 100.0, extra = [{{ tier = \"platinum\", target = 70.0 }}], \
+         hard = {{ gold = 75.0, silver = 85.0, bronze = 95.0, extra = [{{ tier = \"platinum\", target = 65.0 }}] }} }}\n\n\
+         [[grid.event]]\nid = \"b\"\nslot = [2, 1]\nmode = \"time_trial\"\ntrack = \"02_Track\"\nclass = \"venom\"\n\
+         unlock = {{ requires = [{{ event = \"a\", medal = \"platinum\" }}] }}\n\
+         medals = {{ gold = 80.0 }}\n"
+    );
+    let def = CampaignDef::parse(&text).map_err(|e| e.to_string())?;
+    compile(&def, "m", oag_pulse::TITLE, &pilots(), &files)
+}
+
+#[test]
+fn a_campaign_with_no_tier_list_has_the_titles_own_three() {
+    let custom = ladder_campaign("", 3, "").unwrap();
+    assert!(custom.tiers.is_standard());
+}
+
+#[test]
+fn a_declared_tier_list_is_compiled_with_its_points_colours_and_words() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let names: Vec<_> = custom.tiers.iter().map(|(_, t)| t.name.as_str()).collect();
+    assert_eq!(names, ["platinum", "gold", "silver", "bronze"]);
+    let platinum = custom.tiers.find("platinum").unwrap();
+    assert_eq!(custom.tiers.points(platinum), 4);
+    assert_eq!(custom.tiers.argb(platinum), 0xffe5_e4e2);
+    assert_eq!(
+        custom.tiers.get(platinum).unwrap().string_id.as_deref(),
+        Some("PLATINUM_WORD")
+    );
+    let gold = custom
+        .tiers
+        .get(custom.tiers.find("gold").unwrap())
+        .unwrap();
+    assert_eq!(
+        gold.string_id.as_deref(),
+        Some("IG_HUD_GOLD"),
+        "the title's word for gold"
+    );
+}
+
+#[test]
+fn a_result_earns_the_best_tier_whose_target_it_meets_on_the_rung_it_was_raced_at() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let targets = &custom.events["grid0_1_1"].tier_targets;
+    let tier = |centis, rung| {
+        targets
+            .evaluate(&Mode::TimeTrial, centis, rung)
+            .map(|m| custom.tiers.get(m).unwrap().name.as_str())
+    };
+    assert_eq!(tier(6900, Difficulty::Medium), Some("platinum"));
+    assert_eq!(tier(7500, Difficulty::Medium), Some("gold"));
+    assert_eq!(tier(10100, Difficulty::Medium), None);
+    assert_eq!(tier(6500, Difficulty::Hard), Some("platinum"));
+    assert_eq!(
+        tier(6900, Difficulty::Hard),
+        Some("gold"),
+        "platinum asks 65 s on hard"
+    );
+    let cell = &custom.grids[0].cells[0];
+    assert_eq!(
+        (cell.gold, cell.silver, cell.bronze),
+        (8000, 9000, 10_000),
+        "gold, silver and bronze keep their own targets, whatever the list above them"
+    );
+}
+
+#[test]
+fn a_requirement_names_a_declared_tier_and_a_better_tier_satisfies_a_lesser_one() {
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let platinum = custom.tiers.find("platinum").unwrap();
+    let gold = custom.tiers.find("gold").unwrap();
+    let held =
+        |tier: Option<Medal>| move |name: &str| (name == "grid0_1_1").then_some(tier).flatten();
+    assert_eq!(
+        custom.fixed_lock("grid0_2_1", &held(Some(platinum))),
+        Some(false)
+    );
+    assert_eq!(
+        custom.fixed_lock("grid0_2_1", &held(Some(gold))),
+        Some(true)
+    );
+    assert_eq!(custom.fixed_lock("grid0_2_1", &held(None)), Some(true));
+    let own_gold = platinum_campaign(PLATINUM_TIERS)
+        .unwrap()
+        .events
+        .get("grid0_2_1")
+        .unwrap()
+        .requires
+        .clone();
+    assert_eq!(own_gold, [("grid0_1_1".to_string(), Some(platinum))]);
+}
+
+#[test]
+fn a_tier_the_campaign_does_not_declare_is_refused_by_name() {
+    let error = platinum_campaign("").unwrap_err();
+    assert!(error.contains("platinum"), "{error}");
+}
+
+#[test]
+fn a_stored_tier_is_read_back_by_name_against_the_campaigns_list() {
+    use crate::records::{Medal as Stored, Store, TierEarned};
+    let custom = platinum_campaign(PLATINUM_TIERS).unwrap();
+    let order: Vec<&str> = custom.tiers.iter().map(|(_, t)| t.name.as_str()).collect();
+    let mut records = Store::default();
+    records.record_campaign_tier(
+        &custom.records_title,
+        "grid0_1_1",
+        Some(TierEarned {
+            name: "platinum",
+            class: Stored::Gold,
+            points: 4,
+            order: &order,
+        }),
+        None,
+    );
+    records.record_campaign(
+        &custom.records_title,
+        "grid0_2_1",
+        Some(Stored::Silver),
+        None,
+    );
+    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
+    assert_eq!(medal_of("grid0_1_1"), custom.tiers.find("platinum"));
+    assert_eq!(
+        medal_of("grid0_2_1"),
+        custom.tiers.find("silver"),
+        "a row written as a plain silver is the campaign's silver"
+    );
+    let standard = oag_tables::race_campaign::MedalTiers::standard();
+    let plain = crate::unlock::campaign_medal_of(&records, &custom.records_title, standard);
+    assert_eq!(
+        plain("grid0_1_1"),
+        None,
+        "a list without platinum has no such tier"
     );
 }
