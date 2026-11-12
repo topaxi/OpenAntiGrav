@@ -15,16 +15,22 @@ their `FEModelLocation` (`...\fe\track01` ... `track08`) agree with that number
 
 **Answer: none of them, because `%02d_Track` is not a display key.** Its two
 uses build track *ids* (an HD-era hash table, a debug command-line option).
-The executable names a circuit with one rule:
+Every site that turns a `PI_Track` into text does it with one rule:
 
 > **name = string table [ case-fold ( `PI_Track` `name` attribute ) ]**, and on
 > a miss, **the `name` attribute itself, as authored.**
 
-No authored `soundregister`, `FEModelLocation` number or list index takes part
-in naming a circuit. For the sixteen the key is `VINETA_K`, `ANULPHA_PASS`, and
-so on. No string table that ships holds those keys (census below), so by this
-rule the original falls back to the bare id (`Vineta_K`). That last step is
-read statically and not watched running (confidence 65, below).
+No authored `soundregister`, `FEModelLocation` number or list index takes part.
+For the sixteen the key is `VINETA_K`, `ANULPHA_PASS`, and so on. No string
+table that ships holds those keys, and nothing inserts them at run time
+(census below). So every such site prints the bare id (`Vineta_K`).
+
+The same holds for 2048's own ten (`SQUARE` misses too). Their headline names
+come from `SP.xml`'s `TrackDefinition` (`m_trackName` at `+0x0`, `m_displayName`
+at `+0x40`, both `char[0x40]`, registered in `FUN_812b4d6c`). That route's
+consumer is **not read here**. Whether the original ever *shows* a
+`PI_Track`-name site's output on a screen a player sees is open (below). The
+names on the DLC grid may be baked into its track photos instead.
 
 ## `%02d_Track`: two uses, neither on a display path
 
@@ -128,19 +134,28 @@ below reads, is `DAT_8153fc40 + 0x1c0`, the slot this function fills.
 
 ### The display sites: all pass `+0x74`
 
-Each call is `StringTable_LookupString(DAT_8151cdb0, track+0x74, 0)`:
+Each call is `StringTable_LookupString(DAT_8151cdb0, item+0x74, 0)`.
+
+**Shown to hold a track.** These read `DAT_8153fe00`, the current-track slot
+`RaceSetup_SelectTrackByName` fills, or a tournament's track list:
 
 | Function | What it does with the name |
 | --- | --- |
 | `FUN_81093baa` (line `393`) | `sprintf("%s %d/%d", name, i+1, n)`, then the label setter `FUN_810b16c4` (tournament header) |
-| `FUN_810aa49c` (lines `585`, `611`) | label setter `FUN_810b16c4`, and the same `"%s %d/%d"` |
+| `FUN_810aa49c` (line `585`) | label setter `FUN_810b16c4` |
 | `FUN_810c1180` | returns the name of a tournament's `n`th track |
 | `FUN_81109ca0`, `FUN_8123eae0`, `FUN_810a1e50` | hand the name to `FUN_812275d6`, beside `Hash_ComputeCrc32` of the same `+0x74` for `FUN_81226994` |
-| `FUN_81136d36`, `FUN_811409e2`, `FUN_81142f74`, `FUN_8100b930`, `FUN_8100ba12`, `FUN_81184da4`, `FUN_813ca190`, `FUN_813d3790`, `FUN_8123efc6`, `FUN_8123f250` | further labels of the same shape |
+| `FUN_8111dbd4` | trophy check; the result is discarded |
+| `FUN_813ca190`, `FUN_813d3790`, `FUN_8123efc6`, `FUN_8123f250` | further uses of the current track's name (not read further) |
 
-Every one of these sites agrees, and none passes `SoundRegister`, the
-`FEModelLocation` or an index. **"Display key = case-fold(`PI_Track` name)":
-confidence 80.**
+That makes eleven functions, and none of them passes `SoundRegister`, the
+`FEModelLocation` or an index. **"The key a `PI_Track` is named by is
+case-fold(`name`)": confidence 80.**
+
+**Not shown to hold a track** (`+0x74` is every PI item's name, so these
+support the same rule for items in general): `FUN_81136d36`, `FUN_811409e2`
+and `FUN_81142f74` (beside `MSC_UNL_*` strings, so music-unlock screens),
+`FUN_8100b930`, `FUN_8100ba12`, `FUN_81184da4`, and `FUN_810aa49c` line `611`.
 
 ### `PIItem_LoadLocationStringTable` - `0x810663ae`
 
@@ -166,22 +181,44 @@ contains `stringtable`. The language files are
 equal to any of the 26 ids under case folding. The nearest are
 `MP_SQUARE_RACE_FLASH`-style sentences. So all 26 `PI_Track` names miss.
 
-## What the original shows for the sixteen
+## What the original shows for the sixteen: open
 
-By the rule above, `Vineta_K`, `Vineta_K_R`, and so on. **Confidence 65**:
-this is static only, with no Vita3K still taken. Two things fit it:
+Every `PI_Track`-name site above would print `Vineta_K`, `Vineta_K_R`, and so
+on. For 2048's own ten it would print `square` just as well. A shipped game
+printing lowercase ids is unlikely. So either those sites are not on a screen a
+player sees for these circuits, or the visible names come from somewhere this
+pass did not read:
 
-- The v1.00 front end authored four literal `TouchButton String=` names
-  (`Vineta K`, `Anulpha Pass`, `Moa Therma`, `Chenghou Project`). A button
-  that has to spell the name itself fits a lookup that misses.
-- 2048's own ten never go through this rule for their headline name. They
-  carry `SP.xml` `TrackDefinition` `m_displayName`s (`UNITY SQUARE` ...),
-  which is what `oag_game::boot::campaign2048::name_circuits` wires.
+- the `TrackDefinition` `m_displayName` route for the ten (consumer unread);
+- the track photos the DLC grid draws instead of text (`FUN_81108df0` draws
+  `HDTrackSelect` / `TrackSelectEmblem` images from the 4x4 table at
+  `0x8151ec34` and has no text label);
+- a source not found.
 
-To raise it, capture any screen that labels a DLC circuit: the tournament
-header `"%s %d/%d"` (`FUN_81093baa`) during an HD-circuit tournament, or the
-Track Select details panel. The capture recipe is
-[emulator-recipes.md](../../../reverse-engineering/emulator-recipes.md),
+**Checked and ruled out as a source:**
+
+- **Run-time inserts into the string table.** `FUN_8106bb6e` (the language
+  switch) loads only the file named by the language's `Dynamic Entry File
+  Source` entry, which is `entries.xml` itself.
+- **Other `<StringTable>` elements.** All 866 `.xml` files of `PCSF00007`
+  (base, patch `data1`/`data2`, `dlc1`, `dlc2`) were extracted. No
+  `<StringTable>` element appears outside `data/plugins/languages/`, and no
+  `<Entry>` or `<entry>` `id` folds to any of the 26 ids.
+- **Literal names in front-end XML.** Outside `entries.xml`, `Vineta K` appears
+  only in the v1.00 base `data/plugins/frontend/NEWGUI/Definition.xml`, lines
+  `526`-`537`. There four `TouchButton`s (`Anulpha_Pass`, `Chenghou_Project`,
+  `Moa_Therma`, `Vineta_K`), next to the `LegacyTouchGameList` legacy
+  cross-play screen, carry `String="Anulpha Pass"` ... `"Vineta K"` beside each
+  circuit's `TrackSelectEmblem_BW.gxt`. Patch v1.04's two copies of that file
+  have none. A button that spells the name itself fits a lookup that misses.
+
+**So: "the original shows `Vineta_K` on screen" is a hypothesis at about 50,
+and is not claimed.** What *is* established (80) is that no executable path
+keys the sixteen by `soundregister`, by the `FEModelLocation` number or by
+list position. To settle what a player sees, take a Vita3K still of any
+DLC-circuit label: the Track Select details for `Vineta_K`, or the tournament
+header `"%s %d/%d"` (`FUN_81093baa`) during an HD-circuit tournament. The
+recipe is [emulator-recipes.md](../../../reverse-engineering/emulator-recipes.md),
 Vita3K, muted, with its own config directory.
 
 `01_TRACK` ... `08_TRACK` in `entries.xml` are HD's keys (HD's ids are
