@@ -630,6 +630,7 @@ pub fn load_shell(
         &mut archives,
         &tracks,
         &circuit_names,
+        front_end.card_track_aliases,
         &strings,
         &mut report,
     );
