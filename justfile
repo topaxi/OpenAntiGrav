@@ -1144,10 +1144,10 @@ compare-rerender-all *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
-# Rebuild data/compare/ strictly from the curated manifest directory (default data/compare-curated,
+# Rebuild data/compare/ strictly from the curated manifest directory (default data/reference/curated,
 # never the seed set), then upload it to the separate compare Pages project with wrangler. Refuses
 # unless the screenshot-policy ADR's status reads Accepted; never run in CI.
-[doc("Publish the curated comparison page (data/compare-curated unless a directory is given)")]
+[doc("Publish the curated comparison page (data/reference/curated unless a directory is given)")]
 publish-compare *manifests:
     python3 scripts/compare-page.py {{manifests}} --publish
 

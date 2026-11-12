@@ -1553,10 +1553,17 @@ constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted A
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
 `just publish-compare` rebuilds the page strictly from the curated manifest directory first, so a
 missing `platform` refuses it before anything uploads. With no argument it publishes
-`data/compare-curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
+`data/reference/curated/`, the maintainer's curated set; `just publish-compare <dir>` publishes another.
 The default is never the seed or live manifests (`data/reference/compare-page/`): they are developer
 material, and ADR-0074 wants every published image picked by a person. A missing
-`data/compare-curated/` refuses by name.
+`data/reference/curated/` refuses by name.
+
+**The curated set is manifests only, in the private repository** (2026-11-12). Its `*.toml` files sit in
+`data/reference/curated/` and each `[page]` carries `images = "../compare-page"`, so its image paths
+resolve into the reference pairs: both workstations pull one list, and no image is copied. Before this
+the set was a 1.7 GB directory, `data/compare-curated/`, copied between hosts by hand, and the two
+copies drifted (one host published pairs the other lacked). `[page] images` works in any manifest: a
+path relative to the manifest's directory, `.` when absent.
 
 The curated set picks the pairs and may reword them; `just compare-rerender-all` writes only into
 `data/reference/compare-page/`. So with no argument, publishing first carries newer re-renders across.
