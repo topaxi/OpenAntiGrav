@@ -48,6 +48,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: HANDLING_DIR,
     effect_dir: EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    circuit_lineages: &[],
     zone: oag_title::ZoneCircuit::SameCircuit,
     zone_craft: oag_title::ZoneCraft::OwnShipAt {
         root: HD_SHIP_DIR,

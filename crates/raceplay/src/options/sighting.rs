@@ -72,13 +72,23 @@ impl Sighting {
     }
 
     /// A title's reticle with no HUD loaded: the lock grid is the whole HUD
-    /// space of `platform` (what [`Self::of`] reads off `hud.space`, which
-    /// `load_hud` sets from the same platform) and the law is the title's
-    /// art, as [`Self::of`] reads it; with no view, the view grid is the lock
-    /// grid. What a build without the `view` feature loads.
+    /// space `load_hud` would set for a race on `track` (`platform`'s, or the
+    /// circuit family's own, [`oag_title::race::CircuitLineage::grid`]) and the
+    /// law is the art's it would load, as [`Self::of`] reads them; with no view,
+    /// the view grid is the lock grid. What a build without the `view` feature
+    /// loads.
     #[must_use]
-    pub fn without_view(platform: oag_disc::Platform, art: &oag_title::hud::HudArt) -> Self {
-        let size = oag_display::space::Space::of(platform).size;
+    pub fn without_view(
+        platform: oag_disc::Platform,
+        title: &oag_title::Title,
+        track: &str,
+    ) -> Self {
+        let lineage = title.race.circuit_lineage(track);
+        let art = lineage.map_or(title.hud_art, |lineage| lineage.art);
+        let size = oag_display::space::Space::of(
+            lineage.and_then(|lineage| lineage.grid).unwrap_or(platform),
+        )
+        .size;
         Self {
             lock_screen: [size.0, size.1],
             view_screen: [size.0, size.1],

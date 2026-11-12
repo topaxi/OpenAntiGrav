@@ -60,6 +60,7 @@ const TITLE: &Title = &Title {
         handling_dir: r"Data\Nowhere",
         effect_dir: r"Data\Nowhere",
         effect_dir_by_circuit: &[],
+        circuit_lineages: &[],
         zone: oag_title::ZoneCircuit::Prefixed("zone_"),
         zone_craft: oag_title::ZoneCraft::ModelsInTeam {
             hull: "Zone",

@@ -597,3 +597,112 @@ fn an_omega_eliminator_draws_the_lap_hexagon() {
         "`LapPanel2`, the hexagon round the lap number"
     );
 }
+
+fn load_on(track: &str, class: &str) -> oag_raceplay::Loaded {
+    let source = omega().expect("checked by the caller");
+    oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        track: Some(track.to_string()),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega race loads")
+}
+
+const ALTIMA_2048: &str = r"Data\Environments2048\altima\track.vex";
+const TECH_DE_RA: &str = r"Data\environments\tech_de_ra\track.vex";
+
+/// **A race on a 2048-era circuit draws 2048's HUD** (`LAP`, `TOTAL`, `CURRENT`, `POS`, the shield
+/// `%`), laid out on the Vita's 960x544 grid, where a race on an HD-era circuit keeps HD's root.
+/// Dropping `LINEAGES` from `oag_omega::race::DEFAULTS`, or the lineage test in `hud_roots`,
+/// fails the first half; the second half is the control.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn a_2048_era_circuit_draws_2048s_hud_and_an_hd_era_one_keeps_hds() {
+    if omega().is_none() {
+        return;
+    }
+    let lineage = load_on(ALTIMA_2048, "venom");
+    let layout = lineage.hud.layout.as_ref().expect("the layout composes");
+    assert!(
+        layout.label("RaceXPTxt").is_some(),
+        "the 2048_hud set authors the XP line, HD's root does not"
+    );
+    assert_eq!(lineage.hud.art, oag_omega::hud::ART_2048);
+    assert_eq!(
+        lineage.hud.space,
+        oag_display::space::Space::of(oag_disc::Platform::Vita),
+        "the set is authored for 960x544"
+    );
+    assert!(lineage.hud.art.total_time_hundredths && lineage.hud.art.shield_percent);
+    // The build without a view (`oag-server`) must lock on in the grid the client does.
+    let without_view = |track: &str| {
+        oag_raceplay::Sighting::without_view(oag_disc::Platform::Ps4, oag_omega::TITLE, track)
+    };
+    assert_eq!(lineage.setup.sight, without_view(ALTIMA_2048));
+    assert_eq!(lineage.setup.sight.lock_screen, [960.0, 544.0]);
+
+    let hd = load_on(TECH_DE_RA, "venom");
+    let layout = hd.hud.layout.as_ref().expect("the layout composes");
+    assert!(layout.label("RaceXPTxt").is_none());
+    assert_eq!(hd.hud.art, oag_omega::TITLE.hud_art);
+    assert_eq!(hd.setup.sight, without_view(TECH_DE_RA));
+    assert_eq!(hd.setup.sight.lock_screen, [1920.0, 1080.0]);
+    assert_eq!(
+        hd.hud.space,
+        oag_display::space::Space::of(oag_disc::Platform::Ps4)
+    );
+}
+
+/// **The race the Race Box starts on a 2048-era circuit runs 2048's lap counts**: the original
+/// reads `LAP 1/4` at C CLASS (seven circuits) and `LAP 1/5` at A CLASS (Sol), where the engine's
+/// table gives 3 and 4 for the rungs this project maps them to. Measured rungs only: C and A.
+/// An HD-era circuit keeps the engine's table.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn a_2048_era_circuit_runs_the_original_s_laps_per_class() {
+    if omega().is_none() {
+        return;
+    }
+    let laps_of = |track: &str, class: &str| {
+        let loaded = load_on(track, class);
+        oag_raceplay::Race::start(loaded.setup).readout().laps
+    };
+    assert_eq!(laps_of(ALTIMA_2048, "venom"), 4, "C CLASS");
+    assert_eq!(laps_of(ALTIMA_2048, "rapier"), 5, "A CLASS");
+    assert_eq!(
+        laps_of(TECH_DE_RA, "venom"),
+        3,
+        "HD's own circuits keep the engine's table"
+    );
+    assert_eq!(laps_of(TECH_DE_RA, "rapier"), 4);
+}
+
+/// Every widget name `ART_2048` and the 2048 lineage carry is authored by Omega's own copy of
+/// the `2048_hud` set, so the inheritance is a name that matches, not one that matches nothing.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
+    let Some(mut archives) = open() else { return };
+    let h = oag_omega::hud::LAYOUTS_2048;
+    let mut names = BTreeSet::new();
+    for root in [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone] {
+        let c = composed(&mut archives, root);
+        assert!(c.missing.is_empty(), "{root}: missing {:?}", c.missing);
+        names.extend(c.layout.sprites.iter().map(|s| s.name.clone()));
+        names.extend(c.layout.labels.iter().map(|l| l.name.clone()));
+    }
+    let art = oag_omega::hud::ART_2048;
+    let mut wanted: Vec<&str> = art.always_on.to_vec();
+    if let oag_title::hud::Sights::Concentric {
+        seeking, locked, ..
+    } = art.sights
+    {
+        wanted.extend(seeking.iter());
+        wanted.extend(locked.iter());
+    }
+    let missing: Vec<&&str> = wanted.iter().filter(|n| !names.contains(**n)).collect();
+    assert!(missing.is_empty(), "not authored by Omega: {missing:?}");
+}

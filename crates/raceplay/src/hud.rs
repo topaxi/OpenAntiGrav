@@ -18,11 +18,18 @@ pub(super) fn hud_roots(
     title: &'static oag_title::Title,
     style: Option<&str>,
     add_on_campaign: Option<&str>,
+    lineage: Option<&oag_title::race::CircuitLineage>,
     report: &mut Vec<String>,
 ) -> (
     &'static oag_title::HudLayouts,
     Option<&'static oag_title::HudSkin>,
 ) {
+    // A circuit family raced under another game's rules draws that game's HUD, whatever the
+    // `HUD Style` list says: the executable's 2048-lineage managers name their set outright.
+    if let Some(lineage) = lineage {
+        report.push(format!("HUD: the {} circuits' own layouts", lineage.prefix));
+        return (lineage.layouts, None);
+    }
     // A downloadable campaign's own race managers load their own files, ahead of any skin.
     if let Some(campaign) = add_on_campaign {
         match title
@@ -134,6 +141,16 @@ pub(super) struct SplitViews {
     pub(super) people: usize,
 }
 
+impl SplitViews {
+    /// The views and people a launch asks for.
+    pub(super) fn of(options: &Options) -> Self {
+        Self {
+            count: options.views,
+            people: usize::from(options.people_flying()),
+        }
+    }
+}
+
 /// Reads the HUD's layout, atlas, fonts and strings.
 ///
 /// Every piece degrades on its own and says so. The report matters more here than
@@ -145,8 +162,8 @@ pub(super) struct SplitViews {
 /// nothing has been chosen yet, resolved the same way everywhere else a
 /// chosen language is resolved, through [`oag_ui::language::load::chosen_language`].
 ///
-/// `style` is `race::Options::hud_style` and `add_on_campaign` is
-/// `race::Options::add_on_campaign`, both resolved by [`hud_roots`].
+/// `options.hud_style` and `options.add_on_campaign` are resolved by [`hud_roots`]. `track` is the
+/// circuit's path, which picks a [`oag_title::race::CircuitLineage`].
 #[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
@@ -154,13 +171,22 @@ pub(super) fn load_hud(
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
-    style: Option<&str>,
-    add_on_campaign: Option<&str>,
+    options: &Options,
+    track: &str,
     views: SplitViews,
     mod_icons: &crate::extensions::ModIcons,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
-    let (hud, skin) = hud_roots(title, style, add_on_campaign, report);
+    let lineage = title.race.circuit_lineage(track);
+    let (style, add_on_campaign) = (
+        options.hud_style.as_deref(),
+        options.add_on_campaign.as_deref(),
+    );
+    let (hud, skin) = hud_roots(title, style, add_on_campaign, lineage, report);
+    let art = lineage
+        .map(|lineage| lineage.art)
+        .or_else(|| skin.and_then(|skin| skin.art))
+        .unwrap_or(title.hud_art);
     let entry = hud_layout_for(hud, mode, views.people);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
@@ -204,7 +230,11 @@ pub(super) fn load_hud(
         }
     };
 
-    let space = oag_display::space::Space::of(archives.layout.platform);
+    let space = oag_display::space::Space::of(
+        lineage
+            .and_then(|lineage| lineage.grid)
+            .unwrap_or(archives.layout.platform),
+    );
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
     let (split, split_columns) = split_assets(archives, hud, mode, views, space, report);
@@ -274,20 +304,14 @@ pub(super) fn load_hud(
     // pointing at files 2048 does not ship - which the literal ask could
     // pick up ahead of the plugin the player actually chose. See
     // `oag_title::HudArt::hud_font_role`.
-    let font = hud_font(
-        archives,
-        &languages,
-        chosen,
-        title.hud_art.hud_font_role,
-        report,
-    );
+    let font = hud_font(archives, &languages, chosen, art.hud_font_role, report);
     // `None` is a real gap on 2048's own plugins - see
     // `oag_title::HudArt::hud_small_font_role` - and the caption face falls
     // back to the value face's own atlas rather than to 5x7, chosen rather
     // than measured: a Vita3K race frame shows two on-screen sizes, but the
     // layout's own per-widget `scale` is what draws the difference, not a
     // second `.fnt` file this pass located.
-    let small_font = match title.hud_art.hud_small_font_role {
+    let small_font = match art.hud_small_font_role {
         Some(role) => hud_font(archives, &languages, chosen, role, report),
         None => {
             // Named as "reuse", not "draw in the {role} face": `font` above
@@ -371,7 +395,7 @@ pub(super) fn load_hud(
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
         space,
-        art: skin.and_then(|skin| skin.art).unwrap_or(title.hud_art),
+        art,
         split,
         split_columns,
         split_hud,

@@ -362,6 +362,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     handling_dir: r"Data\HandlingStats",
     effect_dir: r"Data\Psys",
     effect_dir_by_circuit: &[],
+    circuit_lineages: &[],
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
     zone_team_step: ZoneTeamStep::Offered,

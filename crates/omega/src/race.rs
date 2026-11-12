@@ -75,6 +75,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // already names.
     effect_dir: r"Data\particles",
     effect_dir_by_circuit: &[(r"Data\environments2048\", r"Data\particles2048")],
+    circuit_lineages: LINEAGES,
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,
     // picked here only because it requires inventing nothing. Omega's Zone
@@ -136,6 +137,24 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: None,
 };
+
+/// The 2048-era circuits (`Data\Environments2048\`) are raced under 2048's rules: its HUD set,
+/// its layout grid and its Race Box lap counts.
+///
+/// **Measured on the original** (the `wipeout_pc` port, Race Box, `GAME MODE` WipEout 2048,
+/// `docs/tools/compare-page.md`, "Omega"): the HUD reads `LAP 1/4` at C CLASS on seven circuits
+/// and `LAP 1/5` at A CLASS on Sol; the HUD is 2048's, laid out on the Vita's 960x544 grid and
+/// scaled to 1920x1080. **Chosen, not measured**: that the circuit's directory stands in for
+/// the Race Box's `GAME MODE`, and A+'s count (equal to A's). B reads 4 on one boot, confidence 55.
+/// The Race Box authors no lap count (`racebox.xml`'s `m_numOfLaps` is `0` for every 2048-mode
+/// entry), so the numbers are the executable's own.
+pub const LINEAGES: &[oag_title::race::CircuitLineage] = &[oag_title::race::CircuitLineage {
+    prefix: r"Data\environments2048\",
+    layouts: crate::hud::LAYOUTS_2048,
+    art: crate::hud::ART_2048,
+    grid: Some(oag_title::Platform::Vita),
+    laps_by_class: Some([4, 4, 5, 5]),
+}];
 
 /// The twelve HD-era teams that ship a model per Fury variant, spelled as
 /// `Data\plugins\teams\Definition.xml`'s own `PI_Team` locations are. **Not**

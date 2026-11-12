@@ -46,7 +46,14 @@ both. `oag_omega::hud::SKINS` carries them (confidence 70: the literals are pres
 - Settled: the five root layouts a single-player race reads are the bare
   `Data\XML\{Arcade,Elimination,TimeTrial,SpeedLap,Zone}_HUD.xml`, which is what
   `oag_omega::hud::LAYOUTS` names. The file spellings are the executable's own.
-- Not settled: **which race selects the `2048_hud\` set.** Its constructors
+- Wired 2026-11-12 (`omega-2048-hud-laps`), **the selector is chosen, not measured**: a race on a
+  `Data\Environments2048\` circuit reads the `2048_hud\` set (`oag_omega::hud::LAYOUTS_2048`,
+  `RaceDefaults::circuit_lineages`), the circuit's directory standing in for the Race Box's `GAME
+  MODE` row (`racebox.xml` authors the `Arcade 2048`, `Time Trial 2048`... entries, and
+  `FUN_0156aa30` maps their names to modes `>= 0x17`). The original's frame on Altima in that
+  mode draws exactly that set's HUD (compare-page pair `altima-2048`). Still not read: the
+  vtable that dispatches to `FUN_015ae4d0` from the mode id.
+- Not settled (the executable side): **which race selects the `2048_hud\` set.** Its constructors
   are reached through virtual dispatch only. `Title::hud` is one set per
   title, so a circuit-by-circuit choice (as `oag_omega::race::DEFAULTS` makes
   for the particle directory, `particle-paths.md`) is an open item, not a

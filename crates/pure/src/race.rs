@@ -59,6 +59,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    circuit_lineages: &[],
     // `false`: Pure's own menu offers exactly its four `type="Zone"`
     // circuits and nothing else, checked directly against the disc in
     // `pure_declares_zone_circuits_of_its_own_and_no_prefixed_file`. Unlike

@@ -1001,12 +1001,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         language_plugins,
         options.language.as_deref(),
-        options.hud_style.as_deref(),
-        options.add_on_campaign.as_deref(),
-        crate::hud::SplitViews {
-            count: options.views,
-            people: usize::from(options.people_flying()),
-        },
+        options,
+        &track,
+        crate::hud::SplitViews::of(options),
         &mod_icons,
         &mut report,
     );
@@ -1110,7 +1107,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         setup: Setup {
             mode: options.mode,
             eliminator_kill_target: rule.target,
-            laps_override: options.laps_override,
+            laps_override: crate::catalogue::launch_laps(title, &track, options),
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
             finished_thrust,
@@ -1202,7 +1199,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(not(feature = "view"))]
             sight: super::Sighting::without_view(
                 craft_of(&mut craft, &mut archives).layout.platform,
-                craft_title.hud_art,
+                craft_title,
+                &track,
             ),
             #[cfg(feature = "view")]
             magstrip_wake: magstrip_wake.anchors,
