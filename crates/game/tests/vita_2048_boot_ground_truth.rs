@@ -277,23 +277,16 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
 /// the flat colour square [`oag_ui::frontend::campaign_map::Frontend::placed`]
 /// falls back to when the sheet has none of it.
 ///
-/// **What this pins.** `oag_game::boot::sprites::load` asks for
-/// `HEX_FILLED`/`HEX_OUTLINE`/`HEX_SELECT` and the four `EventIcon` names
-/// through its own `extra` list (2026-09-27), the same mechanism the menu
-/// blocks' nine-patch already used - but `boot::assemble`'s own
-/// `Frontend::placements` used to be rebuilt by re-walking every screen's
-/// `Image`/`TouchButton` `Src=`, which by construction never named an
-/// `extra`-only texture at all. Nothing caught that gap until this test:
-/// `sprites::load`'s own report line said "N of N decoded" (true), and
-/// `oag-ui`'s unit tests boot with an empty sheet either way (see
-/// `crate::frontend::campaign_map::HEX_FILLED`'s own doc comment), so both
-/// looked green while the campaign map silently drew flat squares against a
-/// full sheet. `assemble` now reads `Frontend::placements` straight off
-/// `Sheet::entries`, which is a superset that already includes them; this
-/// test is what would have caught the old, narrower rebuild.
+/// **What this pins.** `oag_game::boot::sprites::load` bakes the canvas prism
+/// (`oag_ui::frontend::canvas_prism`) off `canvasTexture.gxt` into the sheet and
+/// asks for the selection ring and the four `EventIcon` names through its own
+/// `extra` list, the same mechanism the menu blocks' nine-patch uses.
+/// `oag-ui`'s unit tests boot with an empty sheet either way, so they cannot
+/// tell a map that draws prisms from one that falls back to flat rectangles;
+/// this does, against the full sheet.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
-fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
+fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
@@ -303,14 +296,20 @@ fn the_campaign_map_draws_the_discs_own_hex_tiles_not_flat_squares() {
         w2048::NEW_FE_SHELL
     ));
     let list = frontend.draw_list();
+    let prism = oag_ui::frontend::canvas_prism::layout().size;
     let hex_tiles = list
         .iter()
-        .filter(|draw| matches!(draw, frontend::Draw::Sprite { uv, .. } if uv[2] == 128.0 && uv[3] == 128.0))
+        .filter(|draw| {
+            matches!(draw, frontend::Draw::Sprite { uv, .. }
+            if (uv[2], uv[3]) == (prism.0 as f32 - 2.0, prism.1 as f32 - 2.0))
+        })
         .count();
     assert!(
         hex_tiles >= 2,
-        "expected at least a filled and an outline hex sprite per visible \
-         marker, found {hex_tiles} 128x128 sprites in {} draw(s): {list:#?}",
+        "expected the baked prism once per visible tile, found {hex_tiles} \
+         sprite(s) of its {}x{} size in {} draw(s): {list:#?}",
+        prism.0 - 2,
+        prism.1 - 2,
         list.len()
     );
     let mode_icons = list
@@ -354,16 +353,20 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         &[Button::Cross],
         w2048::NEW_FE_SHELL
     ));
-    // Where the hexagon sits in the 128 x 128 hex art: 2..116 across, 12..115 down.
+    // The prism's picture is anchored on the middle of the top face, one
+    // texel in from the picture's edge.
+    let prism = oag_ui::frontend::canvas_prism::layout();
     let centres = |frontend: &frontend::Frontend| -> Vec<(f32, f32)> {
         frontend
             .draw_list()
             .iter()
             .filter_map(|draw| match draw {
-                frontend::Draw::Sprite { rect, uv, .. } if uv[2] == 128.0 && uv[3] == 128.0 => {
+                frontend::Draw::Sprite { rect, uv, .. }
+                    if (uv[2], uv[3]) == (prism.size.0 as f32 - 2.0, prism.size.1 as f32 - 2.0) =>
+                {
                     Some((
-                        rect[0] + rect[2] * 59.0 / 128.0,
-                        rect[1] + rect[3] * 63.5 / 128.0,
+                        rect[0] - 1.0 + prism.anchor.0,
+                        rect[1] - 1.0 + prism.anchor.1,
                     ))
                 }
                 _ => None,
@@ -422,6 +425,82 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         &frontend,
         "Event 1 selected",
         &[(500.0, 269.7), (614.5, 365.7), (729.5, 460.7)],
+    );
+}
+
+/// A passed tile on the campaign map is the canvas's prism, rendered: a green
+/// top face, a wall below it that darkens towards its foot, and no pale box over
+/// the lattice around it. The reference is frame 13
+/// (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`), where Event
+/// 3's green prism has a lit wall under its face; the flat hex art this
+/// replaced had neither and tinted a faint square around itself. Dropping the
+/// prism bake or the sprite that draws it fails this.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
+fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
+    let Some(source) = source() else { return };
+    let scratch = std::env::temp_dir().join(format!("oag-prism-map-{}", std::process::id()));
+    let records = scratch.join("config/oag");
+    std::fs::create_dir_all(&records).expect("creating the scratch directory");
+    std::fs::write(
+        records.join("records.toml"),
+        ["2048 - event 1", "2048 - event 2", "2048 - event 3"]
+            .map(|cell| {
+                format!(
+                    "[[campaign]]\ntitle = \"wipeout 2048\"\ncell = \"{cell}\"\n\
+                     best_medal = \"bronze\"\nbest_points = 1\n\n"
+                )
+            })
+            .concat(),
+    )
+    .expect("writing the records");
+    let out = scratch.join("map.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&source)
+        .args(["--until", "map:2048 - Event 4", "--press", "cross", "--ticks", "1"])
+        .args(["--no-audio", "--no-video", "--size", "960x544"])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --until newFEshell");
+    let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
+    std::fs::remove_dir_all(&scratch).ok();
+    let at = |x: f32, y: f32| -> [i32; 3] {
+        let i = (y.round() as usize * 960 + x.round() as usize) * 4;
+        [
+            i32::from(pixels[i]),
+            i32::from(pixels[i + 1]),
+            i32::from(pixels[i + 2]),
+        ]
+    };
+    // Event 3 at the opening view: the top face's centre in frame 13, and the
+    // face's half height (95.4 px / 2); the wall hangs 26 px below its edge.
+    let (x, y) = (412.0, 174.7);
+    let face = at(x, y + 40.0);
+    assert!(
+        face[1] > 180 && face[0] < 140 && face[2] < 80,
+        "the top face is the passed green: {face:?}"
+    );
+    let upper = at(x, y + 47.7 + 4.0);
+    let lower = at(x, y + 47.7 + 22.0);
+    assert!(
+        upper[1] > 150 && upper[0] < 140,
+        "the wall under the face is green: {upper:?}"
+    );
+    assert!(
+        lower[1] + 12 < upper[1] && lower[1] < face[1],
+        "the wall darkens towards its foot: face {face:?}, upper {upper:?}, lower {lower:?}"
+    );
+    // The corner of the 128 x 128 art's square, outside the hexagon: the hex
+    // art tinted it with the tile's colour; the canvas leaves the lattice.
+    let corner = at(x - 58.0, y - 55.0);
+    assert!(
+        corner.iter().all(|&c| c > 215) && (corner[0] - corner[2]).abs() <= 6,
+        "no tinted square around the tile: {corner:?}"
     );
 }
 

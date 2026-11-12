@@ -158,7 +158,7 @@ pub(super) fn load(
     }
 
     if let Some(atlas) = lattice_atlas {
-        reversed.extend(lattice_tile(archives, atlas, report));
+        reversed.extend(canvas_pictures(archives, atlas, report));
     }
 
     let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, reversed, report);
@@ -291,21 +291,22 @@ pub(crate) fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
     stems.iter().any(|known| known.eq_ignore_ascii_case(stem))
 }
 
-/// 2048's backdrop lattice tile, rendered off its atlas (`canvasTexture.gxt`,
-/// a 2048 x 2048 sheet that never goes into the sprite sheet whole). `None`
-/// with a report line when the atlas is missing or does not decode: the page
-/// then draws without the lattice rather than with a stand-in.
-fn lattice_tile(
+/// 2048's two canvas pictures, rendered off its atlas (`canvasTexture.gxt`, a
+/// 2048 x 2048 sheet that never goes into the sprite sheet whole): the
+/// backdrop lattice and a campaign tile's prism. Nothing, with a report line,
+/// when the atlas is missing or does not decode: the page then draws without
+/// them rather than with a stand-in.
+fn canvas_pictures(
     archives: &mut oag_assets::Archives,
     atlas: &str,
     report: &mut Vec<String>,
-) -> Option<oag_hud::sprite::DecodedImage> {
-    use oag_ui::frontend::canvas_lattice as lattice;
+) -> Vec<oag_hud::sprite::DecodedImage> {
+    use oag_ui::frontend::{canvas_lattice as lattice, canvas_prism as prism};
     let blob = match read_front_end_first(archives, atlas) {
         Ok(blob) => blob,
         Err(e) => {
             report.push(format!("lattice atlas {atlas}: {e}"));
-            return None;
+            return Vec::new();
         }
     };
     let decoded = oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
@@ -315,27 +316,44 @@ fn lattice_tile(
     });
     let Some((width, height, rgba)) = decoded else {
         report.push(format!("lattice atlas {atlas}: did not decode as a .gxt"));
-        return None;
+        return Vec::new();
     };
     let rgba: Vec<u8> = rgba.into_iter().flatten().collect();
-    let Some(tile) = lattice::bake(&rgba, u32::from(width), u32::from(height)) else {
-        report.push(format!(
-            "lattice atlas {atlas}: {width}x{height} is too small"
-        ));
-        return None;
-    };
-    report.push(format!(
-        "lattice picture baked off {atlas} ({width}x{height}) at {}x{}",
-        lattice::VIEWPORT[0],
-        lattice::VIEWPORT[1]
-    ));
-    Some(oag_hud::sprite::DecodedImage {
-        src: lattice::TILE.to_string(),
-        width: lattice::VIEWPORT[0],
-        height: lattice::VIEWPORT[1],
-        rgba: tile,
+    let (width, height) = (u32::from(width), u32::from(height));
+    let image = |src: &str, size: (u32, u32), rgba| oag_hud::sprite::DecodedImage {
+        src: src.to_string(),
+        width: size.0,
+        height: size.1,
+        rgba,
         quad_extent: None,
         quad_centre: None,
         blend: None,
-    })
+    };
+    let mut pictures = Vec::new();
+    match lattice::bake(&rgba, width, height) {
+        Some(tile) => {
+            report.push(format!(
+                "lattice picture baked off {atlas} ({width}x{height}) at {}x{}",
+                lattice::VIEWPORT[0],
+                lattice::VIEWPORT[1]
+            ));
+            pictures.push(image(
+                lattice::TILE,
+                (lattice::VIEWPORT[0], lattice::VIEWPORT[1]),
+                tile,
+            ));
+        }
+        None => report.push(format!(
+            "lattice atlas {atlas}: {width}x{height} is too small"
+        )),
+    }
+    if let Some(tile) = prism::bake(&rgba, width, height) {
+        let size = prism::layout().size;
+        report.push(format!(
+            "campaign tile prism baked off {atlas} at {}x{}",
+            size.0, size.1
+        ));
+        pictures.push(image(prism::TILE, size, tile));
+    }
+    pictures
 }

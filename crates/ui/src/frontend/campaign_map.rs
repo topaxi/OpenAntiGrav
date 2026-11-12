@@ -16,13 +16,13 @@
 //! from the picture the title page bakes ([`super::canvas_lattice`]), shifted
 //! by whole lattice periods to the view's phase.
 //!
-//! What stands in for the original here: a tile is the disc's flat hex art
-//! ([`HEX_FILLED`]) stretched over the prism's top face, with no wall below it
-//! and none of the canvas's own shading; the striped and dotted cells around
-//! and between tiles, the season cards and the ground relief are not drawn;
-//! every event gets a tile in this build's four progress colours, where the
-//! original raises only the passed and the open ones (same page,
-//! "What the canvas draws"). The view's travel limits are **chosen, not
+//! A tile is the prism the canvas's own programs draw ([`super::canvas_prism`]):
+//! top face, walls and the shade at their foot, in the colours the canvas
+//! paints a state with. What stands in for the original here: the striped and
+//! dotted cells around and between tiles, the season cards and the ground
+//! relief are not drawn; every event gets a tile, where the original raises
+//! only the passed and the open ones (same page, "What the canvas draws"), and
+//! a locked one is the first state's pale colour, chosen. The view's travel limits are **chosen, not
 //! measured**: any event can be centred, with the original's 650 px of margin
 //! past the outermost ones.
 //!
@@ -41,14 +41,15 @@
 //! tier a finished attempt earned is a player's save, read by whatever calls
 //! [`Frontend::refresh_campaign_progress`] (this crate carries no persistence,
 //! so the medal lookup arrives as a closure). [`ProgressState`] folds the two
-//! together. The four colours are the disc's own `Skin.xml` globals
-//! `Grey2048`/`Blue2048`/`Pass2048`/`ElitePass2048`.
+//! together. A tile's colour is one the canvas paints a state with
+//! ([`canvas_prism::colours`]).
 
 use crate::kinetic::{Bounds, Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
 use super::canvas_camera::{self, Camera};
 use super::canvas_lattice;
+use super::canvas_prism;
 use super::touch::{LABEL_SCALE, Launch};
 use super::*;
 use oag_2048::frontend::states as w2048;
@@ -59,25 +60,19 @@ use oag_2048::race::TEAM_VARIANTS;
 const TRAVEL_MARGIN: f32 = 650.0;
 /// Where the hexagon sits in the 128 x 128 hex art, as fractions of the
 /// texture: left, top, right, bottom of its opaque texels (2..116 across,
-/// 12..115 down, measured on the decoded `hex_filled.gxt`).
+/// 12..115 down, measured on the decoded `hex_filled.gxt`). The selection ring
+/// is drawn in the rect that puts this hexagon over a tile's top face.
 const HEX_ART: [f32; 4] = [2.0 / 128.0, 12.0 / 128.0, 116.0 / 128.0, 115.0 / 128.0];
 /// The mode glyph's width over the top face's: the original's flag spans 67
 /// of the face's 120 px in the reference frame, and the glyph fills 60 of its
 /// art's 64 texels.
 const ICON_SHARE: f32 = 0.6;
 
-/// The disc's own hex tile art (`data/FE/Images/hex_{filled,outline,select}.gxt`):
-/// a gloss-filled hexagon, a thin hexagonal outline and a thicker glow ring.
-/// No front-end widget names them, so `oag_game::boot::sprites::load` asks for
-/// them through its `extra` list. A sheet without them (every unit test of this
-/// crate) draws a flat square instead. Stretched over the top face of the
-/// original's prism, which the canvas itself draws from painted cells.
-pub const HEX_FILLED: &str = r"Data\FE\Images\hex_filled.gtf";
-/// See [`HEX_FILLED`].
-pub const HEX_OUTLINE: &str = r"Data\FE\Images\hex_outline.gtf";
-/// See [`HEX_FILLED`]. Drawn only on the selected marker, in `Orange2048`,
-/// in place of [`Frontend::draw_cursor_ring`]'s rectangle ring when it
-/// decoded.
+/// The disc's own selection ring (`data/FE/Images/hex_select.gxt`), a thicker
+/// glow ring. No front-end widget names it, so `oag_game::boot::sprites::load`
+/// asks for it through its `extra` list. Drawn only on the selected marker, in
+/// `Orange2048`, in place of [`Frontend::draw_cursor_ring`]'s rectangle ring
+/// when it decoded.
 pub const HEX_SELECT: &str = r"Data\FE\Images\hex_select.gtf";
 
 /// Which of the disc's four campaign-event icons an event's kind draws,
@@ -722,15 +717,48 @@ impl Frontend {
         }
     }
 
+    /// A tile's prism: the baked picture ([`canvas_prism`]) with its anchor on
+    /// the tile's projected top-face centre, to whole pixels like the lattice,
+    /// tinted the state's colour.
+    fn prism_sprite(
+        camera: &Camera,
+        event: &MapEvent,
+        prism: Placed,
+        colour: [f32; 3],
+        scale: (f32, f32),
+    ) -> Draw {
+        let layout = canvas_prism::layout();
+        let at = camera.project(canvas_camera::tile_top(CampaignMap::cell(event)));
+        let origin = (
+            at.0.round() - layout.anchor.0,
+            at.1.round() - layout.anchor.1,
+        );
+        // One texel in from the picture's edge, which the bake leaves clear, so
+        // a filtered draw never reads the sheet's neighbour along it.
+        Draw::Sprite {
+            rect: [
+                (origin.0 + 1.0) * scale.0,
+                (origin.1 + 1.0) * scale.1,
+                (layout.size.0 as f32 - 2.0) * scale.0,
+                (layout.size.1 as f32 - 2.0) * scale.1,
+            ],
+            uv: prism.sheet_rect([
+                1.0,
+                1.0,
+                prism.width as f32 - 2.0,
+                prism.height as f32 - 2.0,
+            ]),
+            color: canvas_prism::tint(colour),
+        }
+    }
+
     /// The map: the lattice, then every tile in view with its mode glyph, and
     /// the cursor ring on the selected one.
     ///
-    /// A tile is the disc's hex art stretched over the top face of the
-    /// original's prism ([`CampaignMap::face`]), tinted one of the disc's four
-    /// progress colours: [`ProgressState::Locked`] draws `Grey2048`,
-    /// [`ProgressState::Open`] `Blue2048`, [`ProgressState::Passed`]
-    /// `Pass2048` and [`ProgressState::Elite`] `ElitePass2048`. A sheet
-    /// without the art draws a flat rectangle and a rectangle ring.
+    /// A tile is the canvas's prism ([`canvas_prism`]) on the top face
+    /// [`CampaignMap::face`] names, in the colour of its [`ProgressState`]. A
+    /// sheet without the baked prism draws a flat rectangle, and without the
+    /// ring art a rectangle ring.
     pub(super) fn draw_campaign_map(&self, out: &mut Vec<Draw>) {
         let (width, height) = self.space.size;
         let scale = (
@@ -748,12 +776,18 @@ impl Frontend {
         let open = self.global_colour("Blue2048");
         let cursor = self.global_colour("Orange2048");
         let white = [1.0, 1.0, 1.0, 1.0];
-        let hex_filled = self.placed(HEX_FILLED);
-        let hex_outline = self.placed(HEX_OUTLINE);
         let hex_select = self.placed(HEX_SELECT);
         self.draw_map_lattice(out);
         let camera = self.campaign.camera();
-        for (at, event) in self.campaign.events.iter().enumerate() {
+        // Far to near, as the canvas's depth buffer would: a nearer tile's wall
+        // covers a farther tile's shade.
+        let mut order: Vec<usize> = (0..self.campaign.events.len()).collect();
+        order.sort_by(|&a, &b| {
+            let (a, b) = (&self.campaign.events[a], &self.campaign.events[b]);
+            a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+        });
+        for at in order {
+            let event = &self.campaign.events[at];
             let face = CampaignMap::face(&camera, event);
             let rect = on_screen(CampaignMap::art(face));
             if rect[0] + rect[2] < 0.0
@@ -763,22 +797,17 @@ impl Frontend {
             {
                 continue;
             }
-            let color = match self.campaign.state_of(at) {
-                ProgressState::Locked => self.global_colour("Grey2048"),
-                ProgressState::Open => open,
-                ProgressState::Passed => self.global_colour("Pass2048"),
-                ProgressState::Elite => self.global_colour("ElitePass2048"),
+            let colour = match self.campaign.state_of(at) {
+                ProgressState::Locked => canvas_prism::colours::LOCKED,
+                ProgressState::Open => canvas_prism::colours::OPEN,
+                ProgressState::Passed => canvas_prism::colours::PASSED,
+                ProgressState::Elite => canvas_prism::colours::ELITE,
             };
-            match hex_filled {
-                Some(filled) => {
-                    out.push(Self::sprite_at(rect, filled, color));
-                    if let Some(outline) = hex_outline {
-                        out.push(Self::sprite_at(rect, outline, white));
-                    }
-                }
+            match self.placed(canvas_prism::TILE) {
+                Some(prism) => out.push(Self::prism_sprite(&camera, event, prism, colour, scale)),
                 None => out.push(Draw::Fill {
                     rect: on_screen(face),
-                    color,
+                    color: [colour[0].sqrt(), colour[1].sqrt(), colour[2].sqrt(), 1.0],
                 }),
             }
             if let Some(icon) = self.placed(event.kind.texture_name()) {
