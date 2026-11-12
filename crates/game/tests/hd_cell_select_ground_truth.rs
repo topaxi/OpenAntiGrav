@@ -253,7 +253,12 @@ fn the_hd_medal_atlas_resolves_for_a_mod_and_every_frame_is_a_drawn_hexagon() {
                 let at = ((placed.y + v as u32 + row) * sheet.width + placed.x + u as u32) * 4;
                 texels.extend_from_slice(&sheet.rgba[at as usize..(at + w as u32 * 4) as usize]);
             }
-            let opaque = texels.chunks_exact(4).filter(|t| t[3] > 200).count();
+            let opaque = texels
+                .iter()
+                .skip(3)
+                .step_by(4)
+                .filter(|&&a| a > 200)
+                .count();
             assert!(
                 opaque > 1200,
                 "{medal:?} {difficulty:?}: {opaque} opaque texels"
