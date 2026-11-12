@@ -92,6 +92,13 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   of whose serials resolve is for every title. An author's own `titles` win. A pack for the
   right title but another pressing (an EU pack on a US disc) still reaches the load and still
   warns, since the serial check there is the PSP's.
+- **PSP only.** A PPSSPP pack's keys are the PSP's guest memory, so a pack is offered and opened on
+  a PSP source alone, whatever its `titles` say (`oag_game::mods::is_for_platform`). Pulse PS2 is
+  the same title as Pulse PSP, so `titles` cannot tell them apart; the source's platform
+  (`oag_ui::menu::For::platform`, `Finder`'s second argument) does. On a PS2, PS3, PS4 or Vita
+  source the pack is not on the MODS page, not in the menu tree or the strings, and not opened by
+  the race load or the front end's boot; a `debug` line names the skip, not a `warn`. The
+  platform rule covers every pack, including one with no resolvable `[games]` serial.
 
 - **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
   which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
@@ -126,8 +133,8 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   content fingerprint.
 - **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
   replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
-  `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
-  way, or it will not open).
+  `[games]` does not name this PSP disc, its `textures.ini` hashes another
+  way, or it will not open). A source that is not a PSP's never reaches that line ("PSP only", above).
 - `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
   does the search. ZIM images (a later pack's format) are read, raw, zlib or zstd, RGBA8888,
   RGBA4444 and RGB565 (`docs/formats/ppsspp-texture-pack.md`, "ZIM images").
@@ -329,7 +336,20 @@ out, so two machines that differ in one still match and can race. The filter is
 - **A live LANGUAGE pick rebuilds the tree through the same call** (`oag_game::menu_tree::rebuilt`,
   shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
   read the new language's `strings/<language>.toml` at once and the menus reopen on the
-  same page and row. A language the mod ships no file for reads its English, as at boot.
+  same page and row, **and the same mod on the MOD row**: that row is stored nowhere, so
+  `Session::model_where_stood` (behind `reopened_menu` and the MUSIC pool's rebuild
+  `poll_music_pool`, which runs when a music scan lands, and under load that is after the
+  player has picked a mod) reads it off the old model (`oag_game::mods::selection`) and puts it
+  back on the new one (`mods::reseat`). A rebuild that forgot it moved the row to the first mod,
+  and the next switch pressed acted on the wrong mod. Helpers:
+  `crates/game/tests/mods_page.rs`, `a_menu_built_again_keeps_the_mod_the_row_was_on`. The call
+  sites only show under load: eight copies of the `--drive` script of the drive test
+  `the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live` run at
+  once over `stress-ng --cpu 40` failed 2, 4 and 5 times in 8 before the fix (the last two on a
+  build logging the rebuild) and 0 times in 16 after; the drive test alone passes in about 5 to
+  13 s, and the first rebuild always finds the MOD row on `oag.extras`, which is why only the
+  late one hurts.
+  A language the mod ships no file for reads its English, as at boot.
   `crates/game/tests/mods_menu.rs` runs the rebuild for two languages and with a mod on and off;
   the `Session` wiring itself has no test surface (it needs a GPU), see "Switching language
   without relaunching" in `docs/architecture/menus.md`.

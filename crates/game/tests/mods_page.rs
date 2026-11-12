@@ -51,6 +51,7 @@ fn build(base: &Path, title: &'static oag_title::Title) -> mods::Built {
             None,
             Some(oag_ui::menu::For {
                 title,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )
@@ -202,4 +203,31 @@ fn the_page_row_steps_through_the_list_and_the_table_follows_it() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn a_menu_built_again_keeps_the_mod_the_row_was_on() {
+    let built = build(&proof_mods(), oag_pulse::TITLE);
+    let strings = StringTable::default();
+    let model = |built: &mods::Built| {
+        let mut model = Menu::new(built.definition.clone());
+        model.supply(ValueSource::Mods, &mods::choices(&built.listing, &strings));
+        assert!(model.open(mods::PAGE));
+        model
+    };
+    let mut old = model(&built);
+    assert!(old.seed(mods::SELECTED, &Value::Text("test.plain".into())));
+    let held = mods::selection(&old);
+    assert_eq!(held.as_deref(), Some("test.plain"));
+
+    let mut again = model(&built);
+    assert_eq!(
+        mods::selection(&again).as_deref(),
+        Some("oag.extras"),
+        "a model built afresh starts on the first mod, which is what a scan landing used to leave"
+    );
+    mods::reseat(&mut again, &held.unwrap(), &built.listing, &strings);
+    assert_eq!(mods::selection(&again).as_deref(), Some("test.plain"));
+    let switch = mods::table_for(&again, &built.listing, &strings).unwrap();
+    assert!(switch.iter().any(|(_, v)| v == "NO LICENSE STATED"));
 }

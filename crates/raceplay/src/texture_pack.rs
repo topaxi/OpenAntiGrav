@@ -8,17 +8,21 @@
 
 use std::sync::Arc;
 
-use oag_assets::Archives;
+use oag_assets::{Archives, Platform};
 use oag_texture::replacer::{self, Replacements};
 use oag_title::Title;
 
 /// What a [`Finder`] returns: each pack that is on, or why it would not open.
 pub type Packs = Vec<Result<Arc<Replacements>, String>>;
 
-/// Opens the packs that are on and made for `title`, on the load thread: the pack list reads
-/// each pack's `textures.ini`, which a front end has no reason to do before a race is asked for.
+/// The closure behind a [`Finder`].
+pub type FindPacks = dyn Fn(&Title, Platform) -> Packs + Send + Sync;
+
+/// Opens the packs that are on and made for `title` on `platform`, on the load thread: the pack
+/// list reads each pack's `textures.ini`, which a front end has no reason to do before a race is
+/// asked for. A PPSSPP pack is the PSP's, so on any other platform the answer is empty.
 #[derive(Clone)]
-pub struct Finder(pub Arc<dyn Fn(&Title) -> Packs + Send + Sync>);
+pub struct Finder(pub Arc<FindPacks>);
 
 impl std::fmt::Debug for Finder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -29,8 +33,9 @@ impl std::fmt::Debug for Finder {
 /// Installs the pack for the disc `archives` opened, or none, and says which in `report`.
 ///
 /// A PPSSPP pack is keyed by the PSP's guest memory, so it applies to a PSP disc whose
-/// serial the pack's `[games]` names; a disc of another platform, or of another serial,
-/// draws the disc's own textures. Asked for and not usable is an absence in the report.
+/// serial the pack's `[games]` names; another platform is the [`Finder`]'s to leave out, and
+/// another serial draws the disc's own textures. Asked for and not usable is an absence in
+/// the report.
 pub fn engage(
     finder: Option<&Finder>,
     title: &Title,
@@ -42,23 +47,19 @@ pub fn engage(
         return Engaged;
     };
     let mut packs = Vec::new();
-    for pack in (finder.0)(title) {
+    let layout = &archives.layout;
+    for pack in (finder.0)(title, layout.platform) {
         match pack {
             Ok(pack) => packs.push(pack),
             Err(why) => report.push(format!("texture pack not used: {why}")),
         }
     }
-    let layout = &archives.layout;
-    let platform_ok = layout.platform == oag_assets::Platform::Psp;
     let serial = layout.serial.as_deref();
     let mut chosen = None;
     for pack in packs {
-        let why = match (platform_ok, serial) {
-            (false, _) => {
-                Some("a PPSSPP pack's keys are the PSP's, and this disc is not".to_string())
-            }
-            (true, None) => Some("this source has no readable disc serial to match".to_string()),
-            (true, Some(serial)) if !pack.serves(serial) => {
+        let why = match serial {
+            None => Some("this source has no readable disc serial to match".to_string()),
+            Some(serial) if !pack.serves(serial) => {
                 Some(format!("its [games] does not name {serial}"))
             }
             _ if chosen.is_some() => Some("another pack is already in use".to_string()),

@@ -352,7 +352,8 @@ recognises a `textures.ini` folder or zip (or a folder holding `textures.zip`) a
 `oag_mod::texture_pack::replacements` indexes it as an `oag_texture::replacer::Replacements`
 over the mod's own files. The race load (`oag_raceplay::texture_pack::engage`, which is the one
 place that knows the disc serial) makes the first enabled pack that names a PSP disc's serial
-the active one, and the decoders ask it:
+the active one (the finder it asks hands over no pack at all on another platform, so Pulse PS2
+is skipped at `debug`, [mods.md](../tools/mods.md), "Texture packs"), and the decoders ask it:
 
 - **`.vex` textures** (`oag_mesh::mesh::embedded_texture_slots`): each `Texture` node is keyed
   with `Stored::from_vex`; a hit becomes `ModelTexture::replaced`, in the **same form the disc's

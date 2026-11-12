@@ -33,6 +33,7 @@ pub(crate) struct RebuildJob {
     switches: oag_game::settings::Mods,
     language: Option<String>,
     title: &'static oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
     strings: oag_ui::language::StringTable,
 }
@@ -45,6 +46,7 @@ impl RebuildJob {
             &self.switches,
             self.language.as_deref(),
             self.title,
+            self.platform,
             self.updated,
             &self.strings,
         )
@@ -99,20 +101,9 @@ impl Session {
         }
         if texture_pack {
             self.resupply_language();
-            self.reselect_mod(&id);
         } else {
             self.rebuild_menus(Some(&id));
         }
-    }
-
-    /// Puts the MOD row back on `id` after the menus were built again.
-    fn reselect_mod(&mut self, id: &str) {
-        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
-            return;
-        };
-        stage.menu.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-        mods::resupply_switch(&mut stage.menu, &shell.mods, &shell.strings);
-        stage.menu.settle();
     }
 
     /// Builds the tree, listing, campaigns and tracks again for the switches in
@@ -137,6 +128,7 @@ impl Session {
             switches: self.settings.mods.clone(),
             language: self.settings.language.clone(),
             title: shell.title,
+            platform: shell.platform,
             updated: rebuild.updated,
             strings: shell.strings.clone(),
         })
@@ -164,8 +156,7 @@ impl Session {
             return;
         };
         if let Some(id) = select {
-            model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-            mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+            mods::reseat(&mut model, id, &shell.mods, &shell.strings);
         }
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {
@@ -176,17 +167,33 @@ impl Session {
     }
 
     /// The menu model built on `shell`'s tree and opened where the open menus stand: the
-    /// same pages, the cursor on the same rows. `None` when no menu is open.
+    /// same pages, the cursor on the same rows, the MOD row on the same mod. `None` when no
+    /// menu is open.
     pub(crate) fn reopened_menu(&mut self, shell: &super::Shell) -> Option<menu::Menu> {
+        let (model, restored) = self.model_where_stood(shell)?;
+        if !restored {
+            error!("the rebuilt menus lack a page the player was on");
+        }
+        Some(model)
+    }
+
+    /// A menu model built on `shell`, standing where the open menus stand: the trail of pages
+    /// and rows, and the mod the MOD row is on, which no setting holds. `None` when no menu is
+    /// open; the flag says whether every page of the trail exists in the new tree. Every rebuild
+    /// that keeps the player in place goes through this, so none can forget a row that is stored
+    /// nowhere.
+    pub(crate) fn model_where_stood(&mut self, shell: &super::Shell) -> Option<(menu::Menu, bool)> {
         let Stage::Menu(stage) = &self.stage else {
             return None;
         };
         let trail = stage.menu.trail();
+        let held = mods::selection(&stage.menu);
         let skin = stage.skin;
         let mut model = self.menu_model(shell, &skin);
-        if !model.restore_trail(&trail) {
-            error!("the rebuilt menus lack a page the player was on: {trail:?}");
+        let restored = model.restore_trail(&trail);
+        if let Some(id) = held {
+            mods::reseat(&mut model, &id, &shell.mods, &shell.strings);
         }
-        Some(model)
+        Some((model, restored))
     }
 }

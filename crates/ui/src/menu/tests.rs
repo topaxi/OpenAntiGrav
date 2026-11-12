@@ -123,6 +123,7 @@ fn built_in_hd() -> Definition {
         &english,
         Some(For {
             title: oag_hd::TITLE,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
         &[

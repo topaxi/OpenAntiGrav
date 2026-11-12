@@ -28,12 +28,9 @@ impl Session {
         let Some(shell) = self.shell.clone() else {
             return;
         };
-        let trail = stage.menu.trail();
-        let skin = stage.skin;
-        let mut model = self.menu_model(&shell, &skin);
-        if !model.restore_trail(&trail) {
+        let Some((mut model, true)) = self.model_where_stood(&shell) else {
             return;
-        }
+        };
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu = model;
