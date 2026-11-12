@@ -41,6 +41,7 @@ fn build(dir: &Path) -> mods::Built {
             None,
             Some(oag_ui::menu::For {
                 title: oag_pulse::TITLE,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )

@@ -14,26 +14,38 @@ pub fn attach(options: &mut oag_raceplay::Options, switches: &crate::settings::M
 /// The [`oag_raceplay::texture_pack::Finder`] for the packs `switches` leave on and whose
 /// `titles` admit the title being loaded: a race's load and the front end's boot
 /// (`crate::boot::Options::find_texture_packs`) open them the same way. A pack for another
-/// title never reaches the load, so it is not reported as unusable.
+/// title, or any pack on a source that is not a PSP's, never reaches the load, so it is not
+/// reported as unusable.
 #[must_use]
 pub fn finder(switches: &crate::settings::Mods) -> oag_raceplay::texture_pack::Finder {
     let switches = switches.clone();
-    oag_raceplay::texture_pack::Finder(Arc::new(move |title| {
-        match crate::mods::Mods::load(&switches) {
-            Ok(mods) => packs_for(&mods, title),
+    oag_raceplay::texture_pack::Finder(Arc::new(
+        move |title, platform| match crate::mods::Mods::load(&switches) {
+            Ok(mods) => packs_for(&mods, title, platform),
             Err(why) => vec![Err(format!("{why:#}"))],
-        }
-    }))
+        },
+    ))
 }
 
-/// The pack each of `mods` that is on and made for `title` is, other mods and packs for other
-/// titles left out. Each is opened again from its path, so the load thread owns its readers.
+/// The pack each of `mods` that is on and made for `title` on `platform` is, other mods and
+/// packs for other titles or platforms left out. Each is opened again from its path, so the
+/// load thread owns its readers.
 #[must_use]
 pub fn packs_for(
     mods: &crate::mods::Mods,
     title: &oag_title::Title,
+    platform: oag_assets::Platform,
 ) -> oag_raceplay::texture_pack::Packs {
-    mods.player_for(title)
+    for module in mods
+        .player_for(title)
+        .filter(|m| m.manifest.texture_pack.is_some() && !crate::mods::is_for_platform(m, platform))
+    {
+        log::debug!(
+            "texture pack {}: a PPSSPP pack is the PSP's, not used on {platform:?}",
+            module.label()
+        );
+    }
+    mods.player_on(title, platform)
         .filter(|module| module.manifest.texture_pack.is_some())
         .map(|module| {
             let label = module.label();

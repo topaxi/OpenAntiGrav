@@ -88,6 +88,10 @@ Two structural facts to expect, both different from every other binary here:
   corridor, `WeaponStats_ParsePlasma`'s eleven attributes with `charge_time`
   unread, and the explosion's 1.7/1.3/1.3 s ramps - the PS3 half of the
   Pulse/HD/Omega comparison.
+- [projectile-launch-normal.md](projectile-launch-normal.md) - the carried normal every
+  track-following projectile is born with: `0 - craft+0x7850`, the located track's up, in
+  `Rocket_Init`, `Missile_Init`, `Plasma_Init`/`Plasma_Launch`, `Shuriken_Init` and a
+  `PulseBullet` init, with the locate chain that writes it; Omega and 2048 checked.
 - [cannon.md](cannon.md) - `CannonBullet`: `hd_muzzleflash` flashed at the
   craft's `cannon_flash` locators for the round's first `0.1` s rather than
   riding the round, the 0.25-wide full-segment bolt, and the negative search

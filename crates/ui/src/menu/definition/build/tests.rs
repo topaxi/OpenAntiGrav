@@ -31,6 +31,7 @@ fn main_rows(title: Option<&oag_title::Title>, mod_text: &str) -> Result<Vec<Str
         &english,
         title.map(|title| For {
             title,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
         &mods,
@@ -250,6 +251,7 @@ fn built_for(title: &oag_title::Title) -> Definition {
         &english,
         Some(For {
             title,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
         &[ModMenu {

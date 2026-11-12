@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-11
-summary: "Born normal and jump lips answered 2026-11-11 (see the cage thread); left: HD's own projectile update unread, segment-landing speed chosen"
+updated: 2026-11-12
+summary: "HD/Omega/2048 launch normal read: track up, ready to wire, three seed-margin tests block the flip; HD's projectile update unread"
 difficulty: medium (35)
 ---
 
@@ -41,16 +41,27 @@ nothing on the title axis; the gameplay determinism reference did not move.
   not.** All three rockets of a volley fired up Outpost 7's first ramp ended on the collision cage
   within 0.37 s; ours fly on. The missing law and its wire are
   [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md).
-- **HD, 2048 and Omega keep the craft's up as the launch normal until HD's `Rocket_Init` is read**
-  (`Weapons::launch_normal_is_track_up`, `false`). With the Pulse law on, three tests went red:
-  `hd_eliminator_hud_ground_truth::a_finished_eliminator_leaves_a_board_ranked_on_points` (seed 1 never
-  ended in 30,000 ticks), `::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`
-  (18 s became 76 s, a seed past 1,000 s) and
-  `omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed` (slot 5 respawned at
-  tick 5602, no weapon hit); HD's located up agreed with the craft's within 3 degrees (worst 10.6).
-  Read `Rocket_Init`, `Missile_Init`, `Shuriken_Init` and `Plasma_Launch` on `ps3-hdfury-eu` for the
-  stored normal's source; if it is the located down, flip HD's field and treat the three tests as a
-  field-balance question.
+- **HD, 2048 and Omega: read 2026-11-12, ready to wire, not flipped.** HD's `Rocket_Init`
+  (`0x00124d90`), `Missile_Init`, `Plasma_Init`/`Plasma_Launch` and `Shuriken_Init` (`0x00159a30`)
+  each store `0 - craft+0x7850`, the located track sample's down, so the carried normal is the
+  located track's up, Pulse's law (confidence 86). Omega's `Plasma_Init` stores `-(craft+0x8040)`,
+  the same record (80); 2048's stores `-(craft+0x6e90)` (75). Evidence and the locate chain:
+  [projectile-launch-normal.md](../../docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md).
+  **The wire:** `Weapons::launch_normal_is_track_up` to `measured(true)` in `oag-hd`, `oag-omega`
+  and `oag-2048`, the `oag_title::weapons` doc comment, and `weapon-lineage.md`'s row. **Why it is
+  not landed:** with it on, the three tests below go red again, and that page's "Turning it on"
+  section shows each is a chaotic divergence at a margin rather than a wrong normal:
+  - `hd_eliminator_hud_ground_truth::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace`:
+    eleven of twelve seeds end, median 10 laps (window 6 to 12); seed 1 does not reach 200 in
+    1,000 s. Off, seed 1 already takes 857 s.
+  - `::a_finished_eliminator_leaves_a_board_ranked_on_points`: seed 1 at the default difficulty
+    has not ended by 30,000 ticks.
+  - `omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed`: the runs part at the
+    first volley (its last rocket ends one tick early) and slot 5 respawns 4,700 ticks later with
+    no hit.
+  Next: decide with the maintainer whether these seeds are re-chosen or the bounds re-measured
+  against the original (Vineta K's nine laps, n = 1), then land the flip with them. Do not land
+  the flip by loosening a bound unmeasured.
 - **HD's own projectile update is unread.** `ps3-hdfury-eu` is imported; the
   fix is Pulse's model on HD's geometry, which the measurement supports.
 - **The HD autopilot beaches on Sebenco Climb (t=1560), Chenghou Project,

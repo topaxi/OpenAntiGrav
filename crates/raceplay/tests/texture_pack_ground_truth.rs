@@ -55,7 +55,7 @@ fn load(
     let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
     let dir = dir.to_path_buf();
     let finder = with_pack.then(|| {
-        race::texture_pack::Finder(Arc::new(move |_title| {
+        race::texture_pack::Finder(Arc::new(move |_title, _platform| {
             let mut ini = std::fs::read_to_string(dir.join("textures.ini")).unwrap();
             if let Some(games) = games {
                 ini = ini.replace("UCES00465 = textures.ini", games);

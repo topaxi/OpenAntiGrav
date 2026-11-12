@@ -633,3 +633,108 @@ fn group_labels(xml: &str) -> Vec<(String, u32, u32, u32, u32)> {
     }
     labels
 }
+
+/// An HD or Fury event's card titles its circuit through the executable's
+/// track alias table, one key per direction: `VINETA K` for `Vineta_K` (not the
+/// id the card drew before), the reverse through its own `09_Track`, and
+/// `THE AMPHISEUM` for `Amphiseum` (`docs/ghidra/functions/vita-2048-eu-v104/
+/// circuit-name-key.md`, "The card's key: the track alias table"). The ten of
+/// 2048's own keep their `SP.xml` names, which this table does not touch.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn an_hd_event_card_titles_its_circuit_by_the_alias_key_per_direction() {
+    let Some(eu) = package("PCSF00007") else {
+        return;
+    };
+    let campaigns = Campaigns::open(&eu);
+    let aliases = campaigns
+        .title
+        .front_end
+        .expect("a front end")
+        .card_track_aliases;
+    assert_eq!(aliases.len(), 28, "the DLC rows of the alias table");
+    let events: Vec<&frontend::MapEvent> = campaigns
+        .shell
+        .tiers
+        .iter()
+        .flat_map(|tier| &tier.events)
+        .collect();
+    assert_eq!(events.len(), 87 + 80, "an event per cell");
+    let title_of = |cell: &Cell| {
+        let event = events
+            .iter()
+            .find(|event| event.name == cell.name)
+            .unwrap_or_else(|| panic!("{} has no event", cell.name));
+        event.card.title.as_str()
+    };
+    for (circuit, key, name) in [
+        ("Vineta_K", "01_Track", "VINETA K"),
+        ("Anulpha_Pass", "08_Track", "ANULPHA PASS"),
+        ("Amphiseum", "19_Track", "THE AMPHISEUM"),
+        ("Amphiseum_R", "20_Track", "THE AMPHISEUM"),
+        ("Talons_Junction_R", "18_Track", "TALON'S JUNCTION"),
+    ] {
+        assert_eq!(
+            oag_title::track_alias::key_for(aliases, circuit),
+            Some(key),
+            "{circuit}'s own key"
+        );
+        let cell = campaigns
+            .cells()
+            .into_iter()
+            .map(|(_, _, cell)| cell)
+            .find(|cell| cell.track.as_deref() == Some(circuit))
+            .unwrap_or_else(|| panic!("no cell races {circuit}"));
+        assert_eq!(title_of(cell), name, "{circuit}'s card, cell {}", cell.name);
+    }
+    // No cell races the first eight circuits reversed, so a reverse is read
+    // through the same function on a copy of a cell turned round: its own row
+    // and key, and no `FE_REVERSE` word after the name.
+    let (_, _, forward) = campaigns
+        .cells()
+        .into_iter()
+        .find(|(_, _, cell)| cell.track.as_deref() == Some("Vineta_K"))
+        .expect("a Vineta K cell");
+    let mut turned = forward.clone();
+    turned.track = Some("Vineta_K_R".to_string());
+    assert_eq!(
+        oag_title::track_alias::key_for(aliases, "Vineta_K_R"),
+        Some("09_Track")
+    );
+    assert_eq!(
+        boot::tiers2048::card_title(&turned, "ignored", aliases, &campaigns.shell.strings),
+        "VINETA K"
+    );
+    // The game list asks the same table by circuit id, and leaves 2048's own ten
+    // to their picker names rather than answering for them.
+    let strings = &campaigns.shell.strings;
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Metropia_R", strings).as_deref(),
+        Some("METROPIA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Tech_De_Ra", strings).as_deref(),
+        Some("TECH DE RA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "square", strings),
+        None
+    );
+    let mut keyed = 0;
+    for (_, _, cell) in campaigns.cells() {
+        let Some(id) = cell.track.as_deref() else {
+            continue;
+        };
+        if oag_title::track_alias::key_for(aliases, id).is_some() {
+            keyed += 1;
+            assert_ne!(title_of(cell), id, "{} still draws the id", cell.name);
+            assert!(
+                !title_of(cell).contains("_Track") && !title_of(cell).contains('_'),
+                "{} draws {:?}",
+                cell.name,
+                title_of(cell)
+            );
+        }
+    }
+    assert!(keyed > 100, "{keyed} cells race an HD-lineage circuit");
+}

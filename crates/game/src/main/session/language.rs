@@ -105,6 +105,7 @@ impl Session {
                 &self.settings.mods,
                 self.settings.language.as_deref(),
                 title,
+                boot_shell.platform,
                 rebuild.updated,
                 &boot_shell.strings,
             )

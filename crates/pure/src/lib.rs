@@ -409,6 +409,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: None,
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: &[],
     track_record_empty: "-",
     track_distance_authored: false,
     // Pure ships neither `FE\forward.vex` nor `ship_FE.vex`; both screens

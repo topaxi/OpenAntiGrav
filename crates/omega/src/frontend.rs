@@ -246,6 +246,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
     track_label_overrides: &[],
+    card_track_aliases: &[],
     track_record_empty: "-",
     track_distance_authored: false,
     preview_meshes: false,

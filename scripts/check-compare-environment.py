@@ -173,6 +173,25 @@ def tomllib_load(path):
     return tomllib.loads(Path(path).read_text())
 
 
+def check_loading_bar(root):
+    """`compare_menu.lit_bar_columns` counts the lit columns of HD's race-load bar, and the tick that states them follows."""
+    from PIL import Image, ImageDraw
+    for lit in (0, 1, 32, 33, 166):
+        img = Image.new("RGB", (1920, 1080))
+        draw = ImageDraw.Draw(img)
+        for column in range(lit):
+            x = 201 + round(column * 7.66)
+            draw.rectangle([x, 703, x + 5, 929], fill=(172, 7, 23))
+        for column in range(lit, 166):  # the unlit dots are grey and are not counted
+            x = 201 + round(column * 7.66)
+            draw.rectangle([x, 703, x + 5, 929], fill=(40, 40, 40))
+        draw.rectangle([1500, 700, 1700, 900], fill=(172, 7, 23))  # the mode icon is outside the bar
+        path = root / ("bar%d.png" % lit)
+        img.save(path)
+        assert cm.lit_bar_columns(path) == lit, (lit, cm.lit_bar_columns(path))
+    assert cm.LOADING_BAR_TICKS_PER_COLUMN == 10 and cm.LOADING_BAR_FIRST_TARGET_COLUMNS == 33
+
+
 def main():
     import tomllib
     with tempfile.TemporaryDirectory() as t:
@@ -213,6 +232,8 @@ def main():
         check_safe_area(Path(t))
     with tempfile.TemporaryDirectory() as t:
         check_ps2_world_clock(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_loading_bar(Path(t))
     print("compare environment: round trip ok")
 
 

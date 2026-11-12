@@ -161,7 +161,7 @@ p->flags     |= 8;  p->age = 0;  p->ramp_a = 0;           // + 0x74, + 0x8c, + 0
 p->charging   = 1;  p->charge = 1.0f;                     // + 0x84, + 0x88 = 0x3f800000
 p->emitter    = Sound_CreateEmitter("Plasma", ...);       // + 0x98, parented to the weapon node
 Sound_Play(1.0f, p->emitter, ..., "NGP_Plasma", 0, 0xb);
-p->surface    = -craft->up;                               // + 0x150 <- -(craft + 0x8040)
+p->surface    = -craft->track_down;                       // + 0x150 <- -(craft + 0x8040), the located track's up
 p->position   = weapon_node->matrix.row3;                 // + 0xe0
 p->ramp       = -1.2f;                                    // + 0x164 = 0xbf99999a
 Psys_Spawn("WO_PLASMA_HEAD"    -> 'PLHE', attached to p + 0xf0);   p->head_id  = + 0x90
@@ -171,6 +171,10 @@ CameraShake(0.07f, 1.0f, ...) if the craft is local;      // 0x0137eba0
 Light_Register(p + 0x1f0, &DAT_01a148f0); Light_Register(p + 0x1f0, &DAT_01a14950);
 ```
 
+`craft + 0x8040` is the down of the track sample the craft is located on, not the craft's
+own up ([ps3-hdfury-eu/projectile-launch-normal.md](../ps3-hdfury-eu/projectile-launch-normal.md),
+"Omega and 2048", confidence 80).
+
 `Plasma_Launch(plasma, node_matrix, craft_velocity)`:
 
 ```c
@@ -178,7 +182,7 @@ p->launch_kmh = length(craft_velocity) * 3.6f + stats->launchspeed;   // + 0x80,
 p->position   = node_matrix.row3;
 p->charging   = 0;
 p->velocity   = node_matrix.forward * (Plasma_GetSpeed(p) * 0.2777778f);   // age is 0, so launch_kmh
-p->surface    = -craft->up;
+p->surface    = -craft->track_down;
 p->flags     |= 8;
 Sound_Play(1.0f, p->emitter, ..., "_NGP_Plasmatvl", p + 0xa0, -1);   // the loop the teardown stops
 CameraShake(0.06f, 0.3f, ...) if local;

@@ -196,6 +196,7 @@ fn tiles_with(bases: &[std::path::PathBuf]) -> Vec<String> {
             None,
             Some(oag_ui::menu::For {
                 title: oag_2048::TITLE,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )

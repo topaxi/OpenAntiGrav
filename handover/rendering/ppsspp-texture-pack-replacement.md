@@ -33,6 +33,8 @@ packs; `just push-data` carries them.
 
 - A mod knows its titles: a pack's `titles` follow its `[games]` serials (`oag_source::title::by_serial`, closure into `oag-mod`), written by `init-pack` and filled at load, and a mod whose `titles` leave out the running title is dropped from the menu build, the MODS page and the packs a load opens, so the Pure pack no longer warns on Pulse (`docs/tools/mods.md`, "Texture packs"; `crates/game/tests/texture_pack_titles.rs`).
 
+- A PPSSPP pack is the PSP's alone: the menu build (`oag_ui::menu::For::platform`) and the pack finder (`Finder` takes the platform) leave it out of every non-PSP source, so Pulse PS2 does not offer or open it and the load no longer warns there (`oag_game::mods::is_for_platform`; `texture_pack_titles`, `texture_pack_frontend_ground_truth`).
+
 ## Open
 
 - **Serials no title lists**: the Pure pack's `UCJS10007`, `ULES00229` and `ULUS10058` resolve to no title (only Pulse and Pure's EU/US serials are in the tables), so a pack naming only such serials stays for every title. Add a serial to a title's table only with a disc or evidence for it.

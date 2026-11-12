@@ -144,6 +144,7 @@ pub(super) fn menu_page(
             strings,
             Some(oag_ui::menu::For {
                 title,
+                platform,
                 updated: false,
             }),
         )

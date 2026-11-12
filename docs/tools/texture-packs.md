@@ -44,6 +44,9 @@ the checkout's `.git/info/exclude`, so it never makes the tree dirty, and a re-r
 one that is there: edit it freely (a licence, a name). `just push-data` carries it with the rest
 of the folder. [mods.md](mods.md), "Texture packs", has the details.
 
+A pack is the PSP's alone: on a Pulse PS2 source (same title, other platform) it is not listed on
+the MODS page and a race or the front end does not open it ([mods.md](mods.md), "Texture packs").
+
 In a git worktree, `just link-data` links the main checkout's `data/texture-packs`.
 
 ## Where a pack is looked for

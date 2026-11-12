@@ -20,6 +20,14 @@ fn pack_title(serial: &str) -> Option<String> {
     oag_source::title::by_serial(serial).map(|title| title.slug())
 }
 
+/// Whether `module` is for a source of `platform`. A mod is, except a PPSSPP texture pack
+/// (`[texture-pack]` is `ppsspp`, the only format), which is keyed by the PSP's guest memory
+/// and so is the PSP's alone: Pulse PS2 is the same title, and still not a PSP.
+#[must_use]
+pub fn is_for_platform(module: &oag_mod::Mod, platform: oag_assets::Platform) -> bool {
+    module.manifest.texture_pack.is_none() || platform == oag_assets::Platform::Psp
+}
+
 #[derive(Debug)]
 /// The mods this run has: the built-in extras and what the search found.
 ///
@@ -263,9 +271,13 @@ pub fn note_channels(listing: &mut [Listing], strings: &StringTable) {
     }
 }
 
-/// The mod the MODS page's MOD row is on, open or not.
+/// The id of the mod the MODS page's MOD row is on, open or not.
+///
+/// The row is stored nowhere (a settings key would be the wrong place for a cursor), so a menu
+/// model built again starts on the first mod: a rebuild that keeps the player where they stood
+/// reads this off the old model and [`reseat`]s the new one.
 #[must_use]
-pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+pub fn selection(model: &oag_ui::menu::Menu) -> Option<String> {
     let held = model
         .definition()
         .pages
@@ -276,7 +288,26 @@ pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Optio
     let oag_ui::menu::Value::Text(id) = held else {
         return None;
     };
+    Some(id)
+}
+
+/// The mod the MODS page's MOD row is on, open or not.
+#[must_use]
+pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+    let id = selection(model)?;
     listing.iter().find(|mod_| mod_.id == id)
+}
+
+/// Puts the MOD row of a menu model built again on the mod `id` and gives the ENABLED row
+/// that mod's switch.
+pub fn reseat(
+    model: &mut oag_ui::menu::Menu,
+    id: &str,
+    listing: &[Listing],
+    strings: &StringTable,
+) {
+    model.seed(SELECTED, &oag_ui::menu::Value::Text(id.to_string()));
+    resupply_switch(model, listing, strings);
 }
 
 /// Supplies and seeds the ENABLED row for whichever mod the MOD row holds.
@@ -632,20 +663,44 @@ impl Mods {
         self.player().filter(move |m| m.is_for(&slug))
     }
 
-    /// The ids of the loaded mods whose `titles` leave out the title `target` builds for,
-    /// which a build treats as left out: not in the tree, the strings or the MODS page.
-    fn other_titles(&self, target: Option<For<'_>>) -> Vec<String> {
+    /// [`Self::player_for`] without the mods that are not for `platform` ([`is_for_platform`]):
+    /// what a race or a front end on that source loads.
+    pub fn player_on<'a>(
+        &'a self,
+        title: &oag_title::Title,
+        platform: oag_assets::Platform,
+    ) -> impl Iterator<Item = &'a oag_mod::Mod> + Clone + use<'a> {
+        self.player_for(title)
+            .filter(move |m| is_for_platform(m, platform))
+    }
+
+    /// The ids of the loaded mods that are not for the source `target` builds for, which a
+    /// build treats as left out: not in the tree, the strings or the MODS page. A mod is not
+    /// for it when its `titles` leave out the title or ([`is_for_platform`]) it is made for
+    /// another platform.
+    fn left_out_for(&self, target: Option<For<'_>>) -> Vec<String> {
         let Some(target) = target else {
             return Vec::new();
         };
         let slug = target.title.slug();
         self.player
             .iter()
-            .filter(|m| !m.is_for(&slug))
-            .map(|m| {
-                log::debug!("mod {}: for {:?}, not {slug}", m.label(), m.manifest.titles);
-                m.manifest.id.clone()
+            .filter(|m| {
+                if !m.is_for(&slug) {
+                    log::debug!("mod {}: for {:?}, not {slug}", m.label(), m.manifest.titles);
+                    return true;
+                }
+                if !is_for_platform(m, target.platform) {
+                    log::debug!(
+                        "mod {}: a PPSSPP texture pack is the PSP's, not {:?}'s",
+                        m.label(),
+                        target.platform
+                    );
+                    return true;
+                }
+                false
             })
+            .map(|m| m.manifest.id.clone())
             .collect()
     }
 
@@ -701,7 +756,7 @@ impl Mods {
         language: Option<&str>,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out = self.other_titles(target);
+        let mut left_out = self.left_out_for(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {
@@ -764,7 +819,7 @@ impl Mods {
         strings: &StringTable,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out = self.other_titles(target);
+        let mut left_out = self.left_out_for(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {
