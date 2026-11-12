@@ -425,6 +425,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_entry: None,
     endrace_style: None,
     borrows_ps2_split_screens: false,
+    model_lighting: None,
 };
 
 pub mod campaign;

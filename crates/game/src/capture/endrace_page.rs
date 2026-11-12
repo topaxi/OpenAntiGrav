@@ -335,6 +335,7 @@ fn endrace_page(
                     track_model: None,
                     seconds: 0.0,
                     hull_clock: (0.0, 0.0),
+                    fury: false,
                 });
             let model = oag_ui_screens::endrace::Rewards {
                 medal,
