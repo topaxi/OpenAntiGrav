@@ -184,6 +184,10 @@ Two structural facts to expect, both different from every other binary here:
 - [team-selection-model.md](team-selection-model.md) - `TeamSelection_Screen`'s craft: the
   update that writes over the `ShipModel` widget's authored pose every frame, the depth fit on
   the model's `<FE Length>`, the `Model_Item` attribute table and lens.
+- [front-end-model-lighting.md](front-end-model-lighting.md) - what a front-end model is lit
+  with: `FrontEnd_LoadEnvSettings` loads `data/fe/fe.fury.EnvSettings` or `fe.envsettings` into the
+  front end's own block, `FeModel_DrawAtOrigin` binds it to the race's light parameters, and the
+  Ship Select hull's frame check (the rig leaves one channel-neutral scale, the unread tone stage).
 - [menu-backdrop-scene.md](menu-backdrop-scene.md) - `BackgroundAnim_Item.cpp`, the HD
   style's backdrop and the one Omega's menus draw: the scene `FrontEndScene_HD_ATG.vex` flown
   through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s
