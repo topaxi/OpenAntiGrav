@@ -9,7 +9,7 @@
 //!     -E 'test(/^hd_uv_overlay_ground_truth::/)'
 //! ```
 //!
-//! The program is on `docs/formats/rcsmaterial.md`, "Two surfaces the maintainer saw wrong":
+//! The program is on `docs/formats/rcsmaterial.md`, "Modesto Heights: the banner band is drawn white":
 //! the grille is the lit albedo and the Ossego logo enters only through an overlay of the teal
 //! cloud term. Binding the logo as the albedo drew the band white where the original draws it
 //! dark; this checks each shipped copy binds the grille and carries the record's own values.

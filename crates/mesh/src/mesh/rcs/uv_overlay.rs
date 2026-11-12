@@ -27,7 +27,7 @@
 //! term once the grille is the albedo. The generic reading bound the Ossego logo as the
 //! albedo and added the second picture on top, which is white where the logo's ground is: the
 //! band drew white where the original draws it dark navy
-//! (`docs/formats/rcsmaterial.md`, "Two surfaces the maintainer saw wrong").
+//! (`docs/formats/rcsmaterial.md`, "Modesto Heights: the banner band is drawn white").
 //!
 //! All six values are the record's own parameters, read here and never typed. **Read, not
 //! measured live:** the units' gamma nibbles. The colour taps are decoded as every colour tap
