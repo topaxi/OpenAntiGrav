@@ -118,8 +118,10 @@ has the same two lines and its linear term reads `0.0100` off 203 frames
 `talons-junction-standing-start.csv` through this engine with the term switched on, the forward
 speed error over the clean launch decays from `-1.15` at tick 60 to `-0.19` at tick 185, where
 without it it drifts from `-0.91` to `+0.73`, and the replay's largest speed error over the
-capture falls from `3.88` to `1.25` units/s. Pulse's laws keep it off until the tests that ride
-a Pulse trajectory are re-measured with it (the HD page lists them).
+capture falls from `3.88` to `1.25` units/s. Measured per frame on the same capture
+(`+0.00961` of `speed * dt` without it, `-0.00043` with it, confidence 90) in
+[body-damping.md](../../../physics/body-damping.md), which also says why Pulse's laws still keep it
+off: de Konstruct Black's first jump.
 
 Worth recording how the field was found, because the obvious search fails: a
 `search_instructions` scan for the literal displacement `0x384(` finds **stores

@@ -112,15 +112,15 @@ between the two runs' first thrust step.
   switched on, the forward speed error over the clean launch decays from `-1.15` at tick 60 to
   `-0.19` at tick 185, where without it it drifts from `-0.91` to `+0.73`; the replay's largest
   speed error over the capture falls from `3.88` to `1.25` units/s. So Pulse has it live as well
-  as on paper (confidence 88). It is not flown there yet: with it on, the committed state hashes
-  move and eight disc-backed tests that ride a Pulse trajectory change verdict (the AI's clean-lap
-  gate on one circuit at Phantom, its speed plan, the original Autopilot's rescue count on one
-  circuit, the plasma's tick timing among them), each of which has to be re-measured rather
-  than re-pinned. `oag_physics::laws::Laws::PULSE` carries `BodyDamping::NONE` until then.
+  as on paper. Since measured per frame on that capture as HD's was (`+0.00961` of `speed * dt`
+  off, `-0.00043` on, confidence 90), with each moved test diagnosed, in
+  [body-damping.md](../../../physics/body-damping.md). It is not flown there yet: with it on,
+  de Konstruct Black's first jump falls short (same page, "Why Pulse does not fly it yet"), so
+  `oag_physics::laws::Laws::PULSE` carries `BodyDamping::NONE`.
 - **Pure: checked, applies, not wired.** Its constructor passes `0.01`, `0.01` and its
   `Body_Integrate` (`0x089345e8`) is Pulse's loop instruction for instruction
-  ([pure-physics.md](../../../physics/pure-physics.md)); read, not measured live. It follows
-  Pulse: off until Pulse's is flown.
+  ([pure-physics.md](../../../physics/pure-physics.md)); read, not measured live. Flown since
+  2026-11-12 (`oag_pure::race::CRAFT_LAWS`).
 - **Omega: checked, applies, wired.** Read off `eboot.bin` (v1.07, `/omega/eboot-ps4-omega-eu-v107.bin`):
   the integrator inside `FUN_013463f0` (not renamed here) multiplies the updated velocity by the
   splatted step and by `body+0x4b0` and subtracts it (`0x013467d9`..`0x013467eb`), stores the
