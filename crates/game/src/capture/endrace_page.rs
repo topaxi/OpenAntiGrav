@@ -13,7 +13,7 @@ use crate::capture::preview_pass::{PreviewRequest, open_for_previews};
 use oag_tables::race_campaign::Medal;
 
 /// Which EndRace screen a `--menu-page` name asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EndRaceKind {
     Results,
     /// `medal` is the campaign cell's award the synthetic model carries:
@@ -23,6 +23,9 @@ pub(super) enum EndRaceKind {
     /// at without racing to one.
     Rewards {
         medal: Option<Medal>,
+        /// `endrace-rewards@<mod id>/<campaign id>:<tier>`: the award a mod campaign's own tier
+        /// earns, by the campaign's key and the tier's name.
+        tier: Option<(String, String)>,
     },
     /// `tournament_next_leg` swaps `RACE AGAIN` for `ER_NEXT_RACE` - see
     /// `crate::race_stage::endrace::menu_options`'s own doc for when this
@@ -82,15 +85,28 @@ pub(super) enum EndRaceKind {
 pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
     match page {
         "endrace-results" | "endrace_results" => Some(EndRaceKind::Results),
-        "endrace-rewards" | "endrace_rewards" => Some(EndRaceKind::Rewards { medal: None }),
+        "endrace-rewards" | "endrace_rewards" => Some(EndRaceKind::Rewards {
+            medal: None,
+            tier: None,
+        }),
+        other if other.starts_with("endrace-rewards@") => {
+            let (key, tier) = other["endrace-rewards@".len()..].split_once(':')?;
+            Some(EndRaceKind::Rewards {
+                medal: None,
+                tier: Some((key.to_string(), tier.to_string())),
+            })
+        }
         "endrace-rewards-gold" => Some(EndRaceKind::Rewards {
             medal: Some(Medal::Gold),
+            tier: None,
         }),
         "endrace-rewards-silver" => Some(EndRaceKind::Rewards {
             medal: Some(Medal::Silver),
+            tier: None,
         }),
         "endrace-rewards-bronze" => Some(EndRaceKind::Rewards {
             medal: Some(Medal::Bronze),
+            tier: None,
         }),
         "endrace-podium" | "endrace_podium" => Some(EndRaceKind::Podium),
         "endrace-menu" | "endrace_menu" => Some(EndRaceKind::Menu {
@@ -115,6 +131,33 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
         "endrace-rewards-split" | "endrace_rewards_split" => Some(EndRaceKind::SplitRewards),
         other => super::endrace_touch_page::touch_kind(other).map(EndRaceKind::Touch),
     }
+}
+
+/// The class (the gold, silver or bronze whose trophy and jingle stand for it) and, for a tier
+/// the title has no phrase for, the tier itself, of tier `name` in the campaign `key` a mod
+/// carries for `title`.
+fn own_tier(
+    title: &'static oag_title::Title,
+    key: &str,
+    name: &str,
+) -> Result<(
+    Option<Medal>,
+    Option<oag_tables::race_campaign::MedalTier>,
+    Option<String>,
+)> {
+    let mods = crate::mods::Mods::load_for_profile()?;
+    let installed = mods.installed_for(title, &|_| true);
+    let custom = installed
+        .get(key)
+        .with_context(|| format!("no mod campaign {key} for {}", title.name))?;
+    let medal = custom
+        .tiers
+        .find(name)
+        .with_context(|| format!("campaign {key} has no medal tier {name:?}"))?;
+    let own = (!matches!(name, "gold" | "silver" | "bronze"))
+        .then(|| custom.tiers.get(medal).cloned())
+        .flatten();
+    Ok((Some(custom.tiers.class(medal)), own, custom.words.clone()))
 }
 
 /// This project's own fixed 60 Hz tick - see
@@ -314,7 +357,14 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
-        EndRaceKind::Rewards { medal } => {
+        EndRaceKind::Rewards { medal, tier } => {
+            let (medal, tier, words) = match tier {
+                Some((key, name)) => own_tier(title, &key, &name)?,
+                None => (medal, None, None),
+            };
+            let mut with_words = strings.clone();
+            crate::campaign::custom::layer_words(&mut with_words, words.as_deref());
+            let strings = &with_words;
             // The trophy is a 3D pass after the draw list, the one the
             // live `EndRaceRuntime::draw` makes - see
             // `crate::endrace::Trophy`.
@@ -338,6 +388,7 @@ fn endrace_page(
                 });
             let model = oag_ui_screens::endrace::Rewards {
                 medal,
+                tier,
                 campaign: true,
                 // The reference capture's own numbers
                 // (`docs/ui/campaign-screens.md`'s "After a campaign race,
@@ -528,6 +579,7 @@ fn endrace_page(
         EndRaceKind::SplitRewards => {
             let panel = |team: &str, award, total| oag_ui_screens::endrace::Rewards {
                 medal: None,
+                tier: None,
                 campaign: false,
                 loyalty: Some(oag_ui_screens::endrace::Loyalty {
                     team_name: team.to_string(),
@@ -738,6 +790,7 @@ fn hd_endrace_page(
             // The same synthetic race the Results arm above draws: the
             // player first, on a campaign cell whose law gave gold for it.
             let model = oag_ui_screens::endrace::HdRewards {
+                tier: None,
                 place: Some(1),
                 medal: Some(oag_tables::race_campaign::Medal::Gold),
                 campaign: true,

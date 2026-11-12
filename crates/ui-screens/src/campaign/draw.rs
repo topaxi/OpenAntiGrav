@@ -5,7 +5,7 @@
 //! `CellSelection`, `Layout`, `GridSummary`) stay in the parent module;
 //! this file only turns one into a [`oag_ui::menu::Layers`].
 
-use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, MedalTiers, Mode};
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
@@ -112,14 +112,11 @@ pub fn grid_draw_list(
                     .as_deref()
                     .and_then(|n| hex_slot_xy(n, "Medal_"))
                     .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
-                out.push(medal_hex_draw(
+                out.push(tinted_medal_draw(
                     image,
                     placed,
                     hex,
-                    medal,
-                    model.medal_art(),
-                    None,
-                    sprites,
+                    model.tiers().argb(medal),
                 ));
             }
             continue;
@@ -272,9 +269,8 @@ pub fn cell_draw_list(
                     image,
                     placed,
                     hex,
-                    medal,
-                    model.medal_art(),
-                    model.difficulty_at(x, y),
+                    (medal, model.medal_block_at(x, y)),
+                    (model.medal_art(), model.tiers()),
                     sprites,
                 ),
                 None => tinted_medal_draw(image, placed, hex, 0xffff_ffff),
@@ -288,6 +284,7 @@ pub fn cell_draw_list(
         return layers;
     };
 
+    let rows = model.target_rows();
     let counting = matches!(cell.mode, Mode::Zone | Mode::Elimination);
     let targets_visible = matches!(
         cell.mode,
@@ -338,12 +335,18 @@ pub fn cell_draw_list(
             "Line4" | "Line8" => None,
             "Line6" => Some(format!(
                 "{}/{}",
-                model.selected_medal().map_or(0, Medal::points),
-                Medal::Gold.points()
+                model
+                    .selected_medal()
+                    .map_or(0, |m| model.tiers().points(m)),
+                rows.as_ref().and_then(|rows| rows.first()).map_or_else(
+                    || model.tiers().best_points(),
+                    |(best, _)| model.tiers().points(*best),
+                )
             )),
             "Line7" if !targets_visible => Some(medal_line(
                 model.selected_medal(),
                 model.selected_difficulty(),
+                model.tiers(),
                 strings,
             )),
             "Line7" => None,
@@ -352,11 +355,22 @@ pub fn cell_draw_list(
             // see `difficulty_button_line`'s own doc.
             "DifficultyButton" => Some(difficulty_button_line(model.difficulty(), strings)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
-                Some(strings.get_or_id("IG_HUD_TARGET").to_string())
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                (rows.as_ref().is_none_or(|rows| row < rows.len()))
+                    .then(|| strings.get_or_id("IG_HUD_TARGET").to_string())
             }
-            "Target0" if targets_visible => Some(target_value(cell.gold, &cell.mode)),
-            "Target1" if targets_visible => Some(target_value(cell.silver, &cell.mode)),
-            "Target2" if targets_visible => Some(target_value(cell.bronze, &cell.mode)),
+            "Target0" | "Target1" | "Target2" if targets_visible => {
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                match &rows {
+                    Some(rows) => rows
+                        .get(row)
+                        .map(|(_, target)| target_value(*target, &cell.mode)),
+                    None => Some(target_value(
+                        [cell.gold, cell.silver, cell.bronze][row],
+                        &cell.mode,
+                    )),
+                }
+            }
             "Target0 Title" | "Target1 Title" | "Target2 Title" | "Target0" | "Target1"
             | "Target2" => None,
             _ => text.string.clone(),
@@ -373,7 +387,20 @@ pub fn cell_draw_list(
             let Some(placed) = sprites(&image.src) else {
                 continue;
             };
-            out.push(image_draw(image, placed));
+            let row = usize::from(name.as_bytes()[6] - b'0');
+            match &rows {
+                Some(rows) => {
+                    if let Some((medal, _)) = rows.get(row) {
+                        out.push(image.sprite_draw(
+                            placed,
+                            image.x,
+                            image.y,
+                            model.tiers().argb(*medal),
+                        ));
+                    }
+                }
+                None => out.push(image_draw(image, placed)),
+            }
         }
     }
     let _ = counting; // direction is `Cell::evaluate_medal`'s own concern, not this draw's
@@ -507,22 +534,25 @@ fn track_line(cell: &Cell, strings: &StringTable) -> String {
 pub(super) fn medal_line(
     medal: Option<Medal>,
     difficulty: Option<Difficulty>,
+    tiers: &MedalTiers,
     strings: &StringTable,
 ) -> String {
-    let id = match medal {
-        Some(Medal::Gold) => "IG_HUD_GOLD",
-        Some(Medal::Silver) => "IG_HUD_SILVER",
-        Some(Medal::Bronze) => "IG_HUD_BRONZE",
-        None => "MSC_NONE",
+    let name = match medal {
+        Some(medal) => match tiers.get(medal).and_then(|tier| tier.string_id.as_deref()) {
+            Some(id) => strings.get_or_id(id).to_string(),
+            None => tiers
+                .get(medal)
+                .map_or_else(String::new, |tier| tier.name.to_ascii_uppercase()),
+        },
+        None => strings.get_or_id("MSC_NONE").to_string(),
     };
     if let (Some(_), Some(difficulty)) = (medal, difficulty) {
         return format!(
-            "{} ({})",
-            strings.get_or_id(id),
+            "{name} ({})",
             strings.get_or_id(difficulty_rung_id(difficulty))
         );
     }
-    strings.get_or_id(id).to_string()
+    name
 }
 
 /// The bare idstring `Cell_SavedDifficulty`/`CellSelection_Update` both key
@@ -617,38 +647,17 @@ pub(crate) fn image_draw(image: &Image, placed: Placed) -> Draw {
     image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
-/// The medal-colour swatch's own ARGB: gold, silver, bronze. Both
-/// `CellSelection_PopulateGrid` (`0x088d5f50..64`) and
-/// `GridSelection_PopulateTiles` (`0x088de8f4..908`) build this three-entry
-/// table from immediates and index it by medal ordinal; PS2 reads the same
-/// twelve bytes from `.data` (`0x2b34c8`, `0x2b48f8`). The alpha byte is
-/// replaced by the screen's fade at draw time. The panel's `Target0..2
-/// Image` swatches author the same three values.
-pub(super) fn medal_argb(medal: Medal) -> u32 {
-    match medal {
-        Medal::Gold => 0xfffa_eb38,
-        Medal::Silver => 0xffda_e3e4,
-        Medal::Bronze => 0xffdf_942f,
-    }
-}
-
-/// The difficulty block a medal with no saved difficulty is drawn from. **Chosen, not
-/// measured**: Pulse's own default rung is `Medium` (`CellSelection::difficulty`), and a
-/// tier's hex belongs to no single event.
-const UNRECORDED_DIFFICULTY: Difficulty = Difficulty::Medium;
-
 /// A medal's hex: `art`'s atlas frame for the medal and the difficulty it was earned on when
 /// the atlas is in the sprite sheet, the title's tinted swatch otherwise.
 pub(super) fn medal_hex_draw(
     image: &Image,
     placed: Placed,
     hex: Option<[f32; 4]>,
-    medal: Medal,
-    art: &MedalArt,
-    difficulty: Option<Difficulty>,
+    (medal, difficulty): (Medal, Difficulty),
+    (art, tiers): (&MedalArt, &MedalTiers),
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Draw {
-    if let Some(frame) = art.frame(medal, difficulty.unwrap_or(UNRECORDED_DIFFICULTY))
+    if let Some(frame) = art.frame(tiers, medal, difficulty)
         && let Some(atlas) = art.image().and_then(sprites)
     {
         let [x, y, width, height] = hex.unwrap_or([image.x, image.y, 32.0, 32.0]);
@@ -664,7 +673,7 @@ pub(super) fn medal_hex_draw(
         };
         return cropped.sprite_draw(atlas, x, y, 0xffff_ffff);
     }
-    tinted_medal_draw(image, placed, hex, medal_argb(medal))
+    tinted_medal_draw(image, placed, hex, tiers.argb(medal))
 }
 
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored

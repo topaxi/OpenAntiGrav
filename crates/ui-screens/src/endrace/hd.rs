@@ -712,7 +712,7 @@ pub fn hd_rewards_draw_list(
             Some("BigPos") => model.place.map(|place| place.to_string()),
             Some("RewardLine1") => model
                 .campaign
-                .then(|| medal_award_text(model.medal, strings)),
+                .then(|| medal_award_text(model.medal, model.tier.as_ref(), strings)),
             Some(_) => None,
         };
         let Some(content) = content else { continue };

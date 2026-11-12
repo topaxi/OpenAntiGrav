@@ -141,8 +141,7 @@ fn an_atlas_the_sheet_lacks_and_the_default_art_draw_the_swatch() {
 }
 
 #[test]
-fn a_tier_hex_draws_the_middle_block_frame_of_its_medal() {
-    let at = atlas_placed();
+fn a_tier_hex_keeps_the_titles_swatch_whatever_the_art() {
     let model = GridSelection::new(vec![GridSummary {
         name: "grid0".to_string(),
         cell_count: 8,
@@ -154,12 +153,7 @@ fn a_tier_hex_draws_the_middle_block_frame_of_its_medal() {
         flyer_name: None,
     }])
     .with_medal_art(atlas(true));
-    assert!(
-        atlas_crops(&grid_draws(&model, true)).contains(&at.sheet_rect([0.0, 183.0, 60.0, 60.0]))
-    );
+    assert!(atlas_crops(&grid_draws(&model, true)).is_empty());
     let plain = GridSelection::new(model.grids().to_vec());
-    assert_eq!(
-        grid_draws(&model.clone().with_medal_art(MedalArt::Swatch), true),
-        grid_draws(&plain, true)
-    );
+    assert_eq!(grid_draws(&model, true), grid_draws(&plain, true));
 }

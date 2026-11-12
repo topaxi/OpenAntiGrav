@@ -484,25 +484,11 @@ pub fn hd_cell_draw_list(
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
             if let Some(medal) = model.medal_at(x, y) {
-                // **Falls back to `Medium`, not `Hard`.** A medal with no
-                // recorded difficulty was evaluated by the pre-per-difficulty
-                // path (`Cell::evaluate_medal`, always against the medium
-                // rung - `Cell::gold`/`silver`/`bronze` alias it), so
-                // crediting it at Hard here would show a harder badge than
-                // the disc's own `SaveData_MigrateCellMedalsToHardElite`
-                // would for a `Race`/`Elimination` result: that migration
-                // only touches `TimeTrial`/`SpeedLap`/`Zone`, the three
-                // modes whose raw value does not depend on AI skill - an
-                // AI-independent time can honestly be credited at Hard, a
-                // placement against Hard's own tougher AI cannot. `Medium`
-                // is the rung the value was actually judged against, not a
-                // guess. See [`super::CellSelection::difficulty_at`]'s own
-                // doc for when this triggers.
-                let difficulty = model.difficulty_at(x, y).unwrap_or(Difficulty::Medium);
+                let difficulty = model.medal_block_at(x, y);
                 out.push(hd_tinted_medal_draw(
                     image,
                     placed,
-                    medal,
+                    model.tiers().class(medal),
                     difficulty,
                     art.medal_tier_rows,
                 ));
@@ -619,10 +605,17 @@ pub fn hd_cell_draw_list(
             )),
             "Points" => Some(format!(
                 "{}/{}",
-                model.selected_medal().map_or(0, |m| m.points()),
-                oag_tables::race_campaign::Medal::Gold.points()
+                model
+                    .selected_medal()
+                    .map_or(0, |m| model.tiers().points(m)),
+                model.tiers().best_points()
             )),
-            "Best" => Some(medal_line(model.selected_medal(), None, strings)),
+            "Best" => Some(medal_line(
+                model.selected_medal(),
+                None,
+                model.tiers(),
+                strings,
+            )),
             // The square-button prompt - see [`hd_difficulty_button_line`]'s
             // own doc for the `RB_AI_DIF`/`RB_DIF` split and which modes get
             // computed text at all.
@@ -665,7 +658,7 @@ pub fn hd_cell_draw_list(
                 Some(tier) => out.push(hd_tinted_medal_draw(
                     image,
                     placed,
-                    tier,
+                    model.tiers().class(tier),
                     model.difficulty(),
                     art.medal_tier_rows,
                 )),

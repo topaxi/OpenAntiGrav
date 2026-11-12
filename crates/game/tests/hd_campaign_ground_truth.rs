@@ -70,7 +70,7 @@ fn to_record(medal: Medal) -> records::Medal {
     match medal {
         Medal::Gold => records::Medal::Gold,
         Medal::Silver => records::Medal::Silver,
-        Medal::Bronze => records::Medal::Bronze,
+        _ => records::Medal::Bronze,
     }
 }
 
@@ -221,8 +221,13 @@ fn a_medal_persists_and_the_points_it_earns_open_the_next_grid() {
     let mut store = Store::default();
     assert!(!race_campaign::grid_points_met(
         &hd.grids,
+        oag_tables::race_campaign::MedalTiers::standard(),
         "grid0",
-        &campaign_medal_of(&store, TITLE)
+        &campaign_medal_of(
+            &store,
+            TITLE,
+            oag_tables::race_campaign::MedalTiers::standard()
+        )
     ));
 
     let time_trial = cell(&hd.grids, "grid0_2_2");
@@ -251,13 +256,39 @@ fn a_medal_persists_and_the_points_it_earns_open_the_next_grid() {
 
     let mut store = reloaded;
     let met = |store: &Store| {
-        race_campaign::grid_points_met(&hd.grids, "grid0", &campaign_medal_of(store, TITLE))
+        race_campaign::grid_points_met(
+            &hd.grids,
+            oag_tables::race_campaign::MedalTiers::standard(),
+            "grid0",
+            &campaign_medal_of(
+                store,
+                TITLE,
+                oag_tables::race_campaign::MedalTiers::standard(),
+            ),
+        )
     };
     for cell in grid0.cells.iter().filter(|c| c.name != time_trial.name) {
-        let earned = grid0.points_earned(&campaign_medal_of(&store, TITLE));
+        let earned = grid0.points_earned(
+            oag_tables::race_campaign::MedalTiers::standard(),
+            &campaign_medal_of(
+                &store,
+                TITLE,
+                oag_tables::race_campaign::MedalTiers::standard(),
+            ),
+        );
         assert_eq!(met(&store), earned >= grid0.required_points);
         store.record_campaign(TITLE, &cell.name, Some(records::Medal::Gold), None);
     }
-    assert_eq!(grid0.points_earned(&campaign_medal_of(&store, TITLE)), 18);
+    assert_eq!(
+        grid0.points_earned(
+            oag_tables::race_campaign::MedalTiers::standard(),
+            &campaign_medal_of(
+                &store,
+                TITLE,
+                oag_tables::race_campaign::MedalTiers::standard()
+            )
+        ),
+        18
+    );
     assert!(met(&store));
 }

@@ -137,7 +137,7 @@ impl FlyerShot {
     }
 }
 
-use crate::unlock::{to_campaign_difficulty, to_campaign_medal};
+use crate::unlock::{campaign_tier, to_campaign_difficulty};
 
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
@@ -225,6 +225,16 @@ pub(super) fn campaign_page(
         }
         None => None,
     };
+    let with_words;
+    let strings = match custom.as_ref().and_then(|custom| custom.words.as_deref()) {
+        Some(words) => {
+            let mut table = strings.clone();
+            crate::campaign::custom::layer_words(&mut table, Some(words));
+            with_words = table;
+            &with_words
+        }
+        None => strings,
+    };
     let mut campaign = campaign;
     if let Some(custom) = &custom {
         campaign.grids.clone_from(&custom.grids);
@@ -235,6 +245,10 @@ pub(super) fn campaign_page(
     // see `crate::campaign::static_footer_overlay`. Read before
     // `campaign.sprites` moves out below.
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
+    let tiers = custom.as_ref().map_or_else(
+        || oag_tables::race_campaign::MedalTiers::standard().clone(),
+        |custom| custom.tiers.clone(),
+    );
     // The medal art a mod asks for, as `Session::open_campaign` resolves it live.
     let medal_art = crate::campaign::medal_art::apply(
         &crate::mods::Mods::load_for_profile()?.installed_for(title, &|_| true),
@@ -254,12 +268,10 @@ pub(super) fn campaign_page(
     let cell_model = |cells: Vec<oag_tables::race_campaign::Cell>, which: usize| {
         let build = |cells: Vec<oag_tables::race_campaign::Cell>| {
             let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &|name| {
-                records
-                    .campaign_medal(&campaign_title, name)?
-                    .best_medal
-                    .map(to_campaign_medal)
+                campaign_tier(records.campaign_medal(&campaign_title, name)?, &tiers)
             })
-            .with_medal_art(medal_art.clone());
+            .with_medal_art(medal_art.clone())
+            .with_tiers(tiers.clone());
             // The earned rung picks the atlas block; the swatch ignores it, and a still of the
             // swatch keeps drawing the row text it always did.
             let model = if medal_art == oag_ui_screens::campaign::MedalArt::Swatch {
@@ -273,12 +285,16 @@ pub(super) fn campaign_page(
                 })
             };
             match &custom {
-                Some(custom) => model.with_fixed_locks(&|name| {
-                    custom.fixed_lock(
-                        name,
-                        &crate::unlock::campaign_medal_of(records, &campaign_title),
-                    )
-                }),
+                Some(custom) => model
+                    .with_fixed_locks(&|name| {
+                        custom.fixed_lock(
+                            name,
+                            &crate::unlock::campaign_medal_of(records, &campaign_title, &tiers),
+                        )
+                    })
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
                 None => model,
             }
         };
@@ -299,10 +315,16 @@ pub(super) fn campaign_page(
         model
     };
     let medal_of = |cell_name: &str| {
-        records
-            .campaign_medal(&campaign_title, cell_name)?
-            .best_medal
-            .map(to_campaign_medal)
+        campaign_tier(records.campaign_medal(&campaign_title, cell_name)?, &tiers)
+    };
+    // A mod campaign's grid asks for what its events can award, not the best tier everywhere.
+    let summarise = |grid: &oag_tables::race_campaign::Grid| {
+        let mut summary =
+            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, &tiers, &medal_of);
+        if let Some(custom) = &custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
     };
     // [`medal_of`]'s own sibling for `oag_ui_screens::campaign::CellSelection::with_difficulty`
     // - **HD only**, per that method's own doc; read unconditionally here
@@ -431,14 +453,7 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { tier, .. } => {
                 let mut model = oag_ui_screens::campaign::GridSelection::new(
-                    hd_grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &medal_of,
-                            )
-                        })
-                        .collect(),
+                    hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
@@ -476,11 +491,9 @@ pub(super) fn campaign_page(
                     &campaign_title,
                     true,
                 );
-                let grid_summary =
-                    grid.map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
-                        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                            grid, &medal_of,
-                        )
+                let grid_summary = grid
+                    .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
+                        summarise(grid)
                     });
                 oag_ui_screens::campaign::hd::hd_cell_draw_list(
                     &model,
@@ -516,17 +529,10 @@ pub(super) fn campaign_page(
             }
             CampaignKind::Grid { .. } => {
                 let model = oag_ui_screens::campaign::GridSelection::new(
-                    campaign
-                        .grids
-                        .iter()
-                        .map(|grid| {
-                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
-                                grid, &medal_of,
-                            )
-                        })
-                        .collect(),
+                    campaign.grids.iter().map(&summarise).collect(),
                 )
-                .with_medal_art(medal_art.clone());
+                .with_medal_art(medal_art.clone())
+                .with_tiers(tiers.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
                 oag_ui_screens::campaign::grid_draw_list(

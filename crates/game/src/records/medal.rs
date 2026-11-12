@@ -57,6 +57,16 @@ impl Medal {
         }
     }
 
+    /// The word a campaign's tier list names this class by: `gold`, `silver`, `bronze`.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Gold => "gold",
+            Self::Silver => "silver",
+            Self::Bronze => "bronze",
+        }
+    }
+
     /// The better of two medals. Named rather than inlined as `self.min(other)`
     /// at the call site, so a reader of [`Store::record`] does not have to
     /// work out for themselves why `min` means "best" here - see this type's

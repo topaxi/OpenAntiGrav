@@ -378,11 +378,14 @@ fn a_grid_with_one_gold_cell_shows_it_on_medals_and_points() {
         flyer_name: None,
         billboard_name: None,
     };
-    let summary = GridSummary::from_grid_with_medals(&grid, &|name| {
+    let summary = GridSummary::from_grid_with_medals(&grid, MedalTiers::standard(), &|name| {
         (name == "grid0_2_1").then_some(Medal::Gold)
     });
     assert_eq!(summary.gold_medals, 1);
-    assert_eq!(summary.points_earned, Medal::Gold.points());
+    assert_eq!(
+        summary.points_earned,
+        Medal::Gold.points(MedalTiers::standard())
+    );
     assert_eq!(summary.cell_count, 2);
     assert_eq!(summary.max_points, 6);
     assert!(!summary.locked, "grid0 authors Locked=\"false\"");

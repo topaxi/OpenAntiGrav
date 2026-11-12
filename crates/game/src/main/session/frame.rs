@@ -1073,17 +1073,20 @@ impl Session {
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
                     .filter(|_| !unofficial)
                 {
-                    self.records.record_campaign(
-                        stage
-                            .campaign_custom
-                            .as_ref()
-                            .map(|custom| custom.records_title.as_str())
-                            .or(campaign_title.as_deref())
-                            .unwrap_or(&key.title),
-                        &cell.name,
-                        observation.campaign_medal,
-                        observation.campaign_difficulty,
-                    );
+                    match stage.campaign_custom.as_ref() {
+                        Some(launch) => launch.record_result(
+                            &mut self.records,
+                            &cell.name,
+                            stage.campaign_tier_name().as_deref(),
+                            observation.campaign_difficulty,
+                        ),
+                        None => self.records.record_campaign(
+                            campaign_title.as_deref().unwrap_or(&key.title),
+                            &cell.name,
+                            observation.campaign_medal,
+                            observation.campaign_difficulty,
+                        ),
+                    }
                 }
                 if let Some(progress) = stage.campaign_2048_event.as_ref().filter(|_| !unofficial) {
                     self.records.record_campaign(

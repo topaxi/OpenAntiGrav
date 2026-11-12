@@ -58,7 +58,7 @@ use oag_ui::screen::Image;
 /// function already uses, but nothing pins whether the real screen holds
 /// still on it or animates a spin through the rest of the row (the atlas
 /// is far wider than one 60px frame). No earned-medal capture exists to
-/// check either way - the same gap `medal_argb`'s own doc already records.
+/// check either way - the same gap `MedalTiers::standard`'s own doc records.
 /// `u=0` is used because it is what the disc's own comparable widget uses,
 /// not a guess.
 ///
@@ -116,11 +116,7 @@ pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) 
     const FRAME: f32 = 60.0;
     const ROW_PITCH: f32 = 61.0;
     const BLOCK_PITCH: f32 = 183.0;
-    let tier_row = match medal {
-        Medal::Gold => tier_rows[0],
-        Medal::Silver => tier_rows[1],
-        Medal::Bronze => tier_rows[2],
-    };
+    let tier_row = tier_rows[medal.index().min(2)];
     let block = match difficulty {
         Difficulty::Easy => 0.0,
         Difficulty::Medium => 1.0,
@@ -152,7 +148,7 @@ pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) 
 /// visibly-offset badge on every column, and was reverted in favour of
 /// this, the simpler and disc-measured choice. **No tint**: unlike Pulse's
 /// `hex_filled.mip` (a plain white hex [`super::super::draw::tinted_medal_draw`]
-/// still colours with [`super::super::draw::medal_argb`] - that path is
+/// still colours with `MedalTiers::argb` - that path is
 /// untouched, and still correct for Pulse), HD's own atlas frame already
 /// carries the tier's colour baked into its texels, so multiplying a flat
 /// swatch over it a second time was the other half of the bug this

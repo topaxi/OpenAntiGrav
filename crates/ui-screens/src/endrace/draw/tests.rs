@@ -250,6 +250,7 @@ fn a_position_headline_resolves_and_an_unresolved_one_draws_nothing() {
 #[test]
 fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row_absent_one() {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: None,
@@ -287,6 +288,7 @@ fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row_absent_one() {
 #[test]
 fn rewards_draws_the_loyalty_row_once_the_model_carries_an_award() {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: Some(crate::endrace::Loyalty {
@@ -330,6 +332,7 @@ fn loyalty_bar(layers: &oag_ui::menu::Layers) -> Option<([f32; 4], [f32; 4])> {
 
 fn rewards_bar_at(total: u32) -> Option<([f32; 4], [f32; 4])> {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: Some(crate::endrace::Loyalty {
@@ -388,11 +391,13 @@ fn the_loyalty_bar_is_total_times_point_00124_pixels_and_texels_wide() {
 fn rewards_hides_the_glyph_off_a_non_campaign_race_or_an_earned_medal() {
     for model in [
         Rewards {
+            tier: None,
             medal: None,
             campaign: false,
             loyalty: None,
         },
         Rewards {
+            tier: None,
             medal: Some(Medal::Gold),
             campaign: true,
             loyalty: None,
@@ -550,4 +555,44 @@ fn a_two_person_table_names_and_highlights_each_person() {
         })
         .count();
     assert_eq!(highlights, 2, "one highlight per person's row");
+}
+
+/// A tier a campaign mod declares, which the title has no phrase for, names itself in the award
+/// line; gold, silver and bronze keep the title's own.
+#[test]
+fn a_campaign_tier_the_title_has_no_phrase_for_names_itself_in_the_award_line() {
+    let mut strings = strings();
+    strings.merge(std::collections::HashMap::from([
+        (
+            "OAG_MEDAL_AWARD".to_string(),
+            "%s MEDAL AWARDED".to_string(),
+        ),
+        ("PLATINUM_WORD".to_string(), "PLATINUM".to_string()),
+    ]));
+    let award = |tier: Option<oag_tables::race_campaign::MedalTier>| {
+        let model = Rewards {
+            tier,
+            medal: Some(oag_tables::race_campaign::Medal::Gold),
+            campaign: true,
+            loyalty: None,
+        };
+        texts(&rewards_draw_list(
+            &model,
+            &rewards_layout(),
+            &skin(),
+            &Frame::default(),
+            &strings,
+            None,
+            false,
+            &|_| placed(),
+        ))
+    };
+    let platinum = oag_tables::race_campaign::MedalTier {
+        name: "platinum".to_string(),
+        points: 4,
+        argb: 0xff9f_e3ff,
+        string_id: Some("PLATINUM_WORD".to_string()),
+    };
+    assert!(award(Some(platinum)).contains(&"PLATINUM MEDAL AWARDED".to_string()));
+    assert!(award(None).contains(&"Gold medal awarded".to_string()));
 }

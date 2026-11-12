@@ -68,9 +68,41 @@ pub struct CampaignDef {
     header: Option<oag_schema::Header>,
     /// Who the campaign is.
     pub campaign: Info,
+    /// The medal tiers, best first. Empty is the title's own gold, silver and bronze.
+    #[serde(rename = "medal-tier", default, skip_serializing_if = "Vec::is_empty")]
+    pub medal_tiers: Vec<MedalTierDef>,
     /// The tiers, in page order.
     #[serde(rename = "grid", default)]
     pub grids: Vec<GridDef>,
+}
+
+/// `[[medal-tier]]`: one medal a campaign awards.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MedalTierDef {
+    /// What targets, requirements and records name it by: lowercase letters, digits, `-` and `_`.
+    pub name: String,
+    /// What a cell earned at this tier adds to its grid's points.
+    pub points: u32,
+    /// The swatch colour, `#RRGGBB`.
+    pub colour: String,
+    /// The string id of the tier's name on screen; absent shows the name in capitals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub string_id: Option<String>,
+}
+
+impl MedalTierDef {
+    /// [`Self::colour`] as `0xFFRRGGBB`, `None` when it is not `#RRGGBB`.
+    #[must_use]
+    pub fn argb(&self) -> Option<u32> {
+        let hex = self.colour.strip_prefix('#')?;
+        if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        u32::from_str_radix(hex, 16)
+            .ok()
+            .map(|rgb| 0xff00_0000 | rgb)
+    }
 }
 
 /// `[campaign]`.
@@ -271,9 +303,49 @@ pub struct MedalsDef {
     /// The hard rung.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hard: Option<Targets>,
+    /// Targets of the campaign's own tiers other than gold, silver and bronze.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra: Vec<TierTarget>,
+}
+
+/// One target of a tier a campaign declares by name.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TierTarget {
+    /// The `[[medal-tier]]` it is for.
+    pub tier: String,
+    /// A place, a time in seconds, or a count, by mode.
+    pub target: f64,
 }
 
 impl MedalsDef {
+    /// Every tier name the targets mention, wherever they sit.
+    #[must_use]
+    pub fn named_tiers(&self) -> Vec<&str> {
+        fn add<'a>(names: &mut Vec<&'a str>, given: [Option<f64>; 3], extra: &'a [TierTarget]) {
+            for (name, given) in ["gold", "silver", "bronze"].into_iter().zip(given) {
+                if given.is_some() {
+                    names.push(name);
+                }
+            }
+            names.extend(extra.iter().map(|t| t.tier.as_str()));
+        }
+        let mut names = Vec::new();
+        add(
+            &mut names,
+            [self.gold, self.silver, self.bronze],
+            &self.extra,
+        );
+        for rung in [&self.easy, &self.medium, &self.hard].into_iter().flatten() {
+            add(
+                &mut names,
+                [rung.gold, rung.silver, rung.bronze],
+                &rung.extra,
+            );
+        }
+        names
+    }
+
     /// The flat triple.
     #[must_use]
     pub fn all(&self) -> Targets {
@@ -281,13 +353,14 @@ impl MedalsDef {
             gold: self.gold,
             silver: self.silver,
             bronze: self.bronze,
+            extra: self.extra.clone(),
         }
     }
 }
 
 /// One rung's targets: a place, a time in seconds, or a count, by mode. An
 /// absent tier is never awarded.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Targets {
     /// Gold.
@@ -299,13 +372,35 @@ pub struct Targets {
     /// Bronze.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bronze: Option<f64>,
+    /// The campaign's own tiers other than gold, silver and bronze.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra: Vec<TierTarget>,
 }
 
 impl Targets {
     /// Whether no tier is named.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.gold.is_none() && self.silver.is_none() && self.bronze.is_none()
+        self.gold.is_none()
+            && self.silver.is_none()
+            && self.bronze.is_none()
+            && self.extra.is_empty()
+    }
+
+    /// The target of the tier called `name`: gold, silver and bronze by their own keys, any
+    /// other by [`Self::extra`].
+    #[must_use]
+    pub fn of(&self, name: &str) -> Option<f64> {
+        match name {
+            "gold" => self.gold,
+            "silver" => self.silver,
+            "bronze" => self.bronze,
+            other => self
+                .extra
+                .iter()
+                .find(|t| t.tier == other)
+                .map(|t| t.target),
+        }
     }
 }
 
@@ -348,7 +443,8 @@ fn any() -> String {
     "any".to_string()
 }
 
-const MEDALS: [&str; 4] = ["any", "bronze", "silver", "gold"];
+/// The tier names a campaign with no `[[medal-tier]]` has.
+const STANDARD_TIERS: [&str; 3] = ["gold", "silver", "bronze"];
 
 impl CampaignDef {
     /// A definition ready to be written, carrying the schema header
@@ -361,6 +457,7 @@ impl CampaignDef {
                 version: oag_schema::LANGUAGE_VERSION.to_string(),
             }),
             campaign,
+            medal_tiers: Vec::new(),
             grids,
         }
     }
@@ -376,7 +473,9 @@ impl CampaignDef {
         self.check()?;
         let mut def = self.clone();
         if def.header.is_none() {
+            let tiers = std::mem::take(&mut def.medal_tiers);
             def = Self::new(def.campaign, def.grids);
+            def.medal_tiers = tiers;
         }
         toml::to_string(&def).map_err(|e| bad("write", e.to_string()))
     }
@@ -410,6 +509,7 @@ impl CampaignDef {
         if self.grids.is_empty() {
             return Err(bad("[campaign]", "no [[grid]]"));
         }
+        let tiers = self.tier_names()?;
         if self.grids.len() > MAX_GRIDS {
             return Err(bad(
                 "[campaign]",
@@ -470,19 +570,66 @@ impl CampaignDef {
                             format!("requires {:?}: no such event", requirement.event),
                         ));
                     }
-                    if !MEDALS.contains(&requirement.medal.as_str()) {
+                    if requirement.medal != "any" && !tiers.contains(&requirement.medal.as_str()) {
                         return Err(bad(
                             &at,
                             format!(
-                                "requires medal {:?}: one of any, bronze, silver, gold",
-                                requirement.medal
+                                "requires medal {:?}: one of any, {}",
+                                requirement.medal,
+                                tiers.join(", ")
                             ),
                         ));
+                    }
+                }
+                if let Some(medals) = &event.medals {
+                    for name in medals.named_tiers() {
+                        if !tiers.contains(&name) {
+                            return Err(bad(
+                                &at,
+                                format!(
+                                    "medals name tier {name:?}: this campaign's tiers are {}",
+                                    tiers.join(", ")
+                                ),
+                            ));
+                        }
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+impl CampaignDef {
+    /// The tier names, best first: the declared list, checked, or gold, silver and bronze.
+    fn tier_names(&self) -> Result<Vec<&str>, Error> {
+        if self.medal_tiers.is_empty() {
+            return Ok(STANDARD_TIERS.to_vec());
+        }
+        let mut names: Vec<&str> = Vec::new();
+        for tier in &self.medal_tiers {
+            let at = format!("[[medal-tier]] {:?}", tier.name);
+            if !crate::manifest::valid_id(&tier.name) || tier.name.contains('.') {
+                return Err(bad(
+                    &at,
+                    "a name is lowercase letters, digits, '-' and '_', starting with a letter",
+                ));
+            }
+            if names.contains(&tier.name.as_str()) {
+                return Err(bad(&at, "declared twice"));
+            }
+            if tier.argb().is_none() {
+                return Err(bad(
+                    &at,
+                    format!("colour {:?}: write it as #RRGGBB", tier.colour),
+                ));
+            }
+            names.push(&tier.name);
+        }
+        if names.len() > usize::from(u8::MAX) {
+            return Err(bad("[[medal-tier]]", "at most 255 tiers"));
+        }
+        Ok(names)
     }
 }
 

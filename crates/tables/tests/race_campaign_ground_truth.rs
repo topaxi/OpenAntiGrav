@@ -263,7 +263,7 @@ fn required_points_and_maxima_match_the_documented_ladder() {
             grid.name
         );
         assert_eq!(
-            grid.max_points(),
+            grid.max_points(oag_tables::race_campaign::MedalTiers::standard()),
             expected_max[index],
             "{}: max points",
             grid.name
@@ -317,7 +317,12 @@ fn grid_points_met_reproduces_the_unlock_ladder_on_real_data() {
     assert_eq!(grids[0].cells.len(), 8);
 
     let none = |_: &str| None;
-    assert!(!race_campaign::grid_points_met(&grids, "Grid0", &none));
+    assert!(!race_campaign::grid_points_met(
+        &grids,
+        oag_tables::race_campaign::MedalTiers::standard(),
+        "Grid0",
+        &none
+    ));
 
     let gold_in_grid0 = |name: &str| {
         grids[0]
@@ -328,6 +333,7 @@ fn grid_points_met_reproduces_the_unlock_ladder_on_real_data() {
     };
     assert!(race_campaign::grid_points_met(
         &grids,
+        oag_tables::race_campaign::MedalTiers::standard(),
         "Grid0",
         &gold_in_grid0
     ));
@@ -335,6 +341,7 @@ fn grid_points_met_reproduces_the_unlock_ladder_on_real_data() {
     // the comparison is per named grid, not "any medal anywhere".
     assert!(!race_campaign::grid_points_met(
         &grids,
+        oag_tables::race_campaign::MedalTiers::standard(),
         "Grid1",
         &gold_in_grid0
     ));

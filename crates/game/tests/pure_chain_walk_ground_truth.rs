@@ -87,7 +87,7 @@ fn convert(medal: oag_tables::race_campaign::Medal) -> Medal {
     match medal {
         oag_tables::race_campaign::Medal::Gold => Medal::Gold,
         oag_tables::race_campaign::Medal::Silver => Medal::Silver,
-        oag_tables::race_campaign::Medal::Bronze => Medal::Bronze,
+        _ => Medal::Bronze,
     }
 }
 
@@ -167,7 +167,11 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         event.cell.bronze
     );
     store.record_campaign(TITLE, &event.name, medal.map(convert), None);
-    let held = oag_game::unlock::campaign_medal_of(&store, TITLE);
+    let held = oag_game::unlock::campaign_medal_of(
+        &store,
+        TITLE,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     // The race ended: the chain comes back on the screen that picked it.
     let mut chain = chain_of(&source);
     chain.return_to(&event);

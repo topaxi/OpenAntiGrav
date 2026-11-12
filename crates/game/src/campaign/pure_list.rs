@@ -157,7 +157,7 @@ impl Words {
         match medal {
             Medal::Gold => &self.gold,
             Medal::Silver => &self.silver,
-            Medal::Bronze => &self.bronze,
+            _ => &self.bronze,
         }
     }
 }
@@ -216,7 +216,11 @@ pub fn locked_teams_on(
     }
     match load(archives, title) {
         Ok(campaign) => {
-            let medal_of = crate::unlock::campaign_medal_of(records, title.name);
+            let medal_of = crate::unlock::campaign_medal_of(
+                records,
+                title.name,
+                oag_tables::race_campaign::MedalTiers::standard(),
+            );
             locked_teams(&campaign, &medal_of, "")
         }
         Err(error) => {
