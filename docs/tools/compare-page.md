@@ -689,7 +689,7 @@ substituted: it is the authored `grid0_3_1` node, so the brief's twelve are elev
   a frame shows. Each ours-against-original number is one boot; the old and new ours numbers move by 0.004 to 0.008 either way, the size of the original's own spread.
 - **Vita3K 4285 against the pinned 4095.** This machine's Vita3K is `v0.2.1 4285-885f9168`; the 2048 profile pins `v0.2.1 4095-84184a36`
   (`scripts/compare-environment.toml`), and `environment_text` writes the pin, so a re-render writes 4095 into the five new pairs again. The control (Vineta K, unchanged
-  recipe, 4285) is 0.063 from the stored 4095 frame, inside the spread, so the version is not a confounder here; the pin no longer describes every pair and is the lead's to change.
+  recipe, 4285) is 0.063 from the stored 4095 frame, inside the spread, so the version is not a confounder here. The pin moved to `v0.2.1 4285-885f9168` on 2026-11-12 (maintainer); pairs captured on 4095 keep 4095 in their own `pair.json`.
 - **The map route.**
   - **The tiles:** the Fury Campaign tile is at `(659, 162)` on the Game Mode grid (the HD one at `(477, 162)`); a first tap highlights it (orange) and the pair
     script taps again.
