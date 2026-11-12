@@ -298,6 +298,9 @@ pub struct Custom {
     /// The medal tiers, best first: the title's gold, silver and bronze unless the campaign
     /// declares its own.
     pub tiers: MedalTiers,
+    /// The mod's own `strings/english.toml`, the words a tier's `string_id` names: laid over the
+    /// screens' strings by [`layer_words`].
+    pub words: Option<String>,
     /// The tiers.
     pub grids: Vec<Grid>,
     /// Each cell's extras, by cell name.
@@ -402,6 +405,8 @@ pub struct Launch {
     pub records_title: String,
     /// See [`Custom::tiers`].
     pub tiers: MedalTiers,
+    /// See [`Custom::words`].
+    pub words: Option<String>,
     /// What each tier asks of this event ([`Event::tier_targets`]).
     pub tier_targets: TierTargets,
     /// Whose driver flies.
@@ -410,6 +415,16 @@ pub struct Launch {
     pub level: Option<usize>,
     /// Every opponent's pilot, already resolved.
     pub pilot: Option<oag_raceplay::pilots::Entry>,
+}
+
+/// Lays a campaign mod's own words (`words`, its `strings/english.toml`) over `table`, so a
+/// medal tier's `string_id` resolves. A file that does not parse leaves the table as it was.
+pub fn layer_words(table: &mut oag_ui::language::StringTable, words: Option<&str>) {
+    if let Some(text) = words
+        && let Err(reason) = oag_ui::strings::overlay_text(table, text)
+    {
+        log::warn!("campaign words: {reason}");
+    }
 }
 
 impl Launch {
@@ -636,6 +651,7 @@ pub fn compile(
             .collect(),
         records_title: records_title(title, mod_id, &info.id),
         tiers,
+        words: None,
         grids,
         events,
     })
@@ -1101,7 +1117,10 @@ impl Installed {
                     Ok(Some(custom))
                 });
                 match compiled {
-                    Ok(Some(custom)) => installed.campaigns.push(custom),
+                    Ok(Some(mut custom)) => {
+                        custom.words = module.strings("english").ok().flatten();
+                        installed.campaigns.push(custom);
+                    }
                     Ok(None) => {}
                     Err(reason) => {
                         if let Some((other, is_off)) = needed.into_inner() {

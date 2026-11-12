@@ -219,10 +219,7 @@ fn a_target_row_is_tinted_with_its_tiers_colour_and_a_row_with_no_tier_is_not_dr
     );
     let (texts, _) = lines(&timed([0, 15_000, 0, 0]));
     assert_eq!(
-        texts
-            .iter()
-            .filter(|t| t.as_str() == "Target")
-            .count(),
+        texts.iter().filter(|t| t.as_str() == "Target").count(),
         1,
         "one awarded tier, one target title: {texts:?}"
     );

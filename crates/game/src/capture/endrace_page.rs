@@ -140,7 +140,11 @@ fn own_tier(
     title: &'static oag_title::Title,
     key: &str,
     name: &str,
-) -> Result<(Option<Medal>, Option<oag_tables::race_campaign::MedalTier>)> {
+) -> Result<(
+    Option<Medal>,
+    Option<oag_tables::race_campaign::MedalTier>,
+    Option<String>,
+)> {
     let mods = crate::mods::Mods::load_for_profile()?;
     let installed = mods.installed_for(title, &|_| true);
     let custom = installed
@@ -153,7 +157,7 @@ fn own_tier(
     let own = (!matches!(name, "gold" | "silver" | "bronze"))
         .then(|| custom.tiers.get(medal).cloned())
         .flatten();
-    Ok((Some(custom.tiers.class(medal)), own))
+    Ok((Some(custom.tiers.class(medal)), own, custom.words.clone()))
 }
 
 /// This project's own fixed 60 Hz tick - see
@@ -354,10 +358,13 @@ fn endrace_page(
             )
         }
         EndRaceKind::Rewards { medal, tier } => {
-            let (medal, tier) = match tier {
+            let (medal, tier, words) = match tier {
                 Some((key, name)) => own_tier(title, &key, &name)?,
-                None => (medal, None),
+                None => (medal, None, None),
             };
+            let mut with_words = strings.clone();
+            crate::campaign::custom::layer_words(&mut with_words, words.as_deref());
+            let strings = &with_words;
             // The trophy is a 3D pass after the draw list, the one the
             // live `EndRaceRuntime::draw` makes - see
             // `crate::endrace::Trophy`.

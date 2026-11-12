@@ -225,6 +225,16 @@ pub(super) fn campaign_page(
         }
         None => None,
     };
+    let with_words;
+    let strings = match custom.as_ref().and_then(|custom| custom.words.as_deref()) {
+        Some(words) => {
+            let mut table = strings.clone();
+            crate::campaign::custom::layer_words(&mut table, Some(words));
+            with_words = table;
+            &with_words
+        }
+        None => strings,
+    };
     let mut campaign = campaign;
     if let Some(custom) = &custom {
         campaign.grids.clone_from(&custom.grids);

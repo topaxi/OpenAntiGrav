@@ -83,10 +83,12 @@ per-difficulty = true               # one block of three tiers per difficulty
   difficulty draws the middle block (`CellSelection::medal_block_at`, the rule HD's Cell Selection
   shares; chosen, not measured). Grid Selection's tier hexagons keep the title's colour swatch:
   HD's Grid Selection has no tier medal hexagons. Without it, the first block.
-- **`tiers`**: names the tier of each atlas row, so a later tier is a name, not a position. Only
-  `gold`, `silver`, `bronze` load, each once, all three or none; a fourth name is refused with
-  "campaign-defined tiers are not supported yet". A `title` source uses the title's own row order
-  (`oag_title::Campaign::medal_rows`) and ignores it.
+- **`tiers`**: names the tier of each atlas row, top to bottom, by the names a campaign's tiers
+  carry (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of a campaign's own,
+  [custom-campaign.md](../formats/custom-campaign.md)), each once. A tier no row names draws its
+  declared colour as a swatch. A `title` source uses the title's own row order
+  (`oag_title::Campaign::medal_rows`, gold, silver, bronze) and ignores it, so a campaign tier
+  other than those three draws its colour there.
 - **Placement**: a 60 px atlas frame is drawn scaled to the hexagon's own rect (Pulse's
   `Outline_x_y`, 32 x 32 layout units), untinted, the same rect the swatch fills. Frames are 60 px
   tall at a 61 px row pitch.

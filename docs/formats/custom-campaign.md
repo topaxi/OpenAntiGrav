@@ -20,6 +20,12 @@ instead, named in the footer's Square prompt (NEW CAMPAIGN) while the row is sel
 ```toml
 toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/campaign.tosd", version = "1.0.0" }
 
+[[medal-tier]]            # optional, best first: the medals this campaign awards
+name = "platinum"         # lowercase letters, digits, '-', '_': what targets, requirements and records name it by
+points = 4                # what a cell earned at this tier adds to its grid's points
+colour = "#9fe3ff"        # the swatch colour, #RRGGBB
+string_id = "MY_PLATINUM" # optional: the tier's word, from the mod's strings/english.toml; absent shows the name in capitals
+
 [campaign]
 id = "night-run"          # unique in the mod: lowercase letters, digits, '.', '-', '_'
 name = "NIGHT RUN"        # the picker row
@@ -64,6 +70,7 @@ teams = ["Qirex", "Piranha"]          # the opponents' teams, grid slot 1 first
 gold = 1                  # flat: every rung
 silver = 2
 easy = { gold = 2, silver = 3, bronze = 5 }   # optional per-rung overrides
+extra = [{ tier = "platinum", target = 1 }]   # a tier of your own: one row per tier other than gold, silver, bronze
 ```
 
 ## Rules and units
@@ -73,9 +80,10 @@ easy = { gold = 2, silver = 3, bronze = 5 }   # optional per-rung overrides
 | Slot | Cell `gridN_x_y`, the name the title's screens place a hex by (`Cell::grid_coords`). Pulse, HD and Omega all draw the same field: x `0`-`6`, y `0`-`4` on even columns and `0`-`3` on odd ones, odd columns half a hex lower. A neighbour is one of the six hexes around a cell. An event in a slot the layout lacks is logged as unreachable when the campaign opens. |
 | Track file | `file = "tracks/<name>.track.toml"` races a [track file](track-file.md) the mod carries (the manifest and the `.glb` beside it), the way `--track-file` and RACE REMIX's CUSTOM do. `file = "<mod id>:<path>"` races one in another installed mod, which must be for the same title; a mod that is not installed leaves the campaign out, and the log names it. The reference is the dependency: nothing in the manifest declares it yet. Cell Selection names it by the manifest's `track.title`; its records and ghosts key as `foreign:<track.id>`. **Folder mods only** (the reader takes a path on disk): in a `.zip` or `.oagmod` the campaign is not offered and the log says why. Not a tournament leg. A `zone` event takes one too: the file's loop is the Zone circuit, flown with the title's Zone craft, speed ramp, HUD and sound ([track-file.md](track-file.md#zone-mode-on-a-track-file)). |
 | Medal targets | A finishing place (race, tournament, head2head); **seconds** (time_trial, speed_lap; stored as centiseconds); a count (zone, elimination; more is better). |
+| Medal tiers | No `[[medal-tier]]`: the title's gold 3, silver 2, bronze 1, exactly as before. A list replaces it (a tier may be named `gold`, `silver` or `bronze` too; those three keep the title's words, its trophy and its jingle). The list is the order of quality: the first tier the result meets wins, and a better tier counts wherever a lesser one is asked for (a `requires` of `medal = "gold"` is met by `platinum`; a grid's gold-medal count includes every tier above gold; **chosen, not measured**). Targets name tiers by the `gold`, `silver`, `bronze` keys and `extra = [{ tier, target }]` rows (a table cannot take a key the schema does not list); a name the list lacks refuses the campaign by name. A grid's maximum points are the best tier's points times its cells. A tier with no gold, silver or bronze name stands in for the nearest standard tier below it in the list, else the last above it, for the end-of-race trophy and jingle (**chosen, not measured**). Cell Selection's three target rows list the three best tiers the event awards, each in its tier's colour; an event that awards no platinum shows gold, silver and bronze. A record keeps the tier by name (`best_tier` in `[[campaign]]`, only when it is not gold, silver or bronze; `best_medal` keeps the class that stands in for it), so a file written before tiers had names reads as before. A mod's own `strings/english.toml` gives the words (`string_id`); English only. |
 | Absent tier | Never awarded: stored as `0` on a lower-is-better mode and `i64::MAX` on a counting one, values the evaluator can never meet. No `[medals]` awards nothing. |
 | Rungs | Any of `easy`/`medium`/`hard` fills the cell's per-rung targets (HD's shape); an absent rung takes the flat triple. On Pulse the screen judges at medium. |
-| Opening | `open = true`: open from the start. `requires`: every named event has at least `medal` (`any`, the default, `bronze`, `silver`, `gold`). Neither: the title's neighbour rule (a medal on this cell or a hex neighbour). A tier with no open event opens its first event without requirements. |
+| Opening | `open = true`: open from the start. `requires`: every named event has at least `medal` (`any`, the default, or a tier of the campaign: `bronze`, `silver`, `gold` unless it declares its own). Neither: the title's neighbour rule (a medal on this cell or a hex neighbour). A tier with no open event opens its first event without requirements. |
 | Hidden | `reveal = "hidden"` leaves every unopened cell out of the screen: it cannot be drawn, selected, pointed at or confirmed. Per tier: a `[[grid]]`'s `reveal` overrides the campaign's. |
 | Laps | Absent: what Pulse's own 236 cells author for the mode and class (3 Venom, 4 Flash or Rapier, 5 Phantom on a lap race, 7 on a speed lap; none on Zone or elimination). **Chosen** for a mod cell, so the screen never shows a lap mode as endless. |
 | Class | Matched case-insensitively and stored as a disc cell writes it (`Venom`), so the screens show the title's own word. |

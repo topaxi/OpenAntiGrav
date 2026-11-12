@@ -85,6 +85,9 @@ impl Session {
             .custom_campaign
             .as_ref()
             .and_then(|key| shell.custom_campaigns.get(key).cloned());
+        if let Some(custom) = &custom {
+            oag_game::campaign::custom::layer_words(&mut strings, custom.words.as_deref());
+        }
         let installed = shell.custom_campaigns.clone();
         if let Some(key) = &self.custom_campaign
             && custom.is_none()
@@ -491,12 +494,13 @@ impl Session {
                 Some((
                     custom.records_title.clone(),
                     custom.tiers.clone(),
+                    custom.words.clone(),
                     custom.event(&cell.name)?.clone(),
                 ))
             });
         let extras = match custom
             .as_ref()
-            .map(|(_, _, event)| self.resolve_custom_event(event))
+            .map(|(_, _, _, event)| self.resolve_custom_event(event))
             .transpose()
         {
             Ok(extras) => extras,
@@ -515,7 +519,7 @@ impl Session {
             .map(|(_, catalogue)| catalogue);
         let track_file = custom
             .as_ref()
-            .and_then(|(_, _, event)| event.track_file.clone());
+            .and_then(|(_, _, _, event)| event.track_file.clone());
         let Some(plan) = self.plan_cell(&cell, other_disc, track_file.as_ref()) else {
             return;
         };
@@ -634,10 +638,11 @@ impl Session {
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
-        self.campaign_custom = custom.zip(extras).map(|((records_title, tiers, event), extras)| {
+        self.campaign_custom = custom.zip(extras).map(|((records_title, tiers, words, event), extras)| {
             oag_game::campaign::custom::Launch {
                 records_title,
                 tiers,
+                words,
                 tier_targets: event.tier_targets.clone(),
                 ai: event.ai,
                 level: event.level,

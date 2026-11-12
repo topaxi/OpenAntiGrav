@@ -556,3 +556,43 @@ fn a_two_person_table_names_and_highlights_each_person() {
         .count();
     assert_eq!(highlights, 2, "one highlight per person's row");
 }
+
+/// A tier a campaign mod declares, which the title has no phrase for, names itself in the award
+/// line; gold, silver and bronze keep the title's own.
+#[test]
+fn a_campaign_tier_the_title_has_no_phrase_for_names_itself_in_the_award_line() {
+    let mut strings = strings();
+    strings.merge(std::collections::HashMap::from([
+        (
+            "OAG_MEDAL_AWARD".to_string(),
+            "%s MEDAL AWARDED".to_string(),
+        ),
+        ("PLATINUM_WORD".to_string(), "PLATINUM".to_string()),
+    ]));
+    let award = |tier: Option<oag_tables::race_campaign::MedalTier>| {
+        let model = Rewards {
+            tier,
+            medal: Some(oag_tables::race_campaign::Medal::Gold),
+            campaign: true,
+            loyalty: None,
+        };
+        texts(&rewards_draw_list(
+            &model,
+            &rewards_layout(),
+            &skin(),
+            &Frame::default(),
+            &strings,
+            None,
+            false,
+            &|_| placed(),
+        ))
+    };
+    let platinum = oag_tables::race_campaign::MedalTier {
+        name: "platinum".to_string(),
+        points: 4,
+        argb: 0xff9f_e3ff,
+        string_id: Some("PLATINUM_WORD".to_string()),
+    };
+    assert!(award(Some(platinum)).contains(&"PLATINUM MEDAL AWARDED".to_string()));
+    assert!(award(None).contains(&"Gold medal awarded".to_string()));
+}
