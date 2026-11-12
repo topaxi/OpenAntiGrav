@@ -84,7 +84,8 @@ same as Omega.
 Confidence **88**. `*(param_1 + 0x54) = DAT_008a9f44._4_4_` - that is the
 word at `0x008a9f48` = `0x3f800000` = **1.0** - with `+0x50 = 1`
 (charging), `+0x58 = 0` (age), `+0x40 |= 8`, `+0x110 = -(craft + 0x7850)`
-(the carried normal starts as minus the craft's up), and `+0x124 =
+(the carried normal starts as minus the located track sample's down, that is the
+track's up, not the craft's: [projectile-launch-normal.md](projectile-launch-normal.md)), and `+0x124 =
 *(0x008c1868 + 4)` = `0xbf99999a` = **-1.2**, the same seed Omega's
 `Plasma_Init` writes as a literal. Two particle systems are attached at
 `p + 0xb0`: `'PLHE'` (`WO_PLASMA_HEAD`) and `'PLCG'` (`WO_PLASMA_CHARGING`),

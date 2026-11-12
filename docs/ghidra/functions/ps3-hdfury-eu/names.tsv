@@ -947,3 +947,10 @@
 0x001d3150	function	ModelItem_Construct	78	team-selection-model.md
 0x001d3f08	function	ModelItem_BuildPose	75	team-selection-model.md
 0x003be688	function	FeModel_DrawAtOrigin	65	team-selection-model.md
+# 2026-11-12 hd-rocket-init-normal: the projectile launch normal and the track locate chain (projectile-launch-normal.md)
+0x00124d90	function	Rocket_Init	85	projectile-launch-normal.md
+0x00159a30	function	Shuriken_Init	80	projectile-launch-normal.md
+0x00123378	function	PulseBullet_Init	55	projectile-launch-normal.md
+0x000a97f0	function	Track_UpdateCursor	78	projectile-launch-normal.md
+0x000a8198	function	Track_SampleNearestPoint	78	projectile-launch-normal.md
+0x000a7cc8	function	Track_EvaluateSpline	80	projectile-launch-normal.md
