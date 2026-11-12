@@ -85,9 +85,9 @@ pub const MUZZLE_SPACING: f32 = 0.25;
 /// then scales the muzzle's forward row, which still carries the craft's display
 /// scale ([`oag_physics::hover::TARGET_GLOBAL_SCALE`]), by that figure: a round
 /// leaves at `0.75 * (craft km/h + 500)` units/s, 375.0 from a parked craft and
-/// 750.60 from one at 139.111 units/s (`docs/ghidra/functions/psp-pulse-usa/
-/// cannon-quake-leachbeam.md`, "the Cannon checked on a bank"; one shot at one
-/// speed).
+/// 750.60 from one at 139.111 units/s (one shot at one speed;
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "the Cannon
+/// checked on a bank").
 #[must_use]
 pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, Vec3) {
     let forward = state.body.forward();

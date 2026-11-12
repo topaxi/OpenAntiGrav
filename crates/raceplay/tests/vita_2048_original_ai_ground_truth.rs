@@ -324,11 +324,11 @@ macro_rules! circuit {
 /// parked player, so its finish time is bimodal (277 s or past the 300 s limit) and flips with any
 /// nudge. Measured 2026-10-26 over the nine `OAG_PERTURB` scales: 1 of 9 runs missed the limit
 /// with the 2048 grid hover off, 2 of 9 (the unperturbed one among them) with it on, and the
-/// craft's heights agree within a second of the green light. Two of the five scales must
-/// finish; a fault that stops the field fails all five. The Cannon's measured muzzle speed
-/// (2.7 times the earlier figure, `cannon::launch`) lands more rounds on the parked player's
-/// field and moved the count from three finishing scales to two: the same bimodal flip, one
-/// step along it, not a stalled field.
+/// craft's heights agree within a second of the green light. With the Cannon at its measured
+/// muzzle speed 9 of 45 runs miss over the nine `perturb::BOUND_OFFSETS` times five scales (the
+/// missing field is held up by slowdown, slots 1 and 2 on lap 3 at 300 s), 20 %; two of the five
+/// scales must finish (a miss rate of 20 % fails that bar under 1 % of the time), and a fault
+/// that stops the field fails all five.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_field_finishes_tower() {

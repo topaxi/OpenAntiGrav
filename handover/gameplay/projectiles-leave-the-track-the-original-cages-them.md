@@ -88,7 +88,13 @@ smaller effect; 7 is what was not measured.
 - **The Cannon's muzzle speed** (2026-11-12, `projectile-cage`): `cannon::launch` flies
   `(craft km/h + 500) * 0.75` units/s (`TARGET_GLOBAL_SCALE`), 750.60 at 139.111 units/s and 375.0
   parked; HD, 2048 and Omega share it (I:Pulse). `cannon_tilt_ground_truth` skips a round whose
-  first sweep already glanced the track (a step is now 6 to 13 units). Still open: a second speed
+  first sweep already glanced the track (a step is now 6 to 13 units; 12 of 237 on Pulse, 0 on HD, and
+  the test fails past a tenth). `vita_2048_original_ai_ground_truth::the_field_finishes_tower` took the
+  field's rounds harder: 9 of 45 runs (nine offsets by five scales) miss the 300 s limit with this speed
+  against 6 of 45 with the old one, always slots 1 and 2 on lap 3 behind a slowed field, so its bar is two
+  of five scales (a 20 % miss rate fails that under 1 % of the time). A craft ending at 0.0 shield is a
+  destroyed one and passes. The draw (`cannon_quad_vertices`) streaks the round between its previous
+  and new position, as `Cannon_BuildBoltList` does, so the bolt is 2.7 times longer. Still open: a second speed
   from the original (`psp-projectile-sweeps.py --player-fire-frame 120 cannon` from a parked
   craft; the law predicts 375.0).
 

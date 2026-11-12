@@ -33,7 +33,11 @@ fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot 
 }
 
 /// `(bank_cos, residual)` for every round slot 0 fired on one lap of the autopilot.
-fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
+/// `(bank_cos, residual, round-up . craft-up)` per round that flew free, and how
+/// many rounds glanced the track on their first tick.
+type Fired = (Vec<(f32, f32, f32)>, usize);
+
+fn residuals(disc: &str, track: &str) -> Option<Fired> {
     let image = oag_testdata::image(disc)?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -49,6 +53,7 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
     let mut input: Option<Input> = None;
     let mut seen = [None::<u32>; oag_weapons::projectile::MAX_PROJECTILES];
     let mut out = Vec::new();
+    let mut glanced = 0_usize;
     for tick in 0..4_000_u32 {
         let burst = tick >= 240 && tick % 90 < 20;
         // The autopilot fires nothing, so it flies between bursts and the pad
@@ -85,6 +90,7 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
                 .iter()
                 .all(|(_, velocity)| (round.velocity - *velocity).length() > 1e-3)
             {
+                glanced += 1;
                 continue;
             }
             let residual = launches
@@ -100,11 +106,20 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
             ));
         }
     }
-    Some(out)
+    Some((out, glanced))
 }
 
-fn assert_muzzle_residuals(shots: Option<Vec<(f32, f32, f32)>>) {
-    let Some(shots) = shots else { return };
+fn assert_muzzle_residuals(shots: Option<Fired>) {
+    let Some((shots, glanced)) = shots else {
+        return;
+    };
+    // The skipped rounds are a small share: a round that turns on its first
+    // tick without meeting the track would hide behind the skip.
+    assert!(
+        glanced * 10 <= shots.len() + glanced,
+        "{glanced} of {} rounds glanced the track on their first tick",
+        shots.len() + glanced
+    );
     let tilted = shots.iter().filter(|(bank, ..)| *bank < 0.95).count();
     assert!(shots.len() >= 100, "only {} rounds fired", shots.len());
     assert!(tilted >= 20, "only {tilted} rounds fired on a tilt");
