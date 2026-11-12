@@ -2,9 +2,10 @@
 
 Functions in `eboot.elf` (Wipeout 2048, Vita, `PCSF00007` patch v1.04), image base `0x81000000`,
 Ghidra program `/2048/eboot-vita-2048-eu-v104.elf`. 2026-11-12, lane `w2048-lattice-reveal-re`.
-Static reading only (decompile and disassembly); **no live Vita3K run backs any row**, so nothing
-here scores above the rubric's 84 for engine behaviour. The `.fft` file census is an arithmetic
-invariant over every file that ships and is scored as such.
+Static reading only (decompile and disassembly); **no live Vita3K run backs any row**. Decompile-only
+rows are scored on the decompile (an unambiguous few-line function at 85, as elsewhere on this
+binary's pages); the `.fft` file census is an arithmetic invariant over every file that ships and is
+scored as such.
 
 Question (the maintainer, from play): on the campaign map the lattice moves with the music; the
 fifteen hidden prototype events (`m_options & 0x10`) stay still, show nothing until the player

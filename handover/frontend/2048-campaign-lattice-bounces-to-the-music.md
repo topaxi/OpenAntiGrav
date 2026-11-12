@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 map: music wave (.fft band 1, radius 7), hidden-event tap reveal and XP rank gate read; wire XP rank, unlock rule, reveal, wave"
+summary: "2048 map: music wave (.fft band 1, radius 7) wireable now; hidden-event tap reveal and XP rank gate read, need an XP model"
 categories: [audio]
 difficulty: hard (30)
 ---
@@ -27,23 +27,25 @@ confidence is on `docs/ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md`.
 
 ## Next Steps
 
-1. **XP total and rank.** Nothing in this engine keeps 2048's XP
-   (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). Without it no hidden event ever becomes
-   revealable. Minimum: a per-profile XP total, the awards the campaign pays, the rank from
-   `XPRanks.xml`. This is the blocking dependency.
-2. **The unlock rule** (`Campaign_UnlockEvents` `0x812b5b6c`, `GameModeBase_IsUnlockable` `0x812b3a76`):
-   on map open and at race end, every progress-0 event that is unlockable (XP rank at least
-   `m_RankRequired`, `m_pEventRequired` passed) goes to 1 if `m_options & 0x18`, else to 2.
-3. **The reveal** (`Canvas3D_TapCell` `0x81071de4`): a click on any of a progress-1 event's six cells
-   sets it to 2, persisted in the profile; it then draws as the grey state-2 tile and joins pad
-   navigation. A click on ground (no owning button) is the ground bump (gains and caps on the page).
-   The original's touch is a Vita touch panel (which one is open); a mouse click is our choice.
-4. **The wave.** The music path exposes its playing position per frame (an output, ADR-0018); the
+Step 1 is independent; steps 2 to 4 need the XP model.
+
+1. **The wave.** The music path exposes its playing position per frame (an output, ADR-0018); the
    front end reads the playing track's own `.fft` (never a spectrum from PCM:
    `crates/audio/src/spectrum.rs` is not this), samples band 1 at `position * 30`, and applies the law
    around the current event (`R = 7`, the 230/s decay, the 15 % per-frame ease, the six-cell average
    for progress-1 events). The baked lattice picture becomes per frame inside that disc: plan the
    render cost.
+2. **XP total and rank.** Nothing in this engine keeps 2048's XP
+   (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). Minimum: a per-profile XP total, the
+   awards the campaign pays, the rank from `XPRanks.xml`. A subsystem of its own; it may deserve its
+   own thread.
+3. **The unlock rule** (`Campaign_UnlockEvents` `0x812b5b6c`, `GameModeBase_IsUnlockable` `0x812b3a76`):
+   on map open and at race end, every progress-0 event that is unlockable (XP rank at least
+   `m_RankRequired`, `m_pEventRequired` passed) goes to 1 if `m_options & 0x18`, else to 2.
+4. **The reveal** (`Canvas3D_TapCell` `0x81071de4`): a click on any of a progress-1 event's six cells
+   sets it to 2, persisted in the profile; it then draws as the grey state-2 tile and joins pad
+   navigation. A click on ground (no owning button) is the ground bump (gains and caps on the page).
+   The original's touch is a Vita touch panel (which one is open); a mouse click is our choice.
 5. A regression test per law: the `.fft` header and size identity on the disc's 13 files; the wave's
    delay and fall-off on a synthetic band-1 step; the unlock rule's 1-versus-2 split; the tap.
 
