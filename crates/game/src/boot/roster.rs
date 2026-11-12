@@ -262,7 +262,7 @@ fn choose_circuit_names(
     if tracks.is_empty() || names.len() == tracks.len() {
         return names;
     }
-    name_from_campaign(archives, tracks, &mut names);
+    super::campaign2048::name_circuits(archives, tracks, &mut names);
     let unnamed: Vec<&str> = tracks
         .iter()
         .filter(|track| names.get(&track.id).is_none())
@@ -277,38 +277,6 @@ fn choose_circuit_names(
         ));
     }
     names
-}
-
-/// The ten circuits of 2048 carry no key into `entries.xml` on Vita, but
-/// the campaign file authors a `TrackDefinition` for each: `M_TRACKNAME` is the
-/// `PI_Track` id and `M_DISPLAYNAME` its name
-/// (`docs/formats/2048-campaign.md`, "`TrackDefinition` resolves to a circuit by
-/// its own `M_TRACKNAME`"). A source with no such file leaves `names` as it was.
-fn name_from_campaign(
-    archives: &mut oag_assets::Archives,
-    tracks: &[oag_raceplay::catalogue::Track],
-    names: &mut oag_ui::language::CircuitNames,
-) {
-    let Some(text) = archives
-        .read_name(oag_2048::campaign::SP_XML)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-    else {
-        return;
-    };
-    let document = oag_2048::campaign::parse(&text);
-    for definition in oag_tables::mjolnir::campaign::tracks(&document) {
-        if let Some(track) = tracks
-            .iter()
-            .find(|track| track.id.eq_ignore_ascii_case(&definition.track_name))
-        {
-            names.name_if_absent(
-                &track.id,
-                &definition.display_name,
-                oag_2048::campaign::SP_XML,
-            );
-        }
-    }
 }
 
 /// Which copy of the table names them all, and what it says.

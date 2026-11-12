@@ -15,6 +15,9 @@ use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
 use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
+/// The campaign file's entry name.
+const SP_XML: &str = oag_2048::campaign::SP_XML;
+
 /// Every `SP.xml` event that has a map cell, as the map draws it.
 ///
 /// **Filtered by what the file says, not by a save.** The 21 instances with
@@ -36,7 +39,7 @@ pub(super) fn map_events(
     report: &mut Vec<String>,
 ) -> Vec<MapEvent> {
     let text = match archives
-        .read_name(oag_2048::campaign::SP_XML)
+        .read_name(SP_XML)
         .map_err(|e| e.to_string())
         .and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string()))
     {
@@ -44,7 +47,7 @@ pub(super) fn map_events(
         Err(why) => {
             report.push(format!(
                 "{}: {why} - the campaign map has no events",
-                oag_2048::campaign::SP_XML
+                SP_XML
             ));
             return Vec::new();
         }
@@ -161,7 +164,7 @@ pub(super) fn map_events(
     }
     report.push(format!(
         "{}: {} event(s) on the campaign map, {without_cell} with no cell skipped, {demo} E3 demo event(s) left out",
-        oag_2048::campaign::SP_XML,
+        SP_XML,
         out.len()
     ));
     out
@@ -619,4 +622,35 @@ pub(super) fn card_textures(events: &[MapEvent]) -> Vec<&str> {
         }
     }
     names
+}
+
+/// Names each circuit `tracks` offers that `names` left unnamed from the
+/// campaign file's `TrackDefinition`s, where the source has one.
+///
+/// The ten circuits of 2048 carry no key into `entries.xml` on Vita, but the
+/// file authors a `TrackDefinition` for each: `M_TRACKNAME` is the `PI_Track` id
+/// and `M_DISPLAYNAME` its name (`docs/formats/2048-campaign.md`,
+/// "`TrackDefinition` resolves to a circuit by its own `M_TRACKNAME`"). A source
+/// with no such file leaves `names` as it was.
+pub(super) fn name_circuits(
+    archives: &mut oag_assets::Archives,
+    tracks: &[oag_raceplay::catalogue::Track],
+    names: &mut oag_ui::language::CircuitNames,
+) {
+    let Some(text) = archives
+        .read_name(SP_XML)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+    else {
+        return;
+    };
+    let document = oag_tables::mjolnir::parse(&text);
+    for definition in oag_tables::mjolnir::campaign::tracks(&document) {
+        if let Some(track) = tracks
+            .iter()
+            .find(|track| track.id.eq_ignore_ascii_case(&definition.track_name))
+        {
+            names.name_if_absent(&track.id, &definition.display_name, SP_XML);
+        }
+    }
 }
