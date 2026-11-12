@@ -1072,6 +1072,25 @@ impl Session {
             let at = oag_game::render::to_grid(overlay_space, overlay_rect, at);
             list.extend(oag_game::cursor::draw(&self.cursor_sheet, at));
         }
+        // The pad's cursor on the 2048 campaign map is the same arrow, at the
+        // grid point the front end holds it, so a stick shows where Confirm lands.
+        let stick_cursor = match &self.stage {
+            Stage::Frontend(stage) => stage.frontend.map_cursor().map(|at| {
+                let space = stage.frontend.space();
+                let inset = stage.renderer.inset();
+                oag_game::render::from_grid(
+                    space,
+                    rect,
+                    oag_game::render::inset::inset_point(at, inset, space),
+                )
+            }),
+            _ => None,
+        };
+        if let Some(window) = stick_cursor {
+            self.refresh_cursor();
+            let at = oag_game::render::to_grid(overlay_space, overlay_rect, window);
+            list.extend(oag_game::cursor::draw(&self.cursor_sheet, at));
+        }
         if !list.is_empty() {
             self.overlay.overlay(
                 &self.gpu.device,
