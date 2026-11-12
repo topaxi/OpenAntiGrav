@@ -593,3 +593,191 @@ fn omega_plays_the_settle_on_its_borrowed_pose() {
         "{team}: {late} against {settled}"
     );
 }
+
+/// A title's archives and record, booted from `source` the way the previews' tests need them.
+fn boot_archives(
+    source: &std::path::Path,
+    tag: &str,
+) -> (oag_assets::Archives, &'static oag_title::Title) {
+    let options = oag_game::boot::Options {
+        language: None,
+        source: source.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join(format!("oag-{tag}-ship-light-ground-truth")),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+        find_texture_packs: None,
+    };
+    let (_, archives, title) = oag_game::boot::load_shell(&options).expect("the title boots");
+    (archives, title)
+}
+
+/// The craft's light is the front end's own `.envsettings`, read from the disc: the Fury
+/// style's file in the Fury style and the HD style's in the HD one, at HD's halved lit output
+/// times the tone stage's exposure at the front end's adapted luma. The tone constants the
+/// title carries are what the Fury file authors for those keys, so a table that drifts from the
+/// disc fails here. A title with no `model_lighting` draws no such light.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage() {
+    use oag_tables::envsettings::{
+        AMBIENT_COLOUR, EnvSettings, SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
+        TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
+    };
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let (mut archives, title) = boot_archives(&image, "hd");
+    let lighting = title
+        .front_end
+        .and_then(|front_end| front_end.model_lighting)
+        .expect("HD's front end names what lights its models");
+    let tone = lighting.tone.expect("HD's front end has its tone stage");
+
+    let blob = archives
+        .read_name(lighting.fury_file)
+        .expect("the Fury style's file is on the disc");
+    let file = EnvSettings::parse(&String::from_utf8(blob).expect("text")).expect("parses");
+    assert_eq!(file.scalar(TONE_ADAPTION_BOOST), Some(tone.boost));
+    assert_eq!(file.scalar(TONE_DARKENING_CLAMP), Some(tone.clamp));
+    assert_eq!(file.scalar(TONE_MAXIMUM_BRIGHTNESS), Some(tone.maximum));
+
+    let mut report = Vec::new();
+    let light = oag_game::preview::model_light(&mut archives, title, true, &mut report)
+        .unwrap_or_else(|| panic!("no light: {report:?}"));
+    assert_eq!(light.enabled, 1.0, "an authored rig, not the stand-in");
+    assert_eq!(Some(light.sun), file.vec3(SUN_COLOUR));
+    assert_eq!(Some(light.ambient), file.vec3(AMBIENT_COLOUR));
+    assert_eq!(Some(light.direction), file.direction(SUN_DIRECTION));
+    assert_eq!(Some(light.specular_scale), file.scalar(SUN_SPECULAR_SCALE));
+    let exposure = tone.maximum - (tone.adapted * tone.boost).min(tone.clamp);
+    assert!(
+        (light.output_scale - 0.5 * exposure).abs() < 1e-5,
+        "output scale {} against 0.5 x {exposure}",
+        light.output_scale
+    );
+    assert!(
+        (1.7..1.73).contains(&light.output_scale),
+        "the scale the frame fit measured is 1.725 ({})",
+        light.output_scale
+    );
+
+    let hd_style = oag_game::preview::model_light(&mut archives, title, false, &mut report)
+        .expect("the HD style's file reads");
+    assert_ne!(hd_style.sun, light.sun, "the two styles are two files");
+}
+
+/// The mean luma of the hull's lit pixels (those over 60) in the 716,150 1012x650 box of a
+/// 1920x1080 frame, where the craft stands on Ship Select: the backdrop's embers are dimmer and
+/// move between frames, the hull does not.
+fn hull_box_luma(still: &oag_texture::replacer::Image) -> f64 {
+    let scale = still.width as f32 / 1920.0;
+    let [left, top, right, bottom] =
+        [716.0, 150.0, 1728.0, 800.0].map(|edge| (edge * scale) as u32);
+    let (mut sum, mut count) = (0.0, 0u32);
+    for y in top..bottom {
+        for x in left..right {
+            let at = ((y * still.width + x) * 4) as usize;
+            let [r, g, b] = [0, 1, 2].map(|c| f64::from(still.rgba[at + c]));
+            let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if luma > 60.0 {
+                sum += luma;
+                count += 1;
+            }
+        }
+    }
+    assert!(count > 10_000, "no hull in the box");
+    sum / f64::from(count)
+}
+
+/// Both paths a player's frame takes bind the light: the capture and the live screen
+/// (`--drive`) draw Ship Select's Feisar from the front end's rig, each above the level it draws
+/// at with the stand-in (capture 121 against 180 lit, live 108 against 146). The live screen
+/// draws dimmer than the capture in both states, so each is held to its own floor, halfway.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let capture = hull_box_luma(&ship_select_still(&image, "Feisar", "3"));
+    eprintln!("capture hull box luma {capture:.2}");
+    assert!(capture > 150.0, "the capture's hull is {capture:.2}");
+
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("hd-ship-light-live");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
+    let shot = dir.join("settled.png");
+    let script = format!(
+        "boot; select racebox; press cross; until page=race; select launch_race; \
+         press cross; until screen=picker; press cross; until screen.id=ship-select; \
+         until opening_reads=landed; ticks 120; {steps}ticks 240; screenshot {}; quit",
+        shot.display(),
+        // A fresh profile opens the screen on Assegai; Feisar is seven steps left.
+        steps = "press left; ticks 30; ".repeat(7),
+    );
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--drive", &script])
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("OAG_MODS", dir.join("mods"))
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY")
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --drive");
+    let live = hull_box_luma(
+        &oag_texture::replacer::decode_png(&std::fs::read(&shot).expect("a screenshot"))
+            .expect("a PNG"),
+    );
+    eprintln!("live hull box luma {live:.2}");
+    assert!(live > 127.0, "the live screen's hull is {live:.2}");
+}
+
+/// Omega's craft is lit by Omega's own `fe.EnvSettings`, in its own key spelling and with its
+/// sun scale: ambient `0.2 0.3 0.32` and a sun of `0.748 0.906 1` at intensity 2, which are not
+/// HD's rig. No tone stage and no halved lit output: neither is read for Omega.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_lights_its_craft_from_its_own_front_end_file() {
+    use oag_tables::envsettings::{
+        EnvSettings, OMEGA_SUN_DIFFUSE_INTENSITY, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR,
+    };
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let (mut archives, title) = boot_archives(&source, "omega");
+    let lighting = title
+        .front_end
+        .and_then(|front_end| front_end.model_lighting)
+        .expect("Omega's front end names what lights its models");
+    assert!(
+        lighting.tone.is_none(),
+        "Omega's front-end adaptation is unread"
+    );
+    let blob = archives
+        .read_name(lighting.hd_file)
+        .expect("Omega's front-end settings are in the package");
+    let file = EnvSettings::parse(&String::from_utf8(blob).expect("text")).expect("parses");
+
+    let mut report = Vec::new();
+    let light = oag_game::preview::model_light(&mut archives, title, false, &mut report)
+        .unwrap_or_else(|| panic!("no light: {report:?}"));
+    assert_eq!(light.enabled, 1.0);
+    assert_eq!(Some(light.ambient), file.vec3(PSP2_AMBIENT_COLOUR));
+    assert_eq!(light.ambient, [0.2, 0.3, 0.32]);
+    let intensity = file
+        .scalar(OMEGA_SUN_DIFFUSE_INTENSITY)
+        .expect("the file authors the sun's intensity");
+    let sun = file.vec3(PSP2_SUN_DIFFUSE_COLOUR).expect("the sun colour");
+    assert_eq!(light.sun, sun.map(|c| c * intensity));
+    assert_eq!(light.output_scale, 1.0, "no halved lit output on Omega");
+    assert_eq!(light.nova, 1.0, "Omega's own prelit combination");
+}

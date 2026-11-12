@@ -653,6 +653,40 @@ pub struct FrontEnd {
     /// the pressings that borrow it. `false` elsewhere: no other title has a PS2
     /// pressing read, and those with a split screen author it.
     pub borrows_ps2_split_screens: bool,
+    /// What lights the 3-D models a front-end screen draws (the craft on Ship Select), or
+    /// `None` where the screen lights them with the viewer's rig. See [`ModelLighting`].
+    pub model_lighting: Option<ModelLighting>,
+}
+
+/// The light a front-end screen's models are drawn in: the engine's own light parameters,
+/// filled from a `.envsettings` the front end loads for itself, and then the front end's
+/// tone stage (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelLighting {
+    /// The file in the Fury front-end style.
+    pub fury_file: &'static str,
+    /// The file in the HD front-end style. A title that has one style names it twice.
+    pub hd_file: &'static str,
+    /// Whether the file spells its keys the way the PS4 and Vita titles do
+    /// (`oag_tables::envsettings`, "Wipeout 2048 authors the same shape under different key
+    /// names") and carries Omega's sun scale.
+    pub ps4: bool,
+    /// The tone stage the model's frame ends in, or `None` where its adaptation is unread.
+    pub tone: Option<FrontEndTone>,
+}
+
+/// The front end's tone stage as `oag_post::hd_bloom::exposure` reads it:
+/// `maximum - min(adapted * boost, clamp)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FrontEndTone {
+    /// `Tone adaption boost`, written by the front end's loader.
+    pub boost: f32,
+    /// `Tone darkening clamp`.
+    pub clamp: f32,
+    /// `Tone maximum brightness`.
+    pub maximum: f32,
+    /// The adapted luma the frame sits at on the screen this is read for.
+    pub adapted: f32,
 }
 
 /// The origin and depth a `Team Selection` draws its craft at, see

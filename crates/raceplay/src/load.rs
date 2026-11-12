@@ -62,7 +62,7 @@ mod zone_livery;
 #[cfg(feature = "view")]
 pub use campaign::load_event;
 #[cfg(feature = "view")]
-pub use environment::hd_bloom_params;
+pub use environment::{authored_light, hd_bloom_params};
 #[cfg(feature = "view")]
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 use oag_source::remix::craft_of;

@@ -461,6 +461,24 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         oag_title::EndRaceDialect::Field,
     )),
     borrows_ps2_split_screens: false,
+    model_lighting: Some(MODEL_LIGHTING),
+};
+
+/// What lights Ship Select's craft: the two styles' files, and the tone stage the front end's
+/// loader sets up (`Tone adaption boost` 35, and the block's own clamp 3 and maximum 4;
+/// confidence 85). **`adapted` is the live read of `FunkLayer + 0x25c` on Ship Select in the
+/// Fury style**, 1920x1080 at scale 100, ten reads of 0.0157 to 0.0180 whose mean is 0.0163
+/// (confidence 75, one boot); the HD style's frame is unmeasured and inherits it.
+pub const MODEL_LIGHTING: oag_title::ModelLighting = oag_title::ModelLighting {
+    fury_file: names::FURY_MODEL_LIGHT,
+    hd_file: names::HD_MODEL_LIGHT,
+    ps4: false,
+    tone: Some(oag_title::FrontEndTone {
+        boost: 35.0,
+        clamp: 3.0,
+        maximum: 4.0,
+        adapted: 0.0163,
+    }),
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.
@@ -716,6 +734,14 @@ pub mod names {
     /// picture ends in the same chain as a race (`menu-backdrop.md`, "The final
     /// composite adapts").
     pub const FURY_BLOOM_SETTINGS: &str = "Data/fe/fe.fury.track.envsettings";
+
+    /// The settings the front end lights its models with in the Fury style, which
+    /// `FrontEnd_LoadEnvSettings` loads for Ship Select (the non-track file;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`).
+    pub const FURY_MODEL_LIGHT: &str = "Data/fe/fe.fury.EnvSettings";
+
+    /// The HD style's file, loaded by the same function.
+    pub const HD_MODEL_LIGHT: &str = "Data/fe/fe.envsettings";
 
     /// The nineteen point clouds the Fury backdrop flies past, as the
     /// executable's own table at `0x009209b4` spells them - forward slashes

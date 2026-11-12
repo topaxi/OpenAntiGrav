@@ -1105,6 +1105,7 @@ pub(super) fn picker_page(
                 let open = seconds.unwrap_or(SETTLED_SECONDS);
                 (open, step_seconds.unwrap_or(open))
             },
+            fury: frame.blocks.as_ref().is_some_and(|blocks| blocks.fury),
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,

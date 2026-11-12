@@ -53,6 +53,9 @@ pub(super) struct PreviewRequest {
     /// Seconds since the screen opened and since a selection step, for the
     /// race hull's swap - see [`crate::preview::hull_swap`].
     pub hull_clock: (f32, f32),
+    /// Whether the served front end is the Fury style, which picks the light its models are
+    /// drawn in - see [`crate::preview::model_light`].
+    pub fury: bool,
 }
 
 /// The source a capture's race options name, opened with its packs, for the
@@ -78,6 +81,7 @@ pub(super) fn draw_preview(
     viewport: (f32, f32, f32, f32),
     target_size: (u32, u32),
     space: oag_display::space::Space,
+    title: &oag_title::Title,
     race: &oag_raceplay::Options,
     request: &PreviewRequest,
     anisotropy: Anisotropy,
@@ -88,6 +92,17 @@ pub(super) fn draw_preview(
         return;
     }
     let built = open_for_previews(race).and_then(|mut archives| {
+        let light = if request.hull_only {
+            let mut report = Vec::new();
+            let light =
+                crate::preview::model_light(&mut archives, title, request.fury, &mut report);
+            for line in report {
+                log::debug!("preview {}: {line}", request.entry);
+            }
+            light
+        } else {
+            None
+        };
         let mut model = if request.track_model.is_some() {
             crate::preview::psp2_scene::model(&mut archives, &request.entry)?
         } else {
@@ -125,6 +140,10 @@ pub(super) fn draw_preview(
             anisotropy,
             model,
         )?;
+        let preview = match light {
+            Some(light) => preview.lit_by(queue, light),
+            None => preview,
+        };
         Ok(match ramp {
             Some(ramp) => preview.with_ramp(ramp),
             None => preview,

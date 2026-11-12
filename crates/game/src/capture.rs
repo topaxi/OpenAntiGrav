@@ -1212,6 +1212,7 @@ pub fn run(
             oag_display::display::viewport((width, height), options.settings.display.aspect),
             (width, height),
             space,
+            title,
             race,
             &request,
             options.anisotropy,

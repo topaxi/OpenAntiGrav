@@ -282,7 +282,20 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_entry: None,
     endrace_style: None,
     borrows_ps2_split_screens: false,
+    model_lighting: Some(oag_title::ModelLighting {
+        fury_file: OMEGA_MODEL_LIGHT,
+        hd_file: OMEGA_MODEL_LIGHT,
+        ps4: true,
+        tone: None,
+    }),
 };
+
+/// The file Omega's front end lights its models with. Omega always runs the HD style, so the
+/// one file serves both; its path and its keys are read from the package, **the loader that
+/// picks it is not traced** (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
+/// "Omega"). No tone stage: Omega's is its own `Tonemap` and its front end's adaptation is
+/// unread.
+pub const OMEGA_MODEL_LIGHT: &str = "data/fe/fe.EnvSettings";
 
 /// Screen names, spelled exactly as `data09.psarc`'s `skin.xml` spells them -
 /// confirmed identical to HD's own spellings for every one of these eight,
