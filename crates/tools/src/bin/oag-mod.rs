@@ -90,8 +90,12 @@ fn main() -> Result<()> {
             repository,
         } => {
             for folder in &folders {
-                let written = oag_mod::texture_pack::write_manifest(folder, repository.as_deref())
-                    .with_context(|| folder.display().to_string())?;
+                let written = oag_mod::texture_pack::write_manifest(
+                    folder,
+                    repository.as_deref(),
+                    &|serial| oag_source::title::by_serial(serial).map(|title| title.slug()),
+                )
+                .with_context(|| folder.display().to_string())?;
                 match written {
                     oag_mod::texture_pack::Written::Wrote(path) => {
                         println!("wrote {}", path.display());

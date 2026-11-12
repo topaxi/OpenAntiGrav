@@ -4,10 +4,20 @@ use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-use crate::texture_pack::{Written, write_manifest};
+use crate::texture_pack::{Written, assign_titles, titles, write_manifest};
 use crate::{Mod, search};
 
 const INI_TEXT: &str = "[options]\nhash = xxh64\n[games]\nUCES00465 = textures.ini\nUCUS98712 = textures.ini\n[hashes]\n000000007d9d618f1a5be898 = intro/a.png\n";
+
+/// A registry of two serials, as the composition root's would be: the serials of
+/// `INI_TEXT` are one title's, and `UCES00001` another's.
+fn resolve(serial: &str) -> Option<String> {
+    match serial.replace('-', "").as_str() {
+        "UCES00465" | "UCUS98712" => Some("wipeout-pulse".to_string()),
+        "UCES00001" => Some("wipeout-pure".to_string()),
+        _ => None,
+    }
+}
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("oag-pack-{}-{name}", std::process::id()));
@@ -193,7 +203,7 @@ fn a_written_manifest_is_the_mod_detection_made_with_its_own_fields_winning() {
     let pack = folder_pack("generated", "WipEout Pulse (Upscale) 2026");
     let recognised = Mod::open(&pack).unwrap().manifest;
 
-    let written = write_manifest(&pack, Some(REPOSITORY)).unwrap();
+    let written = write_manifest(&pack, Some(REPOSITORY), &resolve).unwrap();
     assert_eq!(written, Written::Wrote(pack.join("oag-mod.toml")));
     let module = Mod::open(&pack).unwrap();
     let m = &module.manifest;
@@ -220,7 +230,7 @@ fn a_written_manifest_is_the_mod_detection_made_with_its_own_fields_winning() {
 #[test]
 fn the_written_text_validates_against_the_mod_schema_and_names_no_serials() {
     let pack = folder_pack("schema", "A \"quoted\" pack");
-    write_manifest(&pack, None).unwrap();
+    write_manifest(&pack, None, &resolve).unwrap();
     let text = std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap();
     oag_schema::validate::accepts("mod", 1, &text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     assert!(!text.contains("serials"), "{text}");
@@ -232,13 +242,13 @@ fn the_written_text_validates_against_the_mod_schema_and_names_no_serials() {
 #[test]
 fn a_manifest_that_is_already_there_is_left_alone_byte_for_byte() {
     let pack = folder_pack("kept", "pack");
-    write_manifest(&pack, Some(REPOSITORY)).unwrap();
+    write_manifest(&pack, Some(REPOSITORY), &resolve).unwrap();
     let edited = std::fs::read_to_string(pack.join("oag-mod.toml"))
         .unwrap()
         .replace("authors = [\"someone\"]", "authors = [\"Me\"]");
     std::fs::write(pack.join("oag-mod.toml"), &edited).unwrap();
 
-    let again = write_manifest(&pack, Some("https://example.com/other/repo")).unwrap();
+    let again = write_manifest(&pack, Some("https://example.com/other/repo"), &resolve).unwrap();
     assert_eq!(again, Written::Kept(pack.join("oag-mod.toml")));
     assert_eq!(
         std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap(),
@@ -250,7 +260,66 @@ fn a_manifest_that_is_already_there_is_left_alone_byte_for_byte() {
 #[test]
 fn a_folder_without_a_textures_ini_gets_no_manifest() {
     let base = scratch("not-a-pack");
-    let error = write_manifest(&base, None).unwrap_err().to_string();
+    let error = write_manifest(&base, None, &resolve)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("textures.ini"), "{error}");
     assert!(!base.join("oag-mod.toml").exists());
+}
+
+#[test]
+fn a_pack_is_for_the_titles_its_serials_resolve_to_each_once_in_order() {
+    let serials = |list: &[&str]| list.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+    assert_eq!(
+        titles(
+            &serials(&["UCES00465", "UCUS98712", "UCES-00001"]),
+            &resolve
+        ),
+        ["wipeout-pulse", "wipeout-pure"]
+    );
+    assert_eq!(
+        titles(&serials(&["UCJS10007", "UCES00001"]), &resolve),
+        ["wipeout-pure"],
+        "an unknown serial adds nothing"
+    );
+    assert!(
+        titles(&serials(&["UCJS10007"]), &resolve).is_empty(),
+        "no serial resolves: for every title, as a manifest with no titles is"
+    );
+}
+
+#[test]
+fn the_written_manifest_names_the_titles_and_a_recognised_pack_gets_them_assigned() {
+    let pack = folder_pack("titles", "pulse-pack");
+    write_manifest(&pack, None, &resolve).unwrap();
+    let text = std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap();
+    oag_schema::validate::accepts("mod", 1, &text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    assert!(text.contains("titles = [\"wipeout-pulse\"]"), "{text}");
+    assert_eq!(Mod::open(&pack).unwrap().manifest.titles, ["wipeout-pulse"]);
+
+    let bare = folder_pack("titles-recognised", "dropped-in");
+    let mut manifest = Mod::open(&bare).unwrap().manifest;
+    assert!(
+        manifest.titles.is_empty(),
+        "recognition alone cannot see titles"
+    );
+    assign_titles(&mut manifest, &resolve);
+    assert_eq!(manifest.titles, ["wipeout-pulse"]);
+    manifest.titles = vec!["wipeout-hd".to_string()];
+    assign_titles(&mut manifest, &resolve);
+    assert_eq!(manifest.titles, ["wipeout-hd"], "an author's titles win");
+}
+
+#[test]
+fn a_pack_no_serial_of_which_resolves_writes_no_titles() {
+    let pack = scratch("unresolved").join("odd");
+    std::fs::create_dir_all(&pack).unwrap();
+    std::fs::write(
+        pack.join("textures.ini"),
+        "[games]\nUCJS10007 = textures.ini\n",
+    )
+    .unwrap();
+    write_manifest(&pack, None, &resolve).unwrap();
+    let text = std::fs::read_to_string(pack.join("oag-mod.toml")).unwrap();
+    assert!(!text.contains("titles"), "{text}");
 }
