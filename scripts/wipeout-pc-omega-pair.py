@@ -25,6 +25,14 @@ countdown board's red 3) and ours' render; its helpers are imported from that sc
 * **A fresh save every boot** (`GOW3_USER_DIR` under the instance directory, deleted first), so Track Select opens on Vineta K and
   Ship Select on its first craft; the GPU caches stay in one persistent `GOW3_GPU_USER_DIR`, so a boot is not a cold shader build.
 * The pad is system-wide (`scripts/uinput-pads.py`): the driver refuses to start when an Xbox-360-shaped pad it did not make exists.
+* **WipEout 2048 mode** (`--game-mode 2048`: RACEBOX, GAME MODE one Right; `--class-steps N` Rights on SPEED CLASS, C, B, A, A+).
+  Ship Select opens on the yellow Feisar2048, so there are no Downs. The race load ends in an intro that loops a fly-over of the
+  circuit under a START RACE prompt: the first tap of cross starts a craft presentation, which returns to the fly-over, and a second tap
+  about 2.5 s later starts the race, so the driver taps until the 2048 HUD shows (and stops tapping then). That HUD is told from the
+  fly-over by reference crops of the "LAP 1/4, TOTAL, CURRENT" labels (`--hud-labels-ref`) and the TOTAL timer reading 0.00.00
+  (`--hud-timer-ref`), both thresholded to a white mask against the frame's own (a fade to white scores as no match); the grab is the
+  first HUD frame plus `GRAB_AFTER_HUD`, and the timer must still read 0.00.00 there (the grid before GO). HD's yellow-ring detector
+  and countdown-board check do not apply to this HUD and are not run.
 * **Proof of the state, not only the walk**: `track-select.png`'s circuit-name crop is compared with `--name-ref` (a crop of the
   same screen made once from the original, kept in scratch because it is a game frame), and the pair is refused when the name is
   not the one asked for; `--ship-ref` does the same for the Feisar logo on Ship Select. The same frames are kept in the pair directory.
@@ -65,6 +73,18 @@ BOARD_LIT_RISE = 0.08
 HUD_RISE = 0.1
 #: The team logo's crop on Ship Select (the cursor's team, which the model preview beside it does not move).
 SHIP_CROP = "420x140+220+170"
+#: 2048 mode's HUD, 1920x1080 crops thresholded to a white mask (gray over 97 %): the "LAP / 1/4 / TOTAL / CURRENT" labels, which
+#: stay put on every circuit, and the TOTAL reading. Against a reference mask made once from a HUD frame of the original, the labels
+#: read 0.00 to 0.07 on 2048-mode HUD frames (0.17 to 0.22 when white scenery sits behind them) and 0.34 or more on every fly-over,
+#: presentation, fade and menu frame seen; the timer reads 0.00 and 0.04 on two frames showing 0.00.00 and 0.35 on 0.02.16.
+HUD2048_LABELS_CROP = "270x230+0+0"
+HUD2048_TIMER_CROP = "200x50+280+138"
+HUD2048_LABELS_MAX = 0.20
+HUD2048_TIMER_MAX = 0.15
+#: Seconds between taps of cross on the START RACE intro (a tap closer than the craft presentation's start is swallowed).
+START_TAP_EVERY = 2.5
+#: Give up on the HUD after this many seconds of tapping.
+START_TAP_LIMIT = 70
 #: The Xbox-360-shaped pad `uinput-pads.py` makes; a second one on the machine is somebody else's.
 PAD_NAME = "Microsoft X-Box 360 pad"
 
@@ -199,6 +219,45 @@ def rmse(a, b):
     return float(r.stderr.split("(")[1].split(")")[0])
 
 
+def white_mask_rmse(frame, geometry, ref, scratch):
+    """Normalised RMSE between the frame's crop thresholded to a white mask and the reference mask."""
+    subprocess.run(["magick", str(frame), "-crop", geometry, "+repage", "-colorspace", "Gray", "-threshold", "97%", str(scratch)], check=True)
+    return rmse(ref, scratch)
+
+
+def hud2048(rig, args, frame):
+    """(labels, timer) mask RMSE of a frame against the 2048 HUD references."""
+    scratch = rig.dir / "mask.png"
+    return (white_mask_rmse(frame, HUD2048_LABELS_CROP, args.hud_labels_ref, scratch),
+            white_mask_rmse(frame, HUD2048_TIMER_CROP, args.hud_timer_ref, scratch))
+
+
+def grid_frames_2048(rig, args, out):
+    """Tap cross on START RACE until the 2048 HUD shows, then grab. Returns the frames from the first HUD frame on."""
+    scan, frames, scores, t0, last_tap, hud_at, taps = out / "scan.png", [], [], time.time(), None, None, 0
+    while time.time() - t0 < START_TAP_LIMIT:
+        rig.grab(scan)
+        labels, timer = hud2048(rig, args, scan)
+        scores.append((round(labels, 3), round(timer, 3)))
+        if hud_at is None and labels < HUD2048_LABELS_MAX:
+            hud_at = 0
+            log("2048 HUD up after %.1f s and %d taps (labels %.3f, timer %.3f)" % (time.time() - t0, taps, labels, timer))
+        if hud_at is not None:
+            path = out / ("frame%02d.png" % len(frames))
+            shutil.copy(scan, path)
+            frames.append(path)
+            if len(frames) > sp.GRAB_AFTER_HUD + 3:
+                break
+        elif last_tap is None or time.time() - last_tap >= START_TAP_EVERY:
+            rig.press("cross", 0.2)
+            last_tap, taps = time.time(), taps + 1
+        time.sleep(0.2)
+    scan.unlink()
+    if hud_at is None:
+        sys.exit("STALLED at grid: no 2048 HUD in %d s and %d taps (best labels %.3f; see loading.png)" % (START_TAP_LIMIT, taps, min(s[0] for s in scores)))
+    return frames, {"taps": taps, "scan_scores_labels_timer": scores, "hud_up_after_s": round(time.time() - t0, 1)}
+
+
 def capture_original(rig, args, out):
     """Boot, walk to the grid, grab. Returns the chosen frame's path and what was seen."""
     rig.write_ini()
@@ -221,7 +280,16 @@ def capture_original(rig, args, out):
     else:
         sys.exit("STALLED at boot: no MAIN MENU in 180 s (see port.log)")
     rig.press("right")
-    rig.press("cross", 3)
+    rig.press("cross", 3)  # MAIN MENU -> Race Box
+    if args.game_mode == "2048":
+        rig.press("right", 1.5)  # GAME MODE: WipEout HD -> WipEout 2048
+        if args.class_steps:
+            rig.press("down")
+            rig.press("down")  # RACE TYPE, SPEED CLASS
+        for _ in range(args.class_steps):
+            rig.press("right", 1.5)  # SPEED CLASS: C -> B -> A -> A+
+        time.sleep(1)
+        rig.grab(out / "racebox.png")
     rig.press("cross", 3)  # Race Box -> Track Select
     for _ in range(args.track_steps):
         rig.press("right", 1.5)
@@ -229,14 +297,20 @@ def capture_original(rig, args, out):
     rig.grab(out / "track-select.png")
     name_crop(out / "track-select.png", out / "circuit-name.png")
     rig.press("cross", 3)  # Track Select -> Ship Select
-    rig.press("down")
-    rig.press("down")
+    if args.game_mode != "2048":  # 2048 mode's Ship Select opens on the Feisar2048 itself
+        rig.press("down")
+        rig.press("down")
     time.sleep(1)
     rig.grab(out / "ship-select.png")
     rig.press("cross", 3)  # Ship Select -> loading
     time.sleep(args.load_wait)
     rig.grab(out / "loading.png")
     time.sleep(args.load_wait2)  # the START RACE prompt waits for the confirm
+    if args.game_mode == "2048":
+        frames, seen = grid_frames_2048(rig, args, out)
+        pick = frames[sp.GRAB_AFTER_HUD]
+        seen.update({"frames": len(frames), "hud_first_frame": 0, "picked_frame": sp.GRAB_AFTER_HUD, "frames_seen": [f.name for f in frames]})
+        return pick, seen
     rig.press("cross", 0.2)
     frames, hud_at, t0, ring0 = [], None, time.time(), None
     while time.time() - t0 < 20:
@@ -279,6 +353,12 @@ def main():
     pr.add_argument("--name-ref", type=Path, help="a crop (NAME_CROP) of Track Select showing this circuit's name, from the original")
     pr.add_argument("--ship-ref", type=Path, help="a crop (SHIP_CROP) of Ship Select with the Feisar logo, from the original")
     pr.add_argument("--twin-of", type=Path, help="an earlier theirs.png of the same pair: its normalised RMSE against this boot is the twin")
+    pr.add_argument("--game-mode", choices=("hd", "2048"), default="hd", help="Race Box's GAME MODE: WipEout HD (default) or WipEout 2048 (see the docstring)")
+    pr.add_argument("--class-steps", type=int, default=0, help="2048 mode: Rights on SPEED CLASS from C CLASS (2 reaches A CLASS)")
+    pr.add_argument("--class-label", default="", help="2048 mode: the class the Race Box shows after --class-steps, for the record")
+    pr.add_argument("--ours-class", default="venom", help="ours' --class (the mapping of 2048's C, B, A, A+ to ours' rungs is assumed, not measured)")
+    pr.add_argument("--hud-labels-ref", type=Path, help="2048 mode: white mask of the LAP/TOTAL/CURRENT label crop of a 2048 HUD frame of the original")
+    pr.add_argument("--hud-timer-ref", type=Path, help="2048 mode: white mask of the TOTAL reading crop showing 0.00.00")
     pr.add_argument("--team", default=sp.DEFAULT_TEAM)
     pr.add_argument("--load-wait", type=float, default=12, help="seconds after the Ship Select confirm before the loading frame")
     pr.add_argument("--load-wait2", type=float, default=14, help="then seconds before START RACE is confirmed")
@@ -292,6 +372,8 @@ def main():
         return prepare_game(args)
     if not os.environ.get("XDG_CONFIG_HOME", "").startswith(str(ce.MAIN / "data" / "scratch")):
         sys.exit("XDG_CONFIG_HOME must be a directory under data/scratch/<lane>/: oag-game persists settings there")
+    if args.game_mode == "2048" and not (args.hud_labels_ref and args.hud_timer_ref):
+        sys.exit("2048 mode needs --hud-labels-ref and --hud-timer-ref (the HUD detector's references)")
     others = foreign_pads()
     if others:
         sys.exit("refusing to start: a virtual pad already exists (%s); the pad is system-wide, so it would answer to this run's presses" % others)
@@ -318,9 +400,14 @@ def main():
     status = rig.dir / "data/out/patch_status.json"
     if status.exists():
         pair.rec["original"]["emulator"]["patch_status"] = json.loads(status.read_text())
-    pair.rec["original"]["state"] = {"circuit": args.track, "circuit_name": args.circuit, "mode": "single_race (Race Box, WipEout HD mode)",
-                                     "class": "venom", "team": args.team, "track_steps": args.track_steps,
+    mode_2048 = args.game_mode == "2048"
+    pair.rec["original"]["state"] = {"circuit": args.track, "circuit_name": args.circuit,
+                                     "mode": "single_race (Race Box, %s)" % ("WipEout 2048 mode" if mode_2048 else "WipEout HD mode"),
+                                     "class": (args.class_label or "C CLASS") if mode_2048 else "venom", "team": args.team,
+                                     "track_steps": args.track_steps, "class_steps": args.class_steps, "game_mode": args.game_mode,
                                      "source": "a cold boot on a fresh save, walked from MAIN MENU"}
+    if mode_2048:
+        pair.rec["ours"]["class_mapping"] = "assumed, not measured: 2048's C, B, A, A+ to ours' %s" % args.ours_class
     cp.build(pair, args, "scenery", "cold_boot", None,
              {"value": 0, "unit": "ticks", "basis": "none needed: the grid before GO is a still (craft at rest, camera static), "
                                                     "no pose readout exists on this title's port", "what": "picture"})
@@ -336,18 +423,26 @@ def main():
         pair.check("Track Select names %s" % args.circuit, d < NAME_RMSE_MAX, "name crop RMSE %.4f against the reference (limit %.2f; another circuit's name reads 0.15 or more)" % (d, NAME_RMSE_MAX))
     if args.ship_ref:
         d = rmse(args.ship_ref, ship_crop(out / "ship-select.png", out / "ship-logo.png"))
-        pair.check("Ship Select is on the Feisar", d < NAME_RMSE_MAX, "team logo crop RMSE %.4f against the reference (limit %.2f)" % (d, NAME_RMSE_MAX))
-    red = sp.board_red(out / "theirs.png")
-    base = seen["board_red"][0]  # the first frame with the HUD up: the board is blank there on every circuit
-    pair.check("the countdown board is still blank (before its red 3)", red - base < BOARD_LIT_RISE,
-               "board red minus blue %.3f at the grab, %.3f at the first HUD frame (a lit digit raises it by 0.2 or more; the value itself depends on the scenery behind the board)" % (red, base))
+        pair.check("Ship Select is on the %s" % ("Feisar2048" if mode_2048 else "Feisar"), d < NAME_RMSE_MAX, "team logo crop RMSE %.4f against the reference (limit %.2f)" % (d, NAME_RMSE_MAX))
+    if mode_2048:
+        labels, timer = hud2048(rig, args, out / "theirs.png")
+        first_timer = hud2048(rig, args, out / "frame00.png")[1]
+        seen["picked_labels_timer"] = [round(labels, 3), round(timer, 3)]
+        pair.check("the 2048 HUD is up", labels < HUD2048_LABELS_MAX, "label mask RMSE %.3f against the reference (limit %.2f; fly-over, presentation and fade frames read 0.34 or more)" % (labels, HUD2048_LABELS_MAX))
+        pair.check("the grab is before GO (TOTAL reads 0.00.00)", timer < HUD2048_TIMER_MAX and first_timer < HUD2048_TIMER_MAX,
+                   "TOTAL mask RMSE %.3f at the grab and %.3f at the first HUD frame against a 0.00.00 reference (limit %.2f; 0.02.16 reads 0.35)" % (timer, first_timer, HUD2048_TIMER_MAX))
+    else:
+        red = sp.board_red(out / "theirs.png")
+        base = seen["board_red"][0]  # the first frame with the HUD up: the board is blank there on every circuit
+        pair.check("the countdown board is still blank (before its red 3)", red - base < BOARD_LIT_RISE,
+                   "board red minus blue %.3f at the grab, %.3f at the first HUD frame (a lit digit raises it by 0.2 or more; the value itself depends on the scenery behind the board)" % (red, base))
     profile_dir = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, profile_dir)
     source = ce.MAIN / "data/extracted/ps4"
-    flags = ce.ours_flags(plat) + ["--mode", "single_race", "--class", "venom", "--team", args.team]
+    flags = ce.ours_flags(plat) + ["--mode", "single_race", "--class", args.ours_class, "--team", args.team]
     base = [args.oag_game, source, "--race", "--track", args.track, "--ticks", args.ours_ticks] + flags
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
-    pair.rec["ours"].update({"mode": "single_race", "class": "venom", "team": args.team, "ticks": args.ours_ticks,
+    pair.rec["ours"].update({"mode": "single_race", "class": args.ours_class, "team": args.team, "ticks": args.ours_ticks,
                              "camera": "the title's default chase view; the grid is at rest, no pose is fed"})
     env = {**os.environ, **ce.ours_env(profile_dir)}
     sp.run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
@@ -359,8 +454,16 @@ def main():
     pair.check_size("ours", out / "ours.png")
     pair.rec["craft_offset_px"] = sp.craft_offset(out / "theirs.png", out / "ours.png")
     pair.rec["craft_offset_px"]["note"] = "informational: the hulls are lit and coloured differently; not a measurement"
-    pair.caveat("ours' gantry board shows the grid position 8 and never changes; the original's is blank before the red 3 and counts 3, 2, 1, GO")
-    pair.caveat("the original's hull livery varies from boot to boot; ours' is fixed")
+    if mode_2048:
+        pair.caveat("ours races its %s rung for 2048's %s, an assumed mapping; lap counts measured: the original 4 at C CLASS (every C circuit) and 5 at A CLASS (Sol), ours on Sol venom 3, flash 4, rapier 4, phantom 5 (compare the hexagon and the original's LAP)"
+                    % (args.ours_class, args.class_label or "C CLASS"))
+        pair.caveat("ours draws HD's HUD (lap hexagon, position disc, BEST and time bar, speed readout) in Omega's 2048 mode; the original draws 2048's (LAP 1/4, TOTAL, CURRENT, POS 8/8, temperature gauge)")
+    else:
+        pair.caveat("ours' gantry board shows the grid position 8 and never changes; the original's is blank before the red 3 and counts 3, 2, 1, GO")
+    if mode_2048:
+        pair.caveat("the original's Feisar2048 hull is lit and graded by the scene (orange at a sunset circuit, yellow and white at a grey one) and stands in a white start ring; ours lights it flatter and draws no ring")
+    else:
+        pair.caveat("the original's hull livery varies from boot to boot; ours' is fixed")
     sp.run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         pair.rec["meta"] = json.loads(args.meta)
