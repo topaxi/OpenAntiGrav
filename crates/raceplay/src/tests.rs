@@ -142,6 +142,7 @@ mod wreck_contact;
 mod wreck_finished;
 mod wreck_fx;
 mod wreck_voice;
+mod xp_feed;
 mod zoom;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.

@@ -837,6 +837,7 @@ impl Race {
                 barrel_rolls: true,
                 pad_current: [None; MAX_SHIPS],
                 pad_previous_position: [None; MAX_SHIPS],
+                xp: None,
                 scheme: ControlScheme::default(),
             },
             #[cfg(not(feature = "view"))]

@@ -700,6 +700,9 @@ impl Stage {
             skill_level: None,
         };
         race.apply_launch(&launch);
+        if let Some(progress) = campaign_2048_event.as_ref() {
+            race.arm_event_xp(progress);
+        }
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
             let skill = autopilot_skill.unwrap_or(difficulty);

@@ -9,7 +9,7 @@
 use oag_tables::xp::Ranks;
 
 use super::{Medal, Store};
-use oag_raceplay::Campaign2048Progress;
+use oag_raceplay::xp_tally::XpTally;
 
 impl Store {
     /// The profile's XP total.
@@ -38,24 +38,22 @@ impl Store {
         ranks.meets(self.xp, rank_required)
     }
 
-    /// Banks a finished 2048 event's race-end awards from `progress`: the completion award for
-    /// the tier `medal` stands for (Gold is Elite, Bronze Pass, none pays no completion) and
-    /// `Finished Nth` for `place`. Returns what was added.
+    /// Banks a finished 2048 event: the race's `tally` (its in-race awards and chain bonuses)
+    /// plus the race-end awards, which go through the same tally so they chain like any other:
+    /// the completion award for the tier `medal` stands for (Gold is Elite, Bronze Pass, none
+    /// pays no completion) and `Finished Nth` for `place`. Returns what was added.
     ///
     /// **Chosen, not measured**: the completion pays on every finish, not only the first, and
     /// Elite pays instead of Pass rather than as well; both are unread
     /// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Wired").
     pub fn bank_event_xp(
         &mut self,
-        progress: &Campaign2048Progress,
+        tally: &mut XpTally,
         medal: Option<Medal>,
         place: Option<u8>,
     ) -> u32 {
-        let Some(awards) = &progress.xp_awards else {
-            return 0;
-        };
-        let completion = medal.map(|m| m == Medal::Gold);
-        let award = awards.race_end(progress.xp_column, completion, place);
+        tally.finish(medal.map(|m| m == Medal::Gold), place);
+        let award = tally.take();
         self.bank_xp(award);
         award
     }
