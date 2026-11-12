@@ -5,7 +5,7 @@
 //! `CellSelection`, `Layout`, `GridSummary`) stay in the parent module;
 //! this file only turns one into a [`oag_ui::menu::Layers`].
 
-use oag_tables::race_campaign::{Cell, Difficulty, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Difficulty, Medal, MedalTiers, Mode};
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
@@ -112,7 +112,12 @@ pub fn grid_draw_list(
                     .as_deref()
                     .and_then(|n| hex_slot_xy(n, "Medal_"))
                     .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
-                out.push(tinted_medal_draw(image, placed, hex, medal_argb(medal)));
+                out.push(tinted_medal_draw(
+                    image,
+                    placed,
+                    hex,
+                    model.tiers().argb(medal),
+                ));
             }
             continue;
         }
@@ -266,6 +271,7 @@ pub fn cell_draw_list(
                     hex,
                     medal,
                     model.medal_art(),
+                    model.tiers(),
                     model.medal_block_at(x, y),
                     sprites,
                 ),
@@ -330,12 +336,15 @@ pub fn cell_draw_list(
             "Line4" | "Line8" => None,
             "Line6" => Some(format!(
                 "{}/{}",
-                model.selected_medal().map_or(0, Medal::points),
-                Medal::Gold.points()
+                model
+                    .selected_medal()
+                    .map_or(0, |m| model.tiers().points(m)),
+                model.tiers().best_points()
             )),
             "Line7" if !targets_visible => Some(medal_line(
                 model.selected_medal(),
                 model.selected_difficulty(),
+                model.tiers(),
                 strings,
             )),
             "Line7" => None,
@@ -499,22 +508,25 @@ fn track_line(cell: &Cell, strings: &StringTable) -> String {
 pub(super) fn medal_line(
     medal: Option<Medal>,
     difficulty: Option<Difficulty>,
+    tiers: &MedalTiers,
     strings: &StringTable,
 ) -> String {
-    let id = match medal {
-        Some(Medal::Gold) => "IG_HUD_GOLD",
-        Some(Medal::Silver) => "IG_HUD_SILVER",
-        Some(Medal::Bronze) => "IG_HUD_BRONZE",
-        None => "MSC_NONE",
+    let name = match medal {
+        Some(medal) => match tiers.get(medal).and_then(|tier| tier.string_id.as_deref()) {
+            Some(id) => strings.get_or_id(id).to_string(),
+            None => tiers
+                .get(medal)
+                .map_or_else(String::new, |tier| tier.name.to_ascii_uppercase()),
+        },
+        None => strings.get_or_id("MSC_NONE").to_string(),
     };
     if let (Some(_), Some(difficulty)) = (medal, difficulty) {
         return format!(
-            "{} ({})",
-            strings.get_or_id(id),
+            "{name} ({})",
             strings.get_or_id(difficulty_rung_id(difficulty))
         );
     }
-    strings.get_or_id(id).to_string()
+    name
 }
 
 /// The bare idstring `Cell_SavedDifficulty`/`CellSelection_Update` both key
@@ -609,21 +621,6 @@ pub(crate) fn image_draw(image: &Image, placed: Placed) -> Draw {
     image.sprite_draw(placed, image.x, image.y, image.color)
 }
 
-/// The medal-colour swatch's own ARGB: gold, silver, bronze. Both
-/// `CellSelection_PopulateGrid` (`0x088d5f50..64`) and
-/// `GridSelection_PopulateTiles` (`0x088de8f4..908`) build this three-entry
-/// table from immediates and index it by medal ordinal; PS2 reads the same
-/// twelve bytes from `.data` (`0x2b34c8`, `0x2b48f8`). The alpha byte is
-/// replaced by the screen's fade at draw time. The panel's `Target0..2
-/// Image` swatches author the same three values.
-pub(super) fn medal_argb(medal: Medal) -> u32 {
-    match medal {
-        Medal::Gold => 0xfffa_eb38,
-        Medal::Silver => 0xffda_e3e4,
-        Medal::Bronze => 0xffdf_942f,
-    }
-}
-
 /// A medal's hex: `art`'s atlas frame for the medal and the difficulty it was earned on when
 /// the atlas is in the sprite sheet, the title's tinted swatch otherwise.
 pub(super) fn medal_hex_draw(
@@ -632,10 +629,11 @@ pub(super) fn medal_hex_draw(
     hex: Option<[f32; 4]>,
     medal: Medal,
     art: &MedalArt,
+    tiers: &MedalTiers,
     difficulty: Difficulty,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Draw {
-    if let Some(frame) = art.frame(medal, difficulty)
+    if let Some(frame) = art.frame(tiers, medal, difficulty)
         && let Some(atlas) = art.image().and_then(sprites)
     {
         let [x, y, width, height] = hex.unwrap_or([image.x, image.y, 32.0, 32.0]);
@@ -651,7 +649,7 @@ pub(super) fn medal_hex_draw(
         };
         return cropped.sprite_draw(atlas, x, y, 0xffff_ffff);
     }
-    tinted_medal_draw(image, placed, hex, medal_argb(medal))
+    tinted_medal_draw(image, placed, hex, tiers.argb(medal))
 }
 
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored

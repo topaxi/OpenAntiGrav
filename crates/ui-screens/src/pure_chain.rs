@@ -113,10 +113,10 @@ const BRONZE: [f32; 4] = [0.78, 0.42, 0.18, 1.0];
 /// The ink a medal word is drawn in.
 #[must_use]
 pub fn medal_ink(medal: Medal) -> [f32; 4] {
-    match medal {
-        Medal::Gold => GOLD,
-        Medal::Silver => SILVER,
-        Medal::Bronze => BRONZE,
+    match medal.index() {
+        0 => GOLD,
+        1 => SILVER,
+        _ => BRONZE,
     }
 }
 

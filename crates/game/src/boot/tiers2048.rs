@@ -348,12 +348,20 @@ pub fn closed(
     if unlock_all {
         return false;
     }
-    let medal_of: &dyn Fn(&str) -> Option<Medal> =
-        &crate::unlock::campaign_medal_of(records, title);
+    let medal_of: &dyn Fn(&str) -> Option<Medal> = &crate::unlock::campaign_medal_of(
+        records,
+        title,
+        oag_tables::race_campaign::MedalTiers::standard(),
+    );
     let open = !grid.locked
-        || grid.points_earned(medal_of) > 0
+        || grid.points_earned(oag_tables::race_campaign::MedalTiers::standard(), medal_of) > 0
         || grid.unlock_grid.as_deref().is_none_or(|target| {
-            oag_tables::race_campaign::grid_points_met(&tier.grids, target, medal_of)
+            oag_tables::race_campaign::grid_points_met(
+                &tier.grids,
+                oag_tables::race_campaign::MedalTiers::standard(),
+                target,
+                medal_of,
+            )
         });
     !open
 }

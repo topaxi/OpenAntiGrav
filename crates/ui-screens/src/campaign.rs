@@ -81,7 +81,7 @@
 //! documents for `Single Player`'s `Zone`/`DifficultyNaText`).
 
 use oag_gameplay::input::{Button, Input};
-use oag_tables::race_campaign::{Cell, Difficulty, Grid, Medal};
+use oag_tables::race_campaign::{Cell, Difficulty, Grid, Medal, MedalTiers};
 
 use oag_ui::language::StringTable;
 use oag_ui::screen::{Screen, Screens};
@@ -165,12 +165,13 @@ pub struct GridSummary {
     pub name: String,
     /// `Grid_CellCount`: `grid.cells.len()`.
     pub cell_count: u32,
-    /// `Grid_PointsPossible`: `3 * cell_count` - [`Grid::max_points`].
+    /// `Grid_PointsPossible`: `3 * cell_count` on the standard tiers - [`Grid::max_points`].
     pub max_points: u32,
     /// `grid->RequiredPoints`. `0` renders as `FE_NA` (`grid15`'s own value).
     pub required_points: u32,
     /// `Grid_CountMedalsAtLeast(grid, 0)`: cells on this grid whose best
-    /// saved medal is gold. `0` on a fresh profile, or whenever
+    /// saved medal is gold or better (**chosen, not measured:** in a campaign with a tier above
+    /// gold, that tier counts). `0` on a fresh profile, or whenever
     /// [`Self::from_grid`] built this without a progress source - see the
     /// module doc.
     pub gold_medals: u32,
@@ -212,7 +213,7 @@ impl GridSummary {
     /// no progress to report. See the module doc.
     #[must_use]
     pub fn from_grid(grid: &Grid) -> Self {
-        Self::from_grid_with_medals(grid, &|_| None)
+        Self::from_grid_with_medals(grid, MedalTiers::standard(), &|_| None)
     }
 
     /// The real reading: `medal_of` answers a cell's own best saved medal by
@@ -220,13 +221,18 @@ impl GridSummary {
     /// doc for why this crate takes a closure rather than the store type
     /// itself.
     #[must_use]
-    pub fn from_grid_with_medals(grid: &Grid, medal_of: &dyn Fn(&str) -> Option<Medal>) -> Self {
+    pub fn from_grid_with_medals(
+        grid: &Grid,
+        tiers: &MedalTiers,
+        medal_of: &dyn Fn(&str) -> Option<Medal>,
+    ) -> Self {
         let mut gold_medals = 0;
         let mut points_earned = 0;
+        let gold = tiers.find("gold").unwrap_or(Medal::Gold);
         for cell in &grid.cells {
             if let Some(medal) = medal_of(&cell.name) {
-                points_earned += medal.points();
-                if medal == Medal::Gold {
+                points_earned += tiers.points(medal);
+                if tiers.at_least(medal, gold) {
                     gold_medals += 1;
                 }
             }
@@ -234,7 +240,7 @@ impl GridSummary {
         Self {
             name: grid.name.clone(),
             cell_count: u32::try_from(grid.cells.len()).unwrap_or(u32::MAX),
-            max_points: grid.max_points(),
+            max_points: grid.max_points(tiers),
             required_points: grid.required_points,
             gold_medals,
             points_earned,
@@ -296,6 +302,8 @@ pub struct GridSelection {
     swipe: hd::Swipe,
     /// What a tier's medal hex is filled with, see [`Self::with_medal_art`].
     medal_art: MedalArt,
+    /// The campaign's medal tiers, see [`Self::with_tiers`].
+    tiers: MedalTiers,
 }
 
 impl GridSelection {
@@ -308,7 +316,21 @@ impl GridSelection {
             pulse: pulse::SelectorPulse::default(),
             swipe: hd::Swipe::default(),
             medal_art: MedalArt::default(),
+            tiers: MedalTiers::default(),
         }
+    }
+
+    /// Draws the tier hexes' swatches in `tiers`' colours: a campaign mod's own list.
+    #[must_use]
+    pub fn with_tiers(mut self, tiers: MedalTiers) -> Self {
+        self.tiers = tiers;
+        self
+    }
+
+    /// The campaign's medal tiers.
+    #[must_use]
+    pub fn tiers(&self) -> &MedalTiers {
+        &self.tiers
     }
 
     /// Fills the tier hexes with `art` instead of the title's colour swatch.
@@ -535,6 +557,8 @@ pub struct CellSelection {
     help_open: bool,
     /// What a cell's medal hex is filled with, see [`Self::with_medal_art`].
     medal_art: MedalArt,
+    /// The campaign's medal tiers, see [`Self::with_tiers`].
+    tiers: MedalTiers,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
     /// The rung the `DifficultyButton` widget's square-button prompt
@@ -631,9 +655,23 @@ impl CellSelection {
             fixed_locks: Vec::new(),
             help_open: false,
             medal_art: MedalArt::default(),
+            tiers: MedalTiers::default(),
             pulse: pulse::SelectorPulse::default(),
             difficulty: Difficulty::Medium,
         }
+    }
+
+    /// Names, scores and colours the medals by `tiers`: a campaign mod's own list.
+    #[must_use]
+    pub fn with_tiers(mut self, tiers: MedalTiers) -> Self {
+        self.tiers = tiers;
+        self
+    }
+
+    /// The campaign's medal tiers.
+    #[must_use]
+    pub fn tiers(&self) -> &MedalTiers {
+        &self.tiers
     }
 
     /// Fills the cells' medal hexes with `art` instead of the title's colour swatch.

@@ -418,6 +418,7 @@ fn has_fill_at(layers: &oag_ui::menu::Layers, x: f32, y: f32) -> bool {
 #[test]
 fn rewards_draws_the_place_and_tier_and_no_loyalty_placeholder() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: Some(3),
         medal: Some(oag_tables::race_campaign::Medal::Gold),
         campaign: true,
@@ -456,6 +457,7 @@ fn rewards_draws_the_place_and_tier_and_no_loyalty_placeholder() {
 #[test]
 fn rewards_without_a_place_or_a_campaign_draws_only_the_authored_labels() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: None,
         medal: None,
         campaign: false,
@@ -468,6 +470,7 @@ fn rewards_without_a_place_or_a_campaign_draws_only_the_authored_labels() {
 #[test]
 fn rewards_on_a_campaign_race_with_no_medal_says_so() {
     let layers = rewards_layers(&HdRewards {
+        tier: None,
         place: Some(8),
         medal: None,
         campaign: true,

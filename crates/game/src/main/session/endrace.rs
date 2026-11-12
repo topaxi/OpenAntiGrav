@@ -211,6 +211,11 @@ impl Session {
             });
             Some(oag_ui_screens::endrace::Rewards {
                 medal: observation.campaign_medal.map(to_campaign_medal),
+                tier: stage
+                    .campaign_custom
+                    .as_ref()
+                    .zip(stage.campaign_tier_name())
+                    .and_then(|(launch, name)| launch.own_phrase_tier(&name)),
                 campaign,
                 loyalty,
             })
@@ -288,6 +293,7 @@ impl Session {
                         });
                         split_rewards.push(oag_ui_screens::endrace::Rewards {
                             medal: None,
+                            tier: None,
                             campaign: false,
                             loyalty,
                         });

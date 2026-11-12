@@ -250,6 +250,7 @@ fn a_position_headline_resolves_and_an_unresolved_one_draws_nothing() {
 #[test]
 fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row_absent_one() {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: None,
@@ -287,6 +288,7 @@ fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row_absent_one() {
 #[test]
 fn rewards_draws_the_loyalty_row_once_the_model_carries_an_award() {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: Some(crate::endrace::Loyalty {
@@ -330,6 +332,7 @@ fn loyalty_bar(layers: &oag_ui::menu::Layers) -> Option<([f32; 4], [f32; 4])> {
 
 fn rewards_bar_at(total: u32) -> Option<([f32; 4], [f32; 4])> {
     let model = Rewards {
+        tier: None,
         medal: None,
         campaign: true,
         loyalty: Some(crate::endrace::Loyalty {
@@ -388,11 +391,13 @@ fn the_loyalty_bar_is_total_times_point_00124_pixels_and_texels_wide() {
 fn rewards_hides_the_glyph_off_a_non_campaign_race_or_an_earned_medal() {
     for model in [
         Rewards {
+            tier: None,
             medal: None,
             campaign: false,
             loyalty: None,
         },
         Rewards {
+            tier: None,
             medal: Some(Medal::Gold),
             campaign: true,
             loyalty: None,

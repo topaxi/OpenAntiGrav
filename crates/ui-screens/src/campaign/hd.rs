@@ -488,7 +488,7 @@ pub fn hd_cell_draw_list(
                 out.push(hd_tinted_medal_draw(
                     image,
                     placed,
-                    medal,
+                    model.tiers().class(medal),
                     difficulty,
                     art.medal_tier_rows,
                 ));
@@ -605,10 +605,17 @@ pub fn hd_cell_draw_list(
             )),
             "Points" => Some(format!(
                 "{}/{}",
-                model.selected_medal().map_or(0, |m| m.points()),
-                oag_tables::race_campaign::Medal::Gold.points()
+                model
+                    .selected_medal()
+                    .map_or(0, |m| model.tiers().points(m)),
+                model.tiers().best_points()
             )),
-            "Best" => Some(medal_line(model.selected_medal(), None, strings)),
+            "Best" => Some(medal_line(
+                model.selected_medal(),
+                None,
+                model.tiers(),
+                strings,
+            )),
             // The square-button prompt - see [`hd_difficulty_button_line`]'s
             // own doc for the `RB_AI_DIF`/`RB_DIF` split and which modes get
             // computed text at all.
@@ -651,7 +658,7 @@ pub fn hd_cell_draw_list(
                 Some(tier) => out.push(hd_tinted_medal_draw(
                     image,
                     placed,
-                    tier,
+                    model.tiers().class(tier),
                     model.difficulty(),
                     art.medal_tier_rows,
                 )),

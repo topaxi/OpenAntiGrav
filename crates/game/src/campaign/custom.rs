@@ -168,11 +168,7 @@ impl TierTargets {
             return None;
         }
         let flipped = matches!(mode, Mode::Zone | Mode::Elimination);
-        oag_tables::race_campaign::evaluate_targets(
-            self.for_difficulty(difficulty),
-            value,
-            flipped,
-        )
+        oag_tables::race_campaign::evaluate_targets(self.for_difficulty(difficulty), value, flipped)
     }
 }
 
@@ -410,6 +406,45 @@ pub struct Launch {
     pub pilot: Option<oag_raceplay::pilots::Entry>,
 }
 
+impl Launch {
+    /// The tier called `name` when the title has no end-of-race phrase for it: any tier but
+    /// gold, silver and bronze. What `EndRace Rewards` names in its award line.
+    #[must_use]
+    pub fn own_phrase_tier(&self, name: &str) -> Option<oag_tables::race_campaign::MedalTier> {
+        if matches!(name, "gold" | "silver" | "bronze") {
+            return None;
+        }
+        let tier = self.tiers.get(self.tiers.find(name)?)?;
+        Some(tier.clone())
+    }
+
+    /// Keeps what `tier` (a name of [`Self::tiers`]) earned on `cell` under this campaign's own
+    /// records title. `None` records a race that earned nothing, as `Store::record_campaign` does.
+    pub fn record_result(
+        &self,
+        records: &mut crate::records::Store,
+        cell: &str,
+        tier: Option<&str>,
+        difficulty: Option<crate::records::Difficulty>,
+    ) {
+        let order: Vec<&str> = self
+            .tiers
+            .iter()
+            .map(|(_, tier)| tier.name.as_str())
+            .collect();
+        let earned = tier.and_then(|name| {
+            let medal = self.tiers.find(name)?;
+            Some(crate::records::TierEarned {
+                name: &self.tiers.get(medal)?.name,
+                class: crate::unlock::to_records_medal(self.tiers.class(medal)),
+                points: self.tiers.points(medal),
+                order: &order,
+            })
+        });
+        records.record_campaign_tier(&self.records_title, cell, earned, difficulty);
+    }
+}
+
 /// RACE CAMPAIGN as a page picking between the disc's campaign and each of
 /// `installed`'s (ADR-0077), and the MODS page's ADDS line naming each. One left
 /// out is offered nowhere, named in the log and in its mod's MODS entry
@@ -531,8 +566,9 @@ pub fn compile(
         let mut cells = Vec::with_capacity(grid_def.events.len());
         for event_def in &grid_def.events {
             let at = format!("{prefix} grid {:?} event {:?}", grid_def.id, event_def.slot);
-            let (cell, mut event) = compile_event(index, event_def, &names, &tiers, ladder, pilots, files)
-                .map_err(|problem| format!("{at}: {problem}"))?;
+            let (cell, mut event) =
+                compile_event(index, event_def, &names, &tiers, ladder, pilots, files)
+                    .map_err(|problem| format!("{at}: {problem}"))?;
             if let Some(setting) = &setting {
                 event.follow(setting, ordinal);
             }
@@ -888,7 +924,11 @@ fn medal_targets(
         }
     };
     let flat = medals.all();
-    let rung = |own: &Option<Targets>| own.clone().filter(|t| !t.is_empty()).unwrap_or(flat.clone());
+    let rung = |own: &Option<Targets>| {
+        own.clone()
+            .filter(|t| !t.is_empty())
+            .unwrap_or(flat.clone())
+    };
     let medium = column(&rung(&medals.medium))?;
     let per_rung = medals.easy.is_some() || medals.medium.is_some() || medals.hard.is_some();
     let (rungs, every) = if per_rung {

@@ -892,6 +892,7 @@ mod tests {
     #[test]
     fn a_campaign_medal_picks_its_own_trophy_and_nothing_else_picks_one() {
         let rewards = |medal, campaign| oag_ui_screens::endrace::Rewards {
+ tier: None,
             medal,
             campaign,
             loyalty: None,

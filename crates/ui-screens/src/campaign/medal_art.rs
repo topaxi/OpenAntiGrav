@@ -1,7 +1,7 @@
 //! What a Pulse-style `Medal_x_y` hex is filled with: the title's flat colour swatch, or a
 //! frame of a medal atlas a mod names (`[campaign-medals]`, `docs/tools/mods.md`).
 
-use oag_tables::race_campaign::{Difficulty, Medal};
+use oag_tables::race_campaign::{Difficulty, Medal, MedalTiers};
 
 use super::hd::medal::hd_medal_frame;
 
@@ -29,18 +29,30 @@ pub struct Atlas {
 
 impl MedalArt {
     /// The atlas frame `[u, v, width, height]` for a medal earned on `difficulty`, or `None`
-    /// for the swatch.
+    /// for the swatch: the art is off, or the atlas has no row for the tier's name
+    /// (gold, silver, bronze), so the tier draws its own colour.
     #[must_use]
-    pub fn frame(&self, medal: Medal, difficulty: Difficulty) -> Option<[f32; 4]> {
+    pub fn frame(
+        &self,
+        tiers: &MedalTiers,
+        medal: Medal,
+        difficulty: Difficulty,
+    ) -> Option<[f32; 4]> {
         let Self::Atlas(atlas) = self else {
             return None;
+        };
+        let class = match tiers.get(medal)?.name.as_str() {
+            "gold" => Medal::Gold,
+            "silver" => Medal::Silver,
+            "bronze" => Medal::Bronze,
+            _ => return None,
         };
         let difficulty = if atlas.per_difficulty {
             difficulty
         } else {
             Difficulty::Easy
         };
-        Some(hd_medal_frame(medal, difficulty, atlas.tier_rows))
+        Some(hd_medal_frame(class, difficulty, atlas.tier_rows))
     }
 
     /// The atlas's sprite sheet key, `None` for the swatch.

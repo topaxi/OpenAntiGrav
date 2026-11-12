@@ -375,7 +375,11 @@ pub struct HdLoyalty {
 /// the module doc.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rewards {
+    /// The medal's class, gold, silver or bronze: what the title's own phrase and trophy say.
     pub medal: Option<Medal>,
+    /// The tier a campaign mod's own list awarded when the title has no phrase for it (a
+    /// platinum above gold): the phrase names the tier. `None` for every disc campaign.
+    pub tier: Option<oag_tables::race_campaign::MedalTier>,
     pub campaign: bool,
     /// `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum`/`loyaltybar`'s own
     /// row - `None` draws none of it, the same absence this project's own
@@ -411,8 +415,11 @@ pub struct Loyalty {
 /// `Results` ([`HdLoyalty`], on [`FieldResults`]), and its own law is not
 /// [`Loyalty`]'s (the PSP's), so this screen's four loyalty widgets draw
 /// nothing rather than Pulse's numbers under HD's layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HdRewards {
+    /// The tier a campaign mod's own list awarded when the title has no phrase for it, as
+    /// [`Rewards::tier`].
+    pub tier: Option<oag_tables::race_campaign::MedalTier>,
     /// The player's own finishing place, 1-based - `BigPos`'s figure.
     /// `None` for a race with no place (a field of one that never finished),
     /// which draws `BigPos` and the tile it sits on as absent.

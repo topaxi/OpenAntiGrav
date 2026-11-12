@@ -247,7 +247,14 @@ fn the_hd_medal_atlas_resolves_for_a_mod_and_every_frame_is_a_drawn_hexagon() {
     let mut seen = Vec::new();
     for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
         for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
-            let [u, v, w, h] = resolved.art.frame(medal, difficulty).expect("a frame");
+            let [u, v, w, h] = resolved
+                .art
+                .frame(
+                    oag_tables::race_campaign::MedalTiers::standard(),
+                    medal,
+                    difficulty,
+                )
+                .expect("a frame");
             let mut texels = Vec::new();
             for row in 0..h as u32 {
                 let at = ((placed.y + v as u32 + row) * sheet.width + placed.x + u as u32) * 4;

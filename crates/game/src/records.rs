@@ -419,6 +419,23 @@ impl PersonalBest {
     }
 }
 
+/// The tier names of a campaign that has no list of its own, best first.
+const STANDARD_ORDER: [&str; 3] = ["gold", "silver", "bronze"];
+
+/// What a campaign race earned: the tier's name, the gold, silver or bronze it stands in for
+/// (`MedalTiers::class`), its points, and every tier name of its campaign, best first.
+#[derive(Debug, Clone, Copy)]
+pub struct TierEarned<'a> {
+    /// The tier's name.
+    pub name: &'a str,
+    /// The class kept in [`CampaignRecord::best_medal`].
+    pub class: Medal,
+    /// The tier's points, kept in [`CampaignRecord::best_points`].
+    pub points: u32,
+    /// The campaign's tier names, best first.
+    pub order: &'a [&'a str],
+}
+
 /// One campaign cell's whole history, keyed on the cell's own `name` rather
 /// than on [`Key`].
 ///
@@ -471,9 +488,27 @@ pub struct CampaignRecord {
     /// whenever [`Self::last_medal`] itself is `None`.
     #[serde(default)]
     pub last_difficulty: Option<Difficulty>,
+    /// The tier a mod campaign's own list awarded, by name, when it is not the word of
+    /// [`Self::best_medal`] (a `platinum`, whose `best_medal` is the class gold stands in for it:
+    /// `MedalTiers::class`). Absent on every disc campaign's row, and on a row written before
+    /// tiers had names: such a row reads as the tier [`Self::best_medal`] names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_tier: Option<String>,
+    /// [`Self::last_medal`]'s tier, as [`Self::best_tier`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_tier: Option<String>,
 }
 
 impl CampaignRecord {
+    /// The name of the tier [`Self::best_medal`] stands for: [`Self::best_tier`], else the word of
+    /// [`Self::best_medal`].
+    #[must_use]
+    pub fn best_tier_name(&self) -> Option<&str> {
+        self.best_tier
+            .as_deref()
+            .or_else(|| self.best_medal.map(Medal::word))
+    }
+
     fn matches(&self, title: &str, cell: &str) -> bool {
         self.title == title && self.cell == cell
     }
@@ -686,6 +721,24 @@ impl Store {
         medal: Option<Medal>,
         difficulty: Option<Difficulty>,
     ) {
+        let earned = medal.map(|medal| TierEarned {
+            name: medal.word(),
+            class: medal,
+            points: medal.points(),
+            order: &STANDARD_ORDER,
+        });
+        self.record_campaign_tier(title, cell, earned, difficulty);
+    }
+
+    /// [`Self::record_campaign`] for a campaign with its own tiers: what the race earned,
+    /// compared with the stored best by [`TierEarned::order`].
+    pub fn record_campaign_tier(
+        &mut self,
+        title: &str,
+        cell: &str,
+        earned: Option<TierEarned<'_>>,
+        difficulty: Option<Difficulty>,
+    ) {
         let title = title.trim().to_ascii_lowercase();
         let cell = cell.trim().to_ascii_lowercase();
         let row = match self
@@ -705,29 +758,46 @@ impl Store {
                     .expect("just pushed onto this exact vec")
             }
         };
-        if let Some(medal) = medal {
+        let medal = earned.as_ref().map(|e| e.class);
+        if let Some(earned) = &earned {
             // `Race_RecordResult`'s own gate: no stored medal yet, or the new
-            // one is same-or-better - never downgrade `best_medal`.
-            let applies = row.best_medal.is_none_or(|stored| medal <= stored);
+            // one is same-or-better - never downgrade `best_medal`. A stored tier the list
+            // no longer names ranks below every tier it does.
+            let rank = |name: &str| {
+                earned
+                    .order
+                    .iter()
+                    .position(|n| n.eq_ignore_ascii_case(name))
+                    .unwrap_or(usize::MAX)
+            };
+            let new_rank = rank(earned.name);
+            let stored_rank = row.best_tier_name().map(rank);
+            let applies = stored_rank.is_none_or(|stored| new_rank <= stored);
             if applies {
                 if let Some(new_difficulty) = difficulty {
-                    let overwrite_difficulty = match (row.best_medal, row.best_difficulty) {
+                    let overwrite_difficulty = match (stored_rank, row.best_difficulty) {
                         // No stored medal, or a stored medal with no rung
                         // recorded yet (a row from before the field): unconditional.
                         (None, _) | (_, None) => true,
-                        (Some(stored_medal), Some(stored_difficulty)) => {
-                            medal < stored_medal || new_difficulty > stored_difficulty
+                        (Some(stored), Some(stored_difficulty)) => {
+                            new_rank < stored || new_difficulty > stored_difficulty
                         }
                     };
                     if overwrite_difficulty {
                         row.best_difficulty = Some(new_difficulty);
                     }
                 }
-                row.best_medal = Some(medal);
-                row.best_points = row.best_medal.map(Medal::points);
+                row.best_medal = Some(earned.class);
+                row.best_tier =
+                    (earned.name != earned.class.word()).then(|| earned.name.to_string());
+                row.best_points = Some(earned.points);
             }
         }
         row.last_medal = medal;
+        row.last_tier = earned
+            .as_ref()
+            .filter(|e| e.name != e.class.word())
+            .map(|e| e.name.to_string());
         row.last_difficulty = difficulty;
 
         // Stable, for the same reason `Self::record` sorts `self.records`.

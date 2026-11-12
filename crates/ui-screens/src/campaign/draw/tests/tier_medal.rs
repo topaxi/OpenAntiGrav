@@ -42,7 +42,8 @@ fn body_colours(model: &GridSelection) -> Vec<[f32; 4]> {
 }
 
 fn medal_colours(model: &GridSelection) -> Vec<[f32; 4]> {
-    let medals = [Medal::Gold, Medal::Silver, Medal::Bronze].map(|m| argb_to_rgba(medal_argb(m)));
+    let medals = [Medal::Gold, Medal::Silver, Medal::Bronze]
+        .map(|m| argb_to_rgba(MedalTiers::standard().argb(m)));
     body_colours(model)
         .into_iter()
         .filter(|c| medals.contains(c))
@@ -63,9 +64,9 @@ fn each_tier_swatch_takes_the_colour_its_points_reach() {
     assert_eq!(
         medal_colours(&model),
         vec![
-            argb_to_rgba(medal_argb(Medal::Gold)),
-            argb_to_rgba(medal_argb(Medal::Silver)),
-            argb_to_rgba(medal_argb(Medal::Bronze)),
+            argb_to_rgba(MedalTiers::standard().argb(Medal::Gold)),
+            argb_to_rgba(MedalTiers::standard().argb(Medal::Silver)),
+            argb_to_rgba(MedalTiers::standard().argb(Medal::Bronze)),
         ]
     );
 }

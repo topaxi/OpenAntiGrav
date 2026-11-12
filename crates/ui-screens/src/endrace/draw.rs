@@ -341,7 +341,7 @@ fn rewards_layers(
             .map_or("", |name| super::table::split_suffix(name).0);
         let content =
             match name {
-                "RewardLine1" => Some(medal_award_text(model.medal, strings)),
+                "RewardLine1" => Some(medal_award_text(model.medal, model.tier.as_ref(), strings)),
                 "RewardLine2" => model.loyalty.as_ref().map(|loyalty| {
                     format!("{} {}", loyalty.team_name, strings.get_or_id("ER_LOY"))
                 }),
@@ -461,17 +461,29 @@ pub(super) fn ordinal_idstring(place: u8) -> Option<&'static str> {
     })
 }
 
-/// `RewardLine1`'s own resolved text: `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA`.
+/// `RewardLine1`'s own resolved text: `ER_GMA`/`ER_SMA`/`ER_BMA`/`ER_NMA`. A campaign's own
+/// tier (`tier`, set only for a tier the title has no phrase for) reads `OAG_MEDAL_AWARD` with
+/// the tier's name in it.
 pub(super) fn medal_award_text(
     medal: Option<oag_tables::race_campaign::Medal>,
+    tier: Option<&oag_tables::race_campaign::MedalTier>,
     strings: &StringTable,
 ) -> String {
     use oag_tables::race_campaign::Medal;
+    if let Some(tier) = tier {
+        let name = tier.string_id.as_deref().map_or_else(
+            || tier.name.to_ascii_uppercase(),
+            |id| strings.get_or_id(id).to_string(),
+        );
+        return strings
+            .get_or_id("OAG_MEDAL_AWARD")
+            .replacen("%s", &name, 1);
+    }
     let id = match medal {
         Some(Medal::Gold) => "ER_GMA",
         Some(Medal::Silver) => "ER_SMA",
         Some(Medal::Bronze) => "ER_BMA",
-        None => "ER_NMA",
+        _ => "ER_NMA",
     };
     strings.get_or_id(id).to_string()
 }

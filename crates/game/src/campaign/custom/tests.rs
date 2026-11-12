@@ -485,7 +485,8 @@ fn mod_progress_and_disc_progress_never_meet() {
     let mut records = Store::default();
     records.record_campaign("Wipeout Pulse", "grid0_2_1", Some(Stored::Gold), None);
     {
-        let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title);
+        let medal_of =
+            crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
         assert_eq!(medal_of("grid0_2_1"), None);
         assert_eq!(custom.fixed_lock("grid0_2_2", &medal_of), Some(true));
     }
@@ -500,7 +501,7 @@ fn mod_progress_and_disc_progress_never_meet() {
         .campaign_medal("Wipeout Pulse", "grid0_2_1")
         .unwrap();
     assert_eq!(vanilla.best_medal, Some(Stored::Gold));
-    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title);
+    let medal_of = crate::unlock::campaign_medal_of(&records, &custom.records_title, &custom.tiers);
     assert_eq!(custom.fixed_lock("grid0_2_2", &medal_of), Some(false));
 }
 
