@@ -62,8 +62,8 @@ while none is on the search path.
 
 ## Campaign medals: `[campaign-medals]`
 
-A mod may replace the colour swatch Pulse's **Cell Selection** and **Grid Selection** fill a medal
-hexagon with by frames of a medal atlas:
+A mod may replace the colour swatch Pulse's **Cell Selection** fills a medal hexagon with by
+frames of a medal atlas (Grid Selection's tier hexagons keep the swatch):
 
 ```toml
 [campaign-medals]
@@ -80,8 +80,9 @@ per-difficulty = true               # one block of three tiers per difficulty
   names a key of `[icons]`; a mod's own atlas is parsed and checked, and not drawn yet.
 - **`per-difficulty`**: a cell draws the block of the difficulty its best medal was earned on
   (`best_difficulty`: easy, medium, hard from the top, 183 px apart); a medal with no saved
-  difficulty and every tier hex of Grid Selection draw the middle block (chosen, not measured).
-  Without it, the first block.
+  difficulty draws the middle block (`CellSelection::medal_block_at`, the rule HD's Cell Selection
+  shares; chosen, not measured). Grid Selection's tier hexagons keep the title's colour swatch:
+  HD's Grid Selection has no tier medal hexagons. Without it, the first block.
 - **`tiers`**: names the tier of each atlas row, so a later tier is a name, not a position. Only
   `gold`, `silver`, `bronze` load, each once, all three or none; a fourth name is refused with
   "campaign-defined tiers are not supported yet". A `title` source uses the title's own row order
@@ -299,7 +300,7 @@ the engine names none of them.
   leaves it out. `crates/game/tests/official_remix.rs` builds every title's tree with it on
   and off.
 - **`hd-medals/` (`oag.hd-medals`): HD Medals.** Off until turned on. Wipeout Pulse's Cell
-  Selection and Grid Selection draw each earned medal as Wipeout HD's own `Hexmedal_HD` frame
+  Selection draws each earned medal as Wipeout HD's own `Hexmedal_HD` frame
   (`[campaign-medals]` above) from a Wipeout HD disc on the search path; without one the
   swatches stay and the MODS page names the missing disc. Art only: it changes no rule, so the LAN
   fingerprint leaves it out.
