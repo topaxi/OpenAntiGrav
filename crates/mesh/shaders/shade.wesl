@@ -573,6 +573,22 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let linear = bars * mix(decode(first.rgb), decode(second.rgb), vec3<f32>(w));
         picture = vec4<f32>(encode(linear), first.a);
     }
+    // **Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads** (`Emissive::program` mode 14,
+    // `oag_mesh::mesh::rcs::psp2::tarmac`), read off the pixel programs:
+    //
+    //     c = lerp(c, dirt.rgb,     dirt.a)       dirt     (sixth binding) at `colour.xy`
+    //     c = lerp(c, markings.rgb, markings.a)   markings (fifth binding) at `lightmap_texcoord.zw`
+    //
+    // over the albedo, dirt first. The vertex colour carries the dirt pair here, so the tint
+    // below is white on this mode. The taps are mixed in the domain `picture` is sampled in.
+    let tarmac_entry = (in.slots >> 24u) & 127u;
+    let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
+    if tarmac {
+        let dirt = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy);
+        let markings = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw);
+        let laid = mix(mix(picture.rgb, dirt.rgb, dirt.a), markings.rgb, markings.a);
+        picture = vec4<f32>(laid, picture.a);
+    }
     // **HD's `uvdistortion_*plusoverlay*` banner** (`Emissive::program` mode 13,
     // `oag_mesh::mesh::rcs::uv_overlay`): the grille is the lit albedo and the program adds,
     // after the light,
@@ -1230,7 +1246,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // cube, whose vertex colour genuinely is a tint because `mesh/sky_cube.rs`
     // builds it rather than the HD loader. `colour_is_light` is a property of
     // the model and answers both.
-    let tint = mix(in.colour.rgb, vec3<f32>(1.0), select(colour_is_light, 1.0, nova_vertex));
+    let tint = mix(in.colour.rgb, vec3<f32>(1.0), select(colour_is_light, 1.0, nova_vertex || tarmac));
     // The gamma-domain sum, for the same reason this whole path is gamma: a
     // prelit surface's light is baked into its vertex colours in the space the
     // asset authors, so a linear summand would be the one term shaded twice.

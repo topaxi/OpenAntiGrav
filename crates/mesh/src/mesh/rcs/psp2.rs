@@ -52,6 +52,7 @@ pub mod refraction;
 pub mod refraction_only;
 mod shield_lightning;
 mod static_hologram;
+mod tarmac;
 mod transparency;
 mod twin_blend;
 mod uv_keys;
@@ -216,6 +217,12 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: no `Texture2Alpha`, no `Constant1`,
     /// or a picture that would not decode.
     pub emissive_add_unread: usize,
+    /// Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads that lay their dirt and
+    /// markings pictures over the diffuse (`psp2::tarmac`).
+    pub tarmac_materials: usize,
+    /// Of that family, materials left to the generic reading: a submesh without both pairs, or a
+    /// picture that would not decode.
+    pub tarmac_unread: usize,
     /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
     /// after the light (`psp2::alpha_emissive`).
     pub alpha_emissive_materials: usize,
@@ -383,6 +390,14 @@ impl Report {
                 self.emissive_add_materials, self.emissive_add_unread
             )
         };
+        let tarmac = if self.tarmac_materials + self.tarmac_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} tarmac road material(s) lay dirt and markings over the diffuse ({} left to the generic reading)",
+                self.tarmac_materials, self.tarmac_unread
+            )
+        };
         let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {
             String::new()
         } else {
@@ -437,7 +452,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{alpha_emissive}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -656,6 +671,8 @@ fn build_planned(
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
+    let tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
@@ -837,6 +854,16 @@ fn build_planned(
                 }
                 _ => (texcoord, texcoord2),
             };
+            // The road's decal pair rides `texcoord2` and its dirt pair `colour.xy`
+            // (`psp2::tarmac`); the fragment stage reads the vertex colour as white there.
+            let (texcoord2, colour) = match (
+                tarmac.of(submesh.material),
+                submesh.markings_texcoords.get(i),
+                submesh.dirt_texcoords.get(i),
+            ) {
+                (Some(_), Some(&markings), Some(&[u, v])) => (markings, [u, v, 1.0, 1.0]),
+                _ => (texcoord2, colour),
+            };
             let (colour, sun_mask) = match submesh.colours.get(i) {
                 Some(&[r, g, b, a]) if nova_vertex => (
                     [
@@ -875,6 +902,7 @@ fn build_planned(
                 } else {
                     role
                 }) | emissive_add.role(submesh.material)
+                    | tarmac.role(submesh.material)
                     | glass.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
@@ -951,7 +979,7 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals, &emissive_add),
+        (&glow, &twin, &normals, &emissive_add, &tarmac),
         &mut model,
         &mut report,
         textures,
@@ -971,11 +999,12 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add): (
+    (glow, twin, normals, emissive_add, tarmac): (
         &glow::Plan,
         &twin_blend::Plan,
         &normal_map::Plan,
         &emissive_add::Plan,
+        &tarmac::Plan,
     ),
     model: &mut Model,
     report: &mut Report,
@@ -1110,6 +1139,13 @@ fn bind_textures(
                         .or_else(|| emissive_add.mask(Some(index)).cloned())
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
+            }
+            if tarmac.any() {
+                let layers = tarmac.of(Some(index));
+                debug_assert_eq!(model.fifth_maps.len(), at);
+                model.fifth_maps.push(layers.map(|l| l.markings.clone()));
+                debug_assert_eq!(model.sixth_maps.len(), at);
+                model.sixth_maps.push(layers.map(|l| l.dirt.clone()));
             }
             if twin.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);
