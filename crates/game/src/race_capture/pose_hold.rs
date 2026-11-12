@@ -27,11 +27,11 @@ impl StartPose {
         }
     }
 
-    /// Puts ship 0 back on this pose. Position and orientation only: the craft's own state (its
-    /// exhaust, its velocity, its hover) is the clock's and stays as it ran.
+    /// Puts ship 0 back on this pose, its engine ribbon with it. Position and orientation only:
+    /// the craft's own state (its velocity, its hover, the exhaust's ramps) is the clock's and
+    /// stays as it ran. The ribbon moves rigidly with the hull ([`Race::place_player`]), so it
+    /// hangs behind the nozzle as it did when it was laid down.
     pub fn restore(&self, race: &mut Race) {
-        let body = &mut race.sim.world.ships[0].physics.body;
-        body.position = self.position;
-        body.orientation = self.orientation;
+        race.place_player(self.position, self.orientation);
     }
 }
