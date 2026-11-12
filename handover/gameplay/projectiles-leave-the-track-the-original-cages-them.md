@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-12
-summary: "Cage test, Cannon muzzle speed, track-up launch normal, floor arms wired on Pulse and Pure; next own-craft box, HD floor arms"
+summary: "Cage test, Cannon muzzle speed, track-up launch normal, floor arms wired on Pulse and Pure; own-craft box measured (ready to wire), HD floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -40,14 +40,18 @@ was not measured.
    wall end carries `blast: true` while its cage end spends none (the `0x14` teardown reaches the
    explosion and no damage); no capture has produced a Missile's sweep `4`; `CageEffect_Spawn` on a
    projectile's cage hit is not drawn.
-3. **The first probes of a projectile miss on the firing craft's own box collider**, not on an age.
-   The query answers `0x7f` when the mesh raycast's nearest hit is a craft box (kind `3`, no
-   collider skipped). 28 live probe records. `plasma::UNPINNED_SECONDS` (0.04 s, chosen) stands in
-   for it and is wrong on the mag strip (the original's bolt rides on its first update there); the
-   Rocket has no stand-in at all (ours rides from the first update, the original's falls two to
-   four). **How far the box reaches ahead of `body+0x30` is not understood**: the brackets by speed
-   are on the linked section and do not fit one box (parked 2.13 to 2.84, 100 units/s 3.91 to 5.01,
-   125 units/s 4.80 to 4.93, 140 units/s 4.0 to 4.3, mag strip at 139 units/s under 2.83).
+3. **The first probes of a projectile miss on a craft's box collider: measured 2026-11-12
+   (`pulse-own-craft-box`), ready to wire.** The box sits on `body+0x30` with the body's own rotation rows
+   (1,712 snapshots, difference 0), 4.125 x 2.625 x 9.75 on a Venom; `Collision_RaycastBox` gates the
+   segment through the **transposed** rotation (`R^T * v`, read live, 39 of 39 vectors), so the reach is
+   4.875 ahead only on a craft aligned to the world axes and shrinks to 2.06 at 45 degrees; on the mag
+   strip (85 degree roll) the gate rejects the start and the bolt rides at once. The model replays all
+   2,302 probes of 56 captures with 0 errors (the correct frame: 63). Law, records for a test, reach by
+   yaw and the wire recipe: [rocket-visuals.md](../../docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box),
+   replay tool `scripts/psp-craft-box-replay.py`. `plasma::UNPINNED_SECONDS` (0.04 s, chosen) is what the
+   wire deletes; the Rocket's missing equivalent is the same function in the same probe path. Open from it:
+   the travel sweep's own box meeting (65: same function, no reading of its own, see the section), an opponent's box (75), other
+   classes' dimensions (the collider carries them), Pure by inheritance.
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.
@@ -57,7 +61,6 @@ was not measured.
    - Pulse PS2 (inherits PSP; unread). HD's own code `4` in its projectile switch (HD runs no cage
      off the track header; its sweep function is unnamed). The Disruptor's own `advance`
      (`projectile/disruptor.rs`) was not looked at.
-   - What poses the craft's box collider against `body+0x30` when the weapons update (item 3).
 
 ## Done
 
@@ -116,8 +119,16 @@ was not measured.
 
 ## Next Steps
 
-1. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
-   collider's own pose beside `body+0x30` (the collider is `world + index * 0xc + 0x2454`, the index
-   is in the capture's `mesh_collider`), on a floor at two speeds and on the mag strip. Then a probe
-   that meets any craft's box first reports nothing, and `plasma::UNPINNED_SECONDS` goes.
+1. **Wire item 3** (a `oag-wire` lane, one shared function, Pulse and Pure by inheritance): in
+   `projectile::flight` replace the Plasma-only `age < plasma::UNPINNED_SECONDS` probe gate by "a craft
+   box nearer than the mesh hit makes the probe `None`" for every probing weapon (the Rocket gains its
+   first one to three falling probes). The box is centre = body position, rows = the body's rotation rows
+   in the original's order and signs, half dimensions = `<Misc>` (width, height, length) x 0.75 x 0.5; the
+   gate is the separating-axis test in the `R^T` frame, then the nearest face of the true box (steps
+   and eight records in the linked section). Check our `Body` basis signs against the records before use
+   (the gate is not symmetric under flipping one row). Tests: those records (red on the `R` frame, red
+   without the box), `rocket_floor_trace` and the Outpost 7 ramp ground truth re-run, the Plasma's
+   `projectile_tilt_ground_truth` first-three-updates constant removed. Keep the wired cage test asking
+   about `to - surface * length` when the box is what the probe met (199 Missile probes returned code `4`
+   on a box). Update `docs/gameplay/weapon-lineage.md` and `projectile-floor.md` in the same change.
 2. Read HD's `Rocket_Update`, `Missile_Update` and `Shuriken_Update` floor arms (`ps3-hdfury-eu`); if they match Pulse's, flip `Weapons::floor_arms_steer_to_ride_point` for HD (and Omega, 2048 by lineage).

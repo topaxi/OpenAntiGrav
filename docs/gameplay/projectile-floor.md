@@ -402,8 +402,12 @@ code-4 queries are outside at the original's boundary point and normal. `rocket_
 Pulse `07` and `10`: rockets that "expired" at their five seconds went from 14 and 7 to 0, and the
 longest flight from 299 ticks to 107 and 156.
 
-**Still different, not wired here:** the own-craft box and the Missile's MAX_BOUNCES wall end
-(`blast: true`, while its cage end spends none).
+**Still different, not wired here:** the own-craft box (measured 2026-11-12, ready to wire: the box
+is on the craft, and the original tests the probe against it through the transposed rotation, so the
+first probes miss for a distance that depends on the craft's heading off the world axes, 4.875 ahead
+at best and 2.06 at 45 degrees, and not at all on the mag strip's roll;
+[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box))
+and the Missile's MAX_BOUNCES wall end (`blast: true`, while its cage end spends none).
 
 ### Wired: the floor arms (2026-11-12, lane `pulse-floor-arms`)
 
