@@ -23,6 +23,7 @@ data/
   tools/        Built third-party tooling, e.g. the Allegrex Ghidra extension
   traces/       Runtime traces captured from PPSSPP / PCSX2
   saves/        Emulator save states used by the behavioural verification suite
+                (memory dumps: never committed anywhere; `just sync-saves <host>` copies them between workstations)
 ```
 
 `tools/` is populated by `just build-allegrex`. It holds a git checkout and a
