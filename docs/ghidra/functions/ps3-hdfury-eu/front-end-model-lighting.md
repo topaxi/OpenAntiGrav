@@ -72,7 +72,7 @@ The parameter index is `(offset - 0x18) / 0x20` into `*(ctx + 0xd8)`, the idiom
 | Parameter | Table offset | Source in the block | Key |
 | --- | --- | --- | --- |
 | 7 `fogColour` | `+0xf8` | `+0x4e0`, `w` from `+0x500` | `Fog.Fog Color`, `Fog Density` |
-| 8 `paraboloidReflectionTex` | `+0x118` | `*(*(0x00d43c80)) + 0x20` (not the block) | |
+| 8 `paraboloidReflectionTex` | `+0x118` | `*(0x00d43c80) + 0x20`, or `0` when that is null (not the block) | |
 | 9 `paraboloidIblTex` | `+0x138` | `0` | |
 | 10 | `+0x158` | `+0x420` | `Lighting.Constant ambient color` |
 | 11 | `+0x178` | `+0x4a0`, normalised | `Lighting.Ambient false direction` |
@@ -132,7 +132,9 @@ reverted):
 | stand-in (today) | 14.33 | -7.6, -11.7, -11.1 |
 | `fe.fury` rig, HD's `/2` output | 14.32 | -6.9, -11.2, -12.3 |
 | the same plus the file's black fog at `0.03` (exp2) | 15.61 | -8.1, -12.7, -13.5 |
-| `fe.fury` rig, no `/2` | 9.31 | -2.4, -5.3, -7.1 |
+| `fe.fury` rig, no `/2` (a tone scale of 2) | 9.31 | -2.4, -5.3, -7.1 |
+| `fe.fury` rig, `/2` times the fitted 3.45 (output scale 1.725) | **4.62** | +2.1, +0.7, -1.7 |
+| the same plus the black fog | 6.48 | +0.1, -1.8, -3.8 |
 
 The box number alone does not separate the rig from an exposure, so the ratio was read too:
 both frames decoded to linear light, the per-pixel `theirs / ours` over the hull (both
@@ -142,9 +144,11 @@ silhouettes above 24, eroded 9 pixels, channels between 5 and 250):
 | --- | --- | --- |
 | stand-in | 4.10, 3.87, 3.13 | 2.45 to 4.58 |
 | `fe.fury` rig, `/2` | **3.53, 3.46, 3.47** | 3.12 to 3.83 |
+| `fe.fury` rig, output scale 1.725 | 1.22, 1.05, 1.06 | 0.95 to 1.20 |
 
 **With the rig, what is left is one channel-neutral scale**, flat over the brightness bins
-(3.67, 3.38, 3.42 in green from dark to bright, the darkest bin the noisiest). The stand-in leaves a blue deficit a scale cannot
+(3.67, 3.38, 3.42 in green from dark to bright; the darkest bin stays high when ours is decoded
+with the shader's own `pow(2.2)` instead of sRGB, so it is lighting, not the decode). The stand-in leaves a blue deficit a scale cannot
 remove. So the rig is the cause of the colour, and a factor of about 3.45 in linear light, after
 the program's `/2`, is the cause of the level. Confidence 85 on the rig (two static sites, one
 earlier live read of the block, and the frame's channel-neutral ratio); 55 on the factor.
@@ -155,27 +159,34 @@ scales by `Tone maximum brightness - min(adapted * Tone adaption boost, Tone dar
 constants, a value between 1 and 4. A scale of 3.45 would mean an adapted luminance of about
 0.016, plausible for a mostly black page. **This value is unread** (next step below).
 
-Residuals, not followed: the ratio still rises toward the hull's nose (green 3.81 at
-`x 716..966` against 3.11 at `x 1466..1716`), and red there more than the others. That is a spatial
-term, not exposure. Candidates are the reflection the draw binds as parameter 8, which this
-preview does not draw, and the fog, which the frame refuses at the file's density. Whether the
-hull's programs read either in the front end is unread.
+**The fog is refused at either level.** At the fitted scale the black exp2 fog moves the box from
+4.62 to 6.48 and steepens the left-to-right gradient. Whether the hull's front-end programs read
+parameter 7 at all is unread.
+
+Residuals at the fitted scale, not followed: the left of the box reads brighter in the original
+(green 1.19 at `x 716..966` against 0.95 at `x 1466..1716`), with red more so (1.76 against 0.97),
+and the darkest pixels too (green 1.45 below 0.05 linear). That is a spatial or additive term, not
+exposure. Candidates are the reflection the draw binds as parameter 8, which this preview does not
+draw, `Ambient false direction` (parameter 11), and the front end's bloom.
 
 ## What to wire, and what is open
 
 **Ready to wire (one value open):** the preview's scene block takes the front end's rig, read
 through the same `envsettings` path the race uses (`oag_raceplay::load::environment`'s
 `envsettings_light`), from `data/fe/fe.fury.EnvSettings` in the Fury style and
-`data/fe/fe.envsettings` in the HD style, with HD's `/2` output scale. Then add the front end's tone
-scale on the preview's lit output. Acceptance: the hull box at or below about 9.3 mean abs, its
-bias toward zero from R -7.6, G -11.7, B -11.1, and the linear ratio channel-neutral.
+`data/fe/fe.envsettings` in the HD style, with HD's `/2` output scale. Then the lit hull takes the
+front end's tone scale. `oag_post::hd_bloom` already runs HD's adaptation and resolve, so the
+faithful form is the menu frame through that resolve with the front end's tone constants (boost 35,
+clamp 3, maximum 4), not a fixed multiplier; 3.45 is the check value. Acceptance: the hull box
+near 4.6 mean abs (from 14.33), its bias within about 2 of zero in each channel, and the linear
+ratio channel-neutral.
 
-**Unread, with the read recipe:** the front end's adapted luminance, or its resolve scale.
-`Tone adaption boost` sits at the global block's `+0x540` (`0x00c489f0 + 0x540` reads `35.0` on
-Ship Select if this page is right). The adapted luminance is a GPU value, so read the resolve
-pass's `scale` constant off an RPCS3 capture of Ship Select, the same way
-`docs/rendering/hd-track-tone.md` read a race's. Until then, the fitted 3.45 must be labelled
-"measured off one frame".
+**Unread, with the read recipe:** the front end's adapted luminance. Read it as
+`docs/rendering/hd-track-tone.md` did for a race: the PPU's adapted luma at `FunkLayer + 0x25c`
+(the object `0xc50ee0`, through `*0x8b73bc`), several reads a few seconds apart on Ship Select
+at rest on the compare profile, then exposure is `4 - min(adapted * 35, 3)`. **This page predicts
+`adapted` of about 0.016.** A second falsifier is that `0x00c489f0 + 0x540` reads `35.0` there.
+Until it is read, the 3.45 is "measured off one frame".
 
 **Not wired, not read:** the fog's effect on a front-end draw, the parameter 8 reflection
 (`*(0x00d43c80)`'s texture at `+0x20`), `iblScalePower`'s value, and `Ambient false direction`,
@@ -183,10 +194,14 @@ which `oag_mesh::mesh_render::Light` has no field for.
 
 ## Omega
 
-**Checked, applies, not wired.** Omega's patch (`data08.psarc`) and base (`data00.psarc`) ship
-the same four `data/fe/fe*.EnvSettings` paths. `fe.fury.EnvSettings` authors the same
-`Lighting.` and `Fog.` values as HD's, plus a `Tonemap` and `TonemapHDR` block whose exposure
-minimum and maximum are both `1`. Omega's `fe.EnvSettings` differs: ambient `0.2 0.3 0.32`,
-spelled `colour`. The patch's `eboot.bin` carries the four path strings. The loader and draw were
-not traced in Omega's executable, and no Omega memory readout exists, so which file its Ship
-Select lights with is inferred from the shared front end, not read.
+**Checked, differs.** Omega's patch (`data08.psarc`) and base (`data00.psarc`) ship the same
+four `data/fe/fe*.EnvSettings` paths, and the patch's `eboot.bin` carries the four path strings.
+**Omega always runs the HD style**: its boot screen compares `"HD"` with itself to pick
+`WOHD_Colours` (`docs/formats/omega-frontend.md`, "The colour-skin switch"), and the HD style's
+`bgAnim` is the only backdrop it has ([menu-backdrop-scene.md](menu-backdrop-scene.md)). So if
+its loader keeps HD's branch, its Ship Select lights from `fe.EnvSettings`. That file differs from
+HD's `fe.envsettings`: ambient `0.2 0.3 0.32` (spelled `colour`) against `0.4` grey, with the same
+sun `3.19749 2.094043 1.768024` along `0.658008 0.677334 0.329004`. Its `fe.fury.EnvSettings`
+authors HD's Fury `Lighting.` and `Fog.` values, plus a `Tonemap`/`TonemapHDR` block with exposure
+minimum and maximum both `1`. The loader and draw were not traced in Omega's executable, and no
+Omega memory readout exists: the file choice is inferred from the style, not read.

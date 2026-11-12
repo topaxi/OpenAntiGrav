@@ -54,17 +54,19 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      `0x0025379c`). Ours draws `mesh.wesl`'s stand-in rig. Confidence 85.
      Change: the preview's scene block takes `Light::authored` built through
      raceplay's `envsettings_light` path from that file (not hand-copied),
-     `with_output_scale(0.5)`, then the front end's tone scale on the lit
-     output. Open value: that scale. One frame fits about 3.45 in linear light
-     (55), inside the tone law's `4 - min(adapted * 35, 3)`; read the resolve's
-     `scale` off an RPCS3 capture of Ship Select. Box today 14.33; rig with
-     `/2` 14.32 (the linear ratio goes channel-neutral, 3.53/3.46/3.47);
-     rig with the scale at 2 gives 9.31 (bias -2.4, -5.3, -7.1). Acceptance:
-     at or below about 9.3, the bias toward zero, the ratio still
-     channel-neutral. Also open: the nose still reads brighter in the original
-     (a spatial term: the parameter 8 reflection or the fog, both unread on a
-     front-end draw). Omega: same `fe.fury.EnvSettings` values, checked, applies,
-     not wired. Medium (45).
+     `with_output_scale(0.5)`, then the front end's tone scale: the menu frame
+     through `oag_post::hd_bloom`'s resolve with the FE constants (boost 35,
+     clamp 3, max 4). Open value: the FE's adapted luma. One frame fits a scale
+     of about 3.45 in linear light (55), predicting `adapted` of about 0.016;
+     read it at `FunkLayer + 0x25c` as `docs/rendering/hd-track-tone.md` did.
+     Box today 14.33; rig with `/2` 14.32 (the linear ratio goes
+     channel-neutral, 3.53/3.46/3.47); rig with `/2` times 3.45 gives 4.62
+     (bias +2.1, +0.7, -1.7). Acceptance: near 4.6, each channel's bias within
+     about 2. The FE's black fog is refused at both levels (6.48 with it).
+     Also open: the left of the box and the darkest pixels still read brighter
+     in the original (parameter 8 reflection, ambient false direction or bloom).
+     Omega: runs the HD style, whose `fe.EnvSettings` differs from HD's
+     (ambient 0.2 0.3 0.32): checked, differs. Medium (45).
   2. ~~**The swap's settle is recovered and not played**~~ (LANDED 2026-11-12,
      `hd-ship-swap-settle`): `ship_model::FitMotion` on the picker stage starts
      the new craft at the last model's rest depth and eases it at 0.125 a frame
