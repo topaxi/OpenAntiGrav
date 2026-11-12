@@ -567,6 +567,8 @@ impl Session {
                     stage
                         .frontend
                         .set_pad_driving(!self.pointer.pointer_spoke_last());
+                    stage.frontend.set_view_stick(self.controls.view().right);
+                    self.pointer.set_mouse_pans(stage.frontend.wants_mouse_pan());
                     if !stage.frontend.pointer(&grid) {
                         pointer::press_for_click(&mut self.controls, &grid);
                     }

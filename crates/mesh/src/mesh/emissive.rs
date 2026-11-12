@@ -99,6 +99,11 @@ pub const PROGRAM_EMISSIVE_ADD: f32 = 8.0;
 /// `super::rcs::uv_overlay`.
 pub const PROGRAM_UV_OVERLAY: f32 = 13.0;
 
+/// [`Emissive::program`]'s mode for Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads:
+/// the sixth binding (dirt) and the fifth (markings) are laid over the albedo by their own alpha,
+/// dirt first. See `super::rcs::psp2`'s `tarmac`.
+pub const PROGRAM_TARMAC: f32 = 14.0;
+
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;

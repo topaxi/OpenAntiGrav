@@ -274,6 +274,24 @@ fn to_grid_inverts_the_draw_chain_on_every_aspect() {
     }
 }
 
+/// `from_grid` is `to_grid` run backwards, bars included: the pad's cursor is
+/// drawn where a mouse at that grid point would sit.
+#[test]
+fn from_grid_is_the_inverse_of_to_grid() {
+    for space in [Space::PSP, Space::PS2] {
+        for viewport in [(0.0, 0.0, 1920.0, 800.0), (240.0, 60.0, 1440.0, 810.0)] {
+            for window in [(300.0, 200.0), (1000.0, 500.0), (5.0, 790.0)] {
+                let grid = to_grid(space, viewport, window);
+                let back = from_grid(space, viewport, grid);
+                assert!(
+                    (back.0 - window.0).abs() < 1e-2 && (back.1 - window.1).abs() < 1e-2,
+                    "{space:?} {viewport:?}: {window:?} -> {grid:?} -> {back:?}"
+                );
+            }
+        }
+    }
+}
+
 /// A click in the letterbox bars is off the grid, not clamped onto its
 /// edge: nothing is drawn there, so nothing should be hit there.
 #[test]

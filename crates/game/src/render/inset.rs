@@ -59,5 +59,15 @@ pub fn uninset(point: (f32, f32), scale: f32, space: Space) -> (f32, f32) {
     )
 }
 
+/// A point of the screen's grid as it is drawn inside the inset: [`uninset`] run the other way.
+#[must_use]
+pub fn inset_point(point: (f32, f32), scale: f32, space: Space) -> (f32, f32) {
+    let centre = (space.size.0 * 0.5, space.size.1 * 0.5);
+    (
+        (point.0 - centre.0) * scale + centre.0,
+        (point.1 - centre.1) * scale + centre.1,
+    )
+}
+
 #[cfg(test)]
 mod tests;

@@ -73,6 +73,8 @@ mod omega_normal_map_ground_truth;
 mod omega_nova_prelit;
 mod omega_pvs_placement_ground_truth;
 mod omega_shield_lightning_lit_path;
+mod omega_tarmac_lit_path;
+mod omega_tarmac_markings_ground_truth;
 mod omega_transparency_ground_truth;
 mod own_shield_lit_path;
 mod psp2_airbrake_flaps_ground_truth;

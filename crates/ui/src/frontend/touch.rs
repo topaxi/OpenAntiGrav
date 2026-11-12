@@ -436,6 +436,9 @@ impl Frontend {
     /// of which device spoke last). Drives the focus fill on the touch grids.
     pub fn set_pad_driving(&mut self, driving: bool) {
         self.touch.pad_cursor = driving;
+        if !driving {
+            self.campaign.cursor.hide();
+        }
     }
 
     /// Back to the first tile: a screen was left or entered. Which device is

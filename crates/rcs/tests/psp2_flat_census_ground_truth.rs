@@ -96,6 +96,12 @@ struct Census {
     /// Of those, the ones whose coordinates the reader returned that differ from a fresh decode
     /// of `uv1_uvDirt`'s first two halves at the attribute's own offset, found by hash here.
     uv_dirt_differs: usize,
+    /// Of those, the ones whose `markings_texcoords` or `dirt_texcoords` differ from a fresh
+    /// decode of `uvMarkings` at its own offset and of `uv1_uvDirt`'s second pair (four bytes
+    /// on), or are empty where the declaration names `uvMarkings`.
+    uv_layers_differ: usize,
+    /// Of those, the ones whose declaration names no `uvMarkings`.
+    uv_markings_absent: usize,
     /// Of those, the ones whose material is a `tarmac_*` family.
     uv_dirt_tarmac: usize,
     /// Per `tarmac_*` material name, the box (`[min u, min v]`, `[max u, max v]`) of the
@@ -155,6 +161,8 @@ impl Census {
         self.own_undecoded.plus(o.own_undecoded);
         self.uv_dirt.plus(o.uv_dirt);
         self.uv_dirt_differs += o.uv_dirt_differs;
+        self.uv_layers_differ += o.uv_layers_differ;
+        self.uv_markings_absent += o.uv_markings_absent;
         self.uv_dirt_tarmac += o.uv_dirt_tarmac;
         for (k, b) in &o.tarmac_box {
             let merged = merge_box(self.tarmac_box.get(k).copied(), Some(*b));
@@ -405,6 +413,24 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             }
             out.uv_dirt.add(tris);
             out.uv_dirt_differs += usize::from(uvs != s.texcoords);
+            if let Some(markings) = own.markings_texcoord(half) {
+                let fresh = |offset: u8| -> Vec<[f32; 2]> {
+                    (0..s.positions.len())
+                        .map(|v| {
+                            let a = base + v * s.stride + usize::from(offset);
+                            psp2::unpack_texcoord(blob[a..a + 4].try_into().unwrap())
+                        })
+                        .collect()
+                };
+                out.uv_layers_differ += usize::from(
+                    fresh(markings.offset) != s.markings_texcoords
+                        || fresh(tiling.offset + 4) != s.dirt_texcoords,
+                );
+            } else {
+                out.uv_markings_absent += 1;
+                out.uv_layers_differ +=
+                    usize::from(!s.markings_texcoords.is_empty() || !s.dirt_texcoords.is_empty());
+            }
             let material = s
                 .material
                 .and_then(|m| model.materials[m].name.rsplit('/').next())
@@ -642,6 +668,12 @@ fn check(name: &str, by_dir: &BTreeMap<String, Census>, total: &Census, e: &Expe
     assert_eq!(
         total.uv_dirt_differs, 0,
         "{name}: tiling pair read as declared"
+    );
+    // The decal and dirt pairs ride the same declaration: `uvMarkings` at its own offset and the
+    // second half pair of `uv1_uvDirt`, and only where both are named.
+    assert_eq!(
+        total.uv_layers_differ, 0,
+        "{name}: markings and dirt pairs read as declared"
     );
     for (key, c) in by_dir {
         let road = c
