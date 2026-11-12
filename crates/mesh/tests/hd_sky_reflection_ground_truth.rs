@@ -391,7 +391,10 @@ fn metropias_lattice_reflects_the_sky_through_its_normal_maps_alpha() {
         assert_eq!(entry.tint, [1.0, 0.0, 2.0], "slot {slot}");
         checked += 1;
     }
-    assert!(checked >= 1, "Metropia names mesh_colour_constant in a drawn slot");
+    assert!(
+        checked >= 1,
+        "Metropia names mesh_colour_constant in a drawn slot"
+    );
 }
 
 /// The same build, honouring HD's render-state rule
