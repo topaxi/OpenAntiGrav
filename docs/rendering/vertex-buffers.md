@@ -92,13 +92,25 @@ with a message naming the model, which no shipped circuit reaches.
 - **`raceplay::tests::vertex_chunks`**: a drawable whose strips sit in several buffers draws
   every pixel a one-buffer drawable does, through the main draw, a whole-model write across the
   cuts, and the overlay list; setting the base vertex to 0 in `Cursor` fails all three.
-- **`oag_mesh` `deferred`**: a cut model parks the bytes of every buffer for the drain.
+- **`oag_mesh` `deferred`** and **`raceplay::tests::vertex_chunks`'s deferral-scope test**: a
+  cut model parks the bytes of every buffer for the drain (only the browser build opens a scope
+  today, `oag_game::main::race_build`), and once drained draws the one-buffer pixels; parking
+  only the first buffer fails it.
+- **Moving frames**: `--autopilot --seed 1` at ticks 900 and 1800 on both circuits, cut against
+  the raised-limit control: byte-identical (the cut frames show the street, tunnel and stand
+  geometry across both buffers). No original capture of either circuit exists to compare with.
 
 ## Not done, not checked
 
-- **GL and WebGL2** may lack `DownlevelFlags::BASE_VERTEX`; a cut model there draws with a
-  validation error rather than wrong, and GL is best effort. No shipped title but Omega's two
-  circuits cuts, and no GL device was available to try.
+- **Backends without a base vertex** (`DownlevelFlags::BASE_VERTEX`: OpenGL below 3.2, ES below
+  3.2, so WebGL2): wgpu-core 30.0.1 does not check the flag at `draw_indexed` (its `render.rs`
+  `draw_indexed` validates only the index limit), and `wgpu-hal`'s GL queue calls
+  `draw_elements_instanced_base_vertex` for a non-zero base vertex assuming the check was made
+  (`gles/queue.rs`, "wgpu-core has already validated"). So a cut model there would draw wrong or
+  fail inside the driver. `device_descriptor` notes such an adapter (a `warn!` once) and
+  `Geometry::new` **refuses a model that needs a cut** there, by name, at load. Not exercised: no
+  such adapter was available, so that refusal has no test, and GL is best effort anyway. Only
+  Omega's `arena` and `square` are cut anywhere.
 - **The sun-occlusion and shadow casters of a cut track are covered by the pixel identity
   above (arena and square, `--shadows mapped`), not by a unit test of their own.**
 - The arena frame shows a black patch of road around the craft. It is in the single-buffer

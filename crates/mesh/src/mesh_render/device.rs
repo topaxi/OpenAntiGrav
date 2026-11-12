@@ -74,7 +74,8 @@ fn probe_features() -> wgpu::Features {
 ///
 /// Process-wide because a `wgpu::Device` carries no downlevel flags of its own; conservative when
 /// two adapters differ, which no run does.
-static BASE_VERTEX_MISSING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static BASE_VERTEX_MISSING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Whether an adapter this process asked a device of cannot draw with a base vertex.
 pub(super) fn base_vertex_missing() -> bool {
