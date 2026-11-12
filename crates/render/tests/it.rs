@@ -33,6 +33,7 @@ mod msaa_resolve;
 mod pad_alpha_test_ground_truth;
 mod ps2_blended_depth_ground_truth;
 mod ps2_bloom_gain;
+mod ps2_neon_clock_ground_truth;
 mod ps2_start_gantry_ground_truth;
 mod ps2_texture_binding_ground_truth;
 mod psp_texture_levels_ground_truth;

@@ -410,10 +410,28 @@ animated surfaces of a grab a few tenths of a second after the load. The metrics
 
 **What the pictures show (all 16 pairs read as half-scale contact sheets; Edgewinter, Orcus and Platinum Rush also at native 1280x720).** Circuit, grid slot, camera, GO board, HUD and its clock agree on all
 sixteen. Differences that are ours, for a lane that owns them: the original's GO board has not yet turned on at Talon's Junction
-(a flat green bar where ours draws `GO`, and on Vostok Reef too); the neon strips on Orcus are yellow in the original and
-magenta in ours; a pink streak beside the hull on Platinum Rush; ours draws no `pos 8/8` readout at the top right on any pair; a faint caption at the bottom left of the original on Talon's Junction,
+(a flat green bar where ours draws `GO`, and on Vostok Reef too); the neon strips on Orcus were yellow in the original and
+magenta in ours, which was ours' clock and not a rendering defect (below); a pink streak beside the hull on Platinum Rush; ours draws no `pos 8/8` readout at the top right on any pair; a faint caption at the bottom left of the original on Talon's Junction,
 Platinum Rush and Vostok Reef that ours does not draw. The
 mean grey difference is 11 to 20, the edge correlation 0.05 to 0.13, near the stored pair's 13.1 and 0.11.
+
+**The Orcus neon strips are the world animation clock (2026-11-12, `ps2-orcus-neon`).** The strips draw `lob_gradient_glow.tga`, a rainbow gradient,
+under an authored texture scroll with a 600 s loop (`crates/render/tests/ps2_neon_clock_ground_truth.rs`), so their colour is the clock they are drawn
+at: ours' own tick count (28.05 s at the pair's 1683 ticks) reads magenta, the original's clock reads yellow. The original feeds every world mesh
+`*(g_ingame + 0x40)` (`g_ingame` at `0x27DDBC`, `docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`), 33.53 s in the Orcus White state against the
+RAM race clock's 26.38 s; `pcsx2_state.world_clock` reads it and `pcsx2-pulse-pair.py` records `original.world_clock_s` and passes ours
+`--world-clock-offset` = that clock, run on by the race clock's advance from the state to the grab, less ours' `ticks / 60` (6.88 s on Orcus White).
+`compare-rerender-ours.py` puts the flag back on a pair recorded without it, from the state file and the grab bracket. Ours' left strip, box
+`330x120+0+130` of the 1280x720 frame, mean RGB: before 99,39,111, after 100,114,35, the original's 108,122,33; a sweep of the offset on the same frame
+reads magenta at 0 s and 12 s, cyan at 3 s and 15 s, yellow from 5 s to 9 s and at 20 s (a period near 13 s to 14 s). **Confidence 75** that the texture animation's clock is `*(g_ingame + 0x40)`: the shared per-race clock is the PSP finding carried over (`docs/ghidra/functions/ps2-pulse-eu/anim-transform.md`,
+read for `Anim Transform` nodes, not live-broken on the PS2 texture updater), and two things measure it here. The Orcus strip's yellow window
+(offsets 5 to 9 s) holds the computed 6.88 s, a chance of about one in three alone. And on the short-loop surfaces, which are phase-sensitive to 0.1 s,
+the offset sweep's whole-frame rmse against the original bottoms out beside the computed offset on both pairs swept finely: Fort Gale Black computed 3.81 s,
+rmse 0.141 / 0.135 / 0.130 / 0.132 at 3.5 / 3.7 / 3.9 / 4.1 s; Gemini Dam White computed 7.77 s, rmse 0.161 / 0.166 / 0.160 / 0.162 at 7.3 / 7.6 / 7.9 / 8.2 s. Across the 15
+race pairs (a re-render with the original's clock against ours' tick clock, rmse): better on Orcus (0.159 to 0.138), Metropia and Vostok Reef (each by 0.007), Talon's
+Junction and Tech de Ra (0.003), Amphiseum (0.002), Arc Prime, Basilico and de Konstruct (0.001); flat on Edgewinter and Outpost 7; worse by 0.001 to 0.004 on Vertica, Fort Gale and Gemini Dam, where
+a 0.2 s step in the offset moves the rmse by more than that (a tick-clock phase can land beside the original's by chance on a 1.7 s loop). The three menu pairs gain no flag (no grab bracket).
+Platinum Rush's pink streak beside the hull is not on this clock: its crop (`300x180+290+540`) is pixel-identical at offsets 0, 3, 7.43 and 12 s (mean 66,65,66), cause not identified, still open.
 
 **Open.** The other 16 Track Select entries (the second layout of each circuit, Black or White) were not walked: a pair is one
 `--entry` away. The states and sidecars are in `data/saves/pulse-ps2/` (a sidecar records the circuit, the craft, the grid position

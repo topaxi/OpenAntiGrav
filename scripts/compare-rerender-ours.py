@@ -39,6 +39,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
+import pcsx2_state  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
 #: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
@@ -58,6 +59,21 @@ def resolve_flags(flags, pair_dir):
                 problems.append("%s: no %s in the pair directory" % (f, Path(f).name))
         out.append(f)
     return out, problems
+
+
+def ps2_world_clock_flags(rec, flags):
+    """`flags` with `--world-clock-offset` added for a Pulse PS2 grid pair recorded without it.
+
+    A PS2 pair's animated surfaces (Orcus' neon strips cycle magenta, cyan, yellow) run on the original's world clock, not on ours' tick count; the
+    value comes from the state file and the grab bracket (`docs/tools/compare-page.md`, "The Orcus neon strips are the world animation clock").
+    Mutates `rec["ours"]` to record it."""
+    if rec["profile"] != "pulse-ps2" or "--world-clock-offset" in flags:
+        return flags
+    offset = pcsx2_state.record_world_clock_offset(rec, ROOT)
+    if offset is None:
+        return flags
+    rec["ours"]["world_clock_offset_s"] = offset
+    return flags + ["--world-clock-offset", "%.3f" % offset]
 
 
 def rerender(pj, binary):
@@ -89,6 +105,7 @@ def rerender(pj, binary):
     if "--field-from" in flags and "--world-clock-offset" in flags and orig.get("world_clock_offset_s") is not None \
             and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
         flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
+    flags = ps2_world_clock_flags(rec, flags)
     # A race shot's pickup row (the running Autopilot's icon and countdown): pairs recorded before 2026-10-26 draw none.
     # The countdown is the timer the pair script read at the stop (`autopilot_timer_at_stop_s`); it runs when the
     # newer `held_pickup.autopilot_running` says so or, in an older record, the provenance's `autopilot.armed`.
