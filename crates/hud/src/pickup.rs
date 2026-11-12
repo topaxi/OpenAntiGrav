@@ -474,7 +474,8 @@ pub(super) fn mod_icon_draw(cx: &Context<'_>, src: &str, look: Option<Look>) -> 
 
 /// The slot of a title's incoming-warning icon on `side`: the box of the weapon icon the
 /// layout authors there ([`crate::incoming::Side::box_icon`]), which the art fills. **Chosen, not
-/// measured**: the box is one weapon's, as the eight rear icons share one place.
+/// measured**: the box is one weapon's (Rocket's, Mine's); the eight rear icons' boxes are near
+/// identical, Missile's and Rocket's carrying small `y` nudges (`docs/ui/hud.md`).
 fn warning_slot(cx: &IconFrame<'_>, side: crate::incoming::Side) -> Option<Slot> {
     let frame = cx.layout.sprite(side.box_icon().widget())?.rect;
     Some(Slot {
