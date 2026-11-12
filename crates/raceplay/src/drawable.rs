@@ -501,6 +501,13 @@ impl Drawable {
         *last_bound = Some(slot);
     }
 
+    /// How many buffers the vertex data is cut into: one unless the model outgrew the
+    /// device's `max_buffer_size`.
+    #[cfg(test)]
+    pub(super) fn vertex_buffer_count(&self) -> usize {
+        self.geometry.buffer_count()
+    }
+
     /// Binds this drawable's vertex buffer - and its streamed coordinates,
     /// when it has them - for the pipelines it built, and returns the cursor
     /// its draws go through.

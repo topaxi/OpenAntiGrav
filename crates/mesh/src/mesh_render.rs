@@ -1040,6 +1040,16 @@ pub fn build_with(
     });
 
     let geometry = Geometry::new(device, model, device.limits().max_buffer_size)?;
+    if !geometry.is_whole() {
+        log::debug!(
+            "{}: {} vertices cut into {} buffers of at most {:.1} MiB (the device's max_buffer_size is {:.1} MiB)",
+            model.label,
+            model.vertices.len(),
+            geometry.buffer_count(),
+            geometry.largest_buffer() as f64 / (1 << 20) as f64,
+            device.limits().max_buffer_size as f64 / (1 << 20) as f64,
+        );
+    }
     let deferred = defer_uploads && oag_gpu::deferred_upload::active();
     if !deferred {
         geometry.write_all(queue, &model.vertices);

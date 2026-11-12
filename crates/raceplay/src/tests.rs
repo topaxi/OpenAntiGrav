@@ -110,6 +110,7 @@ mod shared_half;
 mod shield_flash;
 mod shield_hits;
 mod shine_writes;
+mod vertex_chunks;
 mod slot_hud;
 mod spawn;
 mod spectator_press;

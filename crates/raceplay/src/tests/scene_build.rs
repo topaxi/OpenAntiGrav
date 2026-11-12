@@ -99,6 +99,17 @@ pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     Some(pair)
 }
 
+/// [`test_gpu`] with the device's `max_buffer_size` lowered to `ceiling` bytes: what a
+/// device whose own maximum is that small (a phone, a Steam Deck, WebGPU) is to a model
+/// whose vertex data is larger.
+pub(super) fn test_gpu_with_buffer_ceiling(ceiling: u64) -> Option<(wgpu::Device, wgpu::Queue)> {
+    let instance = wgpu::Instance::default();
+    let adapter = oag_gpu::test_adapter::request(&instance)?;
+    let mut descriptor = mesh_render::device_descriptor("vertex chunk test", &adapter);
+    descriptor.required_limits.max_buffer_size = ceiling;
+    pollster::block_on(adapter.request_device(&descriptor)).ok()
+}
+
 /// A scene over one triangle for a circuit and for every pool: enough to be
 /// drawn, nothing a picture could be judged by.
 pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
