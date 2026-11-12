@@ -18,6 +18,7 @@
 //! back on its own function.
 
 use super::*;
+use oag_weapons::Craft as _;
 
 impl Race {
     /// Fires an opponent's Missile, once `Race::opponent_decides` has decided to.
@@ -73,6 +74,7 @@ impl Race {
             &self.sim.class,
             slot as u8,
             ship.weapon_counts.rockets,
+            ship.launch_normal(),
         ) else {
             return false;
         };
@@ -226,12 +228,9 @@ impl Race {
         if self.sim.world.projectiles.live() >= oag_weapons::projectile::MAX_PROJECTILES {
             return false;
         }
-        let physics = self.sim.world.ships[slot].physics;
-        let dimensions = self.sim.world.ships[slot].handling.dimensions;
         let Some(thrown) = oag_weapons::projectile::shuriken::fire(
             &mut self.sim.world.projectiles,
-            &physics,
-            &dimensions,
+            &self.sim.world.ships[slot],
             &stats,
             &self.sim.class,
             &mut self.sim.world.rng,

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-12
-summary: "The cage test and the Cannon's muzzle speed are wired; next track-up launch normal, own-craft box, Shuriken speed, floor arms"
+summary: "The cage test, the Cannon's muzzle speed and the track-up launch normal are wired; next own-craft box, Shuriken speed, floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -32,8 +32,8 @@ What is settled:
 
 ## Open
 
-Ranked by what a player sees. Item 4 is ready to wire; 3 to 6 are recovered laws with a
-smaller effect; 7 is what was not measured.
+Ranked by what a player sees. Items 3 to 6 are recovered laws with a smaller effect; 7 is what
+was not measured.
 
 1. ~~The cage test in the probe and the travel sweep (the report itself).~~ **Wired 2026-11-11**
    (lane `projectile-cage-wire`, see Done). What stays open from it: the Missile's MAX_BOUNCES
@@ -48,10 +48,6 @@ smaller effect; 7 is what was not measured.
    four). **How far the box reaches ahead of `body+0x30` is not understood**: the brackets by speed
    are on the linked section and do not fit one box (parked 2.13 to 2.84, 100 units/s 3.91 to 5.01,
    125 units/s 4.80 to 4.93, 140 units/s 4.0 to 4.3, mag strip at 139 units/s under 2.83).
-4. **The launch normal is the track's up at the craft's located point** (`craft+0xb10` is the
-   located track point's down), not the craft's up. Ours seeds `body.up()` in `spawn_riding`,
-   `spawn_guided`, `throw` and the Plasma's charge. 0.04 degrees from the spline sample's `-down`
-   on five captures; the craft's own up was 5.24 degrees off on Outpost 7's ramp. Confidence 88.
 5. **The Shuriken's speed is not constant.** Both of its floor arms write
    `(hit + normal * ride - prev) / dt` with no rescale (333.6 at the throw, 268.3 to 337.7 on the
    bank, 373.2 on the kerb); ours keeps the length. Position per update is exact either way; in
@@ -98,14 +94,26 @@ smaller effect; 7 is what was not measured.
   from the original (`psp-projectile-sweeps.py --player-fire-frame 120 cannon` from a parked
   craft; the law predicts 375.0).
 
+- **The launch normal** (2026-11-12, `launch-normal-wire`): a Rocket, Missile, Shuriken or Plasma bolt
+  is born carrying the up of the spline sample the craft is located on (`Ship::track_up`, written by
+  `step_player` and `step_opponents` from the sample the force law reads; `Craft::launch_normal`),
+  not `body.up()`; per title as `Weapons::launch_normal_is_track_up` (Pulse measured, Pure inherited
+  from Pulse; HD chosen `false` and 2048, Omega inherited `false`: with `true` three HD/Omega field
+  tests go red, see `a-projectile-rode-the-angle-not-the-surface-class.md`). The Cannon and the Disruptor keep the craft's up.
+  Test: `projectile_cage_ground_truth::outpost_7_ramp_launch_normal_is_the_tracks_up` (a Plasma
+  press from sample 186 with the capture's craft up: 0.05 degrees from the sample's `-down`, over 5
+  from the craft's up) and `seed::a_plasma_bolt_is_released_riding_the_located_track_up`. Sample
+  186's up is 0.26 degrees from `(0, 1, 0)`. Not observable per weapon in raceplay: a Rocket,
+  Missile or Shuriken's first update replaces the seed with the floor's normal, so those three call
+  sites are pinned only by the weapons crate's tests of the handed-in normal. Still open from it:
+  HD's, 2048's and Omega's own `Rocket_Init` unread (reading HD's decides whether they take the
+  law); the Disruptor's advance unread.
+
 ## Next Steps
 
-1. Item 4 next (small, one field): the craft's located track sample is already what the mag hold
-   reads; the launch needs its `down`. Expected: on Outpost 7's ramp (sample 186) the carried
-   normal at launch is `(0, 1, 0)` where the craft's up is `(-0.014, 0.996, -0.090)`.
-2. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
+1. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
    collider's own pose beside `body+0x30` (the collider is `world + index * 0xc + 0x2454`, the index
    is in the capture's `mesh_collider`), on a floor at two speeds and on the mag strip. Then a probe
    that meets any craft's box first reports nothing, and `plasma::UNPINNED_SECONDS` goes.
-3. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
+2. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
    series and the Missile's per-update errors on the linked pages are their tests.

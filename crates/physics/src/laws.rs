@@ -52,7 +52,7 @@ pub struct Laws {
     /// `cross(r, rate)`; the two agree for a level craft and part with pitch or roll.
     pub wall_point_rate_body_local: bool,
     /// The rigid body's own velocity damping, applied by the integrator
-    /// ([`crate::integrate::integrate`]): Wipeout HD's `0.01` pair.
+    /// ([`crate::integrate::integrate`]): `0.01` on both halves on every title read.
     pub body_damping: BodyDamping,
 }
 
@@ -74,13 +74,19 @@ pub struct BodyDamping {
 }
 
 impl BodyDamping {
-    /// No damping: the integrator leaves both velocities as the forces put them. What Pulse and
-    /// Pure fly, though both executables write `0.01` to the pair: the term is not flown there
-    /// until their AI gates are re-measured with it
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/body-damping.md`, "The other titles").
+    /// No damping: the integrator leaves both velocities as the forces put them.
     pub const NONE: Self = Self {
         linear: 0.0,
         angular: 0.0,
+    };
+
+    /// Pulse's pair, `0.01` on both, written by its body constructor and read by
+    /// `Body_Integrate` (`docs/ghidra/functions/psp-pulse-usa/rigid-body.md`). The linear half is
+    /// measured per frame on a held-throttle PSP capture and the angular half on roll steps
+    /// (`docs/physics/body-damping.md`).
+    pub const PULSE: Self = Self {
+        linear: 0.01,
+        angular: 0.01,
     };
 }
 
@@ -109,6 +115,8 @@ impl Laws {
         wall_one_sided: false,
         wall_steer_away: false,
         wall_point_rate_body_local: false,
+        // Measured as `BodyDamping::PULSE` and not flown yet: with it de Konstruct Black's first
+        // jump falls short (`docs/physics/body-damping.md`, "Why Pulse does not fly it yet").
         body_damping: BodyDamping::NONE,
     };
 }

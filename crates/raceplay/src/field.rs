@@ -881,6 +881,7 @@ impl Race {
             // `ai_order`, so this costs a lookup rather than a search.
             let index = self.sim.world.ships[slot].driver.index as usize;
             let track_sample = self.ai_sample_for(slot, index).map(Spline::track_sample);
+            self.record_track_up(slot, track_sample);
             let track_sample_next = self
                 .ai_sample_for(slot, index + 1)
                 .map(Spline::track_sample)

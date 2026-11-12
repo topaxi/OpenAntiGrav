@@ -159,11 +159,12 @@ fn an_hd_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
     assert_muzzle_residuals(residuals("data/images/hdfury-ps3-eu-dec.iso", VINETA_K));
 }
 
-/// The Missile and the Shuriken leave a banked craft riding **its** up, as
-/// `Missile_Init` and `Shuriken_Init` store `-craft+0xb10`, not world up.
+/// The Missile leaves a banked craft riding the located track's up, as `Missile_Init`
+/// stores `-craft+0xb10` (the located sample's down, negated), not world up and not the
+/// craft's own up.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_missile_fired_on_a_bank_is_born_riding_the_craft_up() {
+fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
         return;
     };
@@ -198,9 +199,12 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_craft_up() {
             .iter()
             .find(|p| p.kind == Some(Weapon::Missile))
             .expect("a missile in the air");
-        assert!(
-            (missile.surface - up).length() < 1e-4,
-            "born riding {:?}, the craft's up is {up:?}",
+        let track_up = race.sim.world.ships[0]
+            .track_up
+            .expect("a stepped craft on a track with samples is located");
+        assert_eq!(
+            missile.surface, track_up,
+            "born riding {:?}, the located track's up is {track_up:?} (the craft's is {up:?})",
             missile.surface
         );
         return;

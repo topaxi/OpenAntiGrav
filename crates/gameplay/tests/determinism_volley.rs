@@ -66,6 +66,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
         "VENOM",
         0,
         projectile::ROCKET_SHOTS as u8,
+        world.ships[0].physics.body.up(),
     )
     .expect("Pulse's weapon table authors a Venom rocket speed");
     assert_eq!(

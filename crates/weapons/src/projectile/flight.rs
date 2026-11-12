@@ -73,7 +73,7 @@ impl Projectiles {
                     // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;
                     // seeded each held tick so the release tick has it whatever
                     // the table says.
-                    projectile.surface = ship.physics().body.up();
+                    projectile.surface = ship.launch_normal();
                     heading
                 });
                 projectile.charge = (projectile.charge - dt).max(0.0);
