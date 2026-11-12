@@ -92,4 +92,4 @@ lives in the event objects, not in `Unlocks_Definition.xml`, which is why the XM
 `oag_tables::xp` reads both files; `Store::bank_event_xp` banks a finished 2048 event's
 `Event complete` (Pass or Elite) plus `Finished Nth`. **Chosen, not measured**: pays on every
 finish; Elite instead of Pass; column by event kind. The profile total is one number shared with
-Omega. The thread is `handover/frontend/2048-profile-xp-and-rank.md`.
+Omega.

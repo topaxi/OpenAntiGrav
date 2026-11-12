@@ -44,7 +44,7 @@ impl Store {
     ///
     /// **Chosen, not measured**: the completion pays on every finish, not only the first, and
     /// Elite pays instead of Pass rather than as well; both are unread
-    /// (`handover/frontend/2048-profile-xp-and-rank.md`).
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Wired").
     pub fn bank_event_xp(
         &mut self,
         progress: &Campaign2048Progress,
