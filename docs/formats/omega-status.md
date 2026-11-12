@@ -1542,9 +1542,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   park, cathedral, subway, arena, bridge; not altima, not sol) name `uv1_uvDirt` and no `Uv1`
   (`crates/rcs/examples/psp2_uv_census.rs`); Omega's HD-era circuits do not. Subway's frame moves
   with the probe (RMSE 0.073 between the two renders) toward the original's reddish rails;
-  Mall's barely (0.013), Square's not at all (its road is another family, below). Which pair the
-  diffuse, dirt and markings samplers take is read off the pixel programs' names only
-  (`DiffuseAlphaMapSampler`, `DirtSampler`, `MarkingsSampler`), not off a decoded program.
+  Mall's barely (0.013), Square's not at all (its road is another family, below). The pixel
+  program's combine is read in "The `tarmac_*` combine" below.
   2048: **checked, differs** - none of 2048's arena, square, altima or mall materials is a
   `tarmac_*` family; its roads name `Uv1`, which is why 2048's own arena draws a normal road.
   **Wired** (2026-11-12, `omega-tarmac-uv`): `VertexDecl::own_diffuse_texcoord` takes
@@ -1572,6 +1571,26 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   2048: **checked, differs, and the ground truth is unchanged**: the same census finds 0
   `uv1_uvDirt` submeshes on every Vita archive (base, dlc1, dlc2, both patch archives) and every
   Vita pin, `empire_climb_is_pinned`'s `own_fallback` 4,761 included, passes unchanged.
+- **The `tarmac_*` pixel programs combine four pictures: diffuse, then dirt, then markings, plus an
+  emissive** (`omega-road-markings`, 2026-11-12, confidence 85). Read from decoded GCN
+  (`gcn_dump <data00.psarc | data05.psarc> data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal_emis.rcsmaterial --at 0x2e44`,
+  which now also prints `sample @<offset> reads API slot <n>` from `Program::sampled_slots`, the
+  usage-record placement `signed_textures` uses). Vertex program `@0x29c4` (60 instructions) writes
+  `param2 = uvMarkings`, `param3 = uv1_uvDirt.xy`, `param4 = uv1_uvDirt.zw`; the pixel program's
+  `attr1`, `attr2`, `attr3` are those three. The unlit program `@0x2e44` (86 instructions in `data00`,
+  94 in the patch `data05`; the combine is identical, the patch adds a `max(w, 0.5)` clamp on the
+  fade divide) samples API slot 0 (`DiffuseAlphaMap`) on `attr2.xy`, slot 2 (`Dirt`) on `attr3.xy`,
+  slot 1 (`Markings`) on `attr1.xy`, slot 3 (`EmissiveTexture`) on `attr2.xy`, and computes
+  `c = diffuse.rgb; c += dirt.a * (dirt.rgb - c); c += markings.a * (markings.rgb - c);
+  out = fog(emissive.rgb + constantAmbientColour * c)`. The lit programs (`@0x3f44`, 200
+  instructions in `data00`) take the same three coordinate sets for their sample (`attr2` normal and
+  diffuse and emissive, `attr1` markings and `MarkingsNormal`, `attr3` dirt), run the same two lerps
+  over the diffuse rgb in the same order (dirt first, markings on top, each weighted by its own
+  alpha), and use the diffuse alpha and the layers' alphas only to weight specular
+  (`MarkingsSpec`), which this reader does not draw. Sibling `tarmac_markings_dirt_markingsnormal`
+  (unlit 83 instructions) samples the same three slots without the emissive; `tarmac_dirt` samples
+  slots 0 and 1 (`Dirt`) only; `tarmac_dirt_emissive` adds the emissive. Their combines were read
+  by sample order and slot only, not instruction by instruction.
 - **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
   (`omega-arena-square`, 2026-11-12, confidence 55). Square's road is
   `road_alphaspec_normal_emissive_panelmap1` (and `_mask`), the family of Altima's road above; its

@@ -144,6 +144,23 @@ impl Program<'_> {
         found
     }
 
+    /// Every `image_sample` as (byte offset in the code, API slot of its texture), in code
+    /// order. A slot no usage record placed is `None`, never guessed at.
+    #[must_use]
+    pub fn sampled_slots(&self) -> Vec<(usize, Option<u8>)> {
+        self.instructions
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| {
+                i.encoding == Encoding::Mimg && i.name.is_some_and(|n| n.contains("sample"))
+            })
+            .filter_map(|(k, i)| match i.src[1] {
+                Some(Operand::Sgpr { first, .. }) => Some((i.at, self.texture_slot(k, first))),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The API slot of the texture whose T# starts at SGPR `t` when instruction `k` samples it.
     pub(super) fn texture_slot(&self, k: usize, t: u8) -> Option<u8> {
         let record = |kind: u8, register: u32| {

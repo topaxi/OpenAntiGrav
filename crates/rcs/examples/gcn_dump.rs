@@ -111,5 +111,11 @@ fn print_program(p: &Program<'_>) {
         }
         Err(e) => println!("  vertex inputs refused: {e}"),
     }
+    for (at, slot) in p.sampled_slots() {
+        match slot {
+            Some(slot) => println!("  sample @{at:#x} reads API slot {slot}"),
+            None => println!("  sample @{at:#x} reads an unplaced slot"),
+        }
+    }
     print!("{p}");
 }
