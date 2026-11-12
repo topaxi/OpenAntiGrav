@@ -18,8 +18,8 @@
 //!   six cells that share it (`canvas_prism::NEIGHBOURS`); the baked picture is
 //!   composite-encoded, so the colour is the square root of
 //!   `min(1 - s + 0.005, 1)`, as the prism's does.
-//! - The z-buffer is replaced by drawing far to near (rows ascending). The
-//!   cells drawn are the raised ones and the ones their walls can reach.
+//! - The z-buffer is replaced by drawing far to near (rows ascending). Only the
+//!   raised cells are drawn.
 //!
 //! Not read, so not drawn: a vertex's occlusion from a tile's cells uses the
 //! tile's full height only (no other tile).
@@ -34,9 +34,6 @@ use super::draw::Corner;
 
 /// How far a wall hangs below its top, in canvas units.
 const SKIRT: f32 = 1.0;
-/// Cells either side of a raised cell that are drawn too: a wall of one unit
-/// reaches about half a cell row below its top.
-const REACH: (i32, i32) = (2, 1);
 /// How far inside the cell's edge a wall samples the picture, in pixels.
 const INSET: f32 = 1.0;
 
@@ -73,21 +70,17 @@ impl std::fmt::Debug for Scene<'_> {
     }
 }
 
-/// The triangles of every cell in `raised` (and the cells round them), far to
-/// near.
+/// The triangles of every cell in `raised`, far to near.
 #[must_use]
 pub fn triangles(scene: &Scene, raised: &[(i32, i32)]) -> Vec<[Corner; 3]> {
-    let mut drawn: BTreeSet<(i32, i32)> = BTreeSet::new();
-    for &(col, row) in raised {
-        for dr in -REACH.1..=REACH.1 {
-            for dc in -REACH.0..=REACH.0 {
-                let cell = (col + dc, row + dr);
-                if !(scene.skip)(cell) {
-                    drawn.insert((row + dr, col + dc));
-                }
-            }
-        }
-    }
+    // Only the raised cells: a wall stops at the top of the lower cell it faces,
+    // so it never covers that cell's own ground, which stays the ground picture
+    // and is byte for byte what it was.
+    let drawn: BTreeSet<(i32, i32)> = raised
+        .iter()
+        .filter(|&&cell| !(scene.skip)(cell))
+        .map(|&(col, row)| (row, col))
+        .collect();
     let mut out = Vec::new();
     for (row, col) in drawn {
         cell_triangles(scene, (col, row), &mut out);

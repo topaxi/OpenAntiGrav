@@ -31,13 +31,15 @@ fn sheet(_: (i32, i32), at: [[f32; 2]; 3]) -> Option<Placed> {
 }
 
 #[test]
-fn a_raised_cell_draws_its_walls_and_a_flat_one_only_its_top() {
+fn a_raised_cell_draws_its_walls_and_a_level_one_only_its_top() {
     let camera = Camera::scrolled((0.0, 0.0));
     let raised = |cell| if cell == CELL { 0.5 } else { 0.0 };
     let high = triangles(&scene(&camera, &raised, &nothing, &sheet), &[CELL]);
     let low = triangles(&scene(&camera, &flat, &nothing, &sheet), &[CELL]);
-    // Every cell round it draws one top; the raised one adds six wall triangles.
-    assert_eq!(high.len(), low.len() + 6);
+    // Only the cell itself is drawn: its top, and with the cells round it lower
+    // the walls of its three edges (two triangles each).
+    assert_eq!(low.len(), 1);
+    assert_eq!(high.len(), 1 + 6);
 }
 
 #[test]
