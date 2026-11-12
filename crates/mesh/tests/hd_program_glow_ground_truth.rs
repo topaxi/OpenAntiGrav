@@ -76,8 +76,11 @@ fn the_neon_rings_glow_by_their_pictures_alpha(
             .unwrap_or_else(|| panic!("ring slot {slot} names no glow entry"));
         assert_eq!(
             entry.program,
-            [mesh::PROGRAM_PICTURE_ALPHA_EMISSIVE, 0.0],
-            "ring slot {slot} is not read as a picture-alpha emissive"
+            [
+                mesh::PROGRAM_PICTURE_ALPHA_EMISSIVE,
+                mesh::ALPHA_EMISSIVE_SPECULAR_MAP
+            ],
+            "ring slot {slot} is not read as a picture-alpha emissive with a specular map"
         );
         for (got, want) in entry.tint.iter().zip([0.821_211, 0.856_112_8, 0.993]) {
             assert!(
@@ -97,6 +100,56 @@ fn the_neon_rings_glow_by_their_pictures_alpha(
     // 17 `dn_diffuse_specular_emiss` and 13 `diffuse_emissive_alpha_glow` slots.
     assert_eq!(report.alpha_emissive_bound, 30);
     assert_eq!(report.alpha_emissive_unread, 0);
+}
+
+/// The 17 `dn_diffuse_specular_emiss` slots multiply their specular by `SpecularTexture`
+/// (`MAD H1.xyz, H5, H4, H1`, `H4` the unit-1 fetch): the map is bound third, the entry says so
+/// (`ALPHA_EMISSIVE_SPECULAR_MAP`), and no chunk of these carries a tangent that would make the
+/// shader read the third binding as a normal map.
+fn the_specular_family_weights_its_specular_by_its_map(
+    model: &mesh::Model,
+    report: &mesh::rcs::Report,
+    source: &oag_rcs::rcsmodel::Model,
+) {
+    use mesh::slots;
+    const SPECULAR: u32 = 0x20c3_e476;
+    let family: Vec<usize> = source
+        .materials
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.name.ends_with("/dn_diffuse_specular_emiss.rcsmaterial"))
+        .map(|(slot, _)| slot)
+        .collect();
+    assert_eq!(family.len(), 17, "the family's slots: {family:?}");
+    for &slot in &family {
+        let want = source.materials[slot]
+            .samplers
+            .iter()
+            .find(|(h, p)| *h == SPECULAR && p.is_some())
+            .and_then(|(_, p)| p.clone())
+            .unwrap_or_else(|| panic!("slot {slot} names no SpecularTexture"));
+        let bound = model.pad_masks[slot]
+            .as_ref()
+            .map(|t| t.label.clone())
+            .unwrap_or_default();
+        assert_eq!(bound, want, "slot {slot}: the third binding");
+        let word = model.material_slots[slot];
+        let index = slots::material_index(word) as usize;
+        let entry = &model.emissive[index - 1];
+        assert_eq!(
+            entry.program,
+            [
+                mesh::PROGRAM_PICTURE_ALPHA_EMISSIVE,
+                mesh::ALPHA_EMISSIVE_SPECULAR_MAP
+            ],
+            "slot {slot}"
+        );
+        assert!(
+            !model.material_tangent[slot].carried(),
+            "slot {slot}: a tangent would make the third binding a normal map"
+        );
+    }
+    assert_eq!(report.alpha_emissive_specular_maps, 17);
 }
 
 /// The tower behind the start line, the disc's one `pb_glass_2nduv_reflect_specular1_glow`
@@ -252,6 +305,7 @@ fn metropia_carries_its_programs_glow_masks() {
         return;
     };
     the_neon_rings_glow_by_their_pictures_alpha(&model, &report, &source);
+    the_specular_family_weights_its_specular_by_its_map(&model, &report, &source);
     the_tower_binds_its_picture_its_glow_mask_and_its_specular_map(&model, &source);
     the_gantry_boards_multiply_their_card_by_the_glow(&model, &report, &source);
     the_rgb_windows_bind_their_picture_and_gate_the_sky_by_their_mask(&model, &source);
