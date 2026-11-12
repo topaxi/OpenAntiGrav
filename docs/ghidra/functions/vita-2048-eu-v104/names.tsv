@@ -337,3 +337,10 @@
 0x8151c6b4	data	g_VignetteCentreY	80	exposure.md
 0x8151c6b8	data	g_VignetteInnerRadius	80	exposure.md
 0x8151c6bc	data	g_VignetteOuterRadius	80	exposure.md
+# 2026-11-12 vita-2048-track-key: the circuit-name key and the string-table lookup (circuit-name-key.md)
+0x81222a72	function	Hash_ComputeCrc32	95	circuit-name-key.md
+0x81068674	function	String_FoldCase	85	circuit-name-key.md
+0x8106b86e	function	StringTable_LookupString	85	circuit-name-key.md
+0x810c1f94	function	PITrack_ParseValues	85	circuit-name-key.md
+0x81001ef4	function	RaceSetup_SelectTrackByName	75	circuit-name-key.md
+0x810663ae	function	PIItem_LoadLocationStringTable	75	circuit-name-key.md
