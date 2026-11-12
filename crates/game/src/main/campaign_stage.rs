@@ -249,6 +249,8 @@ pub(crate) struct CampaignStage {
     /// The campaign editor, when this stage was opened for it: it takes the screen, the
     /// pad and the pointer in place of `Grid Selection` and `Cell Selection`.
     pub(crate) editor: Option<crate::campaign_editor_stage::EditorScreen>,
+    /// What the medal hexes are filled with ([`Self::set_medal_art`]).
+    medal_art: oag_ui_screens::campaign::MedalArt,
 }
 
 impl CampaignStage {
@@ -344,12 +346,24 @@ impl CampaignStage {
             flyers,
             circuit_emblems,
             editor: None,
+            medal_art: oag_ui_screens::campaign::MedalArt::default(),
         };
         // A one-grid campaign has no grid to choose: it opens on that grid's cells.
         if stage.skips_grid_selection() && stage.grid_is_unlocked(0) {
             stage.open_cell_selection(0);
         }
         stage
+    }
+
+    /// Fills the medal hexes of the screen open now, and of every screen built after it, with
+    /// `art`.
+    pub(crate) fn set_medal_art(&mut self, art: oag_ui_screens::campaign::MedalArt) {
+        match &mut self.screen {
+            Screen::Grid(model) => model.set_medal_art(art.clone()),
+            Screen::Cell { model, .. } => model.set_medal_art(art.clone()),
+            Screen::Selection(_) => {}
+        }
+        self.medal_art = art;
     }
 
     /// Whether `Grid Selection` is left out: a campaign of exactly one grid, with no
@@ -784,7 +798,8 @@ impl CampaignStage {
                 .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
                 .collect(),
         )
-        .with_per_page(1);
+        .with_per_page(1)
+        .with_medal_art(self.medal_art.clone());
         let mut model = model;
         if let Some(which) = self.cell_cursor.grid_in(self.grids.iter().map(|grid| grid.name.as_str()), &self.grid_range) {
             model.set_index(which - self.grid_range.start);
@@ -866,7 +881,8 @@ impl CampaignStage {
                     .campaign_medal(campaign_title, name)?
                     .best_difficulty
                     .map(to_campaign_difficulty)
-            });
+            })
+            .with_medal_art(self.medal_art.clone());
             match &self.custom {
                 Some(custom) => model.with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of)),
                 None => model,
@@ -1028,7 +1044,8 @@ impl CampaignStage {
                 .iter()
                 .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
                 .collect(),
-        );
+        )
+        .with_medal_art(self.medal_art.clone());
         if self.has_selection() {
             model = model.with_per_page(1);
         }

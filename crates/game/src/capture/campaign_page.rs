@@ -235,6 +235,12 @@ pub(super) fn campaign_page(
     // see `crate::campaign::static_footer_overlay`. Read before
     // `campaign.sprites` moves out below.
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
+    // The medal art a mod asks for, as `Session::open_campaign` resolves it live.
+    let medal_art = crate::campaign::medal_art::apply(
+        &crate::mods::Mods::load_for_profile()?.installed_for(title, &|_| true),
+        || crate::launcher::survey(&oag_source::source::candidates()),
+        &mut campaign.sprites,
+    );
     *sprites = campaign.sprites;
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
@@ -252,7 +258,20 @@ pub(super) fn campaign_page(
                     .campaign_medal(&campaign_title, name)?
                     .best_medal
                     .map(to_campaign_medal)
-            });
+            })
+            .with_medal_art(medal_art.clone());
+            // The earned rung picks the atlas block; the swatch ignores it, and a still of the
+            // swatch keeps drawing the row text it always did.
+            let model = if medal_art == oag_ui_screens::campaign::MedalArt::Swatch {
+                model
+            } else {
+                model.with_difficulty(&|name| {
+                    records
+                        .campaign_medal(&campaign_title, name)?
+                        .best_difficulty
+                        .map(to_campaign_difficulty)
+                })
+            };
             match &custom {
                 Some(custom) => model.with_fixed_locks(&|name| {
                     custom.fixed_lock(
@@ -506,7 +525,8 @@ pub(super) fn campaign_page(
                             )
                         })
                         .collect(),
-                );
+                )
+                .with_medal_art(medal_art.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
                 oag_ui_screens::campaign::grid_draw_list(

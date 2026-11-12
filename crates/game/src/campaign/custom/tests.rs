@@ -687,3 +687,74 @@ fn the_example_starts_its_opponents_at_medium_and_a_cells_own_rung_wins() {
         assert!(rung(cell) >= Some(1), "{}: {:?}", cell.name, rung(cell));
     }
 }
+
+fn medals_mod() -> oag_mod::Mod {
+    let manifest = r#"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.hd-medals"
+name = "HD Medals"
+version = "1.0.0"
+authors = ["A"]
+description = "x"
+titles = ["wipeout-pulse"]
+needs-titles = ["wipeout-hd"]
+
+[campaign-medals]
+source = { title = "wipeout-hd" }
+per-difficulty = true
+"#;
+    let files: &'static [(&'static str, &'static [u8])] =
+        Box::leak(Box::new([("oag-mod.toml", manifest.as_bytes())]));
+    oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap()
+}
+
+#[test]
+fn a_medals_mod_is_asked_for_on_its_title_and_names_the_disc_it_lacks() {
+    let module = medals_mod();
+    let without = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| false);
+    let (id, medals) = without.medals.as_ref().expect("asks for medal art");
+    assert_eq!(id, "test.hd-medals");
+    assert!(medals.per_difficulty);
+    assert_eq!(
+        without.needs_discs,
+        [("test.hd-medals".to_string(), "Wipeout HD".to_string())]
+    );
+    let with = Installed::for_title([&module], &[], oag_pulse::TITLE, &|slug| {
+        slug == "wipeout-hd"
+    });
+    assert!(with.medals.is_some() && with.needs_discs.is_empty());
+    let pure = Installed::for_title([&module], &[], oag_pure::TITLE, &|_| false);
+    assert!(pure.medals.is_none() && pure.needs_discs.is_empty());
+}
+
+#[test]
+fn the_mods_page_says_which_disc_a_mod_needs() {
+    let module = medals_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| false);
+    let mut listing = vec![crate::mods::Listing {
+        id: "test.hd-medals".to_string(),
+        name: "HD Medals".to_string(),
+        version: "1.0.0".to_string(),
+        authors: Vec::new(),
+        license: None,
+        rows: Vec::new(),
+        builtin: false,
+        enabled: Some(true),
+        default_enabled: false,
+        texture_pack: false,
+        error: None,
+        problems: Vec::new(),
+        publishes: Vec::new(),
+        listens: Vec::new(),
+    }];
+    crate::mods::note_left_out(
+        &mut listing,
+        &installed,
+        &oag_ui::language::StringTable::default(),
+    );
+    assert_eq!(
+        listing[0].problems,
+        [("NEEDS".to_string(), "WIPEOUT HD DISC".to_string())]
+    );
+}

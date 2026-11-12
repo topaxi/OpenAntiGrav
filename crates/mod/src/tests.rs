@@ -417,6 +417,73 @@ fn a_manifest_pickup_names_its_icon_and_colour_sources_and_a_bad_one_is_refused_
 }
 
 #[test]
+fn campaign_medals_name_an_atlas_and_a_bad_table_is_refused_by_name() {
+    let with = |table: &str| {
+        let text = format!(
+            "{MANIFEST_TEXT}\n[icons]\natlas = \"ui/atlas.png\"\n\n[campaign-medals]\n{table}"
+        );
+        Manifest::parse(&text, &|_| true).map(|m| m.campaign_medals)
+    };
+    let medals = with("source = { title = \"HD\" }\nper-difficulty = true")
+        .unwrap()
+        .unwrap();
+    assert_eq!(medals.source, MedalSource::Title("hd".into()));
+    assert!(medals.per_difficulty && medals.tiers.is_empty());
+    let medals = with("source = { mod = \"atlas\" }\ntiers = [\"bronze\", \"silver\", \"gold\"]")
+        .unwrap()
+        .unwrap();
+    assert_eq!(medals.source, MedalSource::Mod("atlas".into()));
+    assert!(!medals.per_difficulty);
+    assert_eq!(medals.tiers, ["bronze", "silver", "gold"]);
+    let text = format!(
+        "{}\nneeds-titles = [\"hd\"]\n\n[icons]\natlas = \"a.png\"\n\n[campaign-medals]\nsource = {{ mod = \"atlas\" }}\nper-difficulty = true\ntiers = [\"gold\", \"silver\", \"bronze\"]\n",
+        MANIFEST_TEXT.replace(
+            "description = \"A mod for the tests.\"",
+            "description = \"x\"\ntitles = [\"wipeout-pulse\"]"
+        )
+    );
+    oag_schema::validate::accepts(SCHEMA_KIND, SCHEMA_MAJOR, &text)
+        .unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+    for (table, named) in [
+        ("source = { mod = \"nope\" }", "[icons]"),
+        (
+            "source = { title = \"hd\", mod = \"atlas\" }",
+            "exactly one",
+        ),
+        ("source = {}", "exactly one"),
+        (
+            "source = { title = \"hd\" }\ntiers = [\"gold\", \"silver\", \"platinum\"]",
+            "campaign-defined tiers are not supported yet",
+        ),
+        (
+            "source = { title = \"hd\" }\ntiers = [\"gold\", \"gold\", \"silver\"]",
+            "named twice",
+        ),
+        (
+            "source = { title = \"hd\" }\ntiers = [\"gold\", \"silver\"]",
+            "all three",
+        ),
+    ] {
+        let error = with(table).unwrap_err().to_string();
+        assert!(
+            error.contains("campaign-medals") && error.contains(named),
+            "{error}"
+        );
+    }
+    assert_eq!(
+        Manifest::parse(MANIFEST_TEXT, &|_| true)
+            .unwrap()
+            .campaign_medals,
+        None
+    );
+    let text = MANIFEST_TEXT.replace("description = ", "needs-titles = [\"hd\"]\ndescription = ");
+    assert_eq!(
+        Manifest::parse(&text, &|_| true).unwrap().needs_titles,
+        ["hd"]
+    );
+}
+
+#[test]
 fn a_channels_table_declares_what_the_mod_publishes_and_listens_to() {
     let text = format!(
         "{MANIFEST_TEXT}\n[channels]\npublishes = [\"test.example/gate\"]\nlistens = [\"other.mod/open\", \"test.example/gate\"]\n"

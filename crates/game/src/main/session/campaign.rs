@@ -85,6 +85,7 @@ impl Session {
             .custom_campaign
             .as_ref()
             .and_then(|key| shell.custom_campaigns.get(key).cloned());
+        let installed = shell.custom_campaigns.clone();
         if let Some(key) = &self.custom_campaign
             && custom.is_none()
         {
@@ -152,6 +153,11 @@ impl Session {
                 // reach the renderer once before anything drawn from it is
                 // on screen, the same upload `PickerStage::take_sheet` does
                 // for a slideshow's own stills.
+                let medal_art = oag_game::campaign::medal_art::apply(
+                    &installed,
+                    || oag_game::launcher::survey(&oag_source::source::candidates()),
+                    &mut campaign.sprites,
+                );
                 self.renderer_set_sprites(&campaign.sprites);
                 let phases = self.selector_phases;
                 if let Stage::Menu(menu_stage) = &mut self.stage {
@@ -175,6 +181,7 @@ impl Session {
                         custom,
                     );
                     stage.resume_selector(phases);
+                    stage.set_medal_art(medal_art);
                     stage.editor = editor;
                     menu_stage.campaign = Some(stage);
                 }

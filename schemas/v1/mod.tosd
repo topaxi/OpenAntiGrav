@@ -65,6 +65,13 @@ type = "array"
 itemtype = "string"
 optional = true
 
+# Titles (lowercased hyphenated names) whose disc the mod needs for what it draws. The mod
+# loads without one; the mods page says which is missing.
+[types.mod.needs-titles]
+type = "array"
+itemtype = "string"
+optional = true
+
 [types.mod.oag]
 type = "string"
 optional = true
@@ -258,6 +265,41 @@ type = "float"
 
 [elements.pickup]
 type = "types.pickup"
+optional = true
+
+# `[campaign-medals]`: the art the campaign screens draw a medal with, in place of the
+# title's colour swatch. `source` names the atlas:
+#   source = { title = "hd" }  or  { mod = "<key of [icons]>" }
+# `per-difficulty` says the atlas holds one block of tiers per difficulty. `tiers` names the
+# tier of each atlas row, top to bottom (gold, silver, bronze, each once); a `title` source
+# uses the title's own row order and ignores it. The loader checks that exactly one source
+# key is given, that a `mod` is a key of [icons] and the tier names.
+
+[types.campaign-medals]
+type = "table"
+
+[types.campaign-medals.source]
+type = "table"
+
+[types.campaign-medals.source.title]
+type = "string"
+optional = true
+
+[types.campaign-medals.source.mod]
+type = "string"
+optional = true
+
+[types.campaign-medals.per-difficulty]
+type = "boolean"
+optional = true
+
+[types.campaign-medals.tiers]
+type = "array"
+itemtype = "string"
+optional = true
+
+[elements.campaign-medals]
+type = "types.campaign-medals"
 optional = true
 
 # `[texture-pack]`: the mod is a PPSSPP texture pack (docs/tools/mods.md, "Texture packs").

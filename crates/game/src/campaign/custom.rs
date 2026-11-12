@@ -852,6 +852,12 @@ pub struct Installed {
     /// Every `tracks/*.track.toml` of a folder mod for this title, raced from
     /// RACE REMIX's CUSTOM title as well as from a campaign.
     pub tracks: Vec<std::path::PathBuf>,
+    /// The medal art the first mod that is on and carries `[campaign-medals]` for this title
+    /// asks the campaign screens to draw, with the mod's id.
+    pub medals: Option<(String, oag_mod::CampaignMedals)>,
+    /// A mod's id and the name of a title whose disc it needs (`needs-titles`) and this
+    /// machine has none of. What the MODS page's NEEDS line says.
+    pub needs_discs: Vec<(String, String)>,
 }
 
 impl Installed {
@@ -885,6 +891,24 @@ impl Installed {
                     .filter_map(|name| module.local_path(name)),
             );
         }
+        for module in mods.iter().filter(|module| module.is_for(&slug)) {
+            for needed in &module.manifest.needs_titles {
+                if !has_disc(needed) {
+                    let name =
+                        oag_source::title::by_slug(needed).map_or(needed.as_str(), |t| t.name);
+                    installed
+                        .needs_discs
+                        .push((module.manifest.id.clone(), name.to_string()));
+                }
+            }
+        }
+        installed.medals = mods
+            .iter()
+            .filter(|module| module.is_for(&slug))
+            .find_map(|module| {
+                let medals = module.manifest.campaign_medals.clone()?;
+                Some((module.manifest.id.clone(), medals))
+            });
         if !title.campaign.custom_campaigns {
             return installed;
         }
