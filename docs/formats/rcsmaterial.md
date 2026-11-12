@@ -4246,8 +4246,10 @@ three pushbuffer reads and is not used).
   Grey is the mean of R, G and B; the share is of pixels under 12. Every under-12 share now meets or beats the
   original's. The fourth box's mean rises past the original's (86.8 against 72.4): the two frames do not hold the same
   content there (the original's craft and speed readout cover part of it; ours, rendered from the pushbuffer camera,
-  does not show the craft), and the before value's match was black wires over a brighter city, so it is not read as an
-  overshoot of the reflection's gain. Read off the frames, the wires go from black to the original's brownish grey.
+  does not show the craft), and the before value's match was black wires over a brighter city. **Open:** that box now reads
+  86.8 against the original's 72.4 (73.0 before); the likely cause is the reflection angle, since ours reflects about
+  the unperturbed vertex normal where the program reflects about the normal-mapped `N`, so the wires there sample a
+  brighter part of the sky than the original's do. Read off the frames, the wires go from black to the original's brownish grey.
   Confidence 88: a static read whose instruction listing agrees with a second family already drawn and measured
   through the same reading, and the pair's black shares close. It is short of the 90s because `env_gain`/`env_desat`
   (the `0x7480de6d` tint, engine-supplied) and the normal map's perturbation of `N` (not drawn: a track vertex carries
