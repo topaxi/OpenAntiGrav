@@ -126,8 +126,8 @@ impl Wave {
     /// of them: how a hidden prototype event moves as one flat hexagon.
     ///
     /// **Confidence 55** that this is what a player sees of such a spot
-    /// (`CanvasButton_FlattenCells` `0x813c5164`, read at 85; the maintainer has
-    /// not confirmed the picture). Kept in one place so a measurement can flip
+    /// (`CanvasButton_FlattenCells` `0x813c5164`, read at 85; the picture is
+    /// unconfirmed). Kept in one place so a measurement can flip
     /// it: the caller passes no groups to leave every cell moving alone.
     pub fn flatten(&mut self, group: &[(i32, i32); 6]) {
         let mean = group
