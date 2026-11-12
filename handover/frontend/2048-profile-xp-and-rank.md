@@ -1,5 +1,5 @@
 ---
-status: open
+status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
 summary: "2048 profile XP total is kept and a finished event banks its race-end awards; the reveal wiring, Omega events and the ~30 in-race awards are open"
