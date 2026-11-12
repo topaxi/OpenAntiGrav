@@ -119,33 +119,35 @@ fn a_lightmapped_alpha_emissive_submesh_carries_the_entry() {
 }
 
 /// Sol 2's `dn_diffuse_specular_emiss_glow` binds `alpha_emissive` and authors no `glowtinrt`:
-/// its program does not declare the uniform, so it gets no entry.
+/// its program does not declare the uniform, so its entry adds no colour (a zero tint). Its
+/// entries exist for the specular map alone.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
-fn a_material_that_authors_no_glowtinrt_gets_no_entry() {
+fn a_material_that_authors_no_glowtinrt_adds_no_colour() {
     let Some((model, report)) = build(
         "dlc1/PSP2/dlc1.psarc",
         "data/art/published/DLC1/environments/Sol_2/track.rcsmodel",
     ) else {
         return;
     };
+    let entries: Vec<_> = model
+        .emissive
+        .iter()
+        .filter(|e| e.program[0] == PROGRAM_PICTURE_ALPHA_EMISSIVE)
+        .collect();
+    assert!(!entries.is_empty(), "{}", report.describe());
     assert!(
-        model
-            .emissive
+        entries
             .iter()
-            .all(|e| e.program[0] != PROGRAM_PICTURE_ALPHA_EMISSIVE),
+            .all(|e| e.tint == [0.0; 3] && e.program[1] > 0.5),
         "{}",
         report.describe()
     );
+    assert_eq!(report.alpha_emissive_materials, 0, "{}", report.describe());
 }
 
-/// Omega re-ships the families: its GCN pixel programs of the same materials multiply the
-/// sample's alpha by `glowtinrt` and add it to the lit sum (249 of 250 programs plain, the
-/// 250th folding the colour into the alpha-weighted specular), so Metropia's glow rows load the
-/// same way.
-#[test]
-#[ignore = "needs data/extracted/ps4/omega-eu"]
-fn omegas_metropia_alpha_emissive_materials_add_their_authored_colour() {
+/// Omega's Metropia, built from the base archives; `None` where the disc is not extracted.
+fn omega_metropia() -> Option<(Vec<u8>, Model, psp2::Report)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/extracted/ps4/omega-eu/uroot");
@@ -155,7 +157,7 @@ fn omegas_metropia_alpha_emissive_materials_add_their_authored_colour() {
             "OAG_REQUIRE_GAME_DATA is set but {} is missing",
             root.display()
         );
-        return;
+        return None;
     }
     let mut archives: Vec<_> = ["data00.psarc", "data01.psarc", "data02.psarc"]
         .iter()
@@ -172,16 +174,94 @@ fn omegas_metropia_alpha_emissive_materials_add_their_authored_colour() {
         archives.iter_mut().find_map(|a| a.read_path(p).ok())
     })
     .expect("builds");
-    let entries = model
-        .emissive
-        .iter()
-        .filter(|e| e.program[0] == PROGRAM_PICTURE_ALPHA_EMISSIVE)
-        .count();
-    assert_eq!(entries, 6, "{}", report.describe());
-    assert_eq!(report.alpha_emissive_materials, 18, "{}", report.describe());
-    // `dn_diffuse_specular_emiss` lists its `SpecularTexture` first, and the build draws the
-    // first non-lightmap sampler as the picture where no programs are read (Omega), so the
-    // alpha of the drawn texel is the specular map's: those 14 stay with the generic reading.
-    // The count may shrink, never grow.
-    assert!(report.alpha_emissive_unread <= 14, "{}", report.describe());
+    Some((blob, model, report))
+}
+
+/// Omega re-ships the families: its GCN pixel programs of the same materials multiply the
+/// sample's alpha by `glowtinrt` and add it to the lit sum (249 of 250 programs plain, the
+/// 250th folding the colour into the alpha-weighted specular), so Metropia's glow rows load the
+/// same way. The 14 `dn_diffuse_specular_emiss` materials that list `SpecularTexture` first
+/// are in that count since their picture is `alpha_emissive` (the next test).
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omegas_metropia_alpha_emissive_materials_add_their_authored_colour() {
+    let Some((_, model, report)) = omega_metropia() else {
+        return;
+    };
+    let entries = |flag: bool| {
+        model
+            .emissive
+            .iter()
+            .filter(|e| e.program[0] == PROGRAM_PICTURE_ALPHA_EMISSIVE)
+            .filter(|e| (e.program[1] > 0.5) == flag)
+            .count()
+    };
+    assert_eq!(entries(false), 5, "{}", report.describe());
+    assert_eq!(entries(true), 5, "{}", report.describe());
+    assert_eq!(report.alpha_emissive_materials, 32, "{}", report.describe());
+    assert_eq!(
+        report.alpha_emissive_specular_maps,
+        17,
+        "{}",
+        report.describe()
+    );
+    assert_eq!(report.alpha_emissive_unread, 0, "{}", report.describe());
+}
+
+/// The file stem of a texture label or path, lower case.
+fn stem(path: &str) -> String {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    name.split('.').next().unwrap_or(name).to_ascii_lowercase()
+}
+
+/// Omega's `dn_diffuse_specular_emiss` pixel programs (`gcn_dump`, `@0x3fc4` of Metropia's file)
+/// sample `alpha_emissive` as the picture (`light * T.rgb + T.a * glowtinrt`) and
+/// `SpecularTexture` only as the weight of the specular (`spec * S.rgb`), though the material
+/// lists `SpecularTexture` first. The picture is the diffuse map and the specular map rides the
+/// third binding, flagged by the entry's second program lane.
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omegas_metropia_specular_family_draws_its_diffuse_and_weights_by_its_specular_map() {
+    let Some((blob, model, report)) = omega_metropia() else {
+        return;
+    };
+    let decoded = oag_rcs::rcsmodel::psp2::parse(&blob).expect("parses");
+    let alpha_emissive = oag_rcs::rcsmaterial::name_hash("alpha_emissive");
+    let specular = oag_rcs::rcsmaterial::name_hash("SpecularTexture");
+    let mut want: BTreeSet<(String, String)> = BTreeSet::new();
+    for m in &decoded.materials {
+        let family = oag_rcs::rcsmodel::psp2::lighting_only::family(m);
+        if !family.starts_with("dn_diffuse_specular_emiss") {
+            continue;
+        }
+        let (Some(picture), Some(map)) = (m.sampler(alpha_emissive), m.sampler(specular)) else {
+            continue;
+        };
+        want.insert((stem(picture), stem(map)));
+    }
+    assert!(
+        want.iter().any(|(picture, map)| picture != map),
+        "Metropia has the family, with distinct maps"
+    );
+    let mut got: BTreeSet<(String, String)> = BTreeSet::new();
+    for draw in model.draws.iter().filter(|d| !d.range.is_empty()) {
+        let v = model.vertices[model.indices[draw.range.start as usize] as usize];
+        let index = slots::material_index(v.slots) as usize;
+        let flagged = index != 0
+            && model.emissive.get(index - 1).is_some_and(|e| {
+                e.program[0] == PROGRAM_PICTURE_ALPHA_EMISSIVE && e.program[1] > 0.5
+            });
+        if !flagged {
+            continue;
+        }
+        let at = draw.texture.expect("a flagged draw has a picture");
+        let picture = model.textures[at].as_ref().expect("picture decoded");
+        let map = model
+            .pad_masks
+            .get(at)
+            .and_then(Option::as_ref)
+            .expect("the specular map rides the third binding");
+        got.insert((stem(&picture.label), stem(&map.label)));
+    }
+    assert_eq!(got, want, "{}", report.describe());
 }
