@@ -4123,7 +4123,7 @@ three pushbuffer reads and is not used).
 - **Wired (2026-11-12, `hd-modesto-banner`).** `mesh::rcs::uv_overlay` binds the grille as the albedo (lit as every
   `VertexColour1`-factor surface is), the clouds second and the logo third, writes the two values entries (mode 13,
   `PROGRAM_UV_OVERLAY`) and clears the generic additive second texture; `shade.wesl` adds `over` after the light and before
-  the fog through `mag_glow`. Matched by program shape (exactly the three samplers and an `SLT`), not by name: the
+  the fog through `mag_glow`. Matched by the material's name prefix (`uvdistortion_diff_vertexcolplusoverlay`) and its program's shape (exactly the three samplers and an `SLT`): the
   `uvdistortion_diff_vertexcol` family has no logo unit and keeps the generic reading (Modesto's 464, 467, 472, 486, 527, 538
   carry no entry of the mode). Tests: `hd_uv_overlay_ground_truth` (slots 550 and 551 bind the grille, clouds and logo and carry
   these values; red when the binding is dropped, as on main) and `hd_uv_overlay_lit_path` (the shader's `2ab` and screen
@@ -4144,10 +4144,17 @@ three pushbuffer reads and is not used).
   each, one per program variant, so the same inputs feed the same law; its programs are GNM and 2048's are GXP, neither read,
   and no render of ours exists on either title at the spot. 2048's `dlc2.psarc` ships only `...plusoverlaybloom` for Modesto
   (the slot-96 shape). Open.
-- **Amphiseum: wired by the same reading, not seen.** Its `...plusoverlay` (slots 355 and 445 forward, 357 and 447
-  reversed; teal `(0, 1, 1)` and `(0.126, 0.148, 0.194)`, grilles `mar_cellular_lamps_blue` and `dc_gradient`) matches the
-  program shape, so it now binds as the banner does; `OAG_SKIP_SLOT` found no frame with the slot visible (six cameras around
-  the draw bounds' centre, six start-pose ticks from 5 to 2000), so whether it moves the right way is unmeasured.
+- **Amphiseum: wired by the same reading, seen, not compared.** Its `...plusoverlay` (19,168 bytes, a different binary) resolves
+  to block `@0x1720`, which is Modesto's block #3 instruction for instruction (`fp-file`: the same five parameter roles, `@0x24`
+  logo tap, `@0x25` `SLT`, `@0x30` `2ab`), with `TC0 = v[3]` and the pair in `TC3.w`, `TC4` (`vp-file` `@0x1580`). Slots 355 and
+  445 forward, 357 and 447 reversed (teal `(0, 1, 1)` and `(0.126, 0.148, 0.194)`, grilles `mar_cellular_lamps_blue` and
+  `dc_gradient`, logos `feisar_square01` and `mr_line_rgb_clouds_alpha`). Rendered at `--pose=-524,46,-379` (inside the tower;
+  the draw bounds are world space but the visible set follows the craft, so a bare `--camera-pose` showed none): before, the
+  window panes carry big white Feisar logos on sky blue; after, a cyan cellular screen with no logo (the logo enters only
+  through `2ab`, weighted by the grille's alpha), and the ceiling's dot lamps glow cyan instead of dark. Reading the three taps
+  raw changes neither. No capture of the original at this spot exists, so whether the logos should be there is **unmeasured**.
+  Elsewhere the table and the report differ only by the new entries (`emissive` 54 to 58 on Modesto, 23 to 27 on Amphiseum,
+  both directions; the limit is 64) and the `uv_overlay_*` counters.
 
 **Falsifier.** Had RPCS3 drawn an opaque dark floor on Metropia, or a white Ossego band on
 Modesto, ours would have matched and the threads closed; the original draws neither. The 75 and 70 stay below 80 until a
