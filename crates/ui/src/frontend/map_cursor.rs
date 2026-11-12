@@ -76,8 +76,9 @@ impl CampaignMap {
                 .map(|f| (f[0] + f[2] * 0.5, f[1] + f[3] * 0.5))
                 .unwrap_or((view_w * 0.5, view_h * 0.5))
         });
-        let speed = MAX_SPEED * (sx * sx + sy * sy);
-        let norm = sx.hypot(sy).max(f32::MIN_POSITIVE);
+        let squared = sx * sx + sy * sy;
+        let speed = MAX_SPEED * squared;
+        let norm = squared.sqrt().max(f32::MIN_POSITIVE);
         let to = (
             from.0 + sx / norm * speed * dt,
             from.1 - sy / norm * speed * dt,
