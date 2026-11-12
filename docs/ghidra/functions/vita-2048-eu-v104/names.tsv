@@ -357,3 +357,21 @@
 0x8105021c	function	CampaignEventCard_DrawCellPanel	75	circuit-name-key.md
 0x810bbfce	function	PICell_ParseValues	70	circuit-name-key.md
 0x812324c6	function	TrackAlias_OtherHash	80	circuit-name-key.md
+# 2026-11-12 w2048-lattice-reveal-re: the campaign map's music wave, the hidden events' reveal and the rank gate (canvas-music-wave.md)
+0x81071de4	function	Canvas3D_TapCell	80	canvas-music-wave.md
+0x810715d2	function	Canvas3D_PickCellAtTouch	65	canvas-music-wave.md
+0x813c5134	function	CanvasButton_OwnsCell	85	canvas-music-wave.md
+0x813c5164	function	CanvasButton_FlattenCells	85	canvas-music-wave.md
+0x813c525c	function	CanvasButton_GetCentre	85	canvas-music-wave.md
+0x813c529c	function	CanvasButton_BuildCellList	85	canvas-music-wave.md
+0x812b3f90	function	GameModeBase_SetProgress	80	canvas-music-wave.md
+0x812b3a76	function	GameModeBase_IsUnlockable	80	canvas-music-wave.md
+0x812b5b6c	function	Campaign_UnlockEvents	80	canvas-music-wave.md
+0x812b3b3c	function	Campaign_AwardProgressTrophies	65	canvas-music-wave.md
+0x8101361a	function	Profile_GetRankThresholdXP	80	canvas-music-wave.md
+0x8125f686	function	MusicAnalysis_StaticInit	75	canvas-music-wave.md
+0x8125f1de	function	MusicAnalysis_LoadFft	80	canvas-music-wave.md
+0x8125f372	function	MusicAnalysis_SampleAt	75	canvas-music-wave.md
+0x8125f460	function	MusicAnalysis_Update	70	canvas-music-wave.md
+0x8125f66c	function	MusicAnalysis_GetHistoryRow	85	canvas-music-wave.md
+0x818c3d58	data	g_MusicAnalysis	80	canvas-music-wave.md

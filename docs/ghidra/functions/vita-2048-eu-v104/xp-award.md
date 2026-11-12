@@ -72,6 +72,12 @@ row was found that needs a rank.** The `<Unlock>` parser's `Loyalty` attribute
 no `rank`/`xp` attribute either (confidence 70: the rank-gate negative rests on one XML and
 three of the eight `Profile_GetXPRank` callers decompiled).
 
+**Correction (2026-11-12, [canvas-music-wave.md](canvas-music-wave.md), section 3):** a rank does gate
+an unlock. `GameModeBase_IsUnlockable` (`0x812b3a76`) compares the XP total `+0x3257c` with
+`Profile_GetRankThresholdXP(m_RankRequired)` (`0x8101361a`, this page's rank table), and
+`Campaign_UnlockEvents` (`0x812b5b6c`) holds the fifteen side challenges until it passes. The gate
+lives in the event objects, not in `Unlocks_Definition.xml`, which is why the XML census missed it.
+
 ## Cross-check
 
 - **Omega**: XP - checked, applies, not wired; ranks - checked, differs. Omega's `eboot.bin` carries the same

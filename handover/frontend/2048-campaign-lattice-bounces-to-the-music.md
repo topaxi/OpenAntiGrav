@@ -1,49 +1,61 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 campaign map: the lattice waves to the music, hidden prototype events stay still and are revealed by a click on their spot; both unread"
+summary: "2048 campaign map: music wave (per-track .fft, band 1, radius 7 round the current event), hidden events' reveal by tap and XP rank gate read; wire XP rank, unlock rule, reveal, then the wave"
 categories: [audio]
 difficulty: hard (30)
 ---
 
 # 2048's campaign lattice bounces to the music
 
-Reported by the maintainer from play (2026-11-12), not yet read off the disc or binary:
+Read 2026-11-12 (lane `w2048-lattice-reveal-re`), static only: every law with its address and
+confidence is on `docs/ghidra/functions/vita-2048-eu-v104/canvas-music-wave.md`. In short:
 
-- The campaign map's lattice (`Canvas3D`, `docs/ghidra/functions/vita-2048-eu-v104/canvas3d-lattice.md`)
-  moves in a wave or bounce driven by the front-end music, by beat or spectrum.
-- A hidden event (the fifteen `m_options & 0x10` prototype challenges, five "P Ship" and ten
-  "S Phantom") does **not** bounce. Its stillness is how a player spots it before clicking its spot to
-  find it (the cursor that reaches the spot is wired; the reveal is step 0 below).
-
-Nothing here is drawn today: our lattice is a static baked picture.
+- **The wave** is not a live analysis. Every music track ships a `*_stereo.fft` sidecar (`AFEX`, 12
+  bands, 30 rows a second, 13 of 13 files checked). The map samples band 1 (the bass) at the playing
+  position, keeps a 30-row history, and each cell within **7 units of the current event's hexagon
+  centre** follows that band delayed by `30 d^2 / 49` updates and scaled by `600 f`
+  (`f = (49 - d^2) / 49`), then decays at 230 alpha a second and eases into the texture at 15 % a
+  frame. Painted tiles (priority 6 or 7) and anything farther than 7 units do not move.
+- **A hidden prototype event** (`m_options & 0x10`) waits at progress 0 (plain ground, moves with the
+  wave) until the player's XP rank reaches its `m_RankRequired`; then `Campaign_UnlockEvents` sets
+  progress 1: the button is state 3, **draws nothing**, and its six cells are averaged every frame
+  (they rise and fall as one flat hexagon while the ground around them ripples). A tap on any of its
+  six cells sets progress 2: it becomes the ordinary grey state-2 hexagon prism.
+- **Omega**: checked, differs (the analyser code ships, no `.fft` file does; Omega's music is Wwise).
 
 ## Next Steps
 
-0. **The reveal (maintainer chose RE first, 2026-11-12).** The right-stick cursor and mouse click
-   already reach any lattice spot (`oag_ui::frontend::campaign_map`, `hit_at`); a click on a hidden
-   event's spot does nothing yet. Read: what a tap on a hidden event's spot does (the progress word it
-   raises; a sweep for writers of offset `+0x2d8` found none), the hit area (the event's own cells?),
-   what makes a hidden event revealable (`m_RankRequired` 10-50, player rank unread), and the found
-   tile's shape (hexagon or triangle). Then wire: a persisted "found" set in the profile, the found
-   tile drawn, pad navigation reaching found events.
-   Leads (from `canvas3d-lattice.md`, unread): `Canvas3D_UpdateCellHeights` `0x81071794` (confidence 60)
-   is the likeliest home of the height wave and a per-cell "static" flag; its caller is `Canvas3D_Update`
-   `0x81072220` (70). Ghidra program `/2048/eboot-vita-2048-eu-v104.elf`.
-1. RE: find what drives the cells' height. Start at the canvas vertex program's height input (the cell
-   alpha "height" `canvas3d-lattice.md` names) and the per-frame writer of the cell buffer; look for an
-   audio analysis call (beat detector, FFT or level meter on the music voice) feeding it. Record the
-   law (amplitude, falloff, wave speed, which band), with addresses and a confidence.
-2. Read how a hidden event's cells are excluded from the motion (a per-cell flag, or the event's cells
-   simply never written).
-3. Measure against the running original in Vita3K: a short capture of the lattice moving with the
-   music, to check the law.
-4. Wire it: the music path (`oag-music`/`oag-sound`) exposes a level or spectrum value per frame to the
-   front end (an output, never `World` state, ADR-0018); the canvas draw stops being one baked picture
-   for the moving cells. Hidden events stay still.
-5. Omega: check whether Omega's 2048 front end ships the same canvas animation; record it on the doc page.
+1. **XP total and rank.** Nothing in this engine keeps 2048's XP
+   (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`). Without it no hidden event ever becomes
+   revealable. Minimum: a per-profile XP total, the awards the campaign pays, the rank from
+   `XPRanks.xml`. This is the blocking dependency.
+2. **The unlock rule** (`Campaign_UnlockEvents` `0x812b5b6c`, `GameModeBase_IsUnlockable` `0x812b3a76`):
+   on map open and at race end, every progress-0 event that is unlockable (XP rank at least
+   `m_RankRequired`, `m_pEventRequired` passed) goes to 1 if `m_options & 0x18`, else to 2.
+3. **The reveal** (`Canvas3D_TapCell` `0x81071de4`): a click on any of a progress-1 event's six cells
+   sets it to 2, persisted in the profile; it then draws as the grey state-2 tile and joins pad
+   navigation. A click on ground (no owning button) is the ground bump (gains and caps on the page).
+   The original's touch is a Vita touch panel (which one is open); a mouse click is our choice.
+4. **The wave.** The music path exposes its playing position per frame (an output, ADR-0018); the
+   front end reads the playing track's own `.fft` (never a spectrum from PCM:
+   `crates/audio/src/spectrum.rs` is not this), samples band 1 at `position * 30`, and applies the law
+   around the current event (`R = 7`, the 230/s decay, the 15 % per-frame ease, the six-cell average
+   for progress-1 events). The baked lattice picture becomes per frame inside that disc: plan the
+   render cost.
+5. A regression test per law: the `.fft` header and size identity on the disc's 13 files; the wave's
+   delay and fall-off on a synthetic band-1 step; the unlock rule's 1-versus-2 split; the tap.
 
 ## Open
 
-- Whether the motion follows the beat, a spectrum band or overall level is unknown.
+- **Persistence of the progress word**: `GameModeBase_SetProgress` (`0x812b3f90`) writes it, the save
+  serialiser is unread (recipe on the page).
+- **Live confirmation**: nothing here was watched running. Best check: Vita3K at the open map, read
+  `canvas+0x5ed40..+0x5ed54` and the cell alphas round the current event over ten stops. A state-3
+  button needs a save at XP rank 10 or more (420,000 XP); poking `profile+0x3257c` in a private copy is
+  the short way.
+- **Ask the maintainer**: does a hidden spot stay completely motionless, or rise and fall as one flat
+  hexagon? The code says the second (confidence 55 that this is what a player reads as "still").
+- The ripple branch of `Canvas3D_UpdateCellHeights` (`+0x5ed24`) has no writer that turns it on.
+- The analyser's peak-hold detail in `MusicAnalysis_Update` (`0x8125f460`, confidence 60).
