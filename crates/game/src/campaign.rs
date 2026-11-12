@@ -729,6 +729,7 @@ fn load_flyers(
             window,
             stretch: 1.0,
             gain,
+            keyed: false,
         })
     });
     let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
@@ -743,6 +744,7 @@ fn load_flyers(
             window: crate::flyer::BACK_WINDOW,
             stretch: crate::flyer::BACK_STRETCH,
             gain,
+            keyed: false,
         })
     });
     // The `Campaign Selection` cards exist only where that screen does: one per
@@ -763,6 +765,7 @@ fn load_flyers(
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
         gain: crate::flyer::CAMPAIGN_GAIN,
+        keyed: true,
     });
     let cards: Vec<crate::flyer::CardSpec> =
         grid_cards.chain(back_cards).chain(campaign_cards).collect();

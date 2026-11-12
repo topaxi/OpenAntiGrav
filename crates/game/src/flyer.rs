@@ -236,6 +236,12 @@ pub struct CardSpec {
     pub stretch: f32,
     /// [`FURY_GAIN`], [`BASE_GAIN`] or [`CAMPAIGN_GAIN`].
     pub gain: f32,
+    /// Play the UV keys the card's `.vex` authors per mesh, on a PS4 or Vita card.
+    ///
+    /// Set for the `Campaign Selection` cards, where the original frame shows the
+    /// keyed art (`docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`"). The grid
+    /// cards stay as built until a frame of theirs measures it.
+    pub keyed: bool,
 }
 
 /// One card on a screen: which flyer, seen through which widget, in which pose.
@@ -506,6 +512,7 @@ impl Flyers {
             window,
             stretch,
             gain,
+            keyed,
         } in cards
         {
             let name = &side.key(flyer);
@@ -521,7 +528,7 @@ impl Flyers {
                 report.push(format!("{entry}: no Camera node - no flyer is drawn"));
                 continue;
             };
-            match crate::preview::psp2_scene::model_named(archives, &entry) {
+            match crate::preview::psp2_scene::model_named(archives, &entry, *keyed) {
                 Ok((mut model, textures)) => {
                     hide_effects(&mut model, &textures);
                     // Fury's cards are lit by `simpletexture*` programs

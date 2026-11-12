@@ -227,7 +227,7 @@ fn the_renderer_draws_a_grey_drawing_that_changes_with_the_clock() {
 
 /// The `oag_texture::png` writer's own output back to RGBA: stored deflate
 /// blocks, filter 0 on every row.
-fn decode_stored_png(bytes: &[u8]) -> (usize, usize, Vec<u8>) {
+pub(crate) fn decode_stored_png(bytes: &[u8]) -> (usize, usize, Vec<u8>) {
     let (mut width, mut height, mut zlib) = (0usize, 0usize, Vec::new());
     let mut at = 8;
     while at + 8 <= bytes.len() {

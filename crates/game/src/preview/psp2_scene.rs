@@ -24,22 +24,31 @@ pub fn build(
     vex: &[u8],
     geometry: &[u8],
 ) -> Result<Option<(Model, String)>> {
-    Ok(build_named(archives, entry, vex, geometry)?.map(|(model, report, _)| (model, report)))
+    Ok(build_named(archives, entry, vex, geometry, false)?
+        .map(|(model, report, _)| (model, report)))
 }
 
 /// [`build`], and the path of each texture the build asked for, in the order it
 /// asked: what a card hides its unread effects by (`crate::flyer`).
+///
+/// `keyed` plays the UV keys the `.vex` authors per mesh (`mesh::rcs::psp2::build_billboard`).
 fn build_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
     vex: &[u8],
     geometry: &[u8],
+    keyed: bool,
 ) -> Result<Option<(Model, String, Vec<String>)>> {
     if !mesh::rcs::psp2::is_psp2(geometry) {
         return Ok(None);
     }
     let mut textures = Vec::new();
-    let (model, built) = mesh::rcs::psp2::build_with_vex(entry, geometry, vex, &mut |path| {
+    let build = if keyed {
+        mesh::rcs::psp2::build_billboard
+    } else {
+        mesh::rcs::psp2::build_with_vex
+    };
+    let (model, built) = build(entry, geometry, vex, &mut |path| {
         // Materials are asked for too; a draw's texture slot counts the pictures only.
         if oag_texture::decode::Container::of_name(path)
             == Some(oag_texture::decode::Container::Gnf)
@@ -55,19 +64,25 @@ fn build_named(
 /// beside `entry` is one, else the PS3 path. Scoped to the flyer cards, like
 /// [`model`] to the selection screens: [`super::model_named`] stays as it was.
 ///
+/// `keyed` plays the UV keys the card's `.vex` authors per mesh. Left off, a card whose art
+/// scrolls samples its textures at rest (the 2048 card's banner lands on the transparent half of
+/// its alpha texture). It is on for the `Campaign Selection` cards alone, the ones an original
+/// frame has measured (`docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`").
+///
 /// # Errors
 ///
 /// The entry is missing or will not decode.
 pub fn model_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
+    keyed: bool,
 ) -> Result<(Model, Vec<String>)> {
     if let Some(sibling) = mesh::rcs::sibling_name(entry)
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
         if let Some((mut model, report, textures)) =
-            build_named(archives, entry, &vex, &geometry)
+            build_named(archives, entry, &vex, &geometry, keyed)
                 .with_context(|| format!("decoding the card model {entry}"))?
         {
             log::debug!("card model {entry}: {report}");
