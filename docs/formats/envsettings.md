@@ -179,7 +179,16 @@ draw through the stand-in rig, because the viewer's job is to show what is on
 the disc clearly rather than as the circuit stages it. The authored rig reaches
 a race and nothing else.
 
-## The one file that is not a circuit's
+## The front end's files
+
+Seven more files under `data/fe/` light the front end's models: `fe.envsettings`,
+`fe.fury.envsettings`, their `.track` and `.medal` variants. They author the same `Lighting.`,
+`Fog.` and `HDR and Bloom` keys as a circuit's, and the executable loads one by front-end style
+into a block of the front end's own
+([front-end-model-lighting.md](../ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md)).
+Nothing in this project reads them yet.
+
+## The one file that is not a lighting file
 
 `/data/fe/fury.envsettings`, 436 lines, with `Feedback`, `Equaliser` and
 `Music Pulse` keys for the Fury front end. It parses through the same reader and

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-12
-summary: "HD front end: Ship Select camera and swap settle wired; open: hull lighting, the first six frames of the settle, craft turn and zoom, Omega's own pose"
+summary: "HD front end: Ship Select camera and settle wired; hull lighting read, wire with the tone scale open; settle start, craft turn and zoom, Omega pose"
 difficulty: medium (30)
 ---
 
@@ -45,8 +45,26 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
   in the order a player would notice:
   1. **The hull is darker than the original** in that box (mean bias R -7.6,
-     G -11.7, B -11.1): the front end's hull lighting, not placement. Not
-     read. Medium (40).
+     G -11.7, B -11.1). READ 2026-11-12 (`hd-ship-select-lighting`), ready to
+     wire with one value open (`docs/ghidra/functions/ps3-hdfury-eu/
+     front-end-model-lighting.md`): the original lights the preview hull (the
+     race `ship.vex` and its programs) with the race's light parameters, filled
+     from `data/fe/fe.fury.EnvSettings` (Fury style; `fe.envsettings` HD style)
+     by `FrontEnd_LoadEnvSettings` (`0x003aa0e8`, Ship Select calls it with 0 at
+     `0x0025379c`). Ours draws `mesh.wesl`'s stand-in rig. Confidence 85.
+     Change: the preview's scene block takes `Light::authored` built through
+     raceplay's `envsettings_light` path from that file (not hand-copied),
+     `with_output_scale(0.5)`, then the front end's tone scale on the lit
+     output. Open value: that scale. One frame fits about 3.45 in linear light
+     (55), inside the tone law's `4 - min(adapted * 35, 3)`; read the resolve's
+     `scale` off an RPCS3 capture of Ship Select. Box today 14.33; rig with
+     `/2` 14.32 (the linear ratio goes channel-neutral, 3.53/3.46/3.47);
+     rig with the scale at 2 gives 9.31 (bias -2.4, -5.3, -7.1). Acceptance:
+     at or below about 9.3, the bias toward zero, the ratio still
+     channel-neutral. Also open: the nose still reads brighter in the original
+     (a spatial term: the parameter 8 reflection or the fog, both unread on a
+     front-end draw). Omega: same `fe.fury.EnvSettings` values, checked, applies,
+     not wired. Medium (45).
   2. ~~**The swap's settle is recovered and not played**~~ (LANDED 2026-11-12,
      `hd-ship-swap-settle`): `ship_model::FitMotion` on the picker stage starts
      the new craft at the last model's rest depth and eases it at 0.125 a frame
