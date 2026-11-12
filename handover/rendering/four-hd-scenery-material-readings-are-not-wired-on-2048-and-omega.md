@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048, omega, hd]
-updated: 2026-11-11
-summary: "Three HD scenery material readings apply to 2048 and Omega, not wired (alpha_emissive wired); HD: one specular map unbound, unsaturated N.L per block"
+updated: 2026-11-12
+summary: "HD readings on 2048 and Omega not wired (alpha_emissive done); HD specular map wired, unsaturated N.L read but drawing it is worse"
 difficulty: medium (35)
 ---
 
@@ -41,15 +41,14 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
 
 **Open on HD itself:**
 
-5. **The specular map of `dn_diffuse_specular_emiss` and
-   `mr_diffuse_emissive_alpha_glow_specular`** (`specular * map.rgb`, unit 1)
-   is unbound on HD: the specular is drawn unweighted. Omega and 2048 now bind it third for the first family
-   (`ALPHA_EMISSIVE_SPECULAR_MAP`, `shade.wesl`); HD's `alpha_emissive` binds nothing third, so the same flag needs its unit 1 sampled
-   there. `mr_..._specular` is not read on Omega or 2048 (its Omega program folds `glowtinrt` into the alpha-weighted specular).
-6. **The unsaturated `N.L`** of the bumped lightmapped block: the program
-   multiplies the sun by `N.L` with no clamp. Wiring it on every bumped
-   lightmapped slot read worse (Moa's box 1.60 against 1.47, the frame 1.92 to
-   2.18), so which programs leave it unsaturated has to be read per block.
+5. ~~**The specular map of `dn_diffuse_specular_emiss`**~~ **Wired 2026-11-12, `hd-specular-nl`**: the 17 Metropia slots (and Ubermall's 2, out of view at its start line)
+   bind `SpecularTexture` third with `ALPHA_EMISSIVE_SPECULAR_MAP` (`docs/formats/rcsmaterial.md`, "The specular map of `dn_diffuse_specular_emiss`").
+   `mr_diffuse_emissive_alpha_glow_specular` declares no `SpecularTexture` on HD (units 1 and 2 are shadow maps): nothing to wire. **Left:** 14 other HD
+   families declare the sampler (`pb_window` 156 programs, `cf_diff_spec`, `base_diffusespecular` and the rest, listed on that page), not read; the
+   `_glow` twin declares it and is not wired on HD.
+6. **The unsaturated `N.L`**: read per block (`Program::sun_diffuse_unsaturated`, 2,349 of 7,211 lightmapped programs, Metropia's `#21` and Moa's `#7`
+   among them; `docs/formats/rcsmaterial.md`, "The sun's N.L") and **not wired: drawing it is measurably worse** (Ubermall's whole frame mean grey
+   3.80 to 5.36, Moa's box 1.40 to 1.54 and its second box 1.17 to 2.63), the cause unknown.
 
 ## Next Steps
 
@@ -58,7 +57,7 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
   the `psp2` loader, and measure on a pair of that title (Omega in-game shots
   are not trusted: use the `wipeout_pc` port or a material census). Item 1
   is done.
-- For 5: bind unit 1 where the program declares it and measure on Metropia
-  (17 slots) and Ubermall (2).
-- For 6: list the lightmapped programs with a `DP3` whose result has no
-  `_SAT`, and wire it for those alone.
+- For 6: an RPCS3 draw dump (the lead's approval needed) of one Ubermall right-wall draw where ours has `N.L < 0` and the atlas alpha near 1 decides
+  between "the original's unit-2 alpha there is 0" and "its `N.L` is not negative" (page, "What would decide it"); then wire it for the 2,349
+  programs behind a role bit (bit 30 with the glow index at six bits worked; reverted) or drop the reading. Omega's Moa `@0x4124` `clamp`
+  modifiers (`@0x228`, `@0x260`) are the cross-title lead.

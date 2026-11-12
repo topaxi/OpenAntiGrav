@@ -3692,7 +3692,7 @@ race draws none of it. Other programs gate other constants by a unit-0 alpha (`d
 **`Program::accumulates(1)` misread `dn_diffuse_specular_emiss`.** Its unit 1 is the specular map and `@0x3b` is the
 specular's own tint, but the shape matches the additive glow, so the vertex-lit slots (10 on the disc) added the
 specular map, gated by the picture's alpha, as a white layer. The new reading takes those slots and clears
-`ADD_SECOND`. The specular map itself stays unbound (open below).
+`ADD_SECOND`. The specular map is bound third ("The specular map of `dn_diffuse_specular_emiss`", below).
 
 **Wired:** `oag_mesh::mesh::rcs::alpha_emissive` admits a slot whose bound picture is `alpha_emissive` and whose
 resolved program gates `glowtinrt` by that unit's alpha (`Program::alpha_gated_parameter`), and writes the colour as a
@@ -3714,8 +3714,7 @@ are added, off in a Zone race. `OAG_ALPHA_EMISSIVE_OFF=1` draws the frame before
 The other eleven race pairs move by 0.01 or less (Vineta K 2.37 to 2.38 low-frequency, 2.81 to 2.80 raw): their
 slots of these families are out of view at the start line or author a black colour.
 
-**Open.** (1) The specular map of `dn_diffuse_specular_emiss` and `mr_diffuse_emissive_alpha_glow_specular`
-(`specular * map.rgb`, unit 1): unbound, the specular is drawn unweighted. (2) No live frame: the magnitude rests on
+**Open.** (1) ~~The specular map of `dn_diffuse_specular_emiss`~~ bound third (2026-11-12, `hd-specular-nl`; `mr_..._specular` has no such map). (2) No live frame: the magnitude rests on
 the pairs above.
 
 **2048 / Omega: ported (2026-11-11, `w2048-alpha-emissive`).** Both re-ship the families with HD's circuits (2048
@@ -3826,6 +3825,98 @@ frame exists). Omega's Anulpha Pass pair (native port original, 1920x1080, tick 
 differ), theirs / before / after: orange stand panel `1065,268 100x35` 76/80/58, 78/73/55, 79/80/55 (G 73 to 80 against 80);
 `1015,203 152x42` 39/63/77, 35/58/72, 45/65/75; `1222,159 76x35` 15/82/114, 18/97/134, 18/100/137 (away, +3 on a box
 already 15 too bright).
+
+### The specular map of `dn_diffuse_specular_emiss` (2026-11-12, `hd-specular-nl`; confidence 90 for the program, 60 for the unit's gamma)
+
+**The law.** Every lit variant of `dn_diffuse_specular_emiss` ends `MAD H1.xyz, H5, H4, H1` (block `#21`, `@0x3b`, quoted above): `H4` is the
+`SpecularTexture` (`0x20c3e476`, `~crc32` of the name; unit 1) fetched at the picture's own coordinate (`TEX H4.xyz, R2.zwzz unit1`),
+`H5` the specular term. `rgb = fog(light * T.rgb + T.a * glowtinrt + specular * S.rgb) / 2`, no alpha of either texture gating the specular,
+the same combine Omega and 2048 read (`psp2::alpha_emissive`).
+
+**Wired:** `mesh::rcs::alpha_emissive` binds the map third (`Model::pad_masks`, merged after `mag_wave` and before `hull_normal` reads the
+table) for a slot whose resolved program declares `SpecularTexture` and fetches that unit's three lanes, and sets the mode 12 entry's second
+lane to `ALPHA_EMISSIVE_SPECULAR_MAP`, the flag 2048 and Omega use; `shade.wesl` reads it as `specular * decode(map.rgb)`. Its gamma
+is the decode every colour unit of this path takes: **chosen, not measured** for this unit (the sampler's address word was not read). The
+chunks of these materials carry no tangent, so the third binding is not read as a normal map (checked on all 17 slots). Switch:
+`OAG_SPECULAR_PICTURE_OFF=1`. Tests, red with the switch on: `hd_program_glow_ground_truth::metropia_carries_its_programs_glow_masks`
+(17 slots: entry `[12, 1]`, the third binding the material's own `SpecularTexture` file) and, in `rcsmaterial_ground_truth`, the census of which
+programs declare the sampler.
+
+**`mr_diffuse_emissive_alpha_glow_specular` has no specular map on HD (the brief's claim is false for it).** None of its blocks declares
+`SpecularTexture` (0 of its programs, Vineta K's `materials` and `materials_dlc`); its unit 1 and 2 are `TXP` fetches, the shadow maps, and its
+specular is `picture.a * 0xeca14ca6` (the picture's alpha weights it, which the generic gloss mask already does). Nothing to wire.
+
+**Census** (`every_fragment_program_on_the_disc_decodes_to_a_clean_end`, every fragment program on the disc): `SpecularTexture` is declared by 16 families:
+`dn_diffuse_specular_emiss` 120 programs, `dn_diffuse_specular_emiss_glow` 132, `pb_window` 156, `wes_diffuse_colourtint_specular` 24,
+`cf_diff_spec` 48, `base_diffusespecular` 48, `pb_diffspecemiss` 36, `mt_diffuse_glow_specular` 40, `tunnel_fx_noalpha` 30, `ab_diff_spec_facing` 26,
+`diffuse_colourtint_seperate_specular` 24, `j_diffuse_colour_tint_spec` 24, `tunnel_fx_noalpha_mult` 20, `diffuse_colourtint_diff_spec_facing` 20,
+`tunnel_fx_glass` 14, `bluemetal` 10. **Only the first is wired**; the others (and the `_glow` twin, which declares it too) were not read for
+how they use the unit and are left open.
+
+**Measured** (HD pairs, ours re-rendered from each pair's recorded flags; the switch off is the before; the boxes are named by where
+`OAG_ONLY_MATERIAL=dn_diffuse_specular_emiss` on and off differ, 3,554 px in 10 clusters; mean RGB over the box, theirs / before / after):
+
+| Box (`x,y WxH`) | Theirs | Before | After | Error before to after |
+| --- | --- | --- | --- | --- |
+| `568,203 39x72` | 114/94/75 | 120/97/77 | 117/96/77 | 4.1 to 2.6 |
+| `790,201 80x28` | 63/61/54 | 61/60/54 | 62/60/54 | 1.3 to 0.6 |
+| `773,159 83x28` | 64/63/57 | 62/61/57 | 62/62/57 | 1.5 to 1.1 |
+| `1096,101 102x29` | 83/86/81 | 77/82/79 | 77/82/79 | 4.4 to 3.9 |
+| `1023,160 73x55` | 101/112/127 | 95/106/119 | 95/106/119 | 6.7 to 6.3 |
+| `1089,36 102x30` | 83/85/77 | 72/76/71 | 72/76/72 | 8.7 to 8.2 |
+| `659,240 47x64` | 73/57/44 | 77/59/45 | 76/59/45 | 2.2 to 1.8 |
+
+Seven of ten boxes move toward the original by 0.4 to 1.5 of error and none moves away; the whole frame's mean grey is 3.12 before and after
+(the family is a few small surfaces: 3.5k px of 2.07 M). **Ubermall's two slots change no pixel** on the `hd-ubermall` pair (0 px differ, on and
+off, whole frame and with only the family drawn): they are out of view at that start line.
+
+**2048 / Omega: ported** (`psp2::alpha_emissive`, `psp2_alpha_emissive_ground_truth`): the same flag and the same third binding.
+
+### The sun's N.L: which lightmapped programs leave it unsaturated (2026-11-12, `hd-specular-nl`; reading confidence 90, **not wired**)
+
+**The reading.** The lightmapped block of Metropia's `dn_diffuse_specular_emiss` (`#21`, `@0x1f`..`@0x25`) and of Moa Therma's
+`diffuse_normal_specular` (`#7` `@0x9960`, `@0x29`..`@0x33`) dot the normal with the sun with **no `_SAT`** and multiply the result into the diffuse light:
+
+```text
+Metropia #21   @0x1f DP3 R0.y, R0, {sunDir}          ; N.L, unsaturated
+               @0x21 MUL H1.x, H4.w, R0.yyyy          ; * atlas alpha          (the diffuse term)
+               @0x23 MUL H2.xyz, H1.xxxx, {sunColour}
+               @0x25 MOV_SAT x8 R1.w, R0.yyyy         ; the same DP3, saturated, for the specular's facing term only
+Moa #7         @0x29 DP3 R1.w, R0, {sunDir}  /  @0x2b MOV_SAT x8 R1.x, R1.wwww  /  @0x2e MUL H0.w, H6, R1  /  @0x33 MUL H6.xyz, H0.wwww, {sunColour}
+```
+
+`Program::sun_diffuse_unsaturated` is that shape: an unsaturated `DP3` against `directionalLight0DirectionWorldSpace` that a later unsaturated
+`MUL`/`MAD`/`ADD` reads (the `MOV_SAT x8` reader every lit program carries is ignored). **Census** (`rcsmaterial_ground_truth`, all 37,461 fragment programs): 7,211 are
+lightmapped and **2,349 of them leave the sun's `N.L` unsaturated**. The plain diffuse families clamp (`diffuse`, `diffuse_emissive`, `diffuse_emissive_alpha`,
+`diffuse_emissive_alpha_glow`, `_v01`: 0 of 14, 12, 60, 54, 6); the specular families do not (`dn_diffuse_specular_emiss` 22 of 24, `_glow` 18 of 18,
+`dn_diffuse_specular` 36 of 36, `diffuse_normal_specular` 152 of 328, `diffuse_specular` 172 of 360, `track_surface` 24 of 56; the partial counts are the Zone, shadowed
+and no-sun variants). Both quoted blocks read unsaturated. The brief's per-program list is this census.
+
+**Wiring it makes the picture worse, so it is not wired (measured, not explained).** A branch in `shade.wesl` took the raw `N.L` on the 2,349 programs
+(a role bit, the light floored at zero before the albedo multiply; reverted). Sigma-7 mean absolute RGB against the stored originals, ours
+re-rendered from each pair's recorded flags:
+
+| Pair, box | Clamped (as drawn) | Unsaturated |
+| --- | ---: | ---: |
+| Moa Therma `0,540 840x540` | 1.40 | 1.54 |
+| Moa Therma `1020,720 660x360` | 1.17 | 2.63 |
+| Moa Therma whole frame | 1.86 | 2.11 |
+| Ubermall `1063,381 857x336` | 2.49 | 11.24 |
+| Ubermall whole frame (mean grey 3.80 to 5.36) | 2.02 | 3.43 |
+
+Ubermall's right-hand walls and the track's far edge draw a deep navy where the original is tan and grey: faces turned from the sun lose the
+sun's red and green and keep the blue of the lightmap. Restricting it to chunks with no tangent (no normal map) still reads worse on Ubermall
+(3.80 to 4.46), so the normal map is not the cause. The program is unsaturated and the original's pixel is not darkened.
+
+**What would decide it (a next step, needs the lead's approval for an RPCS3 draw dump).** On an Ubermall right wall where ours has `N.L < 0` and
+atlas alpha near 1, the original's `lm.a * N.L` must be near 0: either its unit-2 alpha there is 0 (our atlas read is not its), or its `N.L` is not
+negative (the patched sun direction or the normal differs). A draw dump of that wall draw gives the texel's alpha and the patched
+`directionalLight0DirectionWorldSpace`. One lead, recorded not tested: Moa's diffuse product goes through `H0.w`, the output register used as a
+temp, where Metropia's goes through `H1.x`.
+
+**2048 / Omega: not determined.** Omega's lightmapped Moa permutation (`03_moa_therma/Materials/Diffuse_Normal_Specular_1`, `gcn_dump --at 0x4124`)
+carries two `clamp` output modifiers in its lighting chain (`@0x228`, `@0x260`) and no `v_max_f32`; which instruction is the sun's `N.L` and whether
+either clamp is on it was not traced. 2048's GXP was not read. The reading is therefore **checked, applies, not wired** for both.
 
 ### The window with a specular map: `pb_glass_2nduv_reflect_specular1_glow` (confidence 85)
 
@@ -3999,7 +4090,7 @@ from the start line.
 **Open.** The block multiplies the sun by the **unsaturated** `N.L` (`DP3 R1.w` with no `_SAT`, then `MUL H0.w, H6,
 R1` against the atlas's alpha), where ours clamps at zero. With the map bound, the unsaturated form on every bumped
 lightmapped slot reads 1.60 on the box against 1.47 and moves the whole frame 1.92 to 2.18, so it is not wired:
-which programs leave it unsaturated has to be read per block (the non-normal-mapped lightmapped variants saturate).
+which programs leave it unsaturated was read per block ("The sun's N.L", above): Moa's own block is one of them, and wiring them still reads worse.
 
 **2048 / Omega: checked, differs.** Omega's `03_moa_therma/Materials/Diffuse_Normal_Specular_1` fetches its normal
 map three lanes wide (`image_sample ... dmask:0x7`, `gcn_dump --at 0x4124`): the `.gnf` maps are re-cooked, and the

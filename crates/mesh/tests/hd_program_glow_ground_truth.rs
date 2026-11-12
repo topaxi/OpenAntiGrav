@@ -105,10 +105,8 @@ fn the_neon_rings_glow_by_their_pictures_alpha(
 /// The 17 `dn_diffuse_specular_emiss` slots multiply their specular by `SpecularTexture`
 /// (`MAD H1.xyz, H5, H4, H1`, `H4` the unit-1 fetch): the map is bound third, the entry says so
 /// (`ALPHA_EMISSIVE_SPECULAR_MAP`), and no chunk of these carries a tangent that would make the
-/// shader read the third binding as a normal map. The lightmapped ones also leave the sun's
-/// `N.L` unsaturated (`slots::UNSATURATED_SUN`, block `@0xbb60`: `DP3 R0.y` then
-/// `MUL H1.x, H4.w, R0.y`).
-fn the_specular_family_weights_its_specular_by_its_map_and_leaves_the_sun_unsaturated(
+/// shader read the third binding as a normal map.
+fn the_specular_family_weights_its_specular_by_its_map(
     model: &mesh::Model,
     report: &mesh::rcs::Report,
     source: &oag_rcs::rcsmodel::Model,
@@ -123,7 +121,6 @@ fn the_specular_family_weights_its_specular_by_its_map_and_leaves_the_sun_unsatu
         .map(|(slot, _)| slot)
         .collect();
     assert_eq!(family.len(), 17, "the family's slots: {family:?}");
-    let mut lightmapped = 0;
     for &slot in &family {
         let want = source.materials[slot]
             .samplers
@@ -151,18 +148,7 @@ fn the_specular_family_weights_its_specular_by_its_map_and_leaves_the_sun_unsatu
             !model.material_tangent[slot].carried(),
             "slot {slot}: a tangent would make the third binding a normal map"
         );
-        if word & slots::SECOND_IS_LIGHTMAP != 0 {
-            lightmapped += 1;
-            assert_ne!(
-                word & slots::UNSATURATED_SUN,
-                0,
-                "lightmapped slot {slot} clamps the sun's N.L"
-            );
-        } else {
-            assert_eq!(word & slots::UNSATURATED_SUN, 0, "vertex-lit slot {slot}");
-        }
     }
-    println!("{lightmapped} of 17 dn_diffuse_specular_emiss slots are lightmapped");
     assert_eq!(report.alpha_emissive_specular_maps, 17);
 }
 
@@ -319,9 +305,7 @@ fn metropia_carries_its_programs_glow_masks() {
         return;
     };
     the_neon_rings_glow_by_their_pictures_alpha(&model, &report, &source);
-    the_specular_family_weights_its_specular_by_its_map_and_leaves_the_sun_unsaturated(
-        &model, &report, &source,
-    );
+    the_specular_family_weights_its_specular_by_its_map(&model, &report, &source);
     the_tower_binds_its_picture_its_glow_mask_and_its_specular_map(&model, &source);
     the_gantry_boards_multiply_their_card_by_the_glow(&model, &report, &source);
     the_rgb_windows_bind_their_picture_and_gate_the_sky_by_their_mask(&model, &source);

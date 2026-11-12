@@ -164,7 +164,7 @@ fn modestos_glass_panes_bind_texture1_and_split_by_coverage() {
             "slot {slot} binds {} where its program samples {texture1}",
             texture.label
         );
-        let index = mesh::slots::material_index(model.material_slots[slot]);
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
         assert!(index > 0, "slot {slot} carries no glow-table entry");
         let entry = model.emissive[index as usize - 1];
         let refbrightness = material
@@ -223,7 +223,7 @@ fn chenghous_reflective_windows_bind_their_picture_and_reflect_through_its_alpha
             "slot {slot} binds {} where its program's picture is {picture}",
             texture.label
         );
-        let index = mesh::slots::material_index(model.material_slots[slot]);
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
         assert!(index > 0, "slot {slot} carries no glow-table entry");
         let entry = model.emissive[index as usize - 1];
         assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
@@ -283,7 +283,7 @@ fn anulphas_windows_reflect_the_sky_by_their_own_weight() {
         if !material.name.ends_with("/mt_windows_a.rcsmaterial") {
             continue;
         }
-        let index = mesh::slots::material_index(model.material_slots[slot]);
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
         assert!(index > 0, "slot {slot} carries no glow-table entry");
         let entry = model.emissive[index as usize - 1];
         let weight = material
@@ -325,7 +325,7 @@ fn tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha() {
         if !material.name.ends_with("/ds_booth_glass.rcsmaterial") {
             continue;
         }
-        let index = mesh::slots::material_index(model.material_slots[slot]);
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
         assert!(index > 0, "slot {slot} carries no glow-table entry");
         let entry = model.emissive[index as usize - 1];
         assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");

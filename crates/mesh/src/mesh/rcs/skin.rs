@@ -786,18 +786,6 @@ pub(super) fn roles(
         {
             packed |= slots::NO_SUN;
         }
-        // **The sun's `N.L` is unsaturated in some lightmapped programs**: the diffuse term
-        // reads the `DP3` as it is, so a surface facing away subtracts light.
-        if packed & slots::SECOND_IS_LIGHTMAP != 0
-            && declared.as_ref().is_some_and(|d| d.samples_lightmap())
-            && program
-                .as_ref()
-                .is_some_and(Program::sun_diffuse_unsaturated)
-            && !super::isolate::unsaturated_sun_off()
-        {
-            packed |= slots::UNSATURATED_SUN;
-            report.unsaturated_sun += 1;
-        }
         // **The glass family's facing-ramp combine, off the same fact
         // `picks` already routed by.** See `glass_sheen`'s own doc for the
         // shape this catches. `units` below still runs unconditionally: with

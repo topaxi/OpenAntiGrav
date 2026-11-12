@@ -496,7 +496,7 @@ pub mod slots {
     /// is into the glow table, which a model holds at most
     /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) entries of.
     ///
-    /// Twenty-four since [`HOLO_BILLBOARD`] took bit 23 (the index keeps 63 values since [`UNSATURATED_SUN`] took bit 30), twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
+    /// Twenty-four since [`HOLO_BILLBOARD`] took bit 23 (the index keeps 255 values), twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
     /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16.
     pub const MATERIAL_SHIFT: u32 = 24;
@@ -512,35 +512,20 @@ pub mod slots {
     /// cast".
     ///
     /// **Bit 31, above the index**, because bits 0 to 23 are all taken and the
-    /// index needs only six: the glow table holds
+    /// index needs only seven: the glow table holds
     /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so
     /// [`material_index`] masks the top bit off.
     pub const LIT_ALPHA: u32 = 1 << 31;
 
-    /// The material's lightmapped fragment program multiplies the sun by an **unsaturated**
-    /// `N.L` (`sun * (lightmap.a * dot(N, L))`, the `DP3` carrying no `_SAT`), so a surface
-    /// facing away from the sun subtracts light where the usual reading clamps at zero. Read off
-    /// the resolved program (`Program::sun_diffuse_unsaturated`, `skin::roles`), set only on a
-    /// lightmapped material. `docs/formats/rcsmaterial.md`, "The sun's N.L: which lightmapped
-    /// programs leave it unsaturated".
-    ///
-    /// **Bit 30, above the index**, which holds at most [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT)
-    /// (64) entries and so needs six bits ([`MATERIAL_INDEX_MASK`]).
-    pub const UNSATURATED_SUN: u32 = 1 << 30;
-
-    /// The bits of [`MATERIAL_SHIFT`]'s field that hold the index. The glow table holds fewer than
-    /// 64 entries (the index is the entry plus one), so six bits name every one.
-    pub const MATERIAL_INDEX_MASK: u32 = 0x3f;
-
     /// The mask covering every role bit - the low half of the word plus
-    /// [`LIT_ALPHA`] and [`UNSATURATED_SUN`], with [`MATERIAL_SHIFT`]'s index excluded.
-    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA | UNSATURATED_SUN;
+    /// [`LIT_ALPHA`], with [`MATERIAL_SHIFT`]'s index excluded.
+    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA;
 
     /// This material's [`Model::emissive`](super::Model::emissive) index plus
     /// one, or `0` where it has no entry.
     #[must_use]
     pub const fn material_index(packed: u32) -> u32 {
-        (packed >> MATERIAL_SHIFT) & MATERIAL_INDEX_MASK
+        (packed >> MATERIAL_SHIFT) & 0x7f
     }
 
     /// Which channel of that texture the alpha is, in bits 3 and 4.

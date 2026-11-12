@@ -42,9 +42,6 @@
 //!   2048 and Omega (the specular map as the picture), and on every title draws its specular
 //!   unweighted by the map.
 //!
-//! - `OAG_UNSATURATED_SUN_OFF=1` clamps the sun's `N.L` at zero on every HD lightmapped
-//!   material (`skin::roles`), for the before of `slots::UNSATURATED_SUN`.
-//!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
 //! either of the two `.gtf` paths it names**, case-insensitively, so a needle
@@ -191,13 +188,6 @@ pub(super) fn alpha_emissive_off() -> bool {
 pub(super) fn specular_picture_off() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OAG_SPECULAR_PICTURE_OFF").is_some())
-}
-
-/// Whether the lightmapped programs that leave the sun's `N.L` unsaturated are drawn with it
-/// clamped (`OAG_UNSATURATED_SUN_OFF`): the before half of a before/after pair.
-pub(super) fn unsaturated_sun_off() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("OAG_UNSATURATED_SUN_OFF").is_some())
 }
 
 /// Whether every material's picture is replaced by a flat colour keyed by its
