@@ -134,7 +134,10 @@ impl Frontend {
     /// One tick of the cursor, on the campaign map only.
     pub(super) fn step_map_cursor(&mut self, dt: f64) {
         if self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none() {
-            #[expect(clippy::cast_possible_truncation, reason = "a tick is a fraction of a second")]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a tick is a fraction of a second"
+            )]
             self.campaign.step_cursor(dt as f32);
         }
     }

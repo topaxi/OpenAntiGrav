@@ -77,7 +77,10 @@ fn pushing_into_an_edge_scrolls_the_map_within_its_limits() {
         push(&mut frontend, &mut input, (1.0, 0.0));
     }
     let after = frontend.campaign.scroll();
-    assert!(after.0 > before.0, "the view moved right: {before:?} {after:?}");
+    assert!(
+        after.0 > before.0,
+        "the view moved right: {before:?} {after:?}"
+    );
     assert_eq!(after.1, before.1, "and only right");
     let (_, max) = frontend.campaign.limits(0);
     for _ in 0..2400 {
@@ -98,7 +101,11 @@ fn confirm_opens_the_event_under_the_cursor_even_one_the_pad_steps_skip() {
     // Steer the cursor onto the third event, panning as it goes.
     for _ in 0..3000 {
         let target = centre_of(&frontend, 2);
-        let at = frontend.campaign.cursor.at.unwrap_or_else(|| centre_of(&frontend, 0));
+        let at = frontend
+            .campaign
+            .cursor
+            .at
+            .unwrap_or_else(|| centre_of(&frontend, 0));
         let (dx, dy) = (target.0 - at.0, target.1 - at.1);
         let length = dx.hypot(dy).max(1.0);
         if frontend.campaign.hit_at(at) == Some(2) {
