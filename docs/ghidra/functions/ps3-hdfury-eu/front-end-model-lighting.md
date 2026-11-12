@@ -1,11 +1,11 @@
 # The front end's models are lit by the front end's own `.envsettings`
 
-2026-11-12. Why HD/Fury's Ship Select hull draws darker than the original (the pair
+2026-11-12, wired the same day (`hd-ship-select-light-wire`; "The live read" and "Wired" below). Why HD/Fury's Ship Select hull drew darker than the original (the pair
 `hd/menu-ship-select`, hull box `716,150 1012x650`, sigma 7: mean absolute 14.33, mean bias
 R -7.6, G -11.7, B -11.1). **The original lights a front-end model with the same engine
 parameters a race binds, filled from a block the front end loads from `data/fe/fe.fury.EnvSettings`
-(Fury style) or `data/fe/fe.envsettings` (HD style).** This project lights the preview with
-`mesh.wesl`'s invented two-light stand-in. Read statically on the GUI bridge (program
+(Fury style) or `data/fe/fe.envsettings` (HD style).** This project lit the preview with
+`mesh.wesl`'s invented two-light stand-in (until "Wired" below). Read statically on the GUI bridge (program
 `/hdfury/EBOOT-ps3-hdfury-eu.elf`, TOC `0x008bd3c4` for every address below; [memory.md](memory.md)
 for the per-function TOC defect), then checked against the pair's frame.
 
@@ -157,7 +157,7 @@ earlier live read of the block, and the frame's channel-neutral ratio); 55 on th
 scales by `Tone maximum brightness - min(adapted * Tone adaption boost, Tone darkening clamp)`
 (`oag_tables::envsettings::TONE_ADAPTION_BOOST`), `4 - min(adapted * 35, 3)` with the front end's
 constants, a value between 1 and 4. A scale of 3.45 would mean an adapted luminance of about
-0.016, plausible for a mostly black page. **This value is unread** (next step below).
+0.016, plausible for a mostly black page. **Read live, and it is 0.0163** ("The live read" below).
 
 **The fog is refused at either level.** At the fitted scale the black exp2 fog moves the box from
 4.62 to 6.48 and steepens the left-to-right gradient. Whether the hull's front-end programs read
@@ -169,39 +169,93 @@ and the darkest pixels too (green 1.45 below 0.05 linear). That is a spatial or 
 exposure. Candidates are the reflection the draw binds as parameter 8, which this preview does not
 draw, `Ambient false direction` (parameter 11), and the front end's bloom.
 
-## What to wire, and what is open
+## The live read (2026-11-12, `hd-ship-select-light-wire`)
 
-**Ready to wire (one value open):** the preview's scene block takes the front end's rig, read
-through the same `envsettings` path the race uses (`oag_raceplay::load::environment`'s
-`envsettings_light`), from `data/fe/fe.fury.EnvSettings` in the Fury style and
-`data/fe/fe.envsettings` in the HD style, with HD's `/2` output scale. Then the lit hull takes the
-front end's tone scale. `oag_post::hd_bloom` already runs HD's adaptation and resolve, so the
-faithful form is the menu frame through that resolve with the front end's tone constants (boost 35,
-clamp 3, maximum 4), not a fixed multiplier; 3.45 is the check value. Acceptance: the hull box
-near 4.6 mean abs (from 14.33), its bias within about 2 of zero in each channel, and the linear
-ratio channel-neutral.
+RPCS3 cold-booted by `rpcs3-drive.py serve` with `OAG_COMPARE_PLATFORM=hd-fury` (1920x1080, `Resolution Scale
+100`, `Write Color Buffers: true` in the global `config.yml`; no per-game custom config exists in this tree),
+walked `right cross right cross cross` to `Team Selection` (the frame read: Feisar, at rest), then
+`scripts/rpcs3-hd-fe-adapted.py` through `/proc/<pid>/mem` (guest base `0x300000000`), ten reads four seconds apart:
 
-**Unread, with the read recipe:** the front end's adapted luminance. Read it as
-`docs/rendering/hd-track-tone.md` did for a race: the PPU's adapted luma at `FunkLayer + 0x25c`
-(the object `0xc50ee0`, through `*0x8b73bc`), several reads a few seconds apart on Ship Select
-at rest on the compare profile, then exposure is `4 - min(adapted * 35, 3)`. **This page predicts
-`adapted` of about 0.016.** A second falsifier is that `0x00c489f0 + 0x540` reads `35.0` there.
-Until it is read, the 3.45 is "measured off one frame".
+| Read | Value |
+| --- | --- |
+| `FunkLayer + 0x25c` (`0xc50ee0`), the adapted luma | 0.0157 in seven of ten, 0.0168, 0.0180 twice; **mean 0.0163** |
+| the same, `+0x240` (the ladder's last mean) | 0.0118 to 0.0157, steps of 1/255: the readback is 8-bit |
+| `0x00c489f0 + 0x540`, `+0x544`, `+0x548`, `+0x52c` | `35.0`, `3.0`, `4.0`, `0.015` (the page's second falsifier holds) |
+| `*(0x009948ec) + 0x60`: ambient `+0x420` | `0.4392 0.4392 0.4392` |
+| sun `+0x430` | `0.9922 0.9098 0.5765`, `w` `3.75` (the specular scale) |
+| sun direction `+0x450` | `0.6 0.6773 0.8` |
+| fog `+0x4e0`, density `+0x500` | black, `0.03` |
 
-**Not wired, not read:** the fog's effect on a front-end draw, the parameter 8 reflection
-(`*(0x00d43c80)`'s texture at `+0x20`), `iblScalePower`'s value, and `Ambient false direction`,
-which `oag_mesh::mesh_render::Light` has no field for.
+So the front end's exposure is `4 - min(0.0163 * 35, 3)` = **3.43**, against the 3.45 the frame fit predicted
+(0.016): confirmed, confidence 75 (one boot; the quantisation step is 0.0039, so the mean is good to about
+0.002, which is 0.07 of exposure). The block is the file's, in every key read: the rig, specular and fog
+included. **The read is profile-sensitive.** A first run on RPCS3's default 1280x720 at `Resolution Scale 150`
+read 0.0212 to 0.0270 (mean 0.0234, exposure 3.18), 44 % high: the same artefact `docs/rendering/hd-track-tone.md`
+records for the race readback, and why a read of this register is made on the compare profile only.
+
+## Wired (2026-11-12)
+
+The craft preview binds the front end's rig and tone, on both paths a player's frame takes (the capture,
+`oag_game::capture::preview_pass`, and the live picker, `oag_game::picker_stage`), through one function,
+`oag_game::preview::model_light`:
+
+- the file is `oag_title::FrontEnd::model_lighting` (`oag_hd::frontend::MODEL_LIGHTING`): `Data/fe/fe.fury.EnvSettings`
+  in the Fury style, `Data/fe/fe.envsettings` in the HD style, picked by the served front end's style
+  (`FrontEnd_IsFuryStyle`'s stand-in, `HD_BG`'s darkness);
+- read through `oag_raceplay::authored_light`, the reader a circuit's `.envsettings` takes (not hand-copied);
+- the output scale is HD's `0.5` (`lit_output_halved`) times `oag_post::hd_bloom::exposure(0.0163, 35, 3, 4)`
+  (3.43): **1.715**. The tone constants are the loader's writes; a ground-truth test holds them to what
+  `fe.fury.EnvSettings` authors for those keys. The adapted luma is the Fury style's, read; **the HD style's is
+  unmeasured and inherits it**;
+- the file's fog is not applied: with it the box is 6.48 against 4.62, and nothing here shows the hull's programs
+  read parameter 7 at all.
+
+**Frame result**, pair `hd/menu-ship-select` re-rendered with its own recorded flags (hull box `716,150 1012x650`,
+sigma 7):
+
+| Preview light | Box mean abs | Bias R, G, B |
+| --- | --- | --- |
+| stand-in (before) | 14.34 | -7.6, -11.7, -11.1 |
+| the front end's rig and tone (now) | **4.67** | +2.1, +0.7, -1.7 |
+
+The page's predicted 4.62 with `+2.1, +0.7, -1.7` at a scale of 1.725, reproduced at 1.715. The lit pixels of the
+hull box read 136 in the original, 92 before and 133 now (mean luma over pixels above 60).
+
+Tests (`crates/game/tests/hd_ship_preview_ground_truth.rs`):
+`the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage` (the light against the parsed file, the scale,
+the tone keys) and `ship_selects_hull_is_as_bright_as_the_original_on_both_paths` (capture 121 to 180 and live
+108 to 146 lit-pixel luma, each held to a floor between), both red with `model_lighting: None` and green with it;
+`the_exposure_function_is_the_scale_the_resolve_applies` (`oag_post`) holds the function to the resolve pass.
+
+**Still open**, as in "The frame check": the left of the box and the darkest pixels read brighter in the original
+(the parameter 8 reflection, `Ambient false direction`, which `oag_mesh::mesh_render::Light` has no field for, or
+the front end's bloom); the `+ bloom` summand of the resolve is not exposure-scaled and the preview draws after the
+chain, so the hull gets none; `iblScalePower`'s value. The HD style's frame is unmeasured (adapted luma inherited).
 
 ## Omega
 
-**Checked, differs.** Omega's patch (`data08.psarc`) and base (`data00.psarc`) ship the same
-four `data/fe/fe*.EnvSettings` paths, and the patch's `eboot.bin` carries the four path strings.
-**Omega always runs the HD style**: its boot screen compares `"HD"` with itself to pick
-`WOHD_Colours` (`docs/formats/omega-frontend.md`, "The colour-skin switch"), and the HD style's
-`bgAnim` is the only backdrop it has ([menu-backdrop-scene.md](menu-backdrop-scene.md)). So if
-its loader keeps HD's branch, its Ship Select lights from `fe.EnvSettings`. That file differs from
-HD's `fe.envsettings`: ambient `0.2 0.3 0.32` (spelled `colour`) against `0.4` grey, with the same
-sun `3.19749 2.094043 1.768024` along `0.658008 0.677334 0.329004`. Its `fe.fury.EnvSettings`
-authors HD's Fury `Lighting.` and `Fog.` values, plus a `Tonemap`/`TonemapHDR` block with exposure
-minimum and maximum both `1`. The loader and draw were not traced in Omega's executable, and no
-Omega memory readout exists: the file choice is inferred from the style, not read.
+**Checked, differs; wired on Omega's own file.** Omega's patch (`data08.psarc`) and base (`data00.psarc`) ship the same
+four `data/fe/fe*.EnvSettings` paths, and the patch's `eboot.bin` carries the four path strings. **Omega always runs the
+HD style**: its boot screen compares `"HD"` with itself to pick `WOHD_Colours` (`docs/formats/omega-frontend.md`,
+"The colour-skin switch"), and the HD style's `bgAnim` is the only backdrop it has ([menu-backdrop-scene.md](menu-backdrop-scene.md)).
+The loader and draw were not traced in Omega's executable, and no Omega memory readout exists: the file choice is
+inferred from the style, not read (confidence 50).
+
+Its `fe.EnvSettings` (base `data00` 3,949 bytes, patch `data08` 4,447 bytes; the two read the same in every `Lighting.`
+key below) differs from HD's **in the sun as well as the ambient**: ambient `0.2 0.3 0.32` (`Constant ambient colour`),
+sun `Sun diffuse colour` `0.748 0.906 1` times `Sun diffuse intensity` 2 (that is `1.496 1.812 2.0`, a blue-white
+sun), direction `0.658008 0.677334 0.329004` (HD's `fe.envsettings` direction), `Nova prelit scale bias power`
+`1.4 0.2 1.5`, `Fog colour` black. (An earlier version of this section gave Omega HD's sun colour
+`3.19749 2.094043 1.768024`: that was HD's `fe.envsettings`, not Omega's file.) So the same engine parameters take
+different values.
+
+`FrontEnd::model_lighting` for Omega (`oag_omega::frontend::OMEGA_MODEL_LIGHT`) names that file for both styles and
+reads it in Omega's own key spelling through `authored_light`, with its sun scale and nova prelit combination; **no
+tone stage and no halved lit output**: Omega's `lit_output_halved` and its front-end adaptation are unread, so the
+scale is 1.0. **Inherited from HD: the wiring, not the values.** Result, `--menu-page ship-select`, Piranha, the
+hull's coloured pixels: mean luma 86 before, 129 after, the hull draws and the yellow does not clip beyond what its
+texture authors (`omega_lights_its_craft_from_its_own_front_end_file` holds the rig to the file). There is no
+original frame to compare against (the shadPS4 race shots are untrusted and no Ship Select pair exists for Omega),
+so how close this is to the original is **unknown**.
+
+**2048** (Vita): not checked. Its front end lights nothing here (`model_lighting: None`); its loader is unread.

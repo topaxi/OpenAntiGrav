@@ -186,7 +186,7 @@ Seven more files under `data/fe/` light the front end's models: `fe.envsettings`
 `Fog.` and `HDR and Bloom` keys as a circuit's, and the executable loads one by front-end style
 into a block of the front end's own
 ([front-end-model-lighting.md](../ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md)).
-Nothing in this project reads them yet.
+Ship Select's craft is lit by one of them (`fe.fury.envsettings` or `fe.envsettings`, by style; Omega's `fe.EnvSettings`), read through the reader a circuit's file takes (`oag_raceplay::authored_light`); the other screens' models and the `.track` and `.medal` variants are not read.
 
 ## The one file that is not a lighting file
 
