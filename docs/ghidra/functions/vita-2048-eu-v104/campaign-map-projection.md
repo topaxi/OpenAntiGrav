@@ -198,6 +198,7 @@ map's own tiles, blurred, behind the five tiles (the parked question of
 | `0x8106fa8c` | `CanvasItem_SetState` | 80 | Stores `+0x3c`, raises the dirty byte |
 | `0x8106fae2` | `CanvasItem_Paint` | 80 | Above |
 | `0x8106fbd8` | `CanvasButton_PaintIconAndRing` | 70 | Above |
+| `0x81072702` | `CanvasButton_PaintIconCells` | 70 | The icon writer: a half-float `(u, v)` shift per cell of the button's list, "The prism" below |
 | `0x81071560` | `Canvas3D_AddItem` | 80 | First free of 700 slots at `+0x5e0d0`, count at `+0x5ebc0` |
 | `0x810712d2` | `Canvas3D_PaintItems` | 80 | Above |
 | `0x810739a4` | `Canvas3D_PrepareDraw` | 75 | Matrix, mesh window, repaint when dirty |
@@ -226,13 +227,13 @@ to 85 on the same live evidence; its row stays on that page.
 ## Wired
 
 `oag_ui::frontend::canvas_camera` is the camera and the scroll law, `oag_2048::campaign::tier::MAP`
-the quad (the title's `TouchFrontEnd::map_nodes`, applied by `oag_title::NodeMap::nudged`), and `frontend::campaign_map` places every tile through them: the disc's
-hex art stretched over the prism's top face, the lattice beneath from the picture the title page
+the quad (the title's `TouchFrontEnd::map_nodes`, applied by `oag_title::NodeMap::nudged`), and `frontend::campaign_map` places every tile through them: the baked prism
+("The prism", below), the lattice beneath from the picture the title page
 bakes (shifted to the view's phase by whole lattice periods), the map opening where the two-step
 centring comes to rest, and a selection scrolling by the tap's law. The downloadable tiers go
 through the same camera with their own `(3, 2)` step and grid offsets.
 
-Tile centres, ours (the hexagon of the drawn sprite) against the reference frames' top faces:
+Tile centres, ours (the prism picture's anchor, the middle of its top face) against the reference frames' top faces:
 
 | View | Event | Theirs | Ours | Delta |
 | --- | --- | --- | --- | --- |
@@ -247,18 +248,96 @@ their visible edges agree to 2 px in `x`. The lattice under the map: row lines a
 487, 535 against the frame's 343, 391, 439, 487, 535, and the diagonals' crossings on row 452 at
 25, 68, 85, 128, 144, 188 against 25, 68, 85, 128, 145, 187.
 
-Pinned by `crates/ui/src/frontend/canvas_camera/tests.rs` (the law against the live reads) and
+Pinned by `crates/ui/src/frontend/canvas_camera/tests.rs` (the law against the live reads),
 `the_campaign_map_puts_its_tiles_where_the_canvas_camera_does` in
 `crates/game/tests/vita_2048_boot_ground_truth.rs` (the disc's events at the two reference views;
-red on the even grid).
+red on the even grid) and, for the prism, `a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map`
+in the same file (the rendered map: green face, a wall that darkens towards its foot, no tinted square
+around the tile).
 
-Not wired, with what each needs: the prism's wall and the canvas's shading (the tile is flat art
-whose coloured body covers 78 % of the face), the ring and path cells (`0x81073aee` and the fill
-types), the season cards and the other item classes, the state table above (ours keeps its four
-progress colours and draws every event), the ground relief, the scroll bounds, the wait and the
-eases (ours arrives at once).
+Not wired, with what each needs: the ring and path cells (`0x81073aee` and the
+fill types), the season cards and the other item classes, the state table above
+(ours draws every event, a locked one in a chosen pale colour), the ground relief,
+the scroll bounds, the wait and the eases (ours arrives at once), the icon
+glyph through the cells' atlas shift (below). The prism itself is wired
+("The prism", below).
+
+## The prism: the mesh's seven triangles, drawn by the two programs (2026-11-12, lane `w2048-frontend-canvas`)
+
+**What a tile is on screen** (confidence 85 for the picture, 70 for the foot
+shade's level). `Canvas3D_BuildLatticeMesh` writes **seven** triangles per cell
+(21 `u16` indices at `0x81073cb8`, read from the decompile): the top `(0, 1, 2)`
+and three walls, as vertex numbers `(0, 2, 3) (3, 2, 5)`, `(0, 1, 4) (4, 3, 0)`,
+`(1, 2, 4) (2, 5, 4)`, vertices 3 to 5 being 0 to 2 at `z = -1` with the same
+`texCoord`. With a cell's alpha `0.98`, `h` is `0.98` on the top and `-0.02`
+at the foot of a wall, and the vertex program's occlusion
+`s = 1/6 * sum max(alpha_k - h, 0)` (`canvas3d-lattice.md`) is 0 on the top face
+and up to 1 at the foot of a wall: **the wall's dark foot is the vertex colour,
+not a separate shading pass**. `col + row` even makes every tile the same
+picture, translated.
+
+**What the icon writer does to the cells** (`0x81072702`, reached from
+`CanvasButton_PaintIconAndRing` only for state 2). It writes a `(u, v)` shift
+(two half-floats, `canvasTex2`) into each of the button's cells: `u = icon_u +
+0.0459 k` and `v = icon_v + 0.0400 row`, where `0.0459` is `94 / 2048` and
+`0.0400` is `82 / 2048` (the cell's atlas triangle's width and height), `k`
+stepping once per pair of cells along a row and starting half a step back on a
+row of the other parity. The six cells therefore read the **icon's own region of
+`canvasTexture.gxt`** in the same triangular tiling. That region is clear white
+around the glyph: the decoded sheet reads `(255, 255, 255, 0)` at ten texels
+beside the flag, the stopwatch and the crosshair, and `(255, 255, 255, 255)`
+inside the glyph. So the original's tile face and walls carry **no outline
+line** (frame `13` shows none) and the flag or stopwatch is the canvas's own
+pixels on the face. The `icon_u`, `icon_v` per event shape are unread here (two
+`u` were read live: 0.415 the flag, 0.507 the stopwatch; `v` not read).
+
+**Wired.** `oag_ui::frontend::canvas_prism` runs `Canvas3D_vp` and `Canvas3D_fp`
+in software over one tile and the ground around it (z-buffer with `LESS_EQUAL`,
+the occlusion shade, a painted cell's texel the clear white above, the composite
+pass's square-root encode of `canvas3d-lattice.md`, "Part 2"), at three samples
+a pixel along each axis, and the map draws the picture at each tile's projected
+top-face centre as an ordinary sprite. **Why it is baked and not a GPU draw**:
+the camera is orthographic and fixed, so a prism's picture only translates with
+the pan, and `sqrt(t * c * colour) = sqrt(t * c) * sqrt(colour)` lets one white
+picture serve every state through a sprite tint; the picture is derived from the
+mesh and the programs, with no hand-placed art. The ground is drawn as a black
+overlay with alpha `1 - sqrt(c)`, so it darkens the lattice picture beneath it
+and does not repeat it. A tile is placed by the camera's projection of
+`tile_top` and not rounded: a rounded place moved a tile 0.2 px further from
+frame `13`'s Event 4.
+
+**Colours: the canvas's own, `g_CanvasStateColours`** (read live above):
+`20d000` a passed event, `d0d000` an elite one, `909090` an open one. The
+`Skin.xml` globals the flat art used (`Pass2048` `0x018400`, `Blue2048`) are a
+different set and the frames show the canvas's. A locked event is `e0e0e9`,
+`0x817327c4`, the first state's colour: **chosen**, the original paints none.
+
+**Against frame `13`** (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`,
+the opening view with Events 1 to 3 passed): green `(90, 230, 0)` on the face
+both sides; the wall's shape, the face outline and the lit left wall agree on
+the stopwatch tile. The tile centres are unchanged by the bake (table above).
+Measured difference: down the wall under Event 3 (column 395, rows 205 to 262)
+the green channel goes `231 -> 161` in the frame and `230 -> 192` in ours, so
+**our foot is lighter**: the frame's linear shade at the foot is 0.49, ours
+0.70. The ground's relief alpha (`0x01..0x22`, unread; the bake's ground is flat
+at 0) raises the six-cell sum, and one tile's shade at a vertex shared with a
+neighbouring tile is taken from an isolated tile; neither was separated.
+
+Not drawn, and said so: the glyph through the cells' shift (the disc's own mode
+icon sprite lies over the face instead, as before), the ring and path cells, the
+season cards, a locked event's absence. The original's frame `13` shows only six
+tiles; ours also draws every locked event as a pale prism (item 4 of the thread).
 
 ## Omega
+
+**Prism: checked, applies, not wired.** Same item and programs ship
+(`Canvas3D_vp`/`Canvas3D_fp`, `3dCanvas_Item.cpp`, `canvasTexture.gnf`, the reset
+angles: [canvas3d-lattice.md](canvas3d-lattice.md), "HD / Omega cross-check"),
+so the mesh and the seven-triangle index layout are the same CPU code; the GCN
+programs, the icon writer and the cell textures were not read, and Omega's
+front end is HD's, so whether its pages show this map is open
+([2048-frontend.md](../../../formats/2048-frontend.md)). Census only; no live
+value is readable on shadPS4.
 
 **Checked, applies, not wired.** Census of the PS4 `eboot.bin` (base and patch 1.07): it carries
 `"2048 - Event 1"` (`0x82d8ac` / `0x8910e1` in the file), `TouchCampaign_Item.cpp`,

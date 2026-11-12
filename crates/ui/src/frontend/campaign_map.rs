@@ -718,8 +718,9 @@ impl Frontend {
     }
 
     /// A tile's prism: the baked picture ([`canvas_prism`]) with its anchor on
-    /// the tile's projected top-face centre, to whole pixels like the lattice,
-    /// tinted the state's colour.
+    /// the tile's projected top-face centre, tinted the state's colour. Not
+    /// rounded to a whole pixel: the picture is soft shading and edges, and a
+    /// rounded place would move a tile up to half a pixel off the camera's.
     fn prism_sprite(
         camera: &Camera,
         event: &MapEvent,
@@ -783,8 +784,9 @@ impl Frontend {
         // covers a farther tile's shade.
         let mut order: Vec<usize> = (0..self.campaign.events.len()).collect();
         order.sort_by(|&a, &b| {
-            let (a, b) = (&self.campaign.events[a], &self.campaign.events[b]);
-            a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+            self.campaign.events[a]
+                .y
+                .total_cmp(&self.campaign.events[b].y)
         });
         for at in order {
             let event = &self.campaign.events[at];

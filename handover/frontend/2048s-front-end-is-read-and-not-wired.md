@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-11-10
-summary: "2048 front end: DLC campaigns, Select Team and campaign map tile placement wired; canvas cell painting, further screens open"
+updated: 2026-11-12
+summary: "2048 front end: DLC campaigns, Select Team, map tile places and canvas prism wired; ring cells, season cards, glyph shift open"
 difficulty: hard (30)
 ---
 
@@ -126,13 +126,21 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   grid (`PITCH`/`ORIGIN`/`CANVAS`) is gone. A `<CanvasLabel>`'s `x`/`y` are
   canvas cells too, which is why the old fit against `M_X`/`M_Y` half worked.
   Open, each with its address on that page:
-  1. **The tile is flat hex art, not the prism.** The art's coloured body
-     covers 78 % of the top face (93 of 119 px) inside its own white ring, with
-     no wall and no shade, and `hex_filled.gxt`'s faint alpha over its whole
-     square shows as a pale box on the lattice. The real thing is the canvas
-     mesh with painted cells (colour, height in alpha, atlas shift): port it as
-     a draw of its own (as `Draw::FuryBackdrop` is), from the mesh and the two
-     programs in `canvas3d-lattice.md`. That one port also gives items 2 and 3.
+  1. **Resolved 2026-11-12 (`w2048-frontend-canvas`): the tile is the canvas's
+     prism.** `oag_ui::frontend::canvas_prism` runs `Canvas3D_vp`/`fp` in
+     software over one tile (seven triangles a cell, occlusion shade, the
+     composite's square-root encode) and the map draws that picture at each
+     tile's projected place, tinted the canvas's own state colour
+     (`g_CanvasStateColours`). Evidence and limits:
+     `campaign-map-projection.md`, "The prism". Left over from it: our foot
+     shade is lighter than frame `13`'s (green `230 -> 192` down the wall
+     against `231 -> 161`; the ground relief is the candidate), and the icon
+     glyph is still the disc's sprite over the face where the original reads it
+     out of the atlas through the cells' shift (`CanvasButton_PaintIconCells`
+     `0x81072702` read: `u + 0.0459 k`, `v + 0.0400 row`; the per-shape
+     `icon_u`/`icon_v` are the unread input, 0.415 flag and 0.507 stopwatch
+     being the two live `u`). Reading those would draw the glyph from the
+     canvas and is the natural next step with item 2.
   2. **The striped and dotted cells** around and between tiles: the button's
      ring (`CanvasButton_PaintIconAndRing` `0x8106fbd8`, cell writer
      `0x81073aee`, the chain walk `0x810ef5fe`), fill types as atlas shifts.
@@ -151,7 +159,9 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      `records.toml` was written by hand (three `bronze` rows) restored the
      cursor but drew no passed tile. The lib-level test colours them.
   8. **Omega**: the item and `"2048 - Event 1"` ship in `eboot.bin`; the quad
-     was not found by pattern and no live value is readable.
+     was not found by pattern and no live value is readable. The prism: same
+     item and programs ship, checked, applies, not wired (GCN programs and the
+     icon writer unread).
 - **Resolved 2026-09-21: `Home`'s five destinations draw.** See the top of
   this file and `2048-frontend.md`'s own "Wired" section for the full
   account. `team`'s own team/craft-slot picker feeds `settings.race.team`/
