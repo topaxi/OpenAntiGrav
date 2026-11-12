@@ -442,6 +442,14 @@ pub struct SubMesh {
     /// record's own declaration; empty where it names none. A non-finite value is replaced by the
     /// origin.
     pub packed_texcoords: Vec<[f32; 4]>,
+    /// `uvMarkings`, one per vertex: the road's decal atlas pair
+    /// ([`vertex_decl::VertexDecl::markings_texcoord`]). Empty unless the record's own
+    /// declaration names it and `uv1_uvDirt` both (Omega's `tarmac_*` roads). A non-finite value
+    /// is replaced by the origin.
+    pub markings_texcoords: Vec<[f32; 2]>,
+    /// The dirt pair of `uv1_uvDirt`, one per vertex (its `.zw`; `.xy` is
+    /// [`Self::texcoords`]). Empty exactly where [`Self::markings_texcoords`] is.
+    pub dirt_texcoords: Vec<[f32; 2]>,
     /// How many of [`Self::texcoords`] decoded to a non-finite value and were
     /// substituted with the origin.
     ///
@@ -890,6 +898,29 @@ fn one(
             });
         }
     }
+    let mut markings_texcoords = Vec::new();
+    let mut dirt_texcoords = Vec::new();
+    if let (Some(markings), Some(dirt)) = (
+        own.and_then(|decl| decl.markings_texcoord(half_type)),
+        own.and_then(|decl| decl.uv_dirt_tiling(half_type)),
+    ) {
+        let (markings, dirt) = (usize::from(markings.offset), usize::from(dirt.offset) + 4);
+        if stride >= markings + 4 && stride >= dirt + 4 {
+            let pair = |at: usize| {
+                let uv = unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+                if uv[0].is_finite() && uv[1].is_finite() {
+                    uv
+                } else {
+                    [0.0, 0.0]
+                }
+            };
+            for v in 0..vertex_count {
+                let base = vertex_at + v * stride;
+                markings_texcoords.push(pair(base + markings));
+                dirt_texcoords.push(pair(base + dirt));
+            }
+        }
+    }
     let mut packed_texcoords = Vec::new();
     if let Some(off) = own
         .and_then(|decl| decl.packed_uv_pair())
@@ -956,6 +987,8 @@ fn one(
         lightmap_texcoords,
         bars_blend_texcoords,
         packed_texcoords,
+        markings_texcoords,
+        dirt_texcoords,
         non_finite_texcoords,
         tangents,
         colours,
