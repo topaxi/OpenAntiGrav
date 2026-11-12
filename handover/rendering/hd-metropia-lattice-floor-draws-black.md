@@ -25,4 +25,4 @@ Maintainer, from play: Metropia (forward) tick 900 at `[-311.2, 101.1, -13.8]` "
    map's alpha, and check the blend reads it as coverage.
 2. Re-render the pair at `--pose=-354.28,110.69,-53.17` with the camera in the doc and compare the two floor boxes
    (original 102.6 to 103.5 and 81.3 to 82.4 mean grey; ours 1.5 and 17.9 before).
-3. Check no other circuit's `mesh_colour_constant` slot moves (the family is named for Metropia only).
+3. The family exists only in `02_track` on HD (census of the seven archives); Omega (`Mesh_Colour_Constant{,_1,_2}`) and 2048 (`dlc1.psarc`) ship it too: checked, applies, not wired.

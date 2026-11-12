@@ -24,8 +24,8 @@ family as slot 551, and the 8 chunk-less nodes and 21 unresolved materials are t
 
 ## Next Steps
 
-1. Give the `uvdistortion_*` family (7 slots on Modesto) its own reading in `mesh::rcs::skin`: output =
+1. Give the `uvdistortion_*` family (8 slots per direction on Modesto; Amphiseum carries `...plusoverlay` too) its own reading in `mesh::rcs::skin`: output =
    `vertex colour x tunnelscreens.rgb x light + overlay(teal x clouds x screens.alpha, ossego)`.
 2. Re-render the pair at `--pose=729.72,58.95,-119.54` and compare the top-band boxes (target: original 0.1 to 0.3 % over
    grey 200). Check the forward circuit's slot 551 and `uvdistortion_diff_vertexcol` slots (464, 467, 472, 486, 527, 539) do not move.
-3. Omega and 2048 ship no file of this name (their material names differ); record "not checkable by name" or run their own pair.
+3. Omega (`data02.psarc`, Modesto `uvdistortion_*`) and 2048 (`dlc2.psarc`, the `...bloom` variant) ship the family: checked, applies, not wired; render ours on each at the spot.
