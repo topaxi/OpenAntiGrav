@@ -3,8 +3,8 @@ status: re-first
 titles: [omega]
 size: M (55)
 difficulty: medium (50)
-updated: 2026-11-04
-summary: "Omega start plays Wwise events; random/switch containers are read and the missile launch loads; the cue table and the player _PC event are next"
+updated: 2026-11-12
+summary: "Omega start and 10 of 43 race cues play their Wwise events; 14 posted cues wait on switch-container play, 12 held loops on loop flags"
 ---
 
 # Omega race sound effects through Wwise
@@ -60,14 +60,38 @@ cue still goes through the `SBlk` loader and is silent. The start is audible: `c
 - **1,450 dangling `Play` targets** ([wwise.md](../../docs/formats/wwise.md#where-the-references-go)) are not
   in the stub banks; where they went is unread. None is on the countdown's or the missile's path.
 
+## Done: the per-cue table (2026-11-12, lane `omega-wwise-cue-table`)
+
+[wwise-cues.md](../../docs/ghidra/functions/ps4-omega-eu/wwise-cues.md) reads the cue string and slot the
+1.07 executable posts for each of this port's 43 race cues (26 posted) and the patch's slot globals.
+`oag_omega::race::WWISE_CUES` carries the table (`oag_title::WwiseCues` on `SoundBanks::wwise`);
+`Banks::load_wwise_cues` loads `<cue>__<slot>` and `<cue>_PC__<slot>` (the player's, played from slot 0
+through `Banks::voices_for`). **10 of 43 play** for every emitter (Message, Absorb, MineLaunch, Plasma,
+Rocket, Missile, CannonHitShip, LeachFail, LeachEnergy, Repulsor) plus `NGP_LEACH` for the player alone.
+Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their_wwise_events`.
+
+## Open after the table
+
+- **Switch containers block 14 posted cues** (SpeedupPad, Turbo, ShieldActive, Engaging, Disengaging, both
+  Plasma hits, both Rocket hits, MissileHitWall, Cannon, CannonHitWall, QuakeHit, ShurikenLaunch). Reading
+  each switch group's game-side value (ship class, surface, player) is the next unlock; the loader report
+  names each target id.
+- **Held loops (12 cues)**: Omega's `_` cues are kept handles; `wwise_start` reads no loop flags. Read the
+  sound's loop property, then wire them through the held-voice paths (`travel`, `magstrip`, shield).
+- **`QUAKELAUNCH`'s media `405228712`** fails `oag_music`'s ATRAC9 decode at frame 0 ("invalid reuse band params").
+- **`NGP_LEACH__Weapons_NGP` and `NGP_LEACHENERGY_PC__Weapons_NGP` start no sound this loader reads**
+  (a relay into another bank, a dangling target or state actions alone: unread). The player's LeachEnergy
+  is silent rather than the non-player event.
+- **Unread choices**: `.COLLISIONS` (`_COLLISIONS_1`/`_COLLSHIELD`/`_GRIND*`, `FUN_0130b100`), the missile's
+  ship hit (no `MISSILEEXPSHIP` post), the speed pad's per-team `Pad_<team>` layer on `Ship_NGP`.
+- **2048** shares the cue strings (7 of 8 probed in its executable) but plays `SBlk`; not wired.
+
 ## Next Steps
 
 1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
 2. ~~Container rules~~ done; the missile launch loads (`omega_countdown_ground_truth::the_missile_launch_plays_one_child_of_each_random_layer`):
    a layer container of five layers, four random containers and a sound, so five media per post, not one.
-   Next: the per-cue table from `oag_gameplay::cue::Cue` to Omega's cue strings and slots (the weapon cues'
-   strings are in the executable beside each weapon's launcher, e.g. `NGP_MissileFire`) calling
-   `Banks::load_wwise_event`, and the player's `NGP_MissileFire_PC` event, which is not a twin: its own sound,
-   a relay after 100 ms and a `SetState` (`0x1204`). Per-post draws (above) before it is audible as random.
+   ~~Next: the per-cue table~~ done (above). Next: switch-container play, then the held loops' loop flags.
+   Per-post draws (above) before a cue is audible as random.
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).

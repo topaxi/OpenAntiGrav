@@ -27,6 +27,11 @@ pub(super) fn banks_and_announcers(
         .zone_announcer
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
     let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
+    // A title whose cues are Wwise events (Omega) plays those in place of the
+    // named cues, which its stub banks do not hold.
+    if let Some(wwise) = race.sounds.wwise {
+        sounds.load_wwise_cues(archives, wwise);
+    }
     // The start-of-race voice, from the speech bank this mode opened rather
     // than the title's: Zone and Eliminator each load their own. See
     // `oag_title::CountdownVoice`.
