@@ -9,7 +9,9 @@ use std::sync::Arc;
 use oag_gpu::deferred_upload::{self, Scope};
 
 use super::defer_geometry;
-use crate::mesh_render::pipeline_cache::tests::{build_once, device, triangle_model};
+use crate::mesh_render::pipeline_cache::tests::{
+    build_once, device, device_with_ceiling, triangle_model,
+};
 
 fn build_deferring(
     device: &wgpu::Device,
@@ -90,6 +92,34 @@ fn a_build_under_a_scope_leaves_its_geometry_to_the_drain() {
         calls += 1;
     }
     assert!(calls > 1, "{waiting} bytes took {calls} drains");
+    assert_eq!(deferred_upload::pending_bytes(), 0);
+    drop(scope);
+}
+
+/// A model cut across buffers parks every buffer's own span, so the drain fills all of them:
+/// the bytes waiting are the whole vertex array and the whole index array, as for one buffer.
+#[test]
+fn a_cut_model_parks_the_bytes_of_every_one_of_its_buffers() {
+    // Above every table buffer a build makes, below `large_model`'s 800 KB of vertices.
+    let Some((device, queue)) = device_with_ceiling(256 * 1024) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let model = large_model();
+    let scope = Scope::open(&queue);
+    let built = build_deferring(&device, &queue, &model);
+    assert!(
+        built.geometry.buffer_count() > 1,
+        "the model outgrows the ceiling"
+    );
+    let parked = deferred_upload::pending_bytes();
+    let model = Arc::new(model);
+    defer_geometry(&built.geometry, &built.index_buffer, &model);
+    assert_eq!(
+        deferred_upload::pending_bytes() - parked,
+        (size_of_val(&model.vertices[..]) + size_of_val(&model.indices[..])) as u64
+    );
+    while deferred_upload::drain(|| false) > 0 {}
     assert_eq!(deferred_upload::pending_bytes(), 0);
     drop(scope);
 }

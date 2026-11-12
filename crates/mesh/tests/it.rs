@@ -84,6 +84,7 @@ mod psp2_twin_blend_ground_truth;
 mod psp_slope_lod;
 mod rcs_siblings_ground_truth;
 mod velocity_target;
+mod vertex_buffer_census_ground_truth;
 mod weapon_pad_order_ground_truth;
 mod zone_recolour;
 

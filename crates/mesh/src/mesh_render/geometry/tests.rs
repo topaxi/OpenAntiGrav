@@ -1,21 +1,5 @@
 use super::*;
-use crate::mesh_render::pipeline_cache::tests::triangle_model;
-
-/// A device whose `max_buffer_size` is `ceiling`, or `None` where there is no adapter.
-pub(in crate::mesh_render) fn device_with_ceiling(
-    ceiling: u64,
-) -> Option<(wgpu::Device, wgpu::Queue)> {
-    let instance = wgpu::Instance::default();
-    let adapter = oag_gpu::test_adapter::request(&instance)?;
-    pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: wgpu::Limits {
-            max_buffer_size: ceiling,
-            ..wgpu::Limits::default()
-        },
-        ..Default::default()
-    }))
-    .ok()
-}
+use crate::mesh_render::pipeline_cache::tests::{device_with_ceiling, triangle_model};
 
 /// `quads` quads of four vertices, one draw each.
 pub(in crate::mesh_render) fn quads(quads: u32) -> Model {
