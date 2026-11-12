@@ -347,6 +347,11 @@ pub(crate) struct Previews {
     /// The title's front end, for the per-circuit model table - see
     /// [`oag_title::FrontEnd::circuit_models`].
     pub(crate) front_end: Option<&'static oag_title::FrontEnd>,
+    /// The title, for the light its front end's models are drawn in - see
+    /// [`oag_game::preview::model_light`].
+    pub(crate) title: Option<&'static oag_title::Title>,
+    /// Whether the served front end is the Fury style, which picks that light's file.
+    pub(crate) fury: bool,
     /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
     /// declares no globals and still names them for its stills' colour, so
     /// without this Pure's stills tint white - invisible on its white front
@@ -861,6 +866,8 @@ pub(crate) struct PreviewData {
     name: String,
     model: oag_mesh::mesh::Model,
     ramp: Option<oag_game::preview::track_model::Ramp>,
+    /// The front end's light for a craft, see [`oag_game::preview::model_light`].
+    light: Option<oag_mesh::mesh_render::Light>,
 }
 
 /// The disc half of [`build_preview`].
@@ -949,7 +956,23 @@ pub(crate) fn read_preview(
         model.vertices.len(),
         model.indices.len() / 3
     );
-    Ok(PreviewData { name, model, ramp })
+    let light = match (previews.title, previews.ship_hull, &source) {
+        (Some(title), Some(_), PreviewSource::Ship { .. }) => {
+            let mut report = Vec::new();
+            let light = oag_game::preview::model_light(archives, title, previews.fury, &mut report);
+            for line in report {
+                debug!("preview {name}: {line}");
+            }
+            light
+        }
+        _ => None,
+    };
+    Ok(PreviewData {
+        name,
+        model,
+        ramp,
+        light,
+    })
 }
 
 /// The GPU half of [`build_preview`], on the thread that owns `pipelines`.
@@ -958,7 +981,12 @@ pub(crate) fn finish_preview(
     target: &PreviewTarget<'_>,
     pipelines: &mut oag_mesh::mesh_render::KeptBuildCache,
 ) -> Result<Preview> {
-    let PreviewData { name, model, ramp } = data;
+    let PreviewData {
+        name,
+        model,
+        ramp,
+        light,
+    } = data;
     let preview = pipelines.build(|| {
         Preview::new(
             target.device,
@@ -969,6 +997,10 @@ pub(crate) fn finish_preview(
         )
     })
     .with_context(|| format!("building the preview for {name}"))?;
+    let preview = match light {
+        Some(light) => preview.lit_by(target.queue, light),
+        None => preview,
+    };
     Ok(match ramp {
         Some(ramp) => preview.with_ramp(ramp),
         None => preview,

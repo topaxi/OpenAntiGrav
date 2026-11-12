@@ -186,3 +186,176 @@ fn the_missile_launch_plays_one_child_of_each_random_layer() {
         "a seed is repeatable"
     );
 }
+
+/// The race cues Omega posts as Wwise events, out of [`oag_gameplay::cue::Cue::ALL`]'s 43: each
+/// launcher, impact and pickup's cue string and bank slot, read in the 1.07 executable
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`). The other 17 are held loops (loop flags
+/// unread), legacy events the executable never posts, or the collision and missile ship-hit
+/// choices that are unread.
+const POSTED: [oag_gameplay::cue::Cue; 26] = {
+    use oag_gameplay::cue::Cue;
+    [
+        Cue::SpeedupPad,
+        Cue::Message,
+        Cue::Turbo,
+        Cue::Absorb,
+        Cue::ShieldActive,
+        Cue::Engaging,
+        Cue::Disengaging,
+        Cue::MineLaunch,
+        Cue::Plasma,
+        Cue::PlasmaHitWall,
+        Cue::PlasmaHitShip,
+        Cue::Rocket,
+        Cue::RocketHitWall,
+        Cue::RocketHitShip,
+        Cue::Missile,
+        Cue::MissileHitWall,
+        Cue::Cannon,
+        Cue::CannonHitWall,
+        Cue::CannonHitShip,
+        Cue::QuakeLaunch,
+        Cue::QuakeHit,
+        Cue::Leach,
+        Cue::LeachFail,
+        Cue::LeachEnergy,
+        Cue::ShurikenLaunch,
+        Cue::Repulsor,
+    ]
+};
+
+/// The posted cues whose event loads for every emitter: 10 of the 26, each with the player's own
+/// event or the same one but `LeachEnergy`, whose player event is authored and loads nothing. The rest reach a switch
+/// container (its group value is the game's, refused at play), media the ATRAC9 decoder rejects
+/// (`QUAKELAUNCH`), or no sound in the shipped banks (`NGP_LEACH`, whose player event does load).
+const WIRED: [oag_gameplay::cue::Cue; 10] = {
+    use oag_gameplay::cue::Cue;
+    [
+        Cue::Message,
+        Cue::Absorb,
+        Cue::MineLaunch,
+        Cue::Plasma,
+        Cue::Rocket,
+        Cue::Missile,
+        Cue::CannonHitShip,
+        Cue::LeachFail,
+        Cue::LeachEnergy,
+        Cue::Repulsor,
+    ]
+};
+
+/// An Omega race load plays its posted cues from their events, `<cue>__<slot>` for every emitter
+/// and `<cue>_PC__<slot>` for the player's, through the race loader. Every posted cue either
+/// loads or names the limit that stops it; no held loop resolves to a one-shot.
+#[test]
+#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
+fn a_race_plays_its_posted_cues_from_their_wwise_events() {
+    use oag_gameplay::cue::Cue;
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::SingleRace,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega race loads");
+    let sounds = &loaded.setup.sounds;
+    let report: Vec<&String> = sounds
+        .report
+        .iter()
+        .filter(|l| l.contains("__") || l.contains("Wwise"))
+        .collect();
+    let mut rng = oag_core::Rng::new(1);
+    let mut plays = |cue: Cue, player: bool| {
+        sounds
+            .voices_for(cue, player, &mut rng)
+            .is_some_and(|v| !v.is_empty())
+    };
+    let silent: Vec<Cue> = WIRED
+        .iter()
+        .copied()
+        .filter(|&cue| !plays(cue, false) || (cue != Cue::LeachEnergy && !plays(cue, true)))
+        .collect();
+    assert!(
+        silent.is_empty(),
+        "{} of {} wired cues silent: {silent:?}\n{report:#?}",
+        silent.len(),
+        WIRED.len()
+    );
+    assert!(
+        !plays(Cue::Leach, false) && plays(Cue::Leach, true),
+        "NGP_LEACH plays for the player alone: {report:#?}"
+    );
+    // `NGP_LEACHENERGY_PC__Weapons_NGP` is authored and loads nothing: the player hears nothing,
+    // not the non-player event in its place.
+    assert!(
+        !plays(Cue::LeachEnergy, true),
+        "the player's LeachEnergy is silent: {report:#?}"
+    );
+    assert!(
+        report.iter().any(
+            |l| l.starts_with("sfx: NGP_LEACHENERGY_PC__Weapons_NGP not loaded: ")
+                && l.contains("starts no sound that plays")
+        ),
+        "{report:#?}"
+    );
+    for held in [Cue::RocketTravel, Cue::Shield, Cue::Magstrip] {
+        assert!(
+            !plays(held, false),
+            "{held:?} is a held loop and stays unplayed"
+        );
+    }
+    assert!(
+        report
+            .iter()
+            .any(|l| l.starts_with("sfx: 10 of 43 race cues play their Wwise event")),
+        "{report:#?}"
+    );
+    assert!(
+        !sounds
+            .report
+            .iter()
+            .any(|l| l.contains("no Wwise cue read for it")),
+        "every cue of the 43 has a row: {report:#?}"
+    );
+    // The player's missile is its own event: a `SetState` beside the relay.
+    assert!(
+        report
+            .iter()
+            .any(|l| l.starts_with("sfx: NGP_MissileFire_PC__Weapons_NGP: action kind 0x1204")),
+        "{report:#?}"
+    );
+    // Each posted cue that does not play names the limit that stops it.
+    let limits = [
+        "SwitchContainer",
+        "does not decode",
+        "starts no sound that plays",
+    ];
+    for cue in POSTED.iter().filter(|c| !WIRED.contains(c)) {
+        let named = report.iter().any(|l| {
+            l.contains(" not loaded: ")
+                && limits.iter().any(|why| l.contains(why))
+                && line_is_for(l, *cue)
+        });
+        assert!(
+            named,
+            "{cue:?} neither plays nor names a limit: {report:#?}"
+        );
+    }
+}
+
+/// Whether report line `l` is about `cue`'s posted event.
+fn line_is_for(l: &str, cue: oag_gameplay::cue::Cue) -> bool {
+    let row = oag_omega::race::WWISE_CUES
+        .cues
+        .iter()
+        .find(|(name, _)| oag_sound::sfx::CueTables::name(cue) == *name);
+    match row {
+        Some((_, oag_title::WwiseCue::Posts { cue, slot })) => {
+            l.starts_with(&format!("sfx: {cue}__{slot} "))
+        }
+        _ => false,
+    }
+}

@@ -809,3 +809,51 @@ fn a_dark_encoded_scene_value_resolves_to_itself() {
         "stored 0.162 resolved {resolved}"
     );
 }
+
+/// [`exposure`] is the scale the resolve pass applies: a flat dark scene resolves to the byte
+/// the function predicts from the adapted luma, not to the unscaled one. The first frame's
+/// forced-rate adaptation reads the texel through a `1/2.2` power (measured here: the sRGB
+/// piece predicts 24 where the resolve gives 15).
+#[test]
+fn the_exposure_function_is_the_scale_the_resolve_applies() {
+    let tone = Params {
+        alpha_contribution: 0.0,
+        frame_contribution: 0.0,
+        adaption_rate: 1.0,
+        tone_adaption_boost: 35.0,
+        tone_darkening_clamp: 3.0,
+        tone_maximum_brightness: 4.0,
+        ..params()
+    };
+    let linear = 0.002f64;
+    let encode = |v: f64| {
+        if v <= 0.003_130_8 {
+            12.92 * v
+        } else {
+            1.055 * v.powf(1.0 / 2.4) - 0.055
+        }
+    };
+    let adapted = linear.powf(1.0 / 2.2);
+    let scale = f64::from(exposure(adapted as f32, 35.0, 3.0, 4.0));
+    let expected = (encode(linear * scale) * 255.0).round() as i32;
+    let unscaled = (encode(linear) * 255.0).round() as i32;
+    let Some(resolved) = resolve_flat_with(tone, SceneStore::Computed, linear) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(
+        (i32::from(resolved) - expected).abs() <= 1,
+        "resolved {resolved}, exposure {scale:.3} predicts {expected}"
+    );
+    assert!(
+        expected - unscaled >= 5,
+        "the scale moves the byte ({unscaled} to {expected})"
+    );
+}
+
+#[test]
+fn exposure_falls_with_the_adapted_luma_and_stops_at_the_clamp() {
+    assert!((exposure(0.0, 35.0, 3.0, 4.0) - 4.0).abs() < 1e-6);
+    assert!((exposure(0.0163, 35.0, 3.0, 4.0) - 3.4295).abs() < 1e-4);
+    assert!((exposure(1.0, 35.0, 3.0, 4.0) - 1.0).abs() < 1e-6);
+}

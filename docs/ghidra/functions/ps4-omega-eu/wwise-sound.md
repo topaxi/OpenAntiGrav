@@ -238,6 +238,12 @@ Pinned by `crates/raceplay/tests/omega_countdown_ground_truth.rs`
 at tick 91 and Go at 271) rises at 1.50 s, then 2.0, 2.9 and 3.6 s (the VO's three delays after Ready) and at
 4.6 s for Go; one sample of 768,000 reaches full scale. The Ready-to-Go spacing is Pulse's, lent.
 
+## The race cues (2026-11-12)
+
+Which cue string and slot each of this port's race cues posts, read off the 1.07 launchers and impacts,
+and which of them load: [wwise-cues.md](wwise-cues.md). The patch's slot globals are there too
+(`DAT_021aaa4c` is `Weapons_NGP`, `DAT_021aaa50` `Speech_NGP`).
+
 ## Open
 
 * **The countdown post, live.** Drive the wipeout_pc run past GO and confirm no `Failed Posting Audio Event`

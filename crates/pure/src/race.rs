@@ -345,6 +345,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// The circuit a Zone race loads when the caller names none.

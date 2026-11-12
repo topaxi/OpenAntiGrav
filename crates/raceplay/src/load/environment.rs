@@ -576,6 +576,7 @@ mod probes;
 pub(super) use bloom::envsettings_bloom;
 pub use bloom::hd_bloom_params;
 use exposure::envsettings_exposure;
+pub use light::authored_light;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
 pub(super) use probes::read_probes;
 

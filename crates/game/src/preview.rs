@@ -23,9 +23,9 @@ use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
 use oag_mesh::mesh::Model;
 use oag_mesh::mesh_render::{
-    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver, TRANSPARENT_BLEND,
-    TexAnims, UNIFORMS_SIZE, Velocity, build, draw_cutout_then_transparent, write_uniforms,
-    write_uniforms_raw,
+    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, Light, NodeAnims, Scene, ShadowReceiver,
+    TRANSPARENT_BLEND, TexAnims, UNIFORMS_SIZE, Velocity, build, draw_cutout_then_transparent,
+    write_uniforms, write_uniforms_raw,
 };
 use oag_mesh::orbit::Orbit;
 use oag_ui_screens::picker::slideshow::Slideshow;
@@ -615,6 +615,54 @@ fn ps3_model(
     Ok((model, textures))
 }
 
+/// The light a front-end screen's models are drawn in, or `None` where the title lights them
+/// with the viewer's rig or the file does not read (the report says which).
+///
+/// The rig is the title's front-end `.envsettings` ([`oag_title::ModelLighting`]), through the
+/// reader a circuit's file takes, at the title's lit-output scale, times the front end's tone
+/// stage where the title has one: `oag_post::hd_bloom::exposure` at the front end's adapted
+/// luma (the Fury style's is read; the HD style's page is white and is taken at the clamp). The file's fog is not applied: with it the hull's box against the original's frame
+/// goes from 4.62 to 6.48 (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
+/// "The frame check").
+pub fn model_light(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+    fury: bool,
+    report: &mut Vec<String>,
+) -> Option<Light> {
+    let lighting = title.front_end?.model_lighting?;
+    let file = if fury {
+        lighting.fury_file
+    } else {
+        lighting.hd_file
+    };
+    let Some(light) =
+        oag_raceplay::authored_light(archives, file, lighting.ps4, lighting.ps4, report)
+    else {
+        report.push(format!(
+            "{file}: not read; the front end's models draw with the stand-in rig"
+        ));
+        return None;
+    };
+    let halved = if title.looks.lit_output_halved.applies_everywhere() {
+        0.5
+    } else {
+        1.0
+    };
+    let exposure = lighting.tone.map_or(1.0, |tone| {
+        let adapted = if fury {
+            tone.adapted_fury
+        } else {
+            tone.clamp / tone.boost
+        };
+        oag_post::hd_bloom::exposure(adapted, tone.boost, tone.clamp, tone.maximum)
+    });
+    report.push(format!(
+        "{file}: front-end models lit by it, output scale {halved} x exposure {exposure:.3}"
+    ));
+    Some(light.with_output_scale(halved * exposure))
+}
+
 /// The source named by `source`, opened with `dlc`'s packs and the default cache, for a
 /// screen that reads its own meshes (a capture's previews, the Select Team hull).
 ///
@@ -797,6 +845,18 @@ impl Preview {
             }
         }
         self.built.geometry.write_all(queue, &self.model.vertices);
+    }
+
+    /// Lights the model with `light` in place of `mesh.wesl`'s two-light stand-in, in the scene
+    /// block every draw binds. A model nothing lights keeps the stand-in.
+    #[must_use]
+    pub fn lit_by(self, queue: &wgpu::Queue, light: Light) -> Self {
+        let scene = Scene {
+            light,
+            ..Scene::off()
+        };
+        queue.write_buffer(&self.built.fog_buffer, 0, bytemuck::bytes_of(&scene));
+        self
     }
 
     /// Gives this preview the circuit model's own material, taken out of the

@@ -349,3 +349,49 @@ fn the_results_lines_live_in_their_own_bank_which_only_a_naming_title_has() {
         ""
     );
 }
+
+/// One timeline of one layer `marker` frames long, so the cue it stands for is told by length.
+fn marked(marker: usize) -> Vec<layers::Timeline> {
+    vec![layers::Timeline {
+        layers: vec![layers::Layer {
+            sound: Arc::new(Sound::new(vec![1; marker], 1, 44_100).expect("sound")),
+            looping: false,
+            delay: 0.0,
+            angle: 0,
+            rear_edge: false,
+            bend: None,
+        }],
+        bends: Vec::new(),
+    }]
+}
+
+/// A title's player version of a cue plays from the player's emitter alone; a cue with none
+/// plays the same for everyone; an authored player version that did not load is silence for the
+/// player, never the other event (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`).
+#[test]
+fn the_player_hears_its_own_version_of_a_cue_or_nothing() {
+    let mut banks = Banks {
+        timelines: [
+            (Cue::Missile, marked(1)),
+            (Cue::Rocket, marked(3)),
+            (Cue::LeachEnergy, marked(4)),
+        ]
+        .into_iter()
+        .collect(),
+        player_timelines: [(Cue::Missile, marked(2))].into_iter().collect(),
+        ..Default::default()
+    };
+    banks.player_silent.insert(Cue::LeachEnergy);
+    let mut rng = Rng::new(1);
+    let mut sample = |cue: Cue, player: bool| {
+        banks
+            .voices_for(cue, player, &mut rng)
+            .map(|v| v[0].sound.frames())
+    };
+    assert_eq!(sample(Cue::Missile, false), Some(1));
+    assert_eq!(sample(Cue::Missile, true), Some(2));
+    assert_eq!(sample(Cue::Rocket, false), Some(3));
+    assert_eq!(sample(Cue::Rocket, true), Some(3));
+    assert_eq!(sample(Cue::LeachEnergy, false), Some(4));
+    assert_eq!(sample(Cue::LeachEnergy, true), None);
+}
