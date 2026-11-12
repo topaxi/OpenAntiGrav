@@ -347,13 +347,11 @@ fn canvas_pictures(
             "lattice atlas {atlas}: {width}x{height} is too small"
         )),
     }
-    if let Some(tile) = prism::bake(&rgba, width, height) {
-        let size = prism::layout().size;
-        report.push(format!(
-            "campaign tile prism baked off {atlas} at {}x{}",
-            size.0, size.1
-        ));
-        pictures.push(image(prism::TILE, size, tile));
-    }
+    let size = prism::layout().size;
+    report.push(format!(
+        "campaign tile prism baked at {}x{}",
+        size.0, size.1
+    ));
+    pictures.push(image(prism::TILE, size, prism::bake()));
     pictures
 }

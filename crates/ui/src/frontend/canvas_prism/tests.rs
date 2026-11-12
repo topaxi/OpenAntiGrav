@@ -1,10 +1,5 @@
 use super::*;
 
-/// An atlas of plain white with alpha 0: the lattice's ground state.
-fn white_atlas() -> Vec<u8> {
-    vec![255, 255, 255, 0].repeat(256 * 256)
-}
-
 fn pixel(picture: &[u8], at: (f32, f32)) -> [u8; 4] {
     let (width, _) = layout().size;
     let (x, y) = (at.0 as usize, at.1 as usize);
@@ -14,14 +9,14 @@ fn pixel(picture: &[u8], at: (f32, f32)) -> [u8; 4] {
 
 #[test]
 fn the_top_face_is_the_cell_colour_and_opaque() {
-    let picture = bake(&white_atlas(), 256, 256).expect("big enough");
+    let picture = bake();
     let anchor = layout().anchor;
     assert_eq!(pixel(&picture, anchor), [255, 255, 255, 255]);
 }
 
 #[test]
 fn the_wall_below_the_face_is_opaque_and_darkens_towards_its_foot() {
-    let picture = bake(&white_atlas(), 256, 256).expect("big enough");
+    let picture = bake();
     let anchor = layout().anchor;
     // The top face's lower edge is a row and a half of cells below its centre;
     // the front wall hangs below it by the prism's height on screen.
@@ -41,7 +36,7 @@ fn the_wall_below_the_face_is_opaque_and_darkens_towards_its_foot() {
 
 #[test]
 fn the_ground_beside_the_tile_is_shade_only_and_far_ground_is_clear() {
-    let picture = bake(&white_atlas(), 256, 256).expect("big enough");
+    let picture = bake();
     let (width, height) = layout().size;
     // Black with alpha: it darkens the lattice under it.
     let corner = pixel(&picture, (1.0, 1.0));
@@ -72,9 +67,4 @@ fn the_cell_colours_are_the_canvases_own() {
         colours::PASSED,
         [0x20 as f32 / 255.0, 0xd0 as f32 / 255.0, 0.0]
     );
-}
-
-#[test]
-fn a_small_atlas_bakes_nothing() {
-    assert!(bake(&[0; 16], 2, 2).is_none());
 }

@@ -20,9 +20,16 @@
 //! - Vertex height `h = z + alpha` (`z` is 0 on the top, -1 on the skirt),
 //!   occlusion `s = 1/6 * sum max(alpha_k - h, 0)` over the six cells that
 //!   share the vertex (`sampleOffsets`), vertex colour `(1 - s) * cell colour`.
-//! - Fragment `t.rgb * ((1 - t.a) * min(c + 0.005, 1) + t.a)` with `t` the atlas
-//!   at the vertex uvs, which a wall interpolates along its top edge's uv line
-//!   (the skirt copies the top's `texCoord`).
+//! - Fragment `t.rgb * ((1 - t.a) * min(c + 0.005, 1) + t.a)`. A painted cell's
+//!   `t` is the atlas's clear texel, `(255, 255, 255, 0)` ([`CLEAR`]): the
+//!   button's icon writer (`CanvasButton_PaintIconAndRing` `0x8106fbd8` calling
+//!   `0x81072702`) shifts the uvs of its six cells onto the icon's region of
+//!   `canvasTexture.gxt` by `(u + 0.0459 k, v + 0.0400 row)`, one atlas triangle
+//!   pitch a step, and that region is clear white around the glyph (measured on
+//!   the decoded sheet), so the face and the walls, which copy the top's uvs,
+//!   carry none of the lattice's outline. The glyph itself is not drawn here:
+//!   the map lays the disc's own mode icon over the face (the icon's `u`, `v` per
+//!   event shape are unread).
 //! - A z-buffer with `LESS_EQUAL`, and the composite pass's square-root encode
 //!   ([`super::canvas_lattice`], "Part 2"), which commutes with the cell colour:
 //!   `sqrt(t * c * colour) = sqrt(t * c) * sqrt(colour)`. The picture is baked
@@ -37,9 +44,7 @@
 //! from an isolated tile.
 
 use super::canvas_camera::{Camera, TILE_HEIGHT, tile_top};
-use super::canvas_lattice::{
-    ATLAS_DOWN, ATLAS_UP, CELL_DX, CELL_DY, CORNERS_DOWN, CORNERS_UP, bilinear, composite_encode,
-};
+use super::canvas_lattice::{CELL_DX, CELL_DY, CORNERS_DOWN, CORNERS_UP, composite_encode};
 
 /// The sheet key of the baked picture. Not a path: nothing on a disc has it.
 pub const TILE: &str = "oag:2048-canvas-prism";
@@ -75,6 +80,8 @@ const TRIANGLES: [[usize; 3]; 7] = [
     [1, 2, 4],
     [2, 5, 4],
 ];
+/// The atlas texel a painted cell shows, `[r, g, b, a]` in 0 to 255.
+const CLEAR: [f32; 4] = [255.0, 255.0, 255.0, 0.0];
 /// The camera's tilt about `x`: a point is nearer the viewer by `y sin + z cos`.
 const TILT_X: f32 = 0.45;
 /// The colours `Canvas3D` paints a tile with, by what the event is
@@ -119,8 +126,6 @@ struct Vertex {
     near: f32,
     /// `1 - s`.
     shade: f32,
-    /// The atlas, in pixels.
-    uv: [f32; 2],
 }
 
 fn height_of(col: i32, row: i32) -> f32 {
@@ -201,11 +206,7 @@ pub fn tint(colour: [f32; 3]) -> [f32; 4] {
 /// The vertex program on one cell: its six vertices.
 fn vertices(col: i32, row: i32, shift: (f32, f32), origin: (f32, f32)) -> [Vertex; 6] {
     let up = (col + row).rem_euclid(2) == 0;
-    let (corners, atlas) = if up {
-        (&CORNERS_UP, &ATLAS_UP)
-    } else {
-        (&CORNERS_DOWN, &ATLAS_DOWN)
-    };
+    let corners = if up { &CORNERS_UP } else { &CORNERS_DOWN };
     let own = height_of(col, row);
     let (sin_x, cos_x) = oag_core::math::sin_cos(TILT_X);
     std::array::from_fn(|at| {
@@ -230,7 +231,6 @@ fn vertices(col: i32, row: i32, shift: (f32, f32), origin: (f32, f32)) -> [Verte
             ],
             near: world[1] * sin_x + h * cos_x,
             shade: (1.0 - occlusion).clamp(0.0, 1.0),
-            uv: atlas[corner],
         }
     })
 }
@@ -241,19 +241,12 @@ struct Sample {
     near: f32,
     cell: (i32, i32),
     shade: f32,
-    uv: [f32; 2],
 }
 
-/// Runs the canvas's programs over one tile and the ground around it, against
-/// the atlas (`canvasTexture.gxt`, RGBA8, `width` x `height`), and returns the
-/// picture: RGBA, straight alpha, at [`layout`]'s size.
-///
-/// `None` when the atlas is too small to hold the two triangles.
+/// Runs the canvas's programs over one tile and the ground around it and
+/// returns the picture: RGBA, straight alpha, at [`layout`]'s size.
 #[must_use]
-pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
-    if width < 160 || height < 128 || atlas.len() < (width * height * 4) as usize {
-        return None;
-    }
+pub fn bake() -> Vec<u8> {
     let (shift, origin, size) = frame();
     let (w, h) = (size.0 as usize, size.1 as usize);
     let mut buffer = vec![
@@ -261,7 +254,6 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
             near: f32::NEG_INFINITY,
             cell: (i32::MIN, 0),
             shade: 1.0,
-            uv: [0.0; 2],
         };
         w * h * SUPER * SUPER
     ];
@@ -308,10 +300,6 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
                         near,
                         cell: (col, row),
                         shade: wa * a.shade + wb * b.shade + wc * c.shade,
-                        uv: [
-                            wa * a.uv[0] + wb * b.uv[0] + wc * c.uv[0],
-                            wa * a.uv[1] + wb * b.uv[1] + wc * c.uv[1],
-                        ],
                     };
                 }
             }
@@ -328,7 +316,7 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
                         continue;
                     }
                     if height_of(s.cell.0, s.cell.1) > 0.0 {
-                        let t = bilinear(atlas, width, height, s.uv);
+                        let t = CLEAR;
                         let a = t[3] / 255.0;
                         let lit = (1.0 - a) * (s.shade + 0.005).min(1.0) + a;
                         for (sum, texel) in colour.iter_mut().zip(&t) {
@@ -350,7 +338,7 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
             out.push((alpha / samples * 255.0).round().clamp(0.0, 255.0) as u8);
         }
     }
-    Some(out)
+    out
 }
 
 #[cfg(test)]

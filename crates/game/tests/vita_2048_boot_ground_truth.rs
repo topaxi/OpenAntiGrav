@@ -457,7 +457,14 @@ fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
     let out = scratch.join("map.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)
-        .args(["--until", "map:2048 - Event 4", "--press", "cross", "--ticks", "1"])
+        .args([
+            "--until",
+            "map:2048 - Event 4",
+            "--press",
+            "cross",
+            "--ticks",
+            "1",
+        ])
         .args(["--no-audio", "--no-video", "--size", "960x544"])
         .arg("--screenshot")
         .arg(&out)
@@ -496,10 +503,12 @@ fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
         "the wall darkens towards its foot: face {face:?}, upper {upper:?}, lower {lower:?}"
     );
     // The corner of the 128 x 128 art's square, outside the hexagon: the hex
-    // art tinted it with the tile's colour; the canvas leaves the lattice.
+    // art tinted it with the tile's colour; the canvas leaves the lattice
+    // there, shaded grey by the tile's foot at most.
     let corner = at(x - 58.0, y - 55.0);
+    let spread = corner.iter().max().unwrap() - corner.iter().min().unwrap();
     assert!(
-        corner.iter().all(|&c| c > 215) && (corner[0] - corner[2]).abs() <= 6,
+        corner[0] > 190 && spread <= 4,
         "no tinted square around the tile: {corner:?}"
     );
 }
