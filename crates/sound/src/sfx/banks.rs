@@ -72,6 +72,10 @@ pub struct Banks {
     /// The start a title's own events play, decoded beside the named pair and
     /// held until [`Banks::use_event_start`].
     pub(super) event_start: Option<Box<StagedStart>>,
+    /// The player's own version of a cue where the title authors one (Omega's
+    /// `<cue>_PC__<bank>`), played in place of [`Self::timelines`]'s from the
+    /// player's emitter. See [`Self::load_wwise_cues`].
+    pub(super) player_timelines: BTreeMap<Cue, Vec<Timeline>>,
 }
 
 /// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
@@ -561,6 +565,17 @@ impl Banks {
         };
         let index = self.draw(cue, variants.len(), rng);
         Some(variants[index].voices(rng))
+    }
+
+    /// [`Self::voices`], from the player's emitter when `player`: the cue's
+    /// player version where the title authors one, else the same as anyone's.
+    #[must_use]
+    pub fn voices_for(&self, cue: Cue, player: bool, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        if player && let Some(variants) = self.player_timelines.get(&cue) {
+            let index = self.draw(cue, variants.len(), rng);
+            return Some(variants[index].voices(rng));
+        }
+        self.voices(cue, rng)
     }
 
     /// The uniform, never-repeating draw among `len` alternates of `cue`.

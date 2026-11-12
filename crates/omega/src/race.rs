@@ -314,6 +314,102 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,
+    wwise: Some(&WWISE_CUES),
+};
+
+/// The bank slot `Weapons_NGP` (patch `DAT_021aaa4c`).
+const WEAPONS: &str = "Weapons_NGP";
+/// The bank slot `Speech_NGP` (patch `DAT_021aaa50`).
+const SPEECH: &str = "Speech_NGP";
+
+const fn posts(cue: &'static str, slot: &'static str) -> oag_title::WwiseCue {
+    oag_title::WwiseCue::Posts { cue, slot }
+}
+
+const HELD: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
+    why: "a held loop (an `_` cue the executable keeps a handle to); the Wwise sound's loop flags are unread, so it would play once",
+};
+
+const NEVER_POSTED: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
+    why: "the bank keeps a legacy event of this name, but the executable holds no such cue string and posts none",
+};
+
+/// Omega's race cues as the 1.07 executable posts them: each launcher, impact
+/// and pickup queues a cue string on its emitter's group with a bank slot
+/// (`SoundGroup_PlayCue`, inlined), and the post names the event
+/// `<cue>[_PC]__<slot>`. The cue each row names is the string stored at the
+/// request's `+0x68` in the function the evidence page lists, its slot the
+/// global read beside it; every posted event is in the bank's own listing.
+/// `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`.
+pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
+    banks: &[
+        oag_title::WwiseBank {
+            slot: WEAPONS,
+            entries: &[r"Data\audio\sound\English(US)\Weapons_NGP.bnk"],
+        },
+        oag_title::WwiseBank {
+            slot: SPEECH,
+            entries: &[
+                r"Data\audio\sound\English(US)\Speech_NGP.bnk",
+                r"Data\audio\sound\English(US)\frontend.bnk",
+            ],
+        },
+    ],
+    cues: &[
+        ("SPEEDUPPAD", posts("Pad_General", WEAPONS)),
+        ("MESSAGE", posts("MESSAGE", WEAPONS)),
+        ("TURBO", posts("NGP_Turbo", WEAPONS)),
+        ("ABSORB", posts("NGP_Absorb", WEAPONS)),
+        ("shieldactive", posts("shieldactive", SPEECH)),
+        ("autopilot_eng", posts("autopilot_eng", SPEECH)),
+        ("disengaging", posts("disengaging", SPEECH)),
+        ("MINELAUNCH", posts("MINELAUNCH", WEAPONS)),
+        ("PLASMA", posts("NGP_Plasma", WEAPONS)),
+        ("PLASMAHITWALL", posts("NGP_PlasmaHitWall", WEAPONS)),
+        ("PLASMAHITSHIP", posts("NGP_PlasmaHitShip", WEAPONS)),
+        ("ROCKET", posts("ROCKET", WEAPONS)),
+        ("ROCKEXPLWALL", posts("ROCKEXPLWALL", WEAPONS)),
+        ("ROCKEXPLSHIP", posts("ROCKEXPLSHIP", WEAPONS)),
+        ("MISSILE", posts("NGP_MissileFire", WEAPONS)),
+        ("MISSILEEXPWALL", posts("MISSILEEXPWALL", WEAPONS)),
+        ("CANNON", posts("NGP_Cannonfire", WEAPONS)),
+        ("CANNONEXPLWALL", posts("CANNONEXPLWALL", WEAPONS)),
+        ("CANNONEXPLSHIP", posts("CANNONEXPLSHIP", WEAPONS)),
+        ("QUAKELAUNCH", posts("QUAKELAUNCH", WEAPONS)),
+        ("QUAKEHIT", posts("QUAKEHIT", WEAPONS)),
+        ("LEACH", posts("NGP_LEACH", WEAPONS)),
+        ("LEACHFAIL", posts("NGP_LEACHFAIL", WEAPONS)),
+        ("LEACHENERGY", posts("NGP_LEACHENERGY", WEAPONS)),
+        ("SHURIKEN", posts("SHURIKEN", WEAPONS)),
+        ("REPULSOR", posts("REPULSOR", WEAPONS)),
+        (
+            ".COLLISIONS",
+            oag_title::WwiseCue::Unplayed {
+                why: "posted as `_COLLISIONS_1` or `_COLLSHIELD` on the ship slot with a kept handle (`0x0130b100`); the choice and the loop flags are unread",
+            },
+        ),
+        (
+            "MISSILEEXPSHIP",
+            oag_title::WwiseCue::Unplayed {
+                why: "the missile's impact (`0x0137d1e0`) names only `MISSILEEXPWALL`; which cue a ship hit posts is unread",
+            },
+        ),
+        ("SHURIKENEXPL", NEVER_POSTED),
+        ("SHURIKENHIT", NEVER_POSTED),
+        ("REPULSORHIT", NEVER_POSTED),
+        ("~ENGINE", HELD),
+        ("~SHIELD", HELD),
+        ("~AUTOPILOT", HELD),
+        ("~BLOWUP", HELD),
+        ("~ROCKLOCK", HELD),
+        ("~PLASMATVL", HELD),
+        ("~ROCKETTVL", HELD),
+        ("~MISSILETVL", HELD),
+        ("~QUAKETRAVEL", HELD),
+        ("~LEACHATTACH", HELD),
+        ("~SHURIKENTRAVEL", HELD),
+        ("~magstrip01", HELD),
+    ],
 };
 
 /// Where Omega's original opponent differs from Pulse's, read off the base

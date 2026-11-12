@@ -92,6 +92,7 @@ mod name_voice;
 mod repeating;
 mod track;
 mod travel;
+mod wwise_cues;
 mod wwise_start;
 mod xfade;
 pub use announcer::{Announcer, ClassAnnouncer};
@@ -329,7 +330,8 @@ impl Audio {
                     // rather than started silent.
                     continue;
                 };
-                let Some(started) = banks.voices(event.cue, &mut voices.rng) else {
+                let player = event.point.is_none() && slot == player_slot;
+                let Some(started) = banks.voices_for(event.cue, player, &mut voices.rng) else {
                     continue;
                 };
                 // Handles dropped: a one-shot is fire-and-forget, and a refused

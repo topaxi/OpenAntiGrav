@@ -350,6 +350,7 @@ const SOUNDS: SoundBanks = SoundBanks {
         origin: crate::Origin::Chosen,
     },
     crossfade: None,
+    wwise: None,
 };
 
 /// A fixture with both a native `team_variants` table and a `guest_roster` -

@@ -163,7 +163,7 @@ pub use announcer::{
 };
 pub use fresh::FreshVariant;
 pub use lineage::CircuitLineage;
-pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks};
+pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks, WwiseBank, WwiseCue, WwiseCues};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 pub use zone_circuit::ZoneCircuit;
