@@ -136,6 +136,7 @@ impl Banks {
                         self.player_timelines.insert(cue, vec![loaded.timeline]);
                     } else {
                         self.sounds.insert(cue, loaded.loaded);
+                        self.wwise.insert(cue);
                         self.timelines.insert(cue, vec![loaded.timeline]);
                         self.programs.remove(&cue);
                     }

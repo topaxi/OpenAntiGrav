@@ -11,7 +11,10 @@
 //!
 //! Read: which sounds, the action delays, the nodes' initial delays and volume
 //! offsets (summed down the actor-mixer tree), the stop time and fade, the seek
-//! fraction. A random/sequence container sounds exactly one child per post:
+//! fraction, and the loops: a sound's loop count ([`prop::LOOP`]) and a
+//! continuous container's (`docs/formats/wwise.md`, "Loops"). A sound that
+//! plays forever is a looping [`Layer`], held until the game releases the cue;
+//! one that plays `n` times is its media `n` times over. A random/sequence container sounds exactly one child per post:
 //! the first playlist item of a sequence, a uniform draw from `rng` for a
 //! random one (a container that weights its picks is refused, none does). Not
 //! read, so refused or reported: switch containers (which child plays), streamed media, a relay into another bank,
@@ -46,6 +49,48 @@ pub(super) struct EventCue {
 struct Start {
     sound: u32,
     at: f64,
+    repeat: Repeat,
+}
+
+/// How many times a started sound plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Repeat {
+    Times(u32),
+    Forever,
+}
+
+impl Repeat {
+    const ONCE: Self = Self::Times(1);
+
+    /// A Wwise loop count: `0` is forever.
+    fn of_count(count: i64) -> Self {
+        match u32::try_from(count) {
+            Ok(0) | Err(_) => Self::Forever,
+            Ok(n) => Self::Times(n),
+        }
+    }
+
+    /// `self` played inside something that plays `outer` times.
+    fn within(self, outer: Self) -> Self {
+        match (self, outer) {
+            (Self::Times(a), Self::Times(b)) => Self::Times(a.saturating_mul(b)),
+            _ => Self::Forever,
+        }
+    }
+}
+
+/// The longest a counted loop is laid out as media; past it, the sound loops
+/// until released. Chosen: the player's autopilot counts 200 plays of its
+/// container, minutes of audio no held cue lasts.
+const MAX_COUNTED_SECONDS: f64 = 30.0;
+
+/// `frames` (of `channels` interleaved samples) played `times` over.
+fn tile(frames: &[i16], times: usize) -> Vec<i16> {
+    let mut out = Vec::with_capacity(frames.len() * times);
+    for _ in 0..times {
+        out.extend_from_slice(frames);
+    }
+    out
 }
 
 /// A cut that applies to every sound below `target`.
@@ -131,10 +176,14 @@ impl<'a> Tree<'a> {
     /// The sounds playing `target` starts at `at`: the sound itself, or every
     /// child of a layer container or actor-mixer, each after its own initial
     /// delay.
+    ///
+    /// `repeat` is how often the containers above play what they start: a
+    /// continuous container plays its pick its own loop count of times.
     fn starts(
         &self,
         target: u32,
         at: f64,
+        repeat: Repeat,
         pick: &mut Picker<'_>,
         out: &mut Vec<Start>,
     ) -> anyhow::Result<()> {
@@ -143,10 +192,19 @@ impl<'a> Tree<'a> {
             .with_context(|| format!("target {target} is in no object of the bank"))?;
         let at = at + self.initial_delay(target);
         match kind {
-            Kind::Sound => out.push(Start { sound: target, at }),
+            Kind::Sound => {
+                let own = hirc::node_props(kind, body)
+                    .and_then(|p| p.int(prop::LOOP))
+                    .map_or(Repeat::ONCE, |n| Repeat::of_count(i64::from(n)));
+                out.push(Start {
+                    sound: target,
+                    at,
+                    repeat: own.within(repeat),
+                });
+            }
             Kind::LayerContainer | Kind::ActorMixer => {
                 for &child in self.children.get(&target).into_iter().flatten() {
-                    self.starts(child, at, pick, out)?;
+                    self.starts(child, at, repeat, pick, out)?;
                 }
             }
             Kind::RanSeqContainer => {
@@ -167,7 +225,14 @@ impl<'a> Tree<'a> {
                 };
                 let child = container.playlist[item].id;
                 pick.made.push((target, child));
-                self.starts(child, at, pick, out)?;
+                // A continuous container plays on through its playlist; the one
+                // pick made here stands for every item it would play (chosen).
+                let repeat = if container.is_continuous() {
+                    Repeat::of_count(i64::from(container.loop_count)).within(repeat)
+                } else {
+                    repeat
+                };
+                self.starts(child, at, repeat, pick, out)?;
             }
             other => bail!("target {target} is a {other:?}, whose choice of child is not read"),
         }
@@ -217,7 +282,9 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
             let props = Action::props(body).unwrap_or_default();
             let at = base + f64::from(props.int(prop::DELAY_MS).unwrap_or(0)) / 1000.0;
             match action.kind {
-                Action::PLAY => tree.starts(action.target, at, &mut pick, &mut starts)?,
+                Action::PLAY => {
+                    tree.starts(action.target, at, Repeat::ONCE, &mut pick, &mut starts)?;
+                }
                 Action::PLAY_EVENT => queue.push((action.target, at)),
                 Action::STOP => cuts.push(Cut {
                     target: action.target,
@@ -264,6 +331,32 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
             .filter(|c| tree.is_below(start.sound, c.target))
             .collect();
         applied.sort_by(|a, b| a.at.total_cmp(&b.at));
+        let once = (frames.len() / channels) as f64 / rate;
+        let mut looping = false;
+        match start.repeat {
+            Repeat::Times(1) => {}
+            Repeat::Times(n) if f64::from(n) * once <= MAX_COUNTED_SECONDS => {
+                frames = tile(&frames, n as usize);
+            }
+            Repeat::Times(_) | Repeat::Forever => looping = true,
+        }
+        // A loop this event also cuts plays out to its last cut as media, then
+        // ends: a looping voice would repeat the cut.
+        if looping && let Some(last) = applied.last() {
+            let fade = match last.what {
+                CutKind::Stop { fade } => fade,
+                CutKind::Seek { .. } => 0.0,
+            };
+            let need = last.at - start.at + fade + once;
+            if once > 0.0 {
+                frames = tile(&frames, (need / once).ceil().max(1.0) as usize);
+            }
+            looping = false;
+            notes.push(format!(
+                "sound {}: a loop this event cuts, laid out to {need:.2} s",
+                start.sound
+            ));
+        }
         // Cuts in time order, each on the media as the earlier ones left it.
         let mut played = 0.0f64;
         let mut timeline_start = start.at;
@@ -314,7 +407,7 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
         let sound = Arc::new(Sound::new(frames, pcm.channels, pcm.sample_rate)?);
         layers.push(Layer {
             sound,
-            looping: false,
+            looping,
             delay: start.at,
             angle: 0,
             rear_edge: false,
@@ -337,7 +430,7 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
     let loaded = Loaded {
         waveforms: layers
             .iter()
-            .map(|l| (Arc::clone(&l.sound), false))
+            .map(|l| (Arc::clone(&l.sound), l.looping))
             .collect(),
     };
     Ok(EventCue {

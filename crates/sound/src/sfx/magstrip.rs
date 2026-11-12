@@ -46,6 +46,10 @@ const DRAWS: usize = 64;
 /// and a one-shot would end a second into a visit it should last, so it draws
 /// until one loops.
 fn held_draw(banks: &Banks, rng: &mut Rng) -> Option<Vec<layers::CueVoice>> {
+    // A Wwise event marks its own loops: every layer it starts sounds.
+    if let Some(event) = banks.held_voices(Cue::Magstrip, rng) {
+        return Some(event);
+    }
     let first = banks.voices(Cue::Magstrip, rng)?;
     if first.iter().all(|voice| voice.looping) {
         return Some(first);

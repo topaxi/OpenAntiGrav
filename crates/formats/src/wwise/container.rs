@@ -146,6 +146,9 @@ pub struct Item {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RanSeq {
     /// The loop count; `0` is forever in Wwise, `1` on the missile's container.
+    /// Read only on a [continuous](Self::is_continuous) container, whose
+    /// playlist plays on: the held cues' containers loop at `0` (magstrip,
+    /// autopilot, shuriken travel) or `200` (the player's autopilot).
     pub loop_count: u16,
     /// How many of the last plays a random pick must avoid.
     pub avoid_repeat: u16,
@@ -218,6 +221,14 @@ impl RanSeq {
     #[must_use]
     pub fn is_sequence(&self) -> bool {
         self.mode == Self::SEQUENCE
+    }
+
+    /// Whether the container plays its playlist on, item after item (flag bit 3),
+    /// rather than one item per post. `0x1a` on every held cue's looping
+    /// container, `0x12` on every one-shot pick read.
+    #[must_use]
+    pub fn is_continuous(&self) -> bool {
+        self.flags & 0x08 != 0
     }
 
     /// Whether the playlist's weights decide a random pick.

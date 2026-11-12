@@ -16,24 +16,40 @@ use oag_core::math::Vec3;
 use oag_weapons::projectile::{MAX_PROJECTILES, Projectile};
 
 use super::CueTables;
+use super::layers::{self, Where};
 use super::{Banks, Cue};
 
-/// One weapon's held voices, one per projectile slot, `None` where it does not
-/// occupy the slot.
-#[derive(Debug, Clone, Copy)]
+/// One weapon's held voices per projectile slot, empty where it does not
+/// occupy the slot: one looping voice from a title's own bank, every voice the
+/// event starts from a Wwise event ([`Banks::held_voices`]).
+#[derive(Debug, Clone)]
 pub(super) struct TravelVoices {
-    voices: [Option<VoiceId>; MAX_PROJECTILES],
+    voices: [Vec<VoiceId>; MAX_PROJECTILES],
+}
+
+/// Where a voice at `at` is heard from, `radius` its emitter's.
+fn heard(at: Vec3, radius: f32, listener: &Listener) -> Where {
+    let placed = Emitter {
+        position: at.to_array(),
+        radius,
+        cone: None,
+    }
+    .place(listener, 1.0);
+    Where {
+        gain: placed.map_or(0.0, |p| p.gain),
+        pan: placed.map(|p| p.pan),
+        front: placed.map_or(1.0, |p| p.front),
+    }
 }
 
 impl TravelVoices {
     /// No voices open yet.
     pub(super) fn new() -> Self {
         Self {
-            voices: [None; MAX_PROJECTILES],
+            voices: std::array::from_fn(|_| Vec::new()),
         }
     }
 
-    /// One tick: starts, follows or stops every slot's voice.
     /// One tick: starts, follows or stops every slot's voice.
     ///
     /// `flying` decides which slots sound (`kind == <weapon>`, plus
@@ -74,59 +90,57 @@ impl TravelVoices {
         cue: Cue,
         radius: f32,
     ) {
-        match (at, self.voices[slot]) {
+        let held = &mut self.voices[slot];
+        // Forget a handle the pool reclaimed before the bolt ended (starved, not
+        // stopped), so a later tick does not stop whatever the pool gave it next.
+        let was_held = !held.is_empty();
+        held.retain(|&id| mixer.is_playing(id));
+        match at {
+            // Reclaimed this tick: started again on the next.
+            Some(_) if was_held && held.is_empty() => {}
             // The rising edge: this slot started flying (or came into range) this tick.
-            (Some(at), None) => {
-                if let Some((sound, looping)) = banks.pick(cue, rng)
+            Some(at) if held.is_empty() => {
+                let place = heard(at, radius, listener);
+                if let Some(event) = banks.held_voices(cue, rng) {
+                    *held = layers::start(mixer, &event, cue.bus(), place);
+                } else if let Some((sound, looping)) = banks.pick(cue, rng)
                     && looping
                 {
-                    let placed = Emitter {
-                        position: at.to_array(),
-                        radius,
-                        cone: None,
-                    }
-                    .place(listener, 1.0);
-                    let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                    self.voices[slot] = mixer.play(Play {
-                        gain,
-                        pan,
-                        front: placed.map_or(1.0, |p| p.front),
+                    held.extend(mixer.play(Play {
+                        gain: place.gain,
+                        pan: place.pan,
+                        front: place.front,
                         ..Play::looping(sound, cue.bus())
-                    });
+                    }));
                 }
                 // Nothing loaded, or the bank says it is not a loop: the guard of
                 // `Engine::tick` for `~ENGINE`.
             }
             // Still flying and still held: follow it.
-            (Some(at), Some(id)) if mixer.is_playing(id) => {
-                let placed = Emitter {
-                    position: at.to_array(),
-                    radius,
-                    cone: None,
+            Some(at) => {
+                let place = heard(at, radius, listener);
+                for &id in held.iter() {
+                    mixer.set_gain(id, place.gain);
+                    mixer.set_pan(id, place.pan);
+                    mixer.set_front(id, place.front);
                 }
-                .place(listener, 1.0);
-                let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-                mixer.set_gain(id, gain);
-                mixer.set_pan(id, pan);
-                mixer.set_front(id, placed.map_or(1.0, |p| p.front));
             }
-            // The pool reclaimed the voice before the bolt ended (starved, not
-            // stopped): forget the stale handle so a later tick does not stop
-            // whatever slot the pool gave it next.
-            (Some(_), Some(_)) => self.voices[slot] = None,
-            // The falling edge: no longer flying, or nowhere to place it.
-            (None, Some(id)) => {
-                mixer.stop(id);
-                self.voices[slot] = None;
+            // The falling edge: no longer flying, or nowhere to place it. The
+            // original stops a held post with no fade (`StopPlayingID(id, 0,
+            // linear)`, `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "Held
+            // loops"); the mixer's own release is the declick.
+            None => {
+                for id in held.drain(..) {
+                    mixer.stop(id);
+                }
             }
-            (None, None) => {}
         }
     }
 
     /// Releases every held voice, for [`super::Audio::stop_race_sfx`].
     pub(super) fn stop_all(&mut self, mixer: &mut Mixer) {
-        for voice in &mut self.voices {
-            if let Some(id) = voice.take() {
+        for held in &mut self.voices {
+            for id in held.drain(..) {
                 mixer.stop(id);
             }
         }
