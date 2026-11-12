@@ -31,11 +31,14 @@ fn on_the_map(reveal: Reveal) -> (Frontend, Input) {
     events.push(spot);
     let mut frontend = boot(0);
     frontend.set_campaign(events);
-    frontend.refresh_campaign_progress(|name| {
-        (name == "2048 - Event 1").then_some(EarnedTier::Pass)
-    });
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
     frontend.refresh_campaign_reveals(|event| {
-        if event.name == SPOT { reveal } else { Reveal::Hidden }
+        if event.name == SPOT {
+            reveal
+        } else {
+            Reveal::Hidden
+        }
     });
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
@@ -104,19 +107,29 @@ fn a_click_on_a_revealable_spot_finds_it_and_it_becomes_the_grey_prism() {
         let (mut frontend, _) = on_the_map(Reveal::Revealable);
         let at = at_cell(&frontend, cell);
         assert!(frontend.pointer(&click(at)));
-        assert_eq!(frontend.take_found_events(), vec![SPOT.to_string()], "{cell:?}");
+        assert_eq!(
+            frontend.take_found_events(),
+            vec![SPOT.to_string()],
+            "{cell:?}"
+        );
     }
     let at = at_cell(&frontend, spot_cells()[3]);
     frontend.pointer(&click(at));
     tick(&mut frontend, &mut input, 0);
     assert_eq!(frontend.take_found_events(), vec![SPOT.to_string()]);
     assert!(!frontend.campaign.hidden(index), "found: shown as a tile");
-    assert_eq!(frontend.selected_event().map(|e| e.name.as_str()), Some(SPOT));
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some(SPOT)
+    );
     assert_eq!(
         frontend.campaign_event_state(SPOT),
         Some(ProgressState::Open)
     );
-    assert!(!frontend.event_card_open(), "finding does not open the card");
+    assert!(
+        !frontend.event_card_open(),
+        "finding does not open the card"
+    );
     frontend.pointer(&click(at_cell(&frontend, spot_cells()[0])));
     assert!(frontend.take_found_events().is_empty(), "found once");
 }
@@ -134,7 +147,10 @@ fn a_click_on_an_unmet_spot_or_on_plain_ground_does_nothing() {
 
     let (mut frontend, _) = on_the_map(Reveal::Revealable);
     frontend.pointer(&click(at_cell(&frontend, (FIRST.0 + 6, FIRST.1))));
-    assert!(frontend.take_found_events().is_empty(), "ground beside the spot");
+    assert!(
+        frontend.take_found_events().is_empty(),
+        "ground beside the spot"
+    );
 }
 
 #[test]

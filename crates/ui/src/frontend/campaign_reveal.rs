@@ -38,7 +38,7 @@ pub enum Reveal {
     Found,
 }
 
-/// The four cells of the hidden button whose first cell is `first`.
+/// The four cells of the hidden button of the event at cell `first`.
 fn shape(first: (i32, i32)) -> [(i32, i32); 4] {
     HIDDEN_SHAPE.map(|(dc, dr)| (first.0 + dc, first.1 + dr))
 }
@@ -87,7 +87,8 @@ fn cell_holds(camera: &Camera, cell: (i32, i32), at: (f32, f32)) -> bool {
     };
     let centre = (cell.0 as f32 * CELL_DX, cell.1 as f32 * CELL_DY);
     let p = corners.map(|corner| camera.project([centre.0 + corner[0], centre.1 + corner[1], 0.0]));
-    let side = |a: (f32, f32), b: (f32, f32)| (b.0 - a.0) * (at.1 - a.1) - (b.1 - a.1) * (at.0 - a.0);
+    let side =
+        |a: (f32, f32), b: (f32, f32)| (b.0 - a.0) * (at.1 - a.1) - (b.1 - a.1) * (at.0 - a.0);
     let signs = [side(p[0], p[1]), side(p[1], p[2]), side(p[2], p[0])];
     signs.iter().all(|&s| s >= 0.0) || signs.iter().all(|&s| s <= 0.0)
 }

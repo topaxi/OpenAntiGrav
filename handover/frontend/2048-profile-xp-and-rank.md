@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 profile XP total is kept and a finished event banks its race-end awards; the reveal wiring, Omega events and the ~30 in-race awards are open"
+summary: "2048 profile XP total is kept and a finished event banks its race-end awards; the hidden-event reveal reads the rank; Omega events and the ~30 in-race awards are open"
 ---
 
 # 2048 profile XP and rank
@@ -26,9 +26,8 @@ the query the campaign map calls.
 - The two rank trophies (rank 25 and 50, fired from `Profile_BankRaceXP`) are not awarded.
 - 2048 still pays inherited HD loyalty and Omega loyalty only; neither is replaced by XP.
 
-- **Reveal wiring**: `oag_ui::frontend::campaign_map` does not call `Store::rank_reveals` yet
-  (owned by the lattice-wave lane). It needs `Ranks` from `oag_2048::campaign::xp_tables` and
-  each hidden event's `rank_required` (`oag_tables::mjolnir::campaign::Event`).
+- **Reveal wiring**: landed; `oag_game::boot::reveals2048` asks `Store::rank_reveals` at boot (the
+  map is only ever the boot's front end, so XP banked by a race shows at the next launch).
 - **Unread, labelled chosen, not measured**: whether `Event complete` pays on every finish or only
   the first; whether Elite pays instead of Pass or as well (we pay Elite instead); whether
   `Finished Nth` pays in every mode; the original's mode to column map (we use race for race and
@@ -46,6 +45,5 @@ the query the campaign map calls.
 
 ## Next Steps
 
-1. Map: `Store::rank_reveals(&ranks, event.rank_required)` for the hidden spots' tap reveal.
-2. In-race awards: add trigger sites in the tally, summed into `bank_event_xp`'s award.
-3. Omega: find the end-of-race function that banks the XP total (xref the rank-table global the loader fills) and diff its caller against `Race_ComputeLoyaltyAward`'s callers; then carry `xp_awards` / `xp_column` in its event launch.
+1. In-race awards: add trigger sites in the tally, summed into `bank_event_xp`'s award.
+2. Omega: find the end-of-race function that banks the XP total (xref the rank-table global the loader fills) and diff its caller against `Race_ComputeLoyaltyAward`'s callers; then carry `xp_awards` / `xp_column` in its event launch.

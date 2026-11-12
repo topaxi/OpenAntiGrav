@@ -17,7 +17,11 @@ pub fn refresh(
     records: &crate::records::Store,
     campaign_title: &str,
 ) {
-    if !frontend.campaign_events().iter().any(|event| event.rank_gated) {
+    if !frontend
+        .campaign_events()
+        .iter()
+        .any(|event| event.rank_gated)
+    {
         return;
     }
     let Ok(opened) = oag_source::title::open_source(source, Vec::new(), Vec::new()) else {

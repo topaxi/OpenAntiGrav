@@ -593,7 +593,8 @@ The law is [canvas-music-wave.md](canvas-music-wave.md), "The wave"; this is wha
 - **Not ported**: the analyser's automatic gain (`MusicAnalysis_Update`, confidence 60, peak-hold
   unread), so quiet passages move the cells less than in the original; the hidden-event averaging is
   `Wave::flatten` (measured live, confidence 80, `canvas-music-wave.md` section 5; any cell set, a hidden
-  event's button has 4 cells; called with no groups until the XP model exists); the music time of a headless capture is the dump clock, not a
+  event's button has 4 cells; the map passes it the cells of every revealable hidden event, see
+  [canvas-music-wave.md](canvas-music-wave.md), "Wired: the reveal"); the music time of a headless capture is the dump clock, not a
   Vita's.
 - **Omega**: **checked, differs, unchanged**: no `.fft` ships (Wipeout music is Wwise), so
   `spectrum_extension` is `None` and the map is the static picture; the loader says nothing because the

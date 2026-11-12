@@ -95,8 +95,8 @@ use oag_hd::frontend::states as hd_states;
 /// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
-mod campaign_tiers;
 mod campaign_reveal;
+mod campaign_tiers;
 mod campaign_wave;
 pub mod canvas_camera;
 pub mod canvas_cells;
