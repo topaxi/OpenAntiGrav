@@ -3,7 +3,7 @@
 //! (`docs/ghidra/functions/psp-pulse-usa/weather.md`: `Modifier_WrapBox` only
 //! wraps and blows them); with the weather setting at `enhanced` a drop that
 //! meets the track throws a ring and a few droplets, and a snowflake that
-//! meets it settles and fades.
+//! meets it settles and melts.
 //!
 //! **Presentation, not simulation.** Nothing here writes `World`. The hits are
 //! found by [`crate::Race`] from the pool's drawn positions with the same
@@ -48,13 +48,24 @@ const SPRAY_UP: (f32, f32) = (1.75, 3.0);
 const SPRAY_OUT: f32 = 1.0;
 const GRAVITY: f32 = 13.75;
 
-/// A droplet's and a settled flake's half-size, in world units.
+/// A droplet's half-size, in world units.
 const DROPLET_SIZE: f32 = 0.075;
-const FLAKE_SIZE: f32 = 0.105;
 
-/// Seconds a flake stays settled, with the share of it spent fading in and out.
-const SNOW_LIFE: f32 = 1.6;
-const SNOW_FADE: f32 = 0.25;
+/// A settled flake's half-size when it lands, in world units, and the share of
+/// it left when it has melted.
+const FLAKE_SIZE: f32 = 0.16;
+const FLAKE_MELTED: f32 = 0.6;
+
+/// A flake's whole life in seconds, and the part of it spent fading in. A
+/// craft at speed passes a flake it has met within a third to two thirds of a
+/// second (`docs/ghidra/functions/psp-pulse-usa/weather.md`, "Snow melt"), so the flake shows
+/// at once and melts inside that window.
+const SNOW_LIFE: f32 = 0.8;
+const SNOW_IN: f32 = 0.06;
+
+/// The most a settled flake adds, additive: the falling snow's own most is
+/// 0.23 (`docs/ghidra/functions/psp-pulse-usa/weather.md`, "The snow's draw").
+pub const SNOW_PEAK: f32 = 0.35;
 
 /// How far off the surface a flat ring or flake is drawn, so it does not
 /// z-fight with the road it lies on.
@@ -177,16 +188,9 @@ impl Splashes {
         for splash in &self.live {
             let t = splash.age / splash.life();
             if splash.snow {
-                let fade = (t / SNOW_FADE).min((1.0 - t) / SNOW_FADE).clamp(0.0, 1.0);
-                let lifted = splash.at + splash.normal * (LIFT + FLAKE_SIZE * 0.5);
-                additive.extend(quad(
-                    lifted,
-                    right * FLAKE_SIZE,
-                    up * FLAKE_SIZE,
-                    [1.0; 3],
-                    0.85 * fade,
-                    dot,
-                ));
+                let (alpha, size) = flake(splash.age);
+                let lifted = splash.at + splash.normal * (LIFT + size * 0.5);
+                additive.extend(quad(lifted, right * size, up * size, [1.0; 3], alpha, dot));
                 continue;
             }
             let fade = 1.0 - t;
@@ -219,6 +223,16 @@ impl Splashes {
             }
         }
     }
+}
+
+/// A settled flake's alpha and half-size `age` seconds after it landed: in
+/// over [`SNOW_IN`], then out to nothing while it shrinks to [`FLAKE_MELTED`].
+fn flake(age: f32) -> (f32, f32) {
+    let melt = (age / SNOW_LIFE).clamp(0.0, 1.0);
+    let fade_in = (age / SNOW_IN).clamp(0.0, 1.0);
+    let alpha = SNOW_PEAK * fade_in * (1.0 - melt);
+    let size = FLAKE_SIZE * (1.0 - (1.0 - FLAKE_MELTED) * melt);
+    (alpha, size)
 }
 
 /// Two unit vectors that, with `normal`, make an orthonormal frame.
