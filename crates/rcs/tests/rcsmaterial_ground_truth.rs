@@ -521,7 +521,10 @@ impl SunCensus {
             "{programs} lightmapped program(s), {unsaturated} with an unsaturated sun N.L \
              before the source precision modifier, {clamped_by_modifier} after"
         );
-        assert_eq!((programs, unsaturated, clamped_by_modifier), (7_211, 2_349, 0));
+        assert_eq!(
+            (programs, unsaturated, clamped_by_modifier),
+            (7_211, 2_349, 0)
+        );
         let family = |name: &str| self.families.get(name).copied();
         // The plain diffuse families clamp: their `N.L` is a `DP3_SAT`.
         for name in [
