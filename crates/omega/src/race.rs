@@ -328,7 +328,6 @@ const fn posts(cue: &'static str, slot: &'static str) -> oag_title::WwiseCue {
     oag_title::WwiseCue::Posts { cue, slot }
 }
 
-
 const NEVER_POSTED: oag_title::WwiseCue = oag_title::WwiseCue::Unplayed {
     why: "the bank keeps a legacy event of this name, but the executable holds no such cue string and posts none",
 };

@@ -491,9 +491,7 @@ impl Audio {
             match (autopilot_active, voices.autopilot_open) {
                 (true, false) => {
                     voices.autopilot_open = true;
-                    if let Some(started) =
-                        banks.voices_for(Cue::Autopilot, true, &mut voices.rng)
-                    {
+                    if let Some(started) = banks.voices_for(Cue::Autopilot, true, &mut voices.rng) {
                         voices.autopilot =
                             layers::start(mixer, &started, Cue::Autopilot.bus(), VoicePlace::DRY);
                     }
