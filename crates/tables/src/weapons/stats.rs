@@ -349,8 +349,8 @@ pub struct MineStats {
 ///
 /// `Weapon_FireCannon` (`0x088577ac`) reads the firing craft's own current speed
 /// (`craft->entity->body->speed`), and `Cannon_Init` (`0x088648ec`) adds a *base*
-/// speed this schema does not carry (`func_0x00060af4`, unread). See
-/// `oag_weapons::projectile::cannon::BASE_SPEED_KMH`, this engine's stand-in, and
+/// speed this schema does not carry (`func_0x00060af4`, a flat 500 km/h). See
+/// `oag_weapons::projectile::cannon::BASE_SPEED_KMH` and
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CannonStats {

@@ -37,14 +37,14 @@ use oag_tables::weapons::CannonStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
-/// Added to the firing craft's current speed to get a round's muzzle speed.
+/// Added to the firing craft's current speed, both in km/h, to get a round's
+/// muzzle speed.
 ///
 /// **Recovered, confidence 90.** `func_0x00060af4` (`0x08864af4`, EU `0x08864950`)
 /// is `lui a0,0x43fa; mtc1 a0,f0; jr ra`, an unconditional `return 500.0f`
 /// ignoring its argument; `Cannon_Init` (`0x088648ec`) adds it to the caller's
-/// `speed_kmh`. The earlier "per-class" reading was wrong. The Cannon's `<Stats>`
-/// authors no speed (`absorb rounds rate damage_per_bullet slowdown_time`), so
-/// the base is baked into the executable.
+/// `speed_kmh`. The Cannon's `<Stats>` authors no speed (`absorb rounds rate
+/// damage_per_bullet slowdown_time`), so the base is baked into the executable.
 pub const BASE_SPEED_KMH: f32 = 500.0;
 
 /// How long a Cannon round that hits nothing stays in the air, in seconds.
@@ -79,10 +79,15 @@ pub const MUZZLE_SPACING: f32 = 0.25;
 /// 1`; the caller reads it off the post-decrement count
 /// [`crate::pickup::Held::advance_cannon_reload`] returns, as the original does.
 ///
-/// **The speed is the firing craft's own, not the class's. Recovered.**
-/// `Weapon_FireCannon` reads `craft->entity->body->speed * 3.6` and `Cannon_Init`
-/// adds [`BASE_SPEED_KMH`]: a stationary craft's round leaves at a fixed rate and
-/// a moving one adds its motion, as the Shuriken's throw does.
+/// **The speed is the firing craft's own, not the class's, and the km/h sum is
+/// never divided by 3.6. Recovered, confidence 92.** `Weapon_FireCannon` reads
+/// `craft->entity->body->speed * 3.6` and `Cannon_Init` adds [`BASE_SPEED_KMH`],
+/// then scales the muzzle's forward row, which still carries the craft's display
+/// scale ([`oag_physics::hover::TARGET_GLOBAL_SCALE`]), by that figure: a round
+/// leaves at `0.75 * (craft km/h + 500)` units/s, 375.0 from a parked craft and
+/// 750.60 from one at 139.111 units/s (`docs/ghidra/functions/psp-pulse-usa/
+/// cannon-quake-leachbeam.md`, "the Cannon checked on a bank"; one shot at one
+/// speed).
 #[must_use]
 pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, Vec3) {
     let forward = state.body.forward();
@@ -91,7 +96,7 @@ pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, 
     let side = if left { -1.0 } else { 1.0 };
     let position = nose + state.body.right() * (dimensions.width * MUZZLE_SPACING * side);
     let craft_speed_kmh = state.body.linear_velocity.length() * KMH_PER_UNIT_PER_SECOND;
-    let speed = (craft_speed_kmh + BASE_SPEED_KMH) / KMH_PER_UNIT_PER_SECOND;
+    let speed = (craft_speed_kmh + BASE_SPEED_KMH) * oag_physics::hover::TARGET_GLOBAL_SCALE;
     (position, forward * speed)
 }
 

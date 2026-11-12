@@ -75,12 +75,22 @@ fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
             if seen[slot].replace(tick).is_some() {
                 continue;
             }
-            let residual = [false, true]
-                .into_iter()
-                .map(|left| {
-                    let (position, velocity) =
-                        oag_weapons::projectile::cannon::launch(&before, &dimensions, left);
-                    (round.position - (position + velocity * dt)).length()
+            let launches = [false, true]
+                .map(|left| oag_weapons::projectile::cannon::launch(&before, &dimensions, left));
+            // A round whose first sweep meets the track within one step (at
+            // 0.75 * (km/h + 500) units/s that is 6 to 13 units) is moved to
+            // the hit and turned: its velocity is no longer the launch's, and
+            // the law under test is the muzzle line of a round that flew free.
+            if launches
+                .iter()
+                .all(|(_, velocity)| (round.velocity - *velocity).length() > 1e-3)
+            {
+                continue;
+            }
+            let residual = launches
+                .iter()
+                .map(|(position, velocity)| {
+                    (round.position - (*position + *velocity * dt)).length()
                 })
                 .fold(f32::MAX, f32::min);
             out.push((
