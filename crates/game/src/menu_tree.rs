@@ -19,13 +19,22 @@ pub fn mods_menu(
     mods: &Mods,
     language: Option<&str>,
     title: &'static oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
 ) -> Result<(
     menu::Definition,
     Vec<Listing>,
     crate::campaign::custom::Installed,
 )> {
-    let built = mods.build(menu::BUILT_IN, language, Some(menu::For { title, updated }))?;
+    let built = mods.build(
+        menu::BUILT_IN,
+        language,
+        Some(menu::For {
+            title,
+            platform,
+            updated,
+        }),
+    )?;
     for line in &built.report {
         log::info!("{line}");
     }
@@ -149,6 +158,7 @@ pub fn rebuilt(
     switches: &crate::settings::Mods,
     language: Option<&str>,
     title: &'static oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
     strings: &oag_ui::language::StringTable,
 ) -> Result<(
@@ -157,7 +167,8 @@ pub fn rebuilt(
     crate::campaign::custom::Installed,
 )> {
     let loaded = Mods::load_from(bases, switches)?;
-    let (mut definition, listing, installed) = mods_menu(&loaded, language, title, updated)?;
+    let (mut definition, listing, installed) =
+        mods_menu(&loaded, language, title, platform, updated)?;
     finish_definition(&mut definition, title, strings);
     Ok((definition, listing, installed))
 }

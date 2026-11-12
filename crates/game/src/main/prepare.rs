@@ -86,6 +86,7 @@ impl Pending {
     pub(crate) fn menu_for(
         &self,
         title: &'static oag_title::Title,
+        platform: oag_assets::Platform,
         updated: bool,
     ) -> Result<(
         menu::Definition,
@@ -95,7 +96,13 @@ impl Pending {
         let MenuSource::Mods(mods) = &self.menu_source else {
             return Ok((self.definition.clone(), Vec::new(), Default::default()));
         };
-        oag_game::menu_tree::mods_menu(mods, self.settings.language.as_deref(), title, updated)
+        oag_game::menu_tree::mods_menu(
+            mods,
+            self.settings.language.as_deref(),
+            title,
+            platform,
+            updated,
+        )
     }
 
     /// The boot sequence's own options for one source.
@@ -393,7 +400,7 @@ impl Pending {
         // settings file stores, and on a circuit or a team those are different
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
-        let (mut definition, mods, custom_campaigns) = self.menu_for(title, updated)?;
+        let (mut definition, mods, custom_campaigns) = self.menu_for(title, boot_shell.platform, updated)?;
         oag_game::menu_tree::finish_definition(&mut definition, title, &boot_shell.strings);
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch

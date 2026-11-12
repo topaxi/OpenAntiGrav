@@ -193,6 +193,7 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
                     None,
                     Some(oag_ui::menu::For {
                         title: oag_hd::TITLE,
+                        platform: oag_assets::Platform::Psp,
                         updated: false,
                     }),
                 )

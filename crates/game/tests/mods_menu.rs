@@ -73,6 +73,7 @@ fn labels(base: &Path, title: &'static oag_title::Title) -> (Vec<String>, Vec<St
             None,
             Some(oag_ui::menu::For {
                 title,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )
@@ -213,6 +214,7 @@ fn the_pause_menu_offers_photo_mode_on_all_five_titles_and_only_when_offered() {
                 None,
                 Some(oag_ui::menu::For {
                     title,
+                    platform: oag_assets::Platform::Psp,
                     updated: false,
                 }),
             )
@@ -246,6 +248,7 @@ fn rebuilt_labels(base: &Path, disabled: &[&str], language: Option<&str>) -> Vec
         &disabled,
         language,
         oag_pulse::TITLE,
+        oag_assets::Platform::Psp,
         false,
         &oag_ui::strings::project_table(language),
     )

@@ -41,7 +41,7 @@ fn pack_dir(name: &str) -> Option<PathBuf> {
 
 fn finder(dir: &Path) -> Finder {
     let dir = dir.to_path_buf();
-    Finder(Arc::new(move |_title| {
+    Finder(Arc::new(move |_title, _platform| {
         let ini = std::fs::read_to_string(dir.join("textures.ini")).unwrap();
         vec![
             Replacements::new("test pack", &ini, Box::new(Dir(dir.clone())))
@@ -307,7 +307,7 @@ fn the_fetched_packs_are_each_offered_only_to_their_own_title() {
     };
     let mods = oag_game::mods::Mods::load_from(&[base], &switches).unwrap();
     let on = |title| {
-        oag_game::texture_pack::packs_for(&mods, title)
+        oag_game::texture_pack::packs_for(&mods, title, oag_assets::Platform::Psp)
             .into_iter()
             .map(|pack| pack.expect("a pack opens").name().to_string())
             .collect::<Vec<_>>()
@@ -317,4 +317,63 @@ fn the_fetched_packs_are_each_offered_only_to_their_own_title() {
     assert!(!on_pulse.iter().any(|n| n.contains("Pure")), "{on_pulse:?}");
     assert!(on_pure.iter().any(|n| n.contains("Pure")), "{on_pure:?}");
     assert!(!on_pure.iter().any(|n| n.contains("Pulse")), "{on_pure:?}");
+}
+
+/// The front end's report for `image` with a Pulse pack (named by a PSP serial and a PS2 one)
+/// in a mod search path of its own, switched on.
+fn report_with_a_mod_pack(image: &str) -> Option<Vec<String>> {
+    let image = oag_testdata::image(image)?;
+    let base = std::env::temp_dir().join(format!("oag-pack-platform-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let dir = base.join("Pulse Pack");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("textures.ini"),
+        "[options]\nversion = 1\nhash = xxh64\nignoreAddress = true\n[games]\nUCES00465 = textures.ini\nSCES-54748 = textures.ini\n[hashes]\n",
+    )
+    .unwrap();
+    let switches = oag_game::settings::Mods {
+        enabled: ["ppsspp.pulse-pack".to_string()].into(),
+        ..Default::default()
+    };
+    let mods = Arc::new(oag_game::mods::Mods::load_from(&[base.clone()], &switches).unwrap());
+    let options = boot::Options {
+        source: image.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::default(),
+        language: None,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-texture-pack-frontend"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(1),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+        find_texture_packs: Some(Finder(Arc::new(move |title, platform| {
+            oag_game::texture_pack::packs_for(&mods, title, platform)
+        }))),
+    };
+    let (shell, _archives, _title) = boot::load_shell(&options).expect("the shell");
+    let _ = std::fs::remove_dir_all(&base);
+    Some(shell.report)
+}
+
+#[test]
+#[ignore = "needs pulse-psp-eu.chd and pulse-ps2-eu.chd"]
+fn a_ppsspp_pack_is_chosen_on_a_psp_disc_and_skipped_without_a_warning_on_pulse_ps2() {
+    let (Some(psp), Some(ps2)) = (
+        report_with_a_mod_pack("data/images/pulse-psp-eu.chd"),
+        report_with_a_mod_pack("data/images/pulse-ps2-eu.chd"),
+    ) else {
+        return;
+    };
+    assert!(
+        psp.iter()
+            .any(|line| line.starts_with("texture pack Pulse Pack")),
+        "the PSP disc takes the pack: {psp:#?}"
+    );
+    assert!(
+        !ps2.iter().any(|line| line.contains("texture pack")),
+        "the PS2 disc says nothing of a pack, least of all an absence: {ps2:#?}"
+    );
 }

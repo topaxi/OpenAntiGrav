@@ -175,7 +175,7 @@ impl Session {
         self.music_discs = pending.music_discs(source);
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
         let (definition, mods, custom_campaigns) =
-            pending.menu_for(title, false).unwrap_or_else(|e| {
+            pending.menu_for(title, archives.layout.platform, false).unwrap_or_else(|e| {
                 log::warn!("menu: {e:#}");
                 (pending.definition.clone(), Vec::new(), Default::default())
             });

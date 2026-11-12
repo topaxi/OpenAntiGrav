@@ -41,6 +41,9 @@ pub struct ModMenu<'a> {
 pub struct For<'a> {
     /// The title.
     pub title: &'a oag_title::Title,
+    /// The platform of the source: a title is one title across its pressings (Pulse PSP and PS2),
+    /// and a mod made for one platform is left out on another.
+    pub platform: oag_assets::Platform,
     /// Whether the title's update is mounted (see [`oag_title::MainMenu::updated_rows`]).
     pub updated: bool,
 }

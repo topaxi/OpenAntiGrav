@@ -82,9 +82,11 @@ fn a_pure_pack_is_a_pure_mod_and_is_never_a_candidate_on_pulse() {
         "serials no title lists leave the pack for every title"
     );
 
-    let on_pulse = oag_game::texture_pack::packs_for(&mods, oag_pulse::TITLE);
+    let on_pulse =
+        oag_game::texture_pack::packs_for(&mods, oag_pulse::TITLE, oag_assets::Platform::Psp);
     assert_eq!(names(&on_pulse), ["Pulse Pack", "Unknown Pack"]);
-    let on_pure = oag_game::texture_pack::packs_for(&mods, oag_pure::TITLE);
+    let on_pure =
+        oag_game::texture_pack::packs_for(&mods, oag_pure::TITLE, oag_assets::Platform::Psp);
     assert_eq!(names(&on_pure), ["Pure Pack", "Unknown Pack"]);
 }
 
@@ -123,6 +125,7 @@ fn a_mod_for_another_title_is_not_in_the_menu_the_strings_or_the_mods_page() {
             None,
             Some(For {
                 title,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )
@@ -140,4 +143,49 @@ fn a_mod_for_another_title_is_not_in_the_menu_the_strings_or_the_mods_page() {
     let pure = build(oag_pure::TITLE);
     assert!(pure.listing.iter().any(|l| l.id == "test.pure-only"));
     assert!(pure.added.iter().any(|a| a.mod_id == "test.pure-only"));
+}
+
+#[test]
+fn a_ppsspp_pack_is_the_psps_alone_and_is_not_offered_on_a_ps2_source() {
+    use oag_assets::Platform;
+
+    let base = base("platform");
+    pack(&base, "Pulse Pack", "UCES00465 = textures.ini");
+    pack(&base, "Unknown Pack", "UCJS10007 = textures.ini");
+    let mods = load(&base);
+    let build = |platform| {
+        mods.build(
+            BUILT_IN,
+            None,
+            Some(For {
+                title: oag_pulse::TITLE,
+                platform,
+                updated: false,
+            }),
+        )
+        .unwrap()
+    };
+    let listed = |platform, id: &str| build(platform).listing.iter().any(|l| l.id == id);
+
+    for id in ["ppsspp.pulse-pack", "ppsspp.unknown-pack"] {
+        assert!(listed(Platform::Psp, id), "{id} is offered on a PSP");
+        for platform in [Platform::Ps2, Platform::Ps3, Platform::Vita, Platform::Ps4] {
+            assert!(!listed(platform, id), "{id} is not offered on {platform:?}");
+        }
+    }
+
+    let found = |platform| {
+        names(&oag_game::texture_pack::packs_for(
+            &mods,
+            oag_pulse::TITLE,
+            platform,
+        ))
+    };
+    assert_eq!(found(Platform::Psp), ["Pulse Pack", "Unknown Pack"]);
+    assert!(found(Platform::Ps2).is_empty(), "no pack is opened on PS2");
+    assert_eq!(
+        mods.player_on(oag_pulse::TITLE, Platform::Ps2).count(),
+        0,
+        "the same filter the page uses"
+    );
 }

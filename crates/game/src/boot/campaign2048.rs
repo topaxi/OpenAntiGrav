@@ -188,7 +188,7 @@ pub(super) fn touch_menus(
     let updated = !archives.patch.is_empty();
     (
         map_events(archives, strings, nodes, report),
-        extra_tiles(language, title, updated),
+        extra_tiles(language, title, archives.layout.platform, updated),
     )
 }
 
@@ -206,13 +206,18 @@ pub(super) fn touch_menus(
 pub(super) fn extra_tiles(
     language: Option<&str>,
     title: &oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
 ) -> Vec<ExtraTile> {
     let built = crate::mods::Mods::load_for_profile().and_then(|mods| {
         mods.build(
             oag_ui::menu::BUILT_IN,
             language,
-            Some(oag_ui::menu::For { title, updated }),
+            Some(oag_ui::menu::For {
+                title,
+                platform,
+                updated,
+            }),
         )
     });
     let built = match built {

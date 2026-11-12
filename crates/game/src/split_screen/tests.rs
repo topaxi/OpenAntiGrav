@@ -19,6 +19,7 @@ fn built(title: &'static oag_title::Title) -> oag_ui::menu::Definition {
             None,
             Some(oag_ui::menu::For {
                 title,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )

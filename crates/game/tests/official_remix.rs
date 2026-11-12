@@ -36,6 +36,7 @@ fn tree(
         language,
         Some(For {
             title,
+            platform: oag_assets::Platform::Psp,
             updated: false,
         }),
     )

@@ -51,6 +51,7 @@ fn build(base: &Path, title: &'static oag_title::Title) -> mods::Built {
             None,
             Some(oag_ui::menu::For {
                 title,
+                platform: oag_assets::Platform::Psp,
                 updated: false,
             }),
         )

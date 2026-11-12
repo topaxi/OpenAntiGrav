@@ -33,6 +33,7 @@ pub(crate) struct RebuildJob {
     switches: oag_game::settings::Mods,
     language: Option<String>,
     title: &'static oag_title::Title,
+    platform: oag_assets::Platform,
     updated: bool,
     strings: oag_ui::language::StringTable,
 }
@@ -45,6 +46,7 @@ impl RebuildJob {
             &self.switches,
             self.language.as_deref(),
             self.title,
+            self.platform,
             self.updated,
             &self.strings,
         )
@@ -137,6 +139,7 @@ impl Session {
             switches: self.settings.mods.clone(),
             language: self.settings.language.clone(),
             title: shell.title,
+            platform: shell.platform,
             updated: rebuild.updated,
             strings: shell.strings.clone(),
         })

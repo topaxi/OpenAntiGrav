@@ -92,6 +92,13 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   of whose serials resolve is for every title. An author's own `titles` win. A pack for the
   right title but another pressing (an EU pack on a US disc) still reaches the load and still
   warns, since the serial check there is the PSP's.
+- **PSP only.** A PPSSPP pack's keys are the PSP's guest memory, so a pack is offered and opened on
+  a PSP source alone, whatever its `titles` say (`oag_game::mods::is_for_platform`). Pulse PS2 is
+  the same title as Pulse PSP, so `titles` cannot tell them apart; the source's platform
+  (`oag_ui::menu::For::platform`, `Finder`'s second argument) does. On a PS2, PS3, PS4 or Vita
+  source the pack is not on the MODS page, not in the menu tree or the strings, and not opened by
+  the race load or the front end's boot; a `debug` line names the skip, not a `warn`. The
+  platform rule covers every pack, including one with no resolvable `[games]` serial.
 
 - **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
   which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
@@ -126,8 +133,8 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   content fingerprint.
 - **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)
   replaced` in the log, both at `debug`, and `texture pack not used: <name>: <why>` at `warn` (the pack's
-  `[games]` does not name this disc, it is not a PSP disc, its `textures.ini` hashes another
-  way, or it will not open).
+  `[games]` does not name this PSP disc, its `textures.ini` hashes another
+  way, or it will not open). A source that is not a PSP's never reaches that line ("PSP only", above).
 - `.zip` and folder alike are read in place; PPSSPP prefers `textures.zip` to a loose tree, so
   does the search. ZIM images (a later pack's format) are read, raw, zlib or zstd, RGBA8888,
   RGBA4444 and RGB565 (`docs/formats/ppsspp-texture-pack.md`, "ZIM images").
