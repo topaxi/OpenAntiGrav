@@ -1444,6 +1444,46 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   causes, not taken apart. Altima, Mall and Tower join the census at 0 faults.
   2048: **checked, differs** - the Vita road is `fc16_phong_alphaspec_normal_emissive`
   with `track_a_floor_ds` as its `DiffuseMap` first, so its binding is unchanged.
+- **The `tarmac_*` road families draw the wrong coordinate set: Rockway Stadium's black road patch**
+  (`omega-arena-square`, 2026-11-12, confidence 85 for arena, 55 for the other seven circuits).
+  The patch seen around the craft on `arena` is the road, not a light or a shadow. Method: the
+  same pose on 2048's own arena (Vita) has a normal grey road; `OAG_SKIP_MATERIAL=road_a_ds`
+  removes the black and shows the floor under it; an unlit render (`OAG_ALBEDO_ONLY`, wired into
+  the psp2 build for the test) stays black, so the road's *picture* is dark, not its light; the
+  texture itself decodes to grey asphalt with a yellow line and lane dashes (`road_a_ds.gnf`,
+  4096 x 4096), so the coordinates are wrong. The road material is
+  `tarmac_markings_dirt_markingsnormal_emis` (and its siblings `tarmac_markings_dirt_markingsnormal`,
+  `tarmac_dirt`, `tarmac_dirt_emissive`): their vertex programs name `uvMarkings` and
+  `uv1_uvDirt` (`oag-rcs` `gcn_dump --summary`), and the vertex declaration of an arena road
+  submesh lists `uvMarkings` (half pair, offset 20), `lightmapUV` (24), `uv1_uvDirt` (four halves,
+  28) and `uv1` / `uvDirt` (both at 32), **no `Uv1`**. `own_diffuse_texcoord` therefore takes its
+  confidence-70 fallback, the first half pair that is not the lightmap's: `uvMarkings`, a unique
+  unwrap (u 0.79 to 0.99, v 0.01 to 0.68 over the whole 250-unit road, so 33 by 94 texels under
+  the craft: the texture's dark top-right strip). The real tiling set is `uv1_uvDirt`'s first pair
+  (u -44 to 41, v 0 to 1 on arena). **Probe** (a one-line local change, not committed: read
+  `uv1_uvDirt` at offset 28 as the diffuse coordinate): the road draws grey asphalt with the yellow
+  kerb line, lane dashes and the cyan edge line, as the original's frame does (whole-frame RMSE
+  to the original 0.272 to 0.229 on the compare pair, the HUDs excluded from neither).
+  **Reach:** 661 submeshes over 8 of the 10 `environments2048` circuits (mall, tower, square,
+  park, cathedral, subway, arena, bridge; not altima, not sol) name `uv1_uvDirt` and no `Uv1`
+  (`crates/rcs/examples/psp2_uv_census.rs`); Omega's HD-era circuits do not. Subway's frame moves
+  with the probe (RMSE 0.073 between the two renders) toward the original's reddish rails;
+  Mall's barely (0.013), Square's not at all (its road is another family, below). Which pair the
+  diffuse, dirt and markings samplers take is read off the pixel programs' names only
+  (`DiffuseAlphaMapSampler`, `DirtSampler`, `MarkingsSampler`), not off a decoded program.
+  2048: **checked, differs** - none of 2048's arena, square, altima or mall materials is a
+  `tarmac_*` family; its roads name `Uv1`, which is why 2048's own arena draws a normal road.
+- **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
+  (`omega-arena-square`, 2026-11-12, confidence 55). Square's road is
+  `road_alphaspec_normal_emissive_panelmap1` (and `_mask`), the family of Altima's road above; its
+  pixel program (428 instructions) reads `Cg_PanelDisplacement_1In1Depth`, `...SlopeWidth`,
+  `...Aspect`, the panel map, `DiffuseMap` and `EmissiveMap`. Ours draws the diffuse panels and the
+  baked sun shadow wedge (the original has the same wedge); the original also draws long cyan
+  glowing lines along the panel edges on Square and on Queens Mall, which ours does not. The
+  family's emissive texture (`track_a_floor_e.gnf`, 512 x 128) is one thin cyan-grey line, which
+  the panel displacement would stretch along the grooves: the lines are probably that layer, which
+  the emissive-add families ([`emissive_add.rs`](../../crates/mesh/src/mesh/rcs/psp2/emissive_add.rs))
+  do not admit for this family. Not isolated (no run draws the family's emissive alone).
 - **Omega's diffuse sun is its colour times `Lighting.Sun diffuse intensity`**
   ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md),
   2026-10-19, confidence 80): authored 0.3 to 20, ignored until then. The
