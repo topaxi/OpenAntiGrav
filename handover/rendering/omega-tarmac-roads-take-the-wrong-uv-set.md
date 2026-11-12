@@ -2,17 +2,17 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-12
-summary: "Omega's tarmac_* road families name no Uv1, so the loader reads uvMarkings for the road picture: arena's black patch; read uv1_uvDirt.xy instead"
+summary: "Omega tarmac_* roads now draw uv1_uvDirt.xy; open: re-render the eight pairs, the markings and dirt sets, the psp2 unlit switch"
 ---
 
-# Omega's `tarmac_*` roads take `uvMarkings` for their diffuse picture
+# Omega's `tarmac_*` roads took `uvMarkings` for their diffuse picture (fixed; markings and dirt open)
 
 Measured by `omega-arena-square` (2026-11-12). Evidence and numbers:
 [`omega-status.md`](../../docs/formats/omega-status.md), "The `tarmac_*` road families draw the
 wrong coordinate set". Compare pairs `arena-2048` and `square-2048` (originals captured from the
 `wipeout_pc` port) are in the compare-page adoption batch.
 
-## What is wrong (confidence 85 on arena)
+## What was wrong (confidence 85 on arena; fixed, see Next Steps)
 
 Rockway Stadium's road shows a black, ragged patch around the craft. It is the road material
 `tarmac_markings_dirt_markingsnormal_emis`, drawn with the wrong texture coordinate set:
@@ -32,22 +32,16 @@ material. Subway's road changes visibly with the probe, Mall's barely.
 
 ## Next Steps
 
-1. In `crates/rcs/src/rcsmodel/psp2.rs` (`submeshes`, the `diffuse` attribute choice), when the
-   declaration carries `uv1_uvDirt` (`name_hash("uv1_uvDirt")` = `0x273a_b13e`, four half components)
-   and no `Uv1`, read the diffuse coordinate from its offset, first two components. Put the
-   decision on `VertexDecl` (next to `own_diffuse_texcoord`), with a unit test on a declaration
-   shaped like arena's (offsets 20, 24, 28, 32). Do not change a title that names `Uv1`.
-   **Read offset 28 (`uv1_uvDirt`), not the declaration's `uv1` entry**: that entry is at offset 32
-   with `uvDirt` and aliases the dirt pair; reading it draws a smeared surface with no lane dashes
-   (tested, RMSE 0.077 from the offset-28 frame; offset 28 matches the original's dashes).
+Done (`omega-tarmac-uv`): the road's diffuse coordinate is `uv1_uvDirt.xy` at offset 28
+(`VertexDecl::uv_dirt_tiling`, `own_diffuse_texcoord`), with the arena-shaped unit tests and the
+census ground truth over all 661 submeshes (`omega-status.md`, same section).
+
+1. Re-render the compare pairs of the eight circuits (`just compare-rerender-ours --only omega`, on
+   the lead's tree); `arena-2048` measured 49.25 to 35.30 mean grey, RMSE 0.261 to 0.216.
 2. Decide the markings (`uvMarkings`, offset 20) and dirt (`uv1_uvDirt.zw`, offset 32) sets: the
    pixel programs sample `MarkingsSampler` and `DirtSampler` with them. Wiring them draws the
    road decals and dirt splat; the road is correct without them, so this is a second change.
-3. Ground truth: extend `crates/mesh/tests/omega_transparency_ground_truth.rs` with a check that
-   no draw of a `tarmac_*` material reads a coordinate range outside `uv1_uvDirt`'s (arena: u -44 to
-   41, v 0 to 1). Re-render the compare pairs of the eight circuits afterwards
-   (`just compare-rerender-ours --only omega`, on the lead's tree).
-4. `OAG_ALBEDO_ONLY` and `OAG_TINT_MATERIALS` do not reach the psp2 build (`rcs/psp2.rs` never
+3. `OAG_ALBEDO_ONLY` and `OAG_TINT_MATERIALS` do not reach the psp2 build (`rcs/psp2.rs` never
    reads `isolate::unlit()`/`tinting()`); `OAG_SKIP_MATERIAL`, `OAG_ONLY_MATERIAL`, the slot
    filters and `OAG_ALPHA_EMISSIVE_OFF` do. One line in the `None => ([1.0; 4], 1.0, role)` arm of
    `psp2.rs` makes the unlit switch reach it.
