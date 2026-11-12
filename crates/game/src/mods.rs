@@ -140,6 +140,8 @@ pub mod words {
     pub const NEEDS_OFF: (&str, &str) = ("OAG_MODS_NEEDS_OFF", "%s, OFF");
     /// After the needed mod's id: no such mod is installed.
     pub const NEEDS_MISSING: (&str, &str) = ("OAG_MODS_NEEDS_MISSING", "%s, MISSING");
+    /// After NEEDS: a title's disc the mod draws from, and this machine has none of; `%s` is the title.
+    pub const NEEDS_DISC: (&str, &str) = ("OAG_MODS_NEEDS_DISC", "%s DISC");
     /// The detail line naming the event channels a mod sends.
     pub const SENDS: (&str, &str) = ("OAG_MODS_SENDS", "SENDS");
     /// The detail line naming the event channels a mod hears.
@@ -220,6 +222,17 @@ pub fn note_left_out(
         };
         if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id) {
             let line = (say(words::NEEDS), value);
+            if !entry.problems.contains(&line) {
+                entry.problems.push(line);
+            }
+        }
+    }
+    for (mod_id, title) in &installed.needs_discs {
+        if let Some(entry) = listing.iter_mut().find(|entry| &entry.id == mod_id) {
+            let line = (
+                say(words::NEEDS),
+                say(words::NEEDS_DISC).replace("%s", &title.to_ascii_uppercase()),
+            );
             if !entry.problems.contains(&line) {
                 entry.problems.push(line);
             }

@@ -320,6 +320,7 @@ OAG_MODS_LEFT_OUT = { text = "DEIXADO DE FORA", human = false }
 OAG_MODS_NEEDS = { text = "PRECISA DE", human = false }
 OAG_MODS_NEEDS_OFF = { text = "%s, DESLIGADO", human = false }
 OAG_MODS_NEEDS_MISSING = { text = "%s, AUSENTE", human = false }
+OAG_MODS_NEEDS_DISC = { text = "DISCO DE %s", human = false }
 OAG_MODS_SENDS = { text = "ENVIA", human = false }
 OAG_MODS_HEARS = { text = "OUVE", human = false }
 OAG_MODS_NO_ONE_SENDS = { text = "NINGUEM ENVIA", human = false }

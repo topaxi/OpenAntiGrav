@@ -75,8 +75,14 @@ pub struct Manifest {
     pub keywords: Vec<String>,
     /// The titles it is for (their lowercased hyphenated names); empty means any.
     pub titles: Vec<String>,
+    /// `needs-titles`: titles (lowercased hyphenated names) whose disc the mod needs for what
+    /// it draws; the mod loads without one, and the mods page says what is missing.
+    pub needs_titles: Vec<String>,
     /// The game versions it works with.
     pub oag: Option<semver::VersionReq>,
+    /// `[campaign-medals]`: the art the campaign screens draw a medal with, in place of the
+    /// title's own colour swatch.
+    pub campaign_medals: Option<CampaignMedals>,
     /// `[extension]`: the WebAssembly modules the mod runs, if any.
     pub extension: Option<Extension>,
     /// `[icons]`: the mod's own PNGs or SVGs by name, as paths in the mod. A module's `hud-icon`
@@ -112,6 +118,33 @@ pub struct Manifest {
     /// Whether the mod is on until the player turns it off. `true` for every mod but a
     /// texture pack, which changes what a race looks like and starts off.
     pub default_enabled: bool,
+}
+
+/// The medal tiers an atlas row order may name, best first: today's campaigns award these three
+/// (`oag_tables::race_campaign::Medal`). A campaign defining its own is a later change.
+pub const MEDAL_TIERS: [&str; 3] = ["gold", "silver", "bronze"];
+
+/// Where `[campaign-medals]` takes its atlas from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MedalSource {
+    /// `{ title = "hd" }`: the medal atlas a title's own disc ships (a lowercased hyphenated
+    /// title name). The art exists only where that disc is present.
+    Title(String),
+    /// `{ mod = "<key of [icons]>" }`: the mod's own atlas image.
+    Mod(String),
+}
+
+/// `[campaign-medals]` (`docs/tools/mods.md`, "Campaign medals").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampaignMedals {
+    /// The atlas.
+    pub source: MedalSource,
+    /// The atlas holds one block of tiers per difficulty (easy, medium, hard from the top),
+    /// and a cell draws the block of the difficulty its medal was earned on.
+    pub per_difficulty: bool,
+    /// The tier of each atlas row, top to bottom. Absent: gold, silver, bronze. A title source
+    /// ignores it: the title's own row order is used.
+    pub tiers: Vec<String>,
 }
 
 /// `[texture-pack]` (`docs/tools/mods.md`, "Texture packs"): a PPSSPP pack read in place,
@@ -204,6 +237,79 @@ struct File {
     #[serde(default)]
     sounds: std::collections::BTreeMap<String, String>,
     pickup: Option<PickupTable>,
+    #[serde(rename = "campaign-medals")]
+    campaign_medals: Option<CampaignMedalsTable>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CampaignMedalsTable {
+    source: MedalSourceTable,
+    #[serde(default, rename = "per-difficulty")]
+    per_difficulty: bool,
+    #[serde(default)]
+    tiers: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MedalSourceTable {
+    title: Option<String>,
+    #[serde(rename = "mod")]
+    module: Option<String>,
+}
+
+fn campaign_medals(
+    table: CampaignMedalsTable,
+    icons: &std::collections::BTreeMap<String, String>,
+) -> Result<CampaignMedals, Error> {
+    let source = match (table.source.title, table.source.module) {
+        (Some(title), None) => MedalSource::Title(title.to_ascii_lowercase()),
+        (None, Some(name)) if icons.contains_key(&name) => MedalSource::Mod(name),
+        (None, Some(name)) => {
+            return Err(bad(
+                "campaign-medals.source",
+                format!("mod = {name:?} is not a key of [icons]"),
+            ));
+        }
+        _ => {
+            return Err(bad(
+                "campaign-medals.source",
+                "exactly one of `title = \"<title>\"` and `mod = \"<icon>\"`",
+            ));
+        }
+    };
+    let mut seen = Vec::new();
+    for tier in &table.tiers {
+        if !MEDAL_TIERS.contains(&tier.as_str()) {
+            let problem = if valid_key(tier) {
+                format!(
+                    "{tier:?}: campaign-defined tiers are not supported yet (gold, silver, bronze)"
+                )
+            } else {
+                format!("{tier:?} is not a tier name: gold, silver, bronze")
+            };
+            return Err(bad("campaign-medals.tiers", problem));
+        }
+        if seen.contains(tier) {
+            return Err(bad(
+                "campaign-medals.tiers",
+                format!("{tier:?} is named twice"),
+            ));
+        }
+        seen.push(tier.clone());
+    }
+    if !table.tiers.is_empty() && table.tiers.len() != MEDAL_TIERS.len() {
+        return Err(bad(
+            "campaign-medals.tiers",
+            "name all three of gold, silver, bronze, in the atlas's row order",
+        ));
+    }
+    Ok(CampaignMedals {
+        source,
+        per_difficulty: table.per_difficulty,
+        tiers: table.tiers,
+    })
 }
 
 #[derive(Deserialize)]
@@ -441,6 +547,8 @@ struct Table {
     keywords: Vec<String>,
     #[serde(default)]
     titles: Vec<String>,
+    #[serde(default, rename = "needs-titles")]
+    needs_titles: Vec<String>,
     oag: Option<String>,
     #[serde(rename = "default-enabled")]
     default_enabled: Option<bool>,
@@ -483,6 +591,10 @@ impl Manifest {
             }
             None => (None, Vec::new(), Vec::new()),
         };
+        let campaign_medals = file
+            .campaign_medals
+            .map(|table| campaign_medals(table, &file.icons))
+            .transpose()?;
         let t = file.module;
         for (name, path) in &file.icons {
             if name.len() > oag_ext_abi::MAX_HUD_TEXT {
@@ -646,7 +758,9 @@ impl Manifest {
             homepage: t.homepage,
             keywords: t.keywords,
             titles: t.titles,
+            needs_titles: t.needs_titles,
             oag,
+            campaign_medals,
             extension,
             icons: file.icons,
             effects: file.effects,

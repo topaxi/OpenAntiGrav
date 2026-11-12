@@ -236,6 +236,11 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
     ),
 ];
 
+/// The medal atlas: a 60 px frame per tier, three tiers per difficulty block
+/// (`oag_ui_screens::campaign::hd::medal::hd_medal_frame`). Its per-difficulty copy is in
+/// [`PER_DIFFICULTY_MEDAL_ARCHIVE`].
+pub const MEDAL_ATLAS: &str = r"Data\FE\Images\Hexmedal_HD.gtf";
+
 /// Everything else `SCREEN_ENTRY`'s own `src=` attributes name that this
 /// build draws, beyond the hex art above - the bullet arrow beside every
 /// detail-column row, the lock overlay HD's `Grid Selection` shows over a
@@ -265,7 +270,7 @@ pub const OTHER_TEXTURES: [&str; 6] = [
     r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     r"Data\FE\Images\Subtitle_Arrow_HD.gtf",
     r"Data\FE\Images\Padlock.gtf",
-    r"Data\FE\Images\Hexmedal_HD.gtf",
+    MEDAL_ATLAS,
     r"Data\FE\Images\tilted_arrows.gtf",
     r"Data\FE\Images\dot.gtf",
 ];

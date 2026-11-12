@@ -542,6 +542,7 @@ OAG_MODS_LEFT_OUT = { text = "LEFT OUT", human = false }
 OAG_MODS_NEEDS = { text = "NEEDS", human = false }
 OAG_MODS_NEEDS_OFF = { text = "%s, OFF", human = false }
 OAG_MODS_NEEDS_MISSING = { text = "%s, MISSING", human = false }
+OAG_MODS_NEEDS_DISC = { text = "%s DISC", human = false }
 OAG_MODS_SENDS = { text = "SENDS", human = false }
 OAG_MODS_HEARS = { text = "HEARS", human = false }
 OAG_MODS_NO_ONE_SENDS = { text = "NO ONE SENDS", human = false }
