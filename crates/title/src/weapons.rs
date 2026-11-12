@@ -91,6 +91,19 @@ pub struct Weapons {
     /// record's down negated (confidence 86), Omega's and 2048's `Plasma_Init` too (80, 75), so
     /// all five titles are `true` (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`).
     pub launch_normal_is_track_up: crate::pre_race::Sourced<bool>,
+    /// Whether a projectile's floor arms are Pulse's decompiled laws (`true`) or the engine's
+    /// turn parallel to the floor at the same speed (`false`).
+    ///
+    /// Pulse's `Missile_Update` probe arm steers to the ride point as the Rocket's does; its
+    /// `Shuriken_Update` probe arm and its `Rocket_Update` and `Shuriken_Update` travel-sweep arms
+    /// write `(ride point - start) / dt` raw, so the blade's speed drifts and a rocket landing on a
+    /// ramp face can leave it upward; its `Plasma_Update` sweep arm only moves
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "By-catch in the flight arms",
+    /// and `shuriken.md`, `missile.md`, `plasma.md`). HD, 2048 and Omega keep the parallel turn:
+    /// their own `Rocket_Update`, `Missile_Update` and `Shuriken_Update` arms are unread, and HD's
+    /// `Plasma_Update` is its own function with a ride height of 4.0
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
+    pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,

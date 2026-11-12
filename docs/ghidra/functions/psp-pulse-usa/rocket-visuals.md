@@ -1355,17 +1355,189 @@ at the craft's height, and the floor (`kind 1`) on the first update whose start 
 So it is neither age nor place: it is how long the probe's start takes to clear the box. How far
 ahead of the body's position (`body+0x30` read at the update's entry) the box reaches is **not one
 number**: between 2.13 and 2.84 parked, 3.91 to 5.01 at 100 units/s, 4.80 to 4.93 at 125 units/s,
-4.0 to 4.3 at 140 units/s, and under 2.83 at 139 units/s on the mag strip. A box about 2.6 ahead of
-a centre that leads the body by one tick of travel fits the parked, the 100 and the 125 units/s
-rows; the 140 units/s row is shorter than that and the mag strip row has no lead at all, so the
-box's pose against `body+0x30` at the moment the weapons update is **not understood** (which of
-`Body_Integrate`, the collider sync, the mag hold and the Autopilot's rail has run by then was not
-read). Confidence **90** that a craft box nearer than the floor makes the query return `0x7f`; no
-score for the reach.
+4.0 to 4.3 at 140 units/s, and under 2.83 at 139 units/s on the mag strip. Confidence **90** that a
+craft box nearer than the floor makes the query return `0x7f`. **Why the reach is not one number is
+settled 2026-11-12** in ["The own-craft box is a rotated frame"](#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box)
+below: the box sits exactly on `body+0x30` with the body's own axes, and the raycast's separating-axis
+gate looks at it through the transposed rotation. (The two guesses this paragraph carried, a centre
+one tick ahead of the body and a collider-sync order, are both wrong: centre and body agree to 0.001.)
 
 One capture shows it is any update, not only the launch: the Outpost 7 centre rocket landed on the
 ramp's face, was pushed back over its own craft, and its probe then met the craft's box on every
 update until the cage ended it.
+
+### The own-craft box is a rotated frame (2026-11-12, pulse-own-craft-box)
+
+Question put to the original: where is the firing craft's box collider when the weapons update, so
+that the first probes miss on it, and how far ahead of `body+0x30` does it reach? The claim under
+test was "one box, centred some way from `body+0x30`, reaching X ahead at rest, at 100/125/140 units/s
+and on the mag strip". What would have falsified a one-box answer: the reach differing between two
+captures that the box's pose could not explain, which the section above already had (2.13 to 2.84
+parked, 4.80 to 4.93 at 125 units/s). It did not survive: **there is no X**. (Order of work, plainly:
+the second capture, a parked Missile on Talons Junction, already refuted any single reach; the
+transposed-frame model was built from it and from the decompile, and the other 54 captures were
+predictions made with it, not fits, which is why 0 errors in 2,302 probes carries weight.) The pose is exact; the reach
+is not one number because `Collision_RaycastBox` tests the segment against the box through the
+transposed rotation.
+
+**Method.** `scripts/psp-projectile-sweeps.py --box` (PPSSPP v1.20.4, software renderer, the grid save
+states in `data/saves/pulse-psp/`) snapshots, at each update's entry and at each query's return, the
+body's 16-float pose and 0x1e0 bytes of the box collider (`body+0x3bc`), and reads
+`world + index * 0xc + 0x2454` (world from the pointer at `0x08ab0820`) against the capture's
+`mesh_collider`. `scripts/psp-craft-box-replay.py` replays every probe against the model below. 56
+captures (Rocket, Missile, Plasma), each loaded twice from the same state. The two loads differ
+(a player's held-button timing moves the pose at the fire by up to 0.1 unit, an Autopilot run by a few
+tenths, one Missile run by 1.6 units a few updates in), so a pair is two independent fits of the law,
+not one run copied.
+
+**The pose is the body's, exactly** (confidence **95**):
+
+| Read | Result |
+| --- | --- |
+| `table[mesh_collider]` against `body+0x3bc`, every probe that met a box | 352 of 352 equal; indices 149, 151, 175, 181, 190, 196, 201, 217 (the player's, one per circuit) |
+| collider `+0x80/+0x90/+0xa0` (the rotation rows) against body rows `+0x00/+0x10/+0x20` | 1,712 snapshots, largest difference **0** |
+| collider centre `+0xb0` against `body+0x30` at the update's entry | 82 % within 0.001; the rest by up to 0.24 unit, the largest on De Konstruct runs that end against a wall (a contact correction after the collider sync; not traced further) |
+| collider at the update's entry against at the probe's return | identical in all 2,302 probe records |
+| dimensions `+0x1d0/+0x1d4/+0x1d8` | `(4.125, 2.625, 9.75)` on every Venom capture and on one Assegai Zone state: the Misc width, height and length times `0.75` ([collision.md](collision.md), "The dimensions feeding the collider are scaled"); half dimensions `(2.0625, 1.3125, 4.875)` are the scaled axes at `+0xc0/+0xd0/+0xe0` |
+
+So there is no lead, no lag and no offset to explain: the box is centred on `body+0x30` with the
+body's axes, 9.75 long. The guesses in the section above (a centre one tick ahead; the collider-sync
+order; the Autopilot's rail) are all closed: the same 0.000 relation holds for a parked craft, a
+player at 100 units/s and an Autopilot craft at 139 and 151 units/s.
+
+**`Collision_RaycastBox` (`0x08817b1c`) reads the box through the transposed rotation** (confidence
+**92**). Disassembled end to end this pass:
+
+1. `Collision_ClipSegmentToAabb` (`0x08815038`, was `FUN_08815038`): the segment against the collider's
+   world AABB (`+0x00`, `+0x10`); no overlap, return. Never decided a probe in these captures.
+2. Rows `+0x80/+0x90/+0xa0` and centre `+0xb0` are loaded with `lv.q C100..C130` (each memory row
+   into a matrix column) and both segment ends, minus the centre, go through `vtfm4.q C000, E100, C200`.
+3. A separating-axis test of that segment against the half dimensions (`+0x1d0..+0x1d8` times 0.5): three
+   axis tests and the three cross products. Failing any one returns with nothing hit.
+4. Only then the box's eight corners (`Collider_BoxSamplePoints`, `0x08818a00`, centre plus or minus
+   the three scaled axes) and its twelve triangles (`Collider_BoxTriangleIndices`, `0x08818ab0`) go
+   through `Collision_SegmentTriangle` in world space.
+
+The frame of step 2 was read live: a breakpoint after each `vtfm4` on a parked De Konstruct
+craft (yaw 25 degrees), 20 `Collision_RaycastBox` calls, 40 results against the matrix rows
+(`sp + 0xa0`) and the input vector (`sp + 0x470`, `sp + 0x4d0`): **39 of 39 non-zero results equal
+`R^T * v`**, the column-wise product `(v . col0, v . col1, v . col2)`, and none equals `R * v`
+(the fortieth input is a zero vector). A frame that would put a point in the box's own axes is
+`R * v` (each row dotted with `v`); the original builds the other one. The consequence is a gate
+region that is the true box turned the other way: the gate box and the real box coincide when the
+craft is aligned to the world axes (a multiple of 90 degrees of yaw, no roll) and are 2 times the
+craft's angle apart otherwise.
+
+**The model, and what it predicts** (confidence **90**): a probe meets the box iff
+
+- the segment `start` to `start - normal * length` (`start` the projected position; length `6.0` for the
+  Rocket, `12.0` for the Missile, Plasma and Shuriken) passes the separating-axis gate in the
+  `R^T` frame, and
+- it crosses a face of the true oriented box (`centre`, rows, half dimensions), and
+- that face is nearer than the mesh hit, if the mesh was hit.
+
+Replayed against all 2,302 probes (352 of which met the box, 1,950 did not), **0 mispredicted**.
+The same replay with the correct frame (`--frame rows`) mispredicts **63**, every one on a craft yawed
+or rolled off the world axes by 8 degrees or more:
+
+| Captures | Probes | Meet the box | `R^T` frame wrong | `R` frame wrong |
+| --- | ---: | ---: | ---: | ---: |
+| Parked, six circuits (Talons Junction and Vertica Black 28.5 degrees off the world axes, the other four within 1.7) | 525 | 42 | 0 | 5 |
+| Player, Moa Therma White start, 100.2 units/s | 73 | 6 | 0 | 0 |
+| Player, De Konstruct White (25 degrees off the world axes), 71, 112, 66 and 3 units/s | 537 | 89 | 0 | 35 |
+| Player, Moa Therma White and Arc Prime White (10 and 12 degrees off), 6 to 66 units/s | 590 | 166 | 0 | 10 |
+| Autopilot, Moa Therma White bank (85 degree roll, mag floor), 139 units/s | 320 | 4 | 0 | 8 |
+| Autopilot, Outpost 7 (floor, 8 and 13 degrees off the world axes), 151 to 160 units/s | 257 | 45 | 0 | 5 |
+
+The discriminating records, three decimals, for a test (rows are `+0x80/+0x90/+0xa0`; `start` is the
+probe's projected position; the same box twice, one apart, is the sharpest pair):
+
+| Capture, update | Rows | Centre | Start | Carried normal | Length | Original |
+| --- | --- | --- | --- | --- | ---: | --- |
+| Talons Junction parked, Missile 3 | (-0.879, -0.012, -0.477) (-0.004, 1.000, -0.018) (0.477, -0.014, -0.879) | (5.643, -50.083, -196.670) | (6.655, -50.155, -198.533) | (-0.003, 1.000, -0.019) | 12 | box, `0x7f` |
+| Talons Junction parked, Missile 4 | the same | (5.642, -50.083, -196.670) | (6.995, -50.208, -199.161) | the same | 12 | mesh, floor (1) |
+| De Konstruct White, 112 units/s, Rocket 1 | (0.897, -0.101, -0.431) (0.127, 0.991, 0.033) (0.424, -0.085, 0.902) | (84.827, -26.447, 70.351) | (85.978, -26.678, 72.801) | (0.128, 0.991, 0.016) | 6 | box, `0x7f` |
+| De Konstruct White, 112 units/s, Rocket 4 | (0.896, -0.107, -0.431) (0.133, 0.991, 0.030) (0.424, -0.084, 0.902) | (85.621, -26.590, 72.051) | (87.166, -26.930, 75.332) | (0.128, 0.991, 0.016) | 6 | mesh, floor (1) |
+| Moa Therma White bank, 139 units/s, Rocket 1 | (0.064, -0.997, -0.032) (0.397, 0.055, -0.916) (0.916, 0.046, 0.399) | (251.772, 124.247, -349.078) | (254.322, 124.351, -347.969) | (0.393, 0.054, -0.918) | 6 | mesh, mag floor (3) |
+| Moa Therma White bank, Missile 2 | (0.065, -0.997, -0.032) (0.394, 0.055, -0.917) (0.917, 0.047, 0.397) | (253.130, 124.310, -348.487) | (252.295, 124.236, -348.851) | (0.394, 0.053, -0.917) | 12 | box, `0x7f` |
+| Outpost 7, 160 units/s, Plasma 1 | (-0.184, -0.060, -0.981) (-0.462, 0.886, 0.032) (0.868, 0.459, -0.191) | (-1031.705, 7.034, 347.084) | (-1028.295, 9.891, 345.924) | (-0.377, 0.926, -0.000) | 12 | box, `0x7f` |
+
+**Every bracket, explained.** On an axis-aligned craft (Moa Therma's and Arc Prime's grid, Metropia,
+Fort Gale, Basilico) a start dead ahead hits to 4.875 and not past it: the 100 units/s Rocket reads
+2.83 (three rockets of the volley), 3.92 (three), then 5.02 clear, the bracket `3.91 to 5.01` on this
+page. On Talons Junction (28.5 degrees off the world axes) the gate box is turned 57 degrees from the real
+one and the parked Missile hits at 0.70, 1.41, 2.12 and misses at 2.84, the old page's `0.71, 1.42,
+2.13, then 2.84` (re-measured, same numbers). The reach of a start dead ahead of the centre, straight down, by yaw off the world axes (this
+model, a Venom): 4.87 at 0 to 10 degrees, 4.12 at 15, 3.20 at 20, 2.48 at 28, 2.19 at 35, **2.06 at 45**,
+2.38 at 60, 4.87 again at 90. That is the `2.13 to 2.84` parked (Talons), the
+`4.80 to 4.93` of an aligned craft (4.875 inside it), and the `4.0 to 4.3` of a craft 13 to 17
+degrees off the world axes (this is a fit, not a re-read: that capture is gone, and the fresh Outpost 7
+Autopilot craft sat at 8 and 13 degrees). On the
+mag strip the craft is rolled 85 degrees; in the gate frame the start's height is `-2.49`, past the
+half height 1.3125, so the gate rejects it and the Rocket rides on its first update (it did, in both of its
+mag-strip captures, 139.1 units/s), while the Missile's first two starts (0.70 ahead, 0.91 behind) pass and its third
+(2.55 behind, gate height 2.27) does not. The old records could not be re-read (they were scratch, wiped
+after the lane that took them); the parked Talons sequence and the 100 units/s start were reproduced
+to the unit, and the Autopilot rows are covered by their own fresh captures above.
+
+**Also settled:**
+
+- The gate is on the world axes, not the track's: a craft's box reach depends on its **world**
+  heading. A wire must not approximate it with a forward distance.
+- A probe that meets a box leaves `code` at `0x7f` and `end` at the full segment, so the cage is asked
+  about the full end: 199 Missile probes (De Konstruct 63, Moa Therma 28, Arc Prime 108, all start straights)
+  returned **code `4` with kind `3`** (the 12 unit end is outside the tube there), and the Missile does nothing on it. Our wired cage test already
+  asks about `to - surface * length` when the mesh is not hit; keep that.
+- **The travel sweep follows the same law, but a meeting cannot be told from a stale slot** (confidence
+  **65**). It is the same `Collision_SweepSegment`. Its hit-kind slot is written only on a hit, so a
+  sweep that hits nothing still reads the last value there: 442 sweeps read kind `3`, 346 of them with
+  no predicted meeting and (345 of the 346) a probe that read `3` in the same update. Replayed from the
+  entity's position (not the stale previous-position word read at the update's entry) to the projected
+  position with the same gate, the model predicts a meeting on 96 sweeps and **none of them read
+  anything but `3`**; nowhere does a predicted meeting read as a mesh hit. That cannot separate a hit
+  from carry-over on those 96, so the sweep is wired by sharing the function, not by a measurement of
+  its own.
+- Any craft's box, not only the firer's, is in the world's collider table, so the same gate applies to
+  an opponent's (confidence **75**: one craft per Time Trial, all 352 meetings were the player's
+  index; the code path has no owner test, `Collision_RaycastWorld`'s `-1` skips nothing).
+- One title build (Pulse PSP USA) and one box size; the dimensions of other classes are the
+  Misc times 0.75, read from the collider, not assumed.
+
+**Ready to wire** (not wired here; thread `projectiles-leave-the-track-the-original-cages-them`, item 3).
+The probe in `projectile::flight` asks `Raycaster::raycast(Ray::new(to, -surface, length))` and falls on
+`None`. Replace the Plasma's `age < plasma::UNPINNED_SECONDS` gate (chosen, 0.04 s; wrong on the mag
+strip, right by luck on an aligned floor) by one function every flyer shares, so the Rocket, whose
+first two to four probes fall in the original and ride in ours, gets it too:
+
+1. For each craft in the race (the firer's included; the Cannon has no probe), the box is centre =
+   the body's position, rows = the body's rotation rows in the **original's order and signs** (row 0
+   is `(-1, 0, 0)` for a craft facing -z on Moa Therma White's grid; our `Body` basis must be checked against
+   the records above before use, because the gate is not symmetric under flipping one row), half dimensions
+   `(width, height, length) * 0.75 * 0.5` of its `<Misc>`.
+2. Gate: `local = (d . (r0.x, r1.x, r2.x), d . (r0.y, r1.y, r2.y), d . (r0.z, r1.z, r2.z))` for `d` =
+   segment end minus centre, the three-axis plus three-cross separating-axis test against the half
+   dimensions (`scripts/psp-craft-box-replay.py::separating_axis_passes` is the reference), then the
+   nearest face crossing of the true oriented box.
+3. If the nearest crossing is nearer than the mesh hit (or there is no mesh hit), the probe is `None`
+   (code `0x7f`): the Rocket and Plasma fall, the Missile and Shuriken do as they do on `None` today.
+   The travel sweep (position to projected position) asks the same function: a box nearer than a wall
+   hides the wall from a projectile launched inside the box.
+4. Test: the eight records above (red on the `R` frame for the Talons and De Konstruct rows and the
+   mag strip, red without the box for all box rows), then `rocket_floor_trace` and the Outpost 7 ramp
+   test re-run; expect the Rocket's first one to three probes to fall on an aligned grid and the
+   Plasma's `UNPINNED_SECONDS` constant to go.
+
+Names applied (2026-11-12): `Collision_ClipSegmentToAabb` (`0x08815038`, 78: the signature
+`(start, end, min, max, out0, out1)` and the AABB corners it is handed, the slab divide and clamp in
+the VFPU body; never decided a probe here, so its behaviour is read, not exercised) and
+`Collider_BoxTriangleIndices` (`0x08818ab0`, 90: writes twelve triples of corner indices
+`(1,5,7) (7,3,1) (7,5,4) (4,6,7) (7,6,2) (2,3,7) (2,0,1) (1,3,2) (4,5,1) (1,0,4) (6,4,0) (0,2,6)`,
+the box's triangle list). `FUN_08814e34`, called with the rows and not read afterwards, stays unnamed
+(a matrix inverse by its shape, result unused).
+
+**Cross-title.** Pure shares Pulse's engine: unread (**not checkable** this lane, no Pure capture),
+the wire is Pulse and PS2 by inheritance. HD, 2048 and Omega are separate code with their own projectile
+queries: unread; **checked, differs** is not claimed.
 
 ### The launch normal is the track's, not the craft's
 
@@ -1412,7 +1584,7 @@ the projectile's one-point query uses. The 17 rows of "The cage test reproduced"
 point (0.01 unit) and normal (cosine above 0.9999); the Plasma ends on update 49, the Cannon round
 on 25, the Outpost 7 rocket on 21, each on the original's own per-update `dt` (a single listed `dt`
 drifts a whole update by the Rocket's 15th: 0.0171 against a mean of 0.0166). **The Shuriken
-cannot be chained from update 50**: ours keeps the blade's speed where the original's changes
+could not be chained from update 50** (until the floor arms were wired, below): ours kept the blade's speed where the original's changes
 (item 5 of the thread; 276.9 units/s at update 52, 298.9 at 53), so by update 54 it is 0.3 unit off
 the original's line, meets the kerb's wall at update 58 and bounces instead of ending, and the test re-seeds each update from the original's own state
 instead. `rocket_floor_trace` on `07` and `10`: the rockets that reached their five seconds went
@@ -1448,6 +1620,21 @@ Per title (`Weapons::launch_normal_is_track_up`, `docs/gameplay/weapon-lineage.m
 ([ps3-hdfury-eu/projectile-launch-normal.md](../ps3-hdfury-eu/projectile-launch-normal.md), 86, 80
 and 75). Turning it on there moved three tests at their margins; that page's "Landed" section has
 the distributions they were re-based on.
+
+### Wired: the floor arms (2026-11-12, `pulse-floor-arms`)
+
+`Weapons::floor_arms_steer_to_ride_point` picks `projectile::FloorArms` per title. On Pulse and
+Pure (`SteerToRidePoint`) the Shuriken's probe arm and the Rocket's and Shuriken's travel-sweep arm
+write `(ride point - start) / dt` unrescaled (`start` is the update's entry position), the Missile's
+probe arm steers to the ride point as the Rocket's does, and the Plasma's travel-sweep arm only moves.
+`moa_therma_white_shuriken_ends_at_the_cage` chains the Shuriken from update 50: the velocity at
+each next entry is within 2 units/s of the recorded one and the blade ends on the cage at update 58
+(without the law: 278 against 299 units/s at update 52, and a bounce on the kerb). The other three arms
+are unit tests on a flat floor (`crates/weapons/src/projectile/tests/floor_arms.rs`), not recorded states.
+**Cross-title**: HD's `Plasma_Update` is its own function (ride height 4.0, above) and its travel
+segment only destroys on `0`, `4`, `5` (the pseudocode above writes no floor arm): **checked,
+differs** for the Plasma sweep, and HD, 2048 and Omega keep the parallel turn (**not checkable**
+for their Rocket, Missile and Shuriken arms: unread, named in the thread).
 
 ### Cross-title
 

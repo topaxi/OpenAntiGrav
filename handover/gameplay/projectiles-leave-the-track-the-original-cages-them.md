@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-12
-summary: "The cage test, the Cannon's muzzle speed and the track-up launch normal are wired; next own-craft box, Shuriken speed, floor arms"
+summary: "Cage test, Cannon muzzle speed, track-up launch normal, floor arms wired on Pulse and Pure; own-craft box measured (ready to wire), HD floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
@@ -32,7 +32,7 @@ What is settled:
 
 ## Open
 
-Ranked by what a player sees. Items 3 to 6 are recovered laws with a smaller effect; 7 is what
+Ranked by what a player sees. Item 3 is a recovered law with a smaller effect; 7 is what
 was not measured.
 
 1. ~~The cage test in the probe and the travel sweep (the report itself).~~ **Wired 2026-11-11**
@@ -40,23 +40,18 @@ was not measured.
    wall end carries `blast: true` while its cage end spends none (the `0x14` teardown reaches the
    explosion and no damage); no capture has produced a Missile's sweep `4`; `CageEffect_Spawn` on a
    projectile's cage hit is not drawn.
-3. **The first probes of a projectile miss on the firing craft's own box collider**, not on an age.
-   The query answers `0x7f` when the mesh raycast's nearest hit is a craft box (kind `3`, no
-   collider skipped). 28 live probe records. `plasma::UNPINNED_SECONDS` (0.04 s, chosen) stands in
-   for it and is wrong on the mag strip (the original's bolt rides on its first update there); the
-   Rocket has no stand-in at all (ours rides from the first update, the original's falls two to
-   four). **How far the box reaches ahead of `body+0x30` is not understood**: the brackets by speed
-   are on the linked section and do not fit one box (parked 2.13 to 2.84, 100 units/s 3.91 to 5.01,
-   125 units/s 4.80 to 4.93, 140 units/s 4.0 to 4.3, mag strip at 139 units/s under 2.83).
-5. **The Shuriken's speed is not constant.** Both of its floor arms write
-   `(hit + normal * ride - prev) / dt` with no rescale (333.6 at the throw, 268.3 to 337.7 on the
-   bank, 373.2 on the kerb); ours keeps the length. Position per update is exact either way; in
-   free flight ours is 29 units ahead after 52 ticks. Confidence 88.
-6. **Floor arms that differ from ours, decompile-level (84):** the Missile's probe floor arm is the
-   Rocket's steer toward the ride point (ours turns parallel; 0.05 to 0.5 unit a tick);
-   `Rocket_Update`'s travel-sweep floor arm writes `(hit + 3 n - prev) / dt` raw (seen live: a
-   rocket landing on Outpost 7's ramp face left it at `(-65.0, 155.6, -7.1)`; ours turns parallel,
-   chosen); `Plasma_Update`'s travel-sweep floor arm only moves (ours adopts the normal and turns).
+3. **The first probes of a projectile miss on a craft's box collider: measured 2026-11-12
+   (`pulse-own-craft-box`), ready to wire.** The box sits on `body+0x30` with the body's own rotation rows
+   (1,712 snapshots, difference 0), 4.125 x 2.625 x 9.75 on a Venom; `Collision_RaycastBox` gates the
+   segment through the **transposed** rotation (`R^T * v`, read live, 39 of 39 vectors), so the reach is
+   4.875 ahead only on a craft aligned to the world axes and shrinks to 2.06 at 45 degrees; on the mag
+   strip (85 degree roll) the gate rejects the start and the bolt rides at once. The model replays all
+   2,302 probes of 56 captures with 0 errors (the correct frame: 63). Law, records for a test, reach by
+   yaw and the wire recipe: [rocket-visuals.md](../../docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box),
+   replay tool `scripts/psp-craft-box-replay.py`. `plasma::UNPINNED_SECONDS` (0.04 s, chosen) is what the
+   wire deletes; the Rocket's missing equivalent is the same function in the same probe path. Open from it:
+   the travel sweep's own box meeting (65: same function, no reading of its own, see the section), an opponent's box (75), other
+   classes' dimensions (the collider carries them), Pure by inheritance.
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.
@@ -66,7 +61,6 @@ was not measured.
    - Pulse PS2 (inherits PSP; unread). HD's own code `4` in its projectile switch (HD runs no cage
      off the track header; its sweep function is unnamed). The Disruptor's own `advance`
      (`projectile/disruptor.rs`) was not looked at.
-   - What poses the craft's box collider against `body+0x30` when the weapons update (item 3).
 
 ## Done
 
@@ -78,8 +72,8 @@ was not measured.
   ends at the boundary on a sweep `4`, with no bounce. Tests:
   `crates/raceplay/tests/projectile_cage_ground_truth.rs` (the 17 recorded queries and the four
   endings, each red without the cage) and `crates/weapons/src/projectile/tests/cage.rs`. The
-  Shuriken test re-seeds each update from the original's state because its speed (item 5) drifts
-  a chain off the kerb. `rocket_floor_trace` Pulse `07`/`10`: "expired" 14 and 7 to 0.
+  Shuriken test first re-seeded each update from the original's state because its speed drifted a
+  chain off the kerb; it chains from update 50 since the floor arms (below). `rocket_floor_trace` Pulse `07`/`10`: "expired" 14 and 7 to 0.
 
 - **The Cannon's muzzle speed** (2026-11-12, `projectile-cage`): `cannon::launch` flies
   `(craft km/h + 500) * 0.75` units/s (`TARGET_GLOBAL_SCALE`), 750.60 at 139.111 units/s and 375.0
@@ -109,11 +103,32 @@ was not measured.
   HD's, 2048's and Omega's own `Rocket_Init` unread (reading HD's decides whether they take the
   law); the Disruptor's advance unread.
 
+- **The floor arms** (2026-11-12, `pulse-floor-arms`): `Weapons::floor_arms_steer_to_ride_point`
+  (Pulse measured, Pure inherited, HD, 2048 and Omega chosen `false`) selects `projectile::FloorArms`.
+  Pulse and Pure: the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
+  `(ride point - start) / dt` raw (the blade's speed drifts), the Missile's probe arm steers to the
+  ride point, the Plasma's sweep arm only moves. Tests: `projectile_cage_ground_truth::
+  moa_therma_white_shuriken_ends_at_the_cage` (now chained from update 50, no re-seed, velocity within
+  2 units/s of the original's at each update, ends at update 58) and `weapons/.../tests/floor_arms.rs`
+  (each arm's formula on a flat floor, both ways). **Not disc-backed**: the Missile's per-update
+  errors and the Rocket's ramp-face exit were never kept as recorded states, so those arms are unit
+  tests; recording them (`psp-projectile-sweeps.py` on Outpost 7's ramp, a Missile on Moa Therma)
+  would give them a ground truth. Still open from it: HD's, 2048's and Omega's own Rocket, Missile
+  and Shuriken floor arms are unread (HD's Plasma sweep writes no floor arm at all, so it differs from
+  Pulse's "only moves").
+
 ## Next Steps
 
-1. Item 3 needs the box pose read before it is wired: break at a probe's return with the box
-   collider's own pose beside `body+0x30` (the collider is `world + index * 0xc + 0x2454`, the index
-   is in the capture's `mesh_collider`), on a floor at two speeds and on the mag strip. Then a probe
-   that meets any craft's box first reports nothing, and `plasma::UNPINNED_SECONDS` goes.
-2. Items 5 and 6 are one change each in `flight.rs`'s floor arms; the Shuriken capture's speed
-   series and the Missile's per-update errors on the linked pages are their tests.
+1. **Wire item 3** (a `oag-wire` lane, one shared function, Pulse and Pure by inheritance): in
+   `projectile::flight` replace the Plasma-only `age < plasma::UNPINNED_SECONDS` probe gate by "a craft
+   box nearer than the mesh hit makes the probe `None`" for every probing weapon (the Rocket gains its
+   first one to three falling probes). The box is centre = body position, rows = the body's rotation rows
+   in the original's order and signs, half dimensions = `<Misc>` (width, height, length) x 0.75 x 0.5; the
+   gate is the separating-axis test in the `R^T` frame, then the nearest face of the true box (steps
+   and eight records in the linked section). Check our `Body` basis signs against the records before use
+   (the gate is not symmetric under flipping one row). Tests: those records (red on the `R` frame, red
+   without the box), `rocket_floor_trace` and the Outpost 7 ramp ground truth re-run, the Plasma's
+   `projectile_tilt_ground_truth` first-three-updates constant removed. Keep the wired cage test asking
+   about `to - surface * length` when the box is what the probe met (199 Missile probes returned code `4`
+   on a box). Update `docs/gameplay/weapon-lineage.md` and `projectile-floor.md` in the same change.
+2. Read HD's `Rocket_Update`, `Missile_Update` and `Shuriken_Update` floor arms (`ps3-hdfury-eu`); if they match Pulse's, flip `Weapons::floor_arms_steer_to_ride_point` for HD (and Omega, 2048 by lineage).

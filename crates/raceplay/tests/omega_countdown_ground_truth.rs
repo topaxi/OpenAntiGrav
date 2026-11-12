@@ -189,9 +189,9 @@ fn the_missile_launch_plays_one_child_of_each_random_layer() {
 
 /// The race cues Omega posts as Wwise events, out of [`oag_gameplay::cue::Cue::ALL`]'s 43: each
 /// launcher, impact and pickup's cue string and bank slot, read in the 1.07 executable
-/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`). The other 17 are held loops (loop flags
-/// unread), legacy events the executable never posts, or the collision and missile ship-hit
-/// choices that are unread.
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`). The other 17 are the 12 held cues
+/// ([`HELD_WIRED`], [`HELD_REFUSED`] and the engine), legacy events the executable never posts, or
+/// the collision and missile ship-hit choices that are unread.
 const POSTED: [oag_gameplay::cue::Cue; 26] = {
     use oag_gameplay::cue::Cue;
     [
@@ -241,6 +241,33 @@ const WIRED: [oag_gameplay::cue::Cue; 10] = {
         Cue::LeachFail,
         Cue::LeachEnergy,
         Cue::Repulsor,
+    ]
+};
+
+/// The held cues that load, and whether their event authors a loop: Omega spells them with a
+/// leading `_` and keeps the post's handle (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
+/// "Held loops").
+const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 5] = {
+    use oag_gameplay::cue::Cue;
+    [
+        (Cue::Shield, true),
+        (Cue::Autopilot, true),
+        (Cue::ShurikenTravel, true),
+        (Cue::Magstrip, true),
+        (Cue::LeachAttach, false),
+    ]
+};
+
+/// The held cues whose event plays a switch container, whose child is the game's value.
+const HELD_REFUSED: [oag_gameplay::cue::Cue; 6] = {
+    use oag_gameplay::cue::Cue;
+    [
+        Cue::PlasmaTravel,
+        Cue::RocketTravel,
+        Cue::MissileTravel,
+        Cue::QuakeTravel,
+        Cue::LockOn,
+        Cue::Blowup,
     ]
 };
 
@@ -301,16 +328,51 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
         ),
         "{report:#?}"
     );
-    for held in [Cue::RocketTravel, Cue::Shield, Cue::Magstrip] {
+    // A one-shot authors no loop: reading loop counts leaves the ten as they were.
+    for cue in WIRED {
+        for player in [false, true] {
+            let voices = sounds
+                .voices_for(cue, player, &mut oag_core::Rng::new(1))
+                .unwrap_or_default();
+            assert!(
+                voices.iter().all(|v| !v.looping),
+                "{cue:?} (player {player}) is a one-shot and loops"
+            );
+        }
+    }
+    // The held cues: each loads whole, its loops marked by the event
+    // (`docs/formats/wwise.md`, "Loops"); `_NGP_LEACHATTACH` authors none.
+    for (held, loops) in HELD_WIRED {
+        let voices = sounds
+            .held_voices(held, &mut oag_core::Rng::new(1))
+            .unwrap_or_else(|| panic!("{held:?} is a held Wwise cue: {report:#?}"));
+        let looping = voices.iter().filter(|v| v.looping).count();
+        assert_eq!(
+            looping > 0,
+            loops,
+            "{held:?}: {looping} of {} voices loop",
+            voices.len()
+        );
+    }
+    for held in HELD_REFUSED {
         assert!(
-            !plays(held, false),
-            "{held:?} is a held loop and stays unplayed"
+            !plays(held, false)
+                && sounds
+                    .held_voices(held, &mut oag_core::Rng::new(1))
+                    .is_none(),
+            "{held:?} reaches a switch container and stays unplayed"
+        );
+        assert!(
+            report.iter().any(|l| line_is_for(l, held)
+                && l.contains(" not loaded: ")
+                && l.contains("SwitchContainer")),
+            "{held:?} names the switch container: {report:#?}"
         );
     }
     assert!(
         report
             .iter()
-            .any(|l| l.starts_with("sfx: 10 of 43 race cues play their Wwise event")),
+            .any(|l| l.starts_with("sfx: 15 of 43 race cues play their Wwise event")),
         "{report:#?}"
     );
     assert!(

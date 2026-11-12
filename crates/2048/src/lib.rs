@@ -197,6 +197,8 @@ pub const TITLE: &Title = &Title {
         // Read statically off this title's own `Plasma_Init`, confidence 75; its Rocket, Missile
         // and Shuriken inits are not located and take HD's (`ps3-hdfury-eu/projectile-launch-normal.md`).
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
+        // Pulse's arms are measured; this title's own are unread.
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

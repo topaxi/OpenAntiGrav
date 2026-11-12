@@ -469,6 +469,62 @@ it plays its own sound, relays to a second event after 100 ms and sets a state
 (`oag_formats::sblk` opens 2048's `.bnk`; `Bank::parse` refuses them with
 `NoHeader`, the `data02` result above).
 
+## Loops
+
+Lane `omega-wwise-held-loops`, 2026-11-12. A Wwise object loops in one of two
+ways, both read now (`oag_formats::wwise::hirc::prop::LOOP`,
+`container::RanSeq::is_continuous`) and played by `oag_sound::sfx`'s
+`wwise_start`:
+
+* **A sound's loop count, property 58** in the node's own property bundle
+  (`hirc::node_props`): an `i32`, `0` forever, `n` plays `n` times, absent plays
+  once. Values seen over the patch's banks: `0` on 1,077 sounds, `2` on 4, `10`
+  on 2, `20` on 4.
+* **A continuous random or sequence container** (flag bit 3, `0x1a`) plays item
+  after item, `loop count` times over (`0` forever). The held cues' looping
+  containers are `0x1a` with loop `0` (magstrip, autopilot, shuriken travel) or
+  `200` (the player's autopilot); every one-shot pick read is `0x12`, loop `1`.
+
+Evidence, two independent sources:
+
+1. **The held cues against the one-shots.** Every layer of Omega's held cues
+   that should sustain carries one of the two (the probe over
+   `_SHIELD`, `_AUTOPILOT`, `_magstrip01`, `_SHURIKENTRAVEL` and the six travel
+   and lock events, each with its `_PC` twin; the evidence page's "Held
+   loops"); none of the ten one-shot cues this port plays reaches either
+   (`a_race_plays_its_posted_cues_from_their_wwise_events` asserts no voice of
+   theirs loops).
+2. **The media's own loop points.** A sound whose embedded `.wem` carries a
+   `smpl` chunk (a loop point) has property 58 = `0`:
+
+   | Archive | prop 58 = `0`: with `smpl` / without | absent: with `smpl` / without | `2`, `10`, `20` |
+   | --- | ---: | ---: | ---: |
+   | `data08` (patch) | 428 / 648 | 5 / 5,473 | 2 / 8 |
+   | `data00` (base) | 214 / 512 | 5 / 5,173 | 2 / 6 |
+
+   435 of `data08`'s sounds play media carrying `smpl`; 428 of them loop forever
+   (`data00`: 214 of 221).
+
+Confidence: **property 58 is the loop count, 85** (fitted, two sources above;
+the id is recalled from public Wwise documentation as `Loop`, beside 59
+`InitialDelay` already fitted); **the continuous flag and the container's loop
+count, 75** (bit names recalled from the same documentation, every held-cue
+container agrees).
+
+**How it plays** (chosen where the read stops): a forever sound is a looping
+layer, held until the game releases the cue; a counted loop is the media laid
+out `n` times, and one past 30 s of media loops instead (the player's
+autopilot's 200 plays). A continuous container's one pick stands for every
+item it would play, so a held random container repeats its first draw rather
+than drawing per pass, and its transition (crossfade mode 5, durations unread)
+is not played. A loop that its own event also stops or seeks is laid out to
+the cut and ends there (none of the held cues has one). The `smpl` loop
+points are not read: the whole media loops, so a sound authored with a lead-in
+before its loop start replays the lead-in.
+
+**2048: checked, differs.** 2048 ships `SBlk` banks, not Wwise; its looping is
+the `SBlk` reader's. **HD:** `SBlk` too, untouched.
+
 ## What is not done
 
 * **Event names.** A bank carries ids only, but its `.txt` listing names every
@@ -479,7 +535,8 @@ it plays its own sound, relays to a second event after 100 ms and sets a state
   actor-mixers, switch values, `Init.bnk`'s bus and state definitions. Music
   objects are read (above); `EventPlan::unread` still lists the events that
   play one, and `Library::walk_music` is how they are followed.
-* **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
+* **Loop points.** 173 embedded files carry a `smpl` chunk; its loop start and
+  end are not read (the loop count is, "Loops" above).
 * **The 1,450 dangling Play targets.**
 * **Race sound effects on this title** are not wired: the simulation's cues go
   through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
@@ -493,6 +550,8 @@ it plays its own sound, relays to a second event after 100 ms and sets a state
 | --- | ---: | --- |
 | Chunk walk, `BKHD`, `DIDX`, `HIRC` framing | 94 | tile the file / the chunk exactly on 107 of 107 banks; padding is zero |
 | Event, `Play`, sound and music-track layouts | 90 | exact-end on 2,183 of 2,183 Play; embedded size = `DIDX` size on every embedded sound; 0 unresolved media over two archives |
+| Property 58 is a sound's loop count, `0` forever | 85 | "Loops": every sustaining held-cue layer carries it or a continuous container, no one-shot does; 428 of the 435 `data08` sounds whose media carries `smpl` have it at `0` |
+| Container flag bit 3 is *continuous*, its loop count read only then | 75 | "Loops": `0x1a` on every held-cue looping container, `0x12` on every one-shot pick; bit name recalled |
 | Parent id at the head of the base parameters | 85 | fitted: resolves to an object or root on every node, 110 roots; the rest of the structure unread |
 | `.wem` is ATRAC9 | 93 | four independent statements above |
 | Plugin number 12 *means* ATRAC9 | 75 | recalled from the SDK; agrees with the media on every source |

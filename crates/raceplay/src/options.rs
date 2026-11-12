@@ -922,6 +922,9 @@ pub struct Setup {
     /// Whether a Rocket, Missile, Shuriken or Plasma bolt is born carrying the located track's
     /// up rather than the craft's, `oag_title::weapons::Weapons::launch_normal_is_track_up`.
     pub launch_normal_is_track_up: bool,
+    /// Whether the projectiles' floor arms are Pulse's decompiled laws,
+    /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
+    pub floor_arms_steer_to_ride_point: bool,
     /// Which ways a craft is put back are on, and the numbers they fire on:
     /// `oag_race::recovery::ResetTriggers::PULSE` with the title's
     /// `oag_title::Title::reset_enables` applied.

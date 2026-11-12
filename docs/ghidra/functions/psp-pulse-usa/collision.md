@@ -217,6 +217,17 @@ a procedural box rather than an authored mesh. Confidence **85** on
 shared box-dimension field and the 12-triangle loop count both matching the box
 collider layout `Collider_SetBoxDimensions` already established.
 
+**Corrected 2026-11-12 (live, 39 of 39 vectors): the separating-axis test is not in the box's own
+frame.** `Collision_RaycastBox` loads `collider+0x80..+0xb0` with `lv.q C100..C130` and applies
+`vtfm4.q C000, E100, C200` to the two segment ends minus the centre; the result read off the stack is
+`R^T * v` (the columns of the rows, not the rows), so the gate is the box turned the other way and
+agrees with the true box only on a craft aligned to the world axes. Before the test the segment is
+clipped to the collider's AABB (`Collision_ClipSegmentToAabb`, `0x08815038`), and the corners the
+triangles use come from `Collider_BoxSamplePoints` and the index table `Collider_BoxTriangleIndices`
+(`0x08818ab0`). Evidence, 2,302 replayed probes and the consequences for a projectile:
+[rocket-visuals.md](rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box).
+Confidence **92**.
+
 The hit result is 0x2c bytes: point (`+0x00`), normal (`+0x10`), collider
 index (`+0x20`), the averaged per-vertex scalar (`+0x24`), and, at `+0x28`,
 **which of the two narrowphase raycasts produced the hit** - `Collision_RaycastMesh`
@@ -642,6 +653,8 @@ respawn. Confidence **86**.
 | `0x08816ac0` | `Collision_RaycastWorld` | 88 |
 | `0x0881646c` | `Collision_RaycastMesh` | 88 |
 | `0x08817b1c` | `Collision_RaycastBox` | 85 |
+| `0x08815038` | `Collision_ClipSegmentToAabb` | 78 |
+| `0x08818ab0` | `Collider_BoxTriangleIndices` | 90 |
 | `0x088304d4` | `Sap_QueryAabb` | 88 |
 | `0x08816864` | `Collision_AddContact` | 86 |
 | `0x08815c1c` | `Collision_GetContact` | 90 |

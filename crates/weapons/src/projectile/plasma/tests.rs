@@ -76,6 +76,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         tick += 1;
         let bolt = &projectiles.slots[0];
@@ -128,6 +129,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         None,
         crate::projectile::TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
     );
     assert!(
         projectiles.slots[0].position.distance(nose_at_release) > 1.0,
@@ -175,6 +177,7 @@ fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
@@ -253,6 +256,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -316,6 +320,7 @@ fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
                 None,
                 crate::projectile::TriggerRadii::default(),
                 "VENOM",
+                crate::projectile::FloorArms::SteerToRidePoint,
             )
             .into_iter()
             .flatten()
@@ -360,6 +365,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -410,6 +416,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 3],
@@ -517,6 +524,7 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         tick += 1;
         assert!(tick < 120, "the hold has to end");
@@ -564,6 +572,7 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
             None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
     };
 
@@ -645,6 +654,7 @@ fn advance_one(
         None,
         crate::projectile::TriggerRadii::default(),
         "VENOM",
+        crate::projectile::FloorArms::SteerToRidePoint,
     );
 }
 

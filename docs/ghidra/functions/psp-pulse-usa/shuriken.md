@@ -402,4 +402,9 @@ Captured with `scripts/psp-projectile-sweeps.py` on Moa Therma White's banked he
 - `self+0x48` is the age; the carried normal at the throw is the track's up at the craft's located
   point (0.03 degrees from the nearest spline sample's `-down`).
 
+**Wired 2026-11-12** (`pulse-floor-arms`, Pulse): both floor arms write the raw step; the speed series
+above is the test (`projectile_cage_ground_truth::moa_therma_white_shuriken_ends_at_the_cage`,
+chained from update 50, velocity within 2 units/s each update). HD, 2048 and Omega keep the speed-kept
+parallel turn (their own `Shuriken_Update` is unread).
+
 **Cross-title:** Pure has no Shuriken; HD's is I:Pulse and runs no cage (the linked section).

@@ -248,6 +248,8 @@ pub const TITLE: &Title = &Title {
         // Read statically off HD's `Rocket_Init` (`0x00124d90`) and its siblings, confidence 86:
         // `ps3-hdfury-eu/projectile-launch-normal.md`.
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
+        // Pulse's arms are measured; this title's own are unread.
+        floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,

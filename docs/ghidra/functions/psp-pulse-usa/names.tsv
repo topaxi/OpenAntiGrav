@@ -74,6 +74,8 @@
 0x0883198c	function	Collision_SweepSegment	92	rocket-visuals.md
 0x0881646c	function	Collision_RaycastMesh	88	collision.md
 0x08817b1c	function	Collision_RaycastBox	85	collision.md
+0x08815038	function	Collision_ClipSegmentToAabb	78	rocket-visuals.md
+0x08818ab0	function	Collider_BoxTriangleIndices	90	rocket-visuals.md
 0x088304d4	function	Sap_QueryAabb	88	collision.md
 0x08816864	function	Collision_AddContact	86	collision.md
 0x08818540	function	CollisionMesh_BuildSap	85	collision.md

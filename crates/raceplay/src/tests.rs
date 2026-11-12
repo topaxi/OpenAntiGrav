@@ -436,6 +436,7 @@ fn setup(handling: Handling) -> Setup {
         autopilot_absorb_cancels: true,
         autopilot_pad_grants: false,
         launch_normal_is_track_up: true,
+        floor_arms_steer_to_ride_point: true,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         score_law: None,
