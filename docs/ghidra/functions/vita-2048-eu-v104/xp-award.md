@@ -93,3 +93,11 @@ lives in the event objects, not in `Unlocks_Definition.xml`, which is why the XM
 `Event complete` (Pass or Elite) plus `Finished Nth`. **Chosen, not measured**: pays on every
 finish; Elite instead of Pass; column by event kind. The profile total is one number shared with
 Omega.
+
+**Shared XP across 2048 and Omega (maintainer rule, 2026-11-12).** One XP total per player
+profile: a race in either title adds to it and either title's map reads it for the hidden-event
+gate. It is stored as the top-level `xp` key of the profile-wide `records.toml` (`Store::xp`), not
+in a title-keyed row, so no cross-title store needed building. Awards come from 2048's
+`XPAwards.xml`, which Omega ships byte-identical. The rank tables are **not** identical: Omega's
+`XPRanks.xml` has half the thresholds, so each title ranks the shared total by its own table (the
+same total is a higher Omega rank). Whether the maintainer wants one rank table for both is open.

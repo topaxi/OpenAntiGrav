@@ -17,6 +17,8 @@ the query the campaign map calls.
 
 ## Open
 
+- **Rank table under a shared total**: the total is shared (maintainer rule); Omega's `XPRanks.xml` is half 2048's, so the same total ranks higher in Omega. One table for both would be a maintainer call.
+
 - **Reveal wiring**: `oag_ui::frontend::campaign_map` does not call `Store::rank_reveals` yet
   (owned by the lattice-wave lane). It needs `Ranks` from `oag_2048::campaign::xp_tables` and
   each hidden event's `rank_required` (`oag_tables::mjolnir::campaign::Event`).
