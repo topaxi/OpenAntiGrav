@@ -5625,11 +5625,66 @@ and `29_Track` RAPIER (8 of 9) without a verdict.
 When Pulse began to fly its body damping ([body-damping.md](../physics/body-damping.md)),
 `06_Track` RAPIER left the clean set: its plan verified on 2 of the 5 gate builds. Across all 17
 scales of `perturb::BOUND_OFFSETS` and `perturb::HELD_OUT`, **15 of 17 clean undamped against 11
-of 17 damped**. Each failing verification meets the walls at samples 1232-1242, after the gap at
-1196-1200, and those walls stay in the plan's `unresolved` list in clean builds both ways
-(undamped, scales `2e-3`, `1.5e-3`, `-1.5e-5` clean with walls at 1233-1238 unresolved). So the
-landing after the gap was already a coin; the damping makes it come up wrong more often. The
-row sits in `NOT_CLEAN` until the planner resolves those walls.
+of 17 damped**. Each failing verification met the walls at samples 1232-1242, after the gap at
+1196-1200, and those walls stayed in the plan's `unresolved` list in clean builds both ways.
+
+**What the failing builds did (lane `speed-plan-06-rapier`).** The verification's flying lap
+from sample 1185 to 1245, one build per offset, unperturbed scale, damped:
+
+| | clean build (offset `2e-3`) | failing build (offset `0`) |
+| --- | --- | --- |
+| run-up 1185-1195 | not held, ceiling 41.6 at 1189-1195 | **held** from 1104-1159 to 1196, no ceiling |
+| speed at the lip (1195) | 38-41 u/s | 76 u/s |
+| landing | sample 1214, nose down (pitch -0.73), 18 u/s after it | sample 1225 at 102 u/s |
+| offset across the line at 1225 (corridor right bound 0.0) | +3.1 | +3.0, then +6.3 to +6.9 by 1232-1244 |
+| ceilings 1225-1233 | 65-68 | 16 (the floor), braking from 80 |
+| walls | none | 1236-1244, every tick |
+
+The run-up is held (`SpeedPlan::hold_run_up`, `crates/ai/src/plan.rs`) because a learning pass
+falls short into the gap after braking on it: every such fall in the 17 builds took off at
+34-37.5 u/s. (The whole-window search also holds 1155-1212 off a stall in the pit whose
+"takeoff" it reads at 3.3 u/s inside the gap: a misattribution, left as it is.) A held sample has no ceiling, so the hold turned "too slow at the lip" into full
+throttle, and the craft took off at 72-89 u/s. Lowering after the landing could not help (the
+craft is braking from 80 into a ceiling of 16 within ten samples), and the lowering skips held
+samples, so the site ran out of tries and was forgiven. Whether a build failed turned on how
+long a run-up the hold had covered: 45 ticks (1188/1192-1196) verified, 90 ticks back to
+1104-1159 mostly did not.
+
+**The answer: a long landing slows the held run-up** (`crates/ai/src/plan/landing.rs`,
+**chosen, not measured**). A wall on the ground, or after a hop shorter than `FELL_SECONDS`,
+whose trace holds a flight in the last 45 ticks that crossed a gap the line crosses and took
+off from a run-up with a held sample in it, is `Cause::LandedLong`. It lowers each held
+sample of that run-up once, to 0.96 of the slowest the craft did there (or of its ceiling if
+lower), and keeps the hold, so a corner after the landing still does not brake through the
+run-up. A fall short off a held sample with a ceiling raises that ceiling by the same step,
+so the two causes meet in the window between short (at most 37.5) and long (about 72 and up).
+The step is flat, not `lower`'s steepening one, and is taken once per sample per failure: the
+lip sample holds about twelve ticks of the run, and a per-tick step took its ceiling from 52
+to 30 in one failure, so the standing lap fell short (2 of 17 builds until that was fixed).
+
+| `06_Track` RAPIER, damped | before | after |
+| --- | --- | --- |
+| offsets clean, one build each (unperturbed scale) | 11 of 17 | **17 of 17** |
+| offsets clean, majority of the five gate scales | 11 of 17 | **17 of 17** |
+| builds clean, 17 offsets x 5 gate scales | | 85 of 85 |
+| unperturbed build: verify failures, unresolved | 22, `[(1234, Wall), (1232, Wall)]` | 0, `[(1241, Wall), (1242, Wall)]` |
+| unperturbed build: flying lap, ticks | 1,705 | 1,703 |
+
+The learning pass still gives up on a wall at 1233-1245 in 7 of the 17 unperturbed builds (it
+spends the site's tries on the post-landing lowerings first, then on the run-up), and their
+verification is clean anyway: the forgiven site is listed, the plan verifies. The new cause fired
+on `06_Track` FLASH and RAPIER only, at 1231-1249, in all eight slices; FLASH verifies 85 of 85
+builds after. The other 94 plans are bit for bit what they were (the raise reaches only ceilings
+the new cause lowered), the AI determinism references did not move,
+`ai_dekonstruct_symptoms_ground_truth` printed the same lines, and the lone-craft gate stayed
+all twelve clean (`06_Track` 35.3 s to 35.0 s). **2048 and Omega**: the plan is this project's
+own and reads no title data, so the change runs on every title's plans. Where it fires there
+was not traced (only the eight Pulse slices were); the two pins that build them,
+`the_2048_square_ring_plan_brakes_for_the_corner_it_ran_wide_of` and its Omega twin, still pass.
+
+Reproduce: one build per offset, as `speed_plan_ground_truth::slice` builds it but with
+`perturb::apply_at(&mut setup, 0.0, offset)` over the 17 offsets, and `probe::verify` for the
+rows; or the gate sweep below with `OAG_PERTURB`.
 
 ### A road under the line is a failure (2026-11-11)
 
@@ -5722,7 +5777,8 @@ Builds that verified clean, and offsets whose majority did:
 The other 91 rows print the same steps, lap and tight samples as before, and
 no row's majority is unclean under any of the 17 offsets. So the pin's
 `NOT_CLEAN` is empty and its unsettled list is gone. `06_Track`'s gap landing
-(1229-1237) is still what its 6 and 11 unclean builds fail on.
+(1229-1237) is still what its 6 and 11 unclean builds fail on; since 2026-11-12 the landing has
+its own answer ([above](#06_track-rapier-with-the-body-damping-2026-11-12)).
 
 ```sh
 for o in 0 2e-3 -2e-5 3e-6 -5e-4 5e-5 -3e-6 7e-4 -7e-6 \
