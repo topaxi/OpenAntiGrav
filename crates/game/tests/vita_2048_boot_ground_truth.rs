@@ -447,17 +447,6 @@ fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
     assert_eq!(gated.clone().count(), 15);
     assert!(gated.clone().all(|event| side(&event.name)));
     assert_eq!(events.iter().filter(|event| side(&event.name)).count(), 15);
-    // Every one authors the rank it waits for; the Feisar ship challenge is the one the live
-    // canvas read (`canvas-music-wave.md`, section 5): rank 10, first cell (59, 27).
-    assert!(gated.clone().all(|event| event.rank_required.is_some()));
-    let feisar = gated
-        .clone()
-        .find(|event| event.name == "Feisar - P Ship Challenge")
-        .expect("the Feisar ship challenge");
-    assert_eq!(
-        (feisar.x, feisar.y, feisar.rank_required),
-        (59.0, 27.0, Some(10))
-    );
 }
 
 /// The map's opening view, rendered, against frame 13

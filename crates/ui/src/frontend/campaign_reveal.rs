@@ -112,6 +112,14 @@ impl Frontend {
             .collect();
     }
 
+    /// How far the event called `name` has come; `None` when it is not on the
+    /// map.
+    #[must_use]
+    pub fn campaign_reveal(&self, name: &str) -> Option<Reveal> {
+        let at = self.campaign.events.iter().position(|e| e.name == name)?;
+        Some(self.campaign.reveal.get(at).copied().unwrap_or_default())
+    }
+
     /// The events found since the last call, by name: the game files them in
     /// the profile.
     pub fn take_found_events(&mut self) -> Vec<String> {
