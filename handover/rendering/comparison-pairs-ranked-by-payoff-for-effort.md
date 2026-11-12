@@ -2,7 +2,7 @@
 status: measure
 titles: [2048, omega, pure]
 updated: 2026-11-12
-summary: "Compare pairs ranked by payoff for effort: 11 of 14 2048 race pairs compare an HD craft (capture fix first), Omega card art, Pure pairs not viewable"
+summary: "Compare pairs ranked by payoff for effort: 11 of 14 2048 race pairs compare an HD craft (capture fix first), Omega card art (done), Pure pairs not viewable"
 size: S (30)
 difficulty: medium (30)
 ---
@@ -23,8 +23,9 @@ Impact figures are estimates from box area x error. Confidence is 0 to 100.
    `menu-pairs-show-hd-and-omega-front-end-differences.md`, Open 1(d)). Pair `omega/menu-campaign-select`, rmse 0.369,
    the largest of the 140. Visible: ours shows a blue disc and a placeholder hex where the original shows the 2048 banner,
    wordmark and roundel on a lattice card. Impact estimate: the card is about 30 % of the frame, error high (estimate).
-   Split in two: the card's banner and wordmark materials are wiring (effort low to medium, confidence 40, oag-wire);
-   the turned cards' pose needs the executable's `Campaign Selection` update, which is reverse engineering (oag-re).
+   Split in two: the card's banner and wordmark are wiring, **done 2026-11-12** (`omega-campaign-card-art`: the card's UV keys from its `.vex`,
+   `CardSpec::keyed`; the 2048 card box mean grey 69.3 to 32.3); the turned cards' pose needs the executable's `Campaign Selection` update,
+   which is reverse engineering (oag-re).
 
 2. **2048 race pairs compare a different craft: a capture fix first** (new). The `meta` block of 11 of the 14
    `2048-vita` race pairs (amphiseum, anulpha-pass, chenghou-project, dlc-vineta-k, metropia, moa-therma,
@@ -76,7 +77,7 @@ Impact figures are estimates from box area x error. Confidence is 0 to 100.
    every 2048 race pair's `meta.craft` names the craft the 2048 game drew. Until then, do not pick a hull lane.
 2. Item 1a (oag-wire): the `2048_campaign` card's banner and wordmark on the Omega campaign select. Box: the card on
    `omega/menu-campaign-select`, approximately x 200 to 1040, y 170 to 900 of 1920x1080 (set the exact box from the pair).
-   Accept when the pair's rmse falls below 0.369.
+   Accept when the pair's rmse falls below 0.369.~~ (done 2026-11-12).
 3. Item 1b (oag-re): the turned campaign cards' pose on Omega, from the executable's `Campaign Selection` update.
 4. Item 3 after item 2 (oag-re to name the bar's material, then oag-wire). Accept when the row measure above is zero on a
    real 2048 pair with the same track.
