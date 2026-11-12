@@ -454,6 +454,25 @@ and up), and Omega names them by `StringTableId` through the `PI_Track` path
 the section above read, so that section's **checked, differs** still holds.
 Which path Omega's event card takes is not read.
 
+### Ours (2026-11-12, `vita-2048-card-names-wire`)
+
+**Wired on two of the sites, not the rest.** `oag_title::FrontEnd::card_track_aliases`
+holds rows 0 to 27 of the table (`oag_2048::frontend::CARD_TRACK_ALIASES`; the
+DLC circuits, not 2048's own ten and not the `WV_` rows). `oag_game::boot::tiers2048::card_title`
+titles an HD or Fury event's card by `strings[alias(track)]` (exact key, else
+case-folded, else the key), with no `FE_REVERSE` word. Drawn on the
+`grid0_3_1` card: `VINETA K`; `grid0_5_1`: `ANULPHA PASS`; the reverse
+`Talons_Junction_R` (`grid9_1_2`): `TALON'S JUNCTION`. The online game list asks
+the same table by circuit id (`alias_title`); the room form and Track Select keep
+the picker names. A circuit with no row keeps its ordinary name: ours does not
+print `99_Track` or the unchecked `30_Track` prediction for 2048's own ten.
+Not drawn by ours at all: the mode card over the load and `Callout_Item` (no
+2048 screen of ours draws a circuit name there). Test:
+`vita_2048_dlc_menus_ground_truth::an_hd_event_card_titles_its_circuit_by_the_alias_key_per_direction`.
+Omega: **checked, applies, not wired**. Its card path is unread, its 28 ids
+are the identity under the table, and its ten 2048 circuits are not rows of the
+28 listed here, so `oag_omega`'s field stays empty and nothing there changes.
+
 ### Base build (v1.00)
 
 The base `eboot.elf` has `99_Track` (file offset `0x4a4bdc`); the table was not
