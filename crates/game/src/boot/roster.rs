@@ -249,8 +249,70 @@ pub(crate) fn load_circuit_names(
     names
 }
 
-/// Which copy of the table names them all, and what it says.
+/// Every circuit's name: the copy of the table that names them all, then the
+/// campaign file's own names for what that left, then a loader line for what is
+/// still an id.
 fn choose_circuit_names(
+    archives: &mut oag_assets::Archives,
+    language: Option<&oag_ui::language::Language>,
+    tracks: &[oag_raceplay::catalogue::Track],
+    report: &mut Vec<String>,
+) -> oag_ui::language::CircuitNames {
+    let mut names = names_from_a_copy(archives, language, tracks, report);
+    if tracks.is_empty() || names.len() == tracks.len() {
+        return names;
+    }
+    name_from_campaign(archives, tracks, &mut names);
+    let unnamed: Vec<&str> = tracks
+        .iter()
+        .filter(|track| names.get(&track.id).is_none())
+        .map(|track| track.id.as_str())
+        .collect();
+    if !unnamed.is_empty() {
+        report.push(format!(
+            "{} of {} circuit(s) are named by no table or campaign file and show their id: {}",
+            unnamed.len(),
+            tracks.len(),
+            unnamed.join(", ")
+        ));
+    }
+    names
+}
+
+/// The ten circuits of 2048 carry no key into `entries.xml` on Vita, but
+/// the campaign file authors a `TrackDefinition` for each: `M_TRACKNAME` is the
+/// `PI_Track` id and `M_DISPLAYNAME` its name
+/// (`docs/formats/2048-campaign.md`, "`TrackDefinition` resolves to a circuit by
+/// its own `M_TRACKNAME`"). A source with no such file leaves `names` as it was.
+fn name_from_campaign(
+    archives: &mut oag_assets::Archives,
+    tracks: &[oag_raceplay::catalogue::Track],
+    names: &mut oag_ui::language::CircuitNames,
+) {
+    let Some(text) = archives
+        .read_name(oag_2048::campaign::SP_XML)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+    else {
+        return;
+    };
+    let document = oag_2048::campaign::parse(&text);
+    for definition in oag_tables::mjolnir::campaign::tracks(&document) {
+        if let Some(track) = tracks
+            .iter()
+            .find(|track| track.id.eq_ignore_ascii_case(&definition.track_name))
+        {
+            names.name_if_absent(
+                &track.id,
+                &definition.display_name,
+                oag_2048::campaign::SP_XML,
+            );
+        }
+    }
+}
+
+/// Which copy of the table names them all, and what it says.
+fn names_from_a_copy(
     archives: &mut oag_assets::Archives,
     language: Option<&oag_ui::language::Language>,
     tracks: &[oag_raceplay::catalogue::Track],
