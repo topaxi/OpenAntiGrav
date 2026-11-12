@@ -3757,11 +3757,59 @@ rides `emissive_add::Plan` with no third binding. `OAG_ALPHA_EMISSIVE_OFF=1` is 
 (`crates/mesh/tests/psp2_alpha_emissive_ground_truth.rs`, red before, green after): Queens Mall's three authored colours and 8
 submesh users, a lightmapped submesh on Metro Park, Sol 2's negative, Omega Metropia (6 entries, 18 materials).
 
-**Open, Omega (checked, differs in how the picture binds).** 14 of Metropia's `dn_diffuse_specular_emiss` materials stay with the
-generic reading: they list `SpecularTexture` first, Omega's programs are not read for sampler use, and the build draws the first
-non-lightmap sampler as the picture, so the texel whose alpha would be the mask is the specular map's. Vita reads its programs
-and refuses the specular map (`psp2_sampler_use_ground_truth`); Omega's `lighting_only::inherited` carries three colourless families
-only. Binding `alpha_emissive` as the picture on those needs a per-family answer for Omega's record, not done here.
+**Omega's `dn_diffuse_specular_emiss` and 2048's: the picture and the specular map (confidence 90).** Both titles list
+`SpecularTexture` first in the instance, so "the first sampler listed" drew the specular map as the picture and read the
+neon mask off its alpha. Their programs say otherwise. Omega, `gcn_dump` on `02_metropia/Materials/dn_diffuse_specular_emiss`
+(the 9 lit permutations, e.g. `@0x3fc4`, 123 instructions; the ambient-only `@0x3244` samples `alpha_emissive` alone): texture
+slot 0 is `alpha_emissive` and slot 1 `SpecularTexture`, and the program ends
+
+```text
+rgb = fog(light * T.rgb + T.a * glowtinrt + specular * liveLighting0specular * S.rgb)   T = alpha_emissive, S = SpecularTexture
+@0x1bc v_mul_f32 v13, s16, v8                   ; glowtinrt.x * T.a
+@0x1d8 v_mad_f32 v2, v14, v12, v13              ; (liveLighting0specular.x * S.x) * pow + that
+@0x1e0 v_mac_f32 v2, v20, v5                    ; + (ambient + diffuse * N.L).x * T.x
+```
+
+`S` is only the specular's weight (no alpha of either gates it). 2048's lit permutations (`scripts/vita-usse.py disasm`, `dlc1.psarc`
+Metropia `dn_diffuse_specular_emiss` and Sol 2 `dn_diffuse_specular_emiss_glow`; `alpha_emissive` is resource 0 and `SpecularTexture`
+resource 1 in all of them) are the same shape in the Vita's squared texel domain: `mul r0.xyz, spec, S.rgb`, then
+`mad pa2, r0, S, pa2`. The `_glow` twin declares no `glowtinrt` and has the same pair.
+
+**Wired** (`oag_rcs::rcsmodel::psp2::specular_picture`, keyed by the file stem and an instance that binds both samplers, so a family
+not read keeps the sampler order): the picture is `alpha_emissive`; the specular map rides the third binding
+(`emissive_add::Add::texture`, so `pad_masks`) and the mode 12 entry's second lane is `ALPHA_EMISSIVE_SPECULAR_MAP`, which
+`shade.wesl` reads as `specular_mask = 1`, `specular_tint = decode(third.rgb)` (the pb_glass window's path, with the map third
+because Metropia's lightmapped draws hold the second). The `_glow` twin gets an entry of zero tint for the map alone.
+`OAG_SPECULAR_PICTURE_OFF=1` is the before. Tests, red before: `psp2_alpha_emissive_ground_truth::
+omegas_metropia_specular_family_draws_its_diffuse_and_weights_by_its_specular_map` (6 picture/map pairs over 17 materials, every one
+the `alpha_emissive` file as the picture and the specular file third), `..._alpha_emissive_materials_add_their_authored_colour`
+(32 materials, 0 left to the generic reading), `..._adds_no_colour` (Sol 2), and `hd_pad_ne_lit_path::
+an_alpha_emissive_entry_with_a_specular_map_weights_the_specular_by_its_colour` (fails with the shader branch dropped).
+
+**Measured, Omega Metropia pair** (native port original, 1920x1080, tick 100, the pair's own argv; `OAG_SPECULAR_PICTURE_OFF=1`
+is the before; the pixels that change are 1,191 of 2.07 million, in six clusters, the boxes below, named by where on/off differ). Mean RGB over those boxes,
+theirs / before / after:
+
+| Box (`x,y WxH`) | Theirs | Before | After |
+| --- | --- | --- | --- |
+| `777,112 230x82` | 143/132/131 | 118/116/119 | 122/121/125 |
+| `1100,121 114x45` | 114/113/111 | 103/100/91 | 110/107/99 |
+| `1035,264 130x28` | 81/78/74 | 58/53/48 | 68/64/59 |
+| `689,116 53x63` | 117/95/76 | 115/96/75 | 118/100/80 |
+| `763,261 23x49` | 121/115/98 | 70/92/82 | 69/92/83 |
+| `1221,129 116x73` | 99/93/90 | 107/102/93 | 111/107/98 |
+
+Three of the six boxes move toward the original (`777,112` by 4 to 6 of a 12 to 26 gap, `1100,121` by 7 of 11 to 23, `1035,264` by
+10 of 23); `1221,129` moves **away** (+4, already 8 to 9 too bright), `689,116` was within 2 and ends 1 to 5 off, and `763,261` is
+unchanged and 51 red short, so that cluster's
+remaining error is another term. The `517,112 1000x300` crop's mean absolute error against the original goes from
+0.1943 to 0.1935: the family is a few surfaces of the frame, and its picture is now the diffuse map, not a measured match of the
+whole.
+
+**Omega: checked, differs, left alone.** Omega's specular is not our `N.H` power: `@0xf0` to `@0x14c` compute `R.L` (`R` the
+reflected view) to the power `32 - 24 * s6` (`s6` a `reflectiveBlurCoeffs` lane), scaled by a reciprocal of `s6` as well
+(`@0x10c` to `@0x16c`; read at the instruction level, not named). The weighting by `S.rgb` is the
+reading wired here; the shape of the lobe is the shared stand-in's.
 
 **Measured.** None of the three 2048 grid pairs has an `alpha_emissive` surface in frame: `OAG_ONLY_MATERIAL` and a magenta override
 of mode 12 draw nothing on Empire Climb (Tower: 6 materials, 12 submeshes) or Queens Mall (5 materials, 8 submeshes), and Vineta K's

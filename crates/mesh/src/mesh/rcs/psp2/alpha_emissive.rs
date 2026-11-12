@@ -39,6 +39,17 @@ use crate::mesh::{
     ALPHA_EMISSIVE_SPECULAR_MAP, Emissive, ModelTexture, PROGRAM_PICTURE_ALPHA_EMISSIVE,
 };
 
+/// The family's picture and specular map, unless the diagnostic switch leaves them to the
+/// sampler order.
+pub(super) fn specular_picture(
+    material: &psp2::material::Material,
+) -> Option<specular_picture::SpecularPicture<'_>> {
+    if crate::mesh::rcs::isolate::specular_picture_off() {
+        return None;
+    }
+    specular_picture::of(material)
+}
+
 /// Admits each material that binds `alpha_emissive` and authors `glowtinrt` (or weights its
 /// specular by a map), writing its glow-table entry into the glow plan's table and its slot
 /// (and specular map) into `plan`. A slot another reading holds keeps it.
@@ -58,7 +69,7 @@ pub(super) fn plan(
             continue;
         };
         let tint = material.param(COLOUR);
-        let weighted = specular_picture::of(material);
+        let weighted = specular_picture(material);
         if tint.is_none() && weighted.is_none() {
             continue;
         }

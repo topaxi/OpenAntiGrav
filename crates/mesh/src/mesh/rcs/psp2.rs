@@ -40,7 +40,7 @@ use super::Textures;
 use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
 use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
-use oag_rcs::rcsmodel::psp2::{lighting_only, specular_picture};
+use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod alpha_emissive;
 mod alpha_product;
@@ -1026,7 +1026,7 @@ fn bind_textures(
                 Some(layer) => Some(layer.diffuse.as_str()),
                 None => emissive_add
                     .colour(Some(index))
-                    .or_else(|| specular_picture::of(material).map(|s| s.picture))
+                    .or_else(|| alpha_emissive::specular_picture(material).map(|s| s.picture))
                     .or_else(|| material.diffuse_texture_without(&refused)),
             };
             let refused_here = layer.is_none()
