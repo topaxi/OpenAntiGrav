@@ -1487,7 +1487,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   2048: **checked, differs** - the Vita road is `fc16_phong_alphaspec_normal_emissive`
   with `track_a_floor_ds` as its `DiffuseMap` first, so its binding is unchanged.
 - **The `tarmac_*` road families draw the wrong coordinate set: Rockway Stadium's black road patch**
-  (`omega-arena-square`, 2026-11-12, confidence 85 for arena, 55 for the other seven circuits).
+  (`omega-arena-square`, 2026-11-12, confidence 85 for arena, 55 for the other seven circuits; fixed
+  below).
   The patch seen around the craft on `arena` is the road, not a light or a shadow. Method: the
   same pose on 2048's own arena (Vita) has a normal grey road; `OAG_SKIP_MATERIAL=road_a_ds`
   removes the black and shows the floor under it; an unlit render (`OAG_ALBEDO_ONLY`, wired into
@@ -1519,6 +1520,31 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   (`DiffuseAlphaMapSampler`, `DirtSampler`, `MarkingsSampler`), not off a decoded program.
   2048: **checked, differs** - none of 2048's arena, square, altima or mall materials is a
   `tarmac_*` family; its roads name `Uv1`, which is why 2048's own arena draws a normal road.
+  **Wired** (2026-11-12, `omega-tarmac-uv`): `VertexDecl::own_diffuse_texcoord` takes
+  `uv1_uvDirt` (`0x273a_b13e`, four halves) after a named `Uv1` and before the confidence-70
+  file-order rule, so the first pair at offset 28 is the diffuse coordinate; the declaration's own
+  `uv1` entry (offset 32) is not read. `diffuse_texcoord_is_fallback` no longer counts these.
+  Unit tests on an arena-shaped declaration (offsets 20, 24, 28, 32; red on `uvMarkings` before the
+  change). Ground truth, `crates/rcs/tests/psp2_flat_census_ground_truth.rs`: 661 submeshes name
+  `uv1_uvDirt` and no `Uv1`, **all of them `tarmac_*`** (122 in `data00`: mall, tower; 539 in `data04`:
+  arena, bridge, cathedral, park, square, subway), and for every one the reader's coordinates equal
+  a fresh decode of `uv1_uvDirt`'s first two halves off the vertex buffer. The range is not the
+  thread's "u -44 to 41, v 0 to 1" (that was one reading near the craft): the whole of arena's
+  `track.final.rcsmodel` road material `tarmac_markings_dirt_markingsnormal_emis` spans u -53.9 to
+  56.9, v -4.0 to 3.5, its sibling `tarmac_markings_dirt_markingsnormal` u -2.8 to 3.7, v -4.2 to 3.6;
+  the test asserts the road's u span exceeds 80 (`uvMarkings` spans 0.2). One road submesh (787
+  triangles) that drew flat on `uvMarkings` now reads a real coordinate (`omega_data04`'s flat pin
+  36,178 to 36,177). Compare pair `arena-2048` re-rendered on the branch (a private copy of the
+  pair, its recorded flags): whole-frame mean grey 49.25 to 35.30, RMSE to the original 0.261 to
+  0.216; mean RGB of three road boxes (1920 x 1080 pixels; left of the craft 280,500 340x180,
+  right 1350,560 400x200, ahead 720,330 400x160): original (86,122,114) (131,138,128)
+  (124,132,123), before (29,44,39) (163,172,166) (66,85,77), after (74,115,108) (139,147,137)
+  (95,129,120). The road is grey asphalt with the kerb line and dashes. Still open: the markings
+  and dirt sets (`uvMarkings`, `uv1_uvDirt.zw`) are not wired, so the decals and dirt splat are
+  not drawn.
+  2048: **checked, differs, and the ground truth is unchanged**: the same census finds 0
+  `uv1_uvDirt` submeshes on every Vita archive (base, dlc1, dlc2, both patch archives) and every
+  Vita pin, `empire_climb_is_pinned`'s `own_fallback` 4,761 included, passes unchanged.
 - **Unity Square's road is not black; what it lacks is the panel emissive and the displacement**
   (`omega-arena-square`, 2026-11-12, confidence 55). Square's road is
   `road_alphaspec_normal_emissive_panelmap1` (and `_mask`), the family of Altima's road above; its
