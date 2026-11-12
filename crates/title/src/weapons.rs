@@ -87,9 +87,9 @@ pub struct Weapons {
     /// track's, not the craft's"). The Cannon and the Disruptor are not in that list and keep the
     /// craft's up on every title.
     ///
-    /// `false` on HD, 2048 and Omega: their own `Rocket_Init` and siblings are unread, and
-    /// turning the Pulse law on moved their opponent fields (`rocket-visuals.md`, "Wired: the
-    /// launch normal"), so they keep the craft's up until read.
+    /// HD's `Rocket_Init`, `Missile_Init`, `Plasma_Init` and `Shuriken_Init` store the same
+    /// record's down negated (confidence 86), Omega's and 2048's `Plasma_Init` too (80, 75), so
+    /// all five titles are `true` (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`).
     pub launch_normal_is_track_up: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.

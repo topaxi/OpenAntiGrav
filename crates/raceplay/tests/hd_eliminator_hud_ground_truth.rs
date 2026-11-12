@@ -201,51 +201,6 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
     );
 }
 
-/// The board an Eliminator leaves is the score's: every row carries the points its craft ended on
-/// and the rows run highest first, so `EndRace Results` can draw a `POINTS` column in that order.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_finished_eliminator_leaves_a_board_ranked_on_points() {
-    let Some(image) = image() else { return };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
-        source: image.display().to_string(),
-        class: "VENOM".to_string(),
-        mode: oag_race::Mode::Eliminator,
-        seed: Some(1),
-        ..oag_raceplay::Options::default()
-    })
-    .expect("loading an HD Eliminator");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.set_autopilot(true);
-    for _ in 0..30_000 {
-        race.tick(&PlayerInputs::none());
-        if race.results().is_some() {
-            break;
-        }
-    }
-    let board = race.results().expect("the race reached its target");
-    assert!(board.scored(), "a score race's board ranks on points");
-    let world = &race.sim.world;
-    for row in &board.rows {
-        let standing = &world.ships[usize::from(row.slot)].standing;
-        let points = row.points.expect("every row carries its points");
-        assert_eq!(points.points, standing.score as u32, "slot {}", row.slot);
-        assert_eq!(points.kills, standing.kills);
-        assert_eq!(points.deaths, standing.deaths);
-    }
-    let ranked: Vec<u32> = board
-        .rows
-        .iter()
-        .filter_map(|row| row.points.map(|points| points.points))
-        .collect();
-    assert!(
-        ranked.windows(2).all(|pair| pair[0] >= pair[1]),
-        "{ranked:?}"
-    );
-    let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
-    assert_eq!(places, (1..=8).collect::<Vec<u8>>());
-}
-
 /// The lap award reaches a craft through the race's own tick, at the opponents' scale.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -388,14 +343,64 @@ fn sweep_score_changes() {
     std::fs::write(path, out).expect("writing the sweep");
 }
 
-/// Runs an HD Racebox Eliminator to its target under autopilot and answers the tick it ended on
-/// and the laps the leading opponent had completed, `None` if it never ended.
+/// How one race to the target went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Outcome {
+    /// The laps the leading opponent had completed when the race ended, or at the cap.
+    laps: u32,
+    /// The tick the race ended on, `None` if it still ran at the cap.
+    ended: Option<u64>,
+}
+
+/// The board an Eliminator leaves is the score's: every row carries the points its craft ended on
+/// and the rows run highest first, so `EndRace Results` can draw a `POINTS` column in that order.
+fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
+    let board = race.results().expect("the race reached its target");
+    assert!(board.scored(), "a score race's board ranks on points");
+    let world = &race.sim.world;
+    for row in &board.rows {
+        let standing = &world.ships[usize::from(row.slot)].standing;
+        let points = row.points.expect("every row carries its points");
+        assert_eq!(points.points, standing.score as u32, "slot {}", row.slot);
+        assert_eq!(points.kills, standing.kills);
+        assert_eq!(points.deaths, standing.deaths);
+    }
+    let ranked: Vec<u32> = board
+        .rows
+        .iter()
+        .filter_map(|row| row.points.map(|points| points.points))
+        .collect();
+    assert!(
+        ranked.windows(2).all(|pair| pair[0] >= pair[1]),
+        "{ranked:?}"
+    );
+    let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
+    assert_eq!(places, (1..=8).collect::<Vec<u8>>());
+}
+
+/// The laps the opponent with the most points has completed.
+fn leader_laps(race: &oag_raceplay::Race) -> u32 {
+    let world = &race.sim.world;
+    let leader = (1..world.ship_count as usize)
+        .max_by(|&a, &b| {
+            world.ships[a]
+                .standing
+                .score
+                .total_cmp(&world.ships[b].standing.score)
+        })
+        .expect("an opponent");
+    world.ships[leader].standing.lap - 1
+}
+
+/// Runs an HD Racebox Eliminator to its target under autopilot, or to 60,000 ticks (1,000 s).
+/// Every race that ends is checked for a board ranked on points
+/// ([`assert_board_ranked_on_points`]).
 fn race_to_target(
     image: &std::path::Path,
     difficulty: oag_ai::Difficulty,
     seed: u64,
     skill_level: Option<u8>,
-) -> Option<(u64, u32)> {
+) -> Outcome {
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
@@ -416,19 +421,17 @@ fn race_to_target(
     for tick in 0..60_000u64 {
         race.tick(&PlayerInputs::none());
         if race.results().is_some() {
-            let world = &race.sim.world;
-            let leader = (1..world.ship_count as usize)
-                .max_by(|&a, &b| {
-                    world.ships[a]
-                        .standing
-                        .score
-                        .total_cmp(&world.ships[b].standing.score)
-                })
-                .expect("an opponent");
-            return Some((tick, world.ships[leader].standing.lap - 1));
+            assert_board_ranked_on_points(&race);
+            return Outcome {
+                laps: leader_laps(&race),
+                ended: Some(tick),
+            };
         }
     }
-    None
+    Outcome {
+        laps: leader_laps(&race),
+        ended: None,
+    }
 }
 
 /// The seeds the pace was tuned and measured on (`docs/gameplay/race-modes.md`, "The pace of a
@@ -436,9 +439,8 @@ fn race_to_target(
 /// the pace is made on the median over all twelve.
 const PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=12;
 
-/// Runs `PACE_SEEDS` four at a time and answers the sorted laps the leading opponent had completed
-/// when each race reached its target, `None` if one never did.
-fn pace_laps(image: &std::path::Path, difficulty: oag_ai::Difficulty) -> Option<Vec<u32>> {
+/// Runs `PACE_SEEDS` four at a time and answers their outcomes, sorted by laps.
+fn pace_laps(image: &std::path::Path, difficulty: oag_ai::Difficulty) -> Vec<Outcome> {
     let seeds: Vec<u64> = PACE_SEEDS.collect();
     let mut laps = Vec::new();
     for chunk in seeds.chunks(4) {
@@ -448,48 +450,63 @@ fn pace_laps(image: &std::path::Path, difficulty: oag_ai::Difficulty) -> Option<
                 .map(|&seed| scope.spawn(move || race_to_target(image, difficulty, seed, None)))
                 .collect();
             for race in races {
-                laps.push(race.join().expect("a race thread").map(|(_, laps)| laps));
+                laps.push(race.join().expect("a race thread"));
             }
         });
     }
-    let mut laps = laps.into_iter().collect::<Option<Vec<u32>>>()?;
     laps.sort_unstable();
-    Some(laps)
+    laps
 }
 
-/// The median of an even count of sorted laps, rounded down.
-fn median_laps(sorted: &[u32]) -> u32 {
+/// The median of an even count of outcomes sorted by laps, rounded down.
+fn median_laps(sorted: &[Outcome]) -> u32 {
     let mid = sorted.len() / 2;
-    (sorted[mid - 1] + sorted[mid]) / 2
+    (sorted[mid - 1].laps + sorted[mid].laps) / 2
 }
 
 /// A Novice score Eliminator lasts about as long as the original's (nine laps to 200 on Vineta K,
-/// n = 1), a third either way, as the median over `PACE_SEEDS`: eight measured, ten before
-/// Novice started on `easyshield`. Every seed reaches its target, which none did while a Novice
-/// opponent held a Mine for good (seed 9 of twelve still ran at 1,000 s); and the median is more
-/// than six laps, which it was not (one to three) while opponents steered for pads and bunched.
+/// n = 1), a third either way, as the median over `PACE_SEEDS`: ten measured, nine with the
+/// craft's up as the launch normal. The median is more than six laps, which it was not (one to
+/// three) while opponents steered for pads and bunched.
+///
+/// **A race still running at 1,000 s counts at the laps it had** (`docs/gameplay/race-modes.md`,
+/// "The pace of a score Eliminator"), and the median must not depend on it: every such race has
+/// already run at least the median's laps, so however long it would have run, the median is
+/// the same. A Novice opponent that holds a Mine for good still fails it: seven of twelve ran
+/// past 1,000 s that way, and more than half unended puts the median into the cap. One seed (1)
+/// runs past it, at 19 laps with its opponents on 117 to 187 points
+/// (`docs/ghidra/functions/ps3-hdfury-eu/projectile-launch-normal.md`, "Turning it on").
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
     let Some(image) = image() else { return };
-    let laps = pace_laps(&image, oag_ai::Difficulty::Novice)
-        .expect("every Novice race reaches 200 within 1,000 s");
+    let laps = pace_laps(&image, oag_ai::Difficulty::Novice);
     let median = median_laps(&laps);
     assert!(
         (6..=12).contains(&median),
         "Novice's leader completed a median of {median} laps (sorted: {laps:?})"
     );
+    let unended: Vec<&Outcome> = laps.iter().filter(|race| race.ended.is_none()).collect();
+    assert!(
+        unended.len() < laps.len() / 2 && unended.iter().all(|race| race.laps >= median),
+        "a race still running at 1,000 s moves the median of {median} laps (sorted: {laps:?})"
+    );
 }
 
 /// An Elite score Eliminator takes more than three laps at the median over `PACE_SEEDS` (six
 /// measured; one while the opponent spent every pickup the moment the law let it, which the
-/// twenty-second hold of a fresh pickup stops), and every seed reaches its target.
+/// twenty-second hold of a fresh pickup stops), and every seed reaches its target. Elite is the
+/// default difficulty, so these twelve races also carry the claim that a finished race leaves a
+/// board ranked on points ([`assert_board_ranked_on_points`]).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_elite_score_eliminator_takes_more_than_a_few_laps() {
     let Some(image) = image() else { return };
-    let laps = pace_laps(&image, oag_ai::Difficulty::Elite)
-        .expect("every Elite race reaches 200 within 1,000 s");
+    let laps = pace_laps(&image, oag_ai::Difficulty::Elite);
+    assert!(
+        laps.iter().all(|race| race.ended.is_some()),
+        "every Elite race reaches 200 within 1,000 s: {laps:?}"
+    );
     let median = median_laps(&laps);
     assert!(
         median >= 4,
@@ -522,8 +539,11 @@ fn sweep_race_length() {
     let mut out = String::new();
     for seed in first.parse::<u64>().expect("a seed")..=last.parse::<u64>().expect("a seed") {
         match race_to_target(&image, difficulty, seed, rung) {
-            Some((tick, laps)) => out.push_str(&format!("{seed} {tick} {laps}\n")),
-            None => out.push_str(&format!("{seed} never -\n")),
+            Outcome {
+                laps,
+                ended: Some(tick),
+            } => out.push_str(&format!("{seed} {tick} {laps}\n")),
+            Outcome { laps, ended: None } => out.push_str(&format!("{seed} never {laps}\n")),
         }
         std::fs::write(&path, &out).expect("writing the sweep");
     }
