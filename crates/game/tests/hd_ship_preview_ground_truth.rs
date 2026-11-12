@@ -619,7 +619,7 @@ fn boot_archives(
 
 /// The craft's light is the front end's own `.envsettings`, read from the disc: the Fury
 /// style's file in the Fury style and the HD style's in the HD one, at HD's halved lit output
-/// times the tone stage's exposure at the front end's adapted luma. The tone constants the
+/// times the tone stage's exposure at the front end's adapted luma (the HD style's, unread, at the clamp). The tone constants the
 /// title carries are what the Fury file authors for those keys, so a table that drifts from the
 /// disc fails here. A title with no `model_lighting` draws no such light.
 #[test]
@@ -655,7 +655,7 @@ fn the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage() {
     assert_eq!(Some(light.ambient), file.vec3(AMBIENT_COLOUR));
     assert_eq!(Some(light.direction), file.direction(SUN_DIRECTION));
     assert_eq!(Some(light.specular_scale), file.scalar(SUN_SPECULAR_SCALE));
-    let exposure = tone.maximum - (tone.adapted * tone.boost).min(tone.clamp);
+    let exposure = tone.maximum - (tone.adapted_fury * tone.boost).min(tone.clamp);
     assert!(
         (light.output_scale - 0.5 * exposure).abs() < 1e-5,
         "output scale {} against 0.5 x {exposure}",
@@ -670,6 +670,11 @@ fn the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage() {
     let hd_style = oag_game::preview::model_light(&mut archives, title, false, &mut report)
         .expect("the HD style's file reads");
     assert_ne!(hd_style.sun, light.sun, "the two styles are two files");
+    assert!(
+        (hd_style.output_scale - 0.5 * (tone.maximum - tone.clamp)).abs() < 1e-6,
+        "the HD style's white page sits at the clamp: {}",
+        hd_style.output_scale
+    );
 }
 
 /// The mean luma of the hull's lit pixels (those over 60) in the 716,150 1012x650 box of a

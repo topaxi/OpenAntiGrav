@@ -468,7 +468,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
 /// loader sets up (`Tone adaption boost` 35, and the block's own clamp 3 and maximum 4;
 /// confidence 85). **`adapted` is the live read of `FunkLayer + 0x25c` on Ship Select in the
 /// Fury style**, 1920x1080 at scale 100, ten reads of 0.0157 to 0.0180 whose mean is 0.0163
-/// (confidence 75, one boot); the HD style's frame is unmeasured and inherits it.
+/// (confidence 75, one boot); the HD style's frame is unmeasured, a white page, and is taken at the clamp.
 pub const MODEL_LIGHTING: oag_title::ModelLighting = oag_title::ModelLighting {
     fury_file: names::FURY_MODEL_LIGHT,
     hd_file: names::HD_MODEL_LIGHT,
@@ -477,7 +477,7 @@ pub const MODEL_LIGHTING: oag_title::ModelLighting = oag_title::ModelLighting {
         boost: 35.0,
         clamp: 3.0,
         maximum: 4.0,
-        adapted: 0.0163,
+        adapted_fury: 0.0163,
     }),
 };
 

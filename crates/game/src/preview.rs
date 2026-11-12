@@ -621,7 +621,7 @@ fn ps3_model(
 /// The rig is the title's front-end `.envsettings` ([`oag_title::ModelLighting`]), through the
 /// reader a circuit's file takes, at the title's lit-output scale, times the front end's tone
 /// stage where the title has one: `oag_post::hd_bloom::exposure` at the front end's adapted
-/// luma. The file's fog is not applied: with it the hull's box against the original's frame
+/// luma (the Fury style's is read; the HD style's page is white and is taken at the clamp). The file's fog is not applied: with it the hull's box against the original's frame
 /// goes from 4.62 to 6.48 (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
 /// "The frame check").
 pub fn model_light(
@@ -650,7 +650,12 @@ pub fn model_light(
         1.0
     };
     let exposure = lighting.tone.map_or(1.0, |tone| {
-        oag_post::hd_bloom::exposure(tone.adapted, tone.boost, tone.clamp, tone.maximum)
+        let adapted = if fury {
+            tone.adapted_fury
+        } else {
+            tone.clamp / tone.boost
+        };
+        oag_post::hd_bloom::exposure(adapted, tone.boost, tone.clamp, tone.maximum)
     });
     report.push(format!(
         "{file}: front-end models lit by it, output scale {halved} x exposure {exposure:.3}"

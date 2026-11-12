@@ -189,9 +189,11 @@ walked `right cross right cross cross` to `Team Selection` (the frame read: Feis
 So the front end's exposure is `4 - min(0.0163 * 35, 3)` = **3.43**, against the 3.45 the frame fit predicted
 (0.016): confirmed, confidence 75 (one boot; the quantisation step is 0.0039, so the mean is good to about
 0.002, which is 0.07 of exposure). The block is the file's, in every key read: the rig, specular and fog
-included. **The read is profile-sensitive.** A first run on RPCS3's default 1280x720 at `Resolution Scale 150`
-read 0.0212 to 0.0270 (mean 0.0234, exposure 3.18), 44 % high: the same artefact `docs/rendering/hd-track-tone.md`
-records for the race readback, and why a read of this register is made on the compare profile only.
+included. **The read moved with the profile.** A first run on RPCS3's default 1280x720 at `Resolution Scale 150`
+read 0.0212 to 0.0270 (mean 0.0234, exposure 3.18), 44 % high; `docs/rendering/hd-track-tone.md` found the race
+readback at that profile 9 to 35 % *low*, the opposite way, so this is a profile effect of another size and sign, on
+a different boot each time (the Fury backdrop's cloud pick varies by boot), and profile and boot are not separated.
+A read of this register is made on the compare profile only.
 
 ## Wired (2026-11-12)
 
@@ -204,9 +206,15 @@ The craft preview binds the front end's rig and tone, on both paths a player's f
   (`FrontEnd_IsFuryStyle`'s stand-in, `HD_BG`'s darkness);
 - read through `oag_raceplay::authored_light`, the reader a circuit's `.envsettings` takes (not hand-copied);
 - the output scale is HD's `0.5` (`lit_output_halved`) times `oag_post::hd_bloom::exposure(0.0163, 35, 3, 4)`
-  (3.43): **1.715**. The tone constants are the loader's writes; a ground-truth test holds them to what
-  `fe.fury.EnvSettings` authors for those keys. The adapted luma is the Fury style's, read; **the HD style's is
-  unmeasured and inherits it**;
+  (3.43): **1.715** in the Fury style. The tone constants are the loader's writes; a ground-truth test holds them to
+  what `fe.fury.EnvSettings` authors for those keys. The adapted luma is the Fury style's, read. **The HD style's is
+  unread, and its page is white** (`HD_BG` light), where the exposure bottoms out at the clamp for any luma above
+  `3 / 35` = 0.086: so the HD style is taken at `maximum - clamp` = 1 (output scale 0.5), an inference from the law
+  and a white page, confidence 55, not a read. The inherited 3.43 would have been about 3.4 times too bright there;
+- **the HD style is not seen on a real frame**: its frame needs the plain HD disc (the Fury disc's menus are the Fury
+  style; `display.front_end_style` moves only the loading screen). With the HD file's rig forced onto the Fury frame
+  the hull draws plausibly (not clipped, a little dimmer than under the Fury rig; box 9.99 against the Fury
+  original, which is not a comparison);
 - the file's fog is not applied: with it the box is 6.48 against 4.62, and nothing here shows the hull's programs
   read parameter 7 at all.
 
@@ -230,7 +238,7 @@ the tone keys) and `ship_selects_hull_is_as_bright_as_the_original_on_both_paths
 **Still open**, as in "The frame check": the left of the box and the darkest pixels read brighter in the original
 (the parameter 8 reflection, `Ambient false direction`, which `oag_mesh::mesh_render::Light` has no field for, or
 the front end's bloom); the `+ bloom` summand of the resolve is not exposure-scaled and the preview draws after the
-chain, so the hull gets none; `iblScalePower`'s value. The HD style's frame is unmeasured (adapted luma inherited).
+chain, so the hull gets none; `iblScalePower`'s value. The HD style's frame is unmeasured (adapted luma taken at the clamp, no HD-style disc frame seen).
 
 ## Omega
 

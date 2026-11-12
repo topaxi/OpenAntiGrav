@@ -685,8 +685,10 @@ pub struct FrontEndTone {
     pub clamp: f32,
     /// `Tone maximum brightness`.
     pub maximum: f32,
-    /// The adapted luma the frame sits at on the screen this is read for.
-    pub adapted: f32,
+    /// The adapted luma the Fury style's frame sits at on the screen this is read for. The HD
+    /// style's is unread and is taken at the clamp (`clamp / boost`), which is where the exposure
+    /// bottoms out on any frame brighter than that.
+    pub adapted_fury: f32,
 }
 
 /// The origin and depth a `Team Selection` draws its craft at, see

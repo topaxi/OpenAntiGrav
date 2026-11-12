@@ -52,7 +52,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      **0.0163**, exposure 3.43, against the predicted 0.016; the hull box goes 14.34 to 4.67 (bias +2.1, +0.7,
      -1.7). Open: the left of the box and the darkest pixels still read brighter in the original (the parameter 8
      reflection, `Ambient false direction`, which `Light` has no field for, or the front end's bloom, which the
-     preview draws after); the HD style's adapted luma is unmeasured (inherits the Fury read); Omega's rig is its own
+     preview draws after); the HD style's adapted luma is unread and taken at the clamp (exposure 1, from the law and a white page; no frame of it seen, it needs the plain HD disc); Omega's rig is its own
      file's with no tone stage and no frame to compare it with (`docs/ghidra/functions/ps3-hdfury-eu/
      front-end-model-lighting.md`). Small (20).
   2. ~~**The swap's settle is recovered and not played**~~ (LANDED 2026-11-12,
