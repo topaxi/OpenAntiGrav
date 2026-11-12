@@ -29,10 +29,14 @@ impl Session {
             return;
         };
         let trail = stage.menu.trail();
+        let held = oag_game::mods::selection(&stage.menu);
         let skin = stage.skin;
         let mut model = self.menu_model(&shell, &skin);
         if !model.restore_trail(&trail) {
             return;
+        }
+        if let Some(id) = held {
+            oag_game::mods::reseat(&mut model, &id, &shell.mods, &shell.strings);
         }
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {

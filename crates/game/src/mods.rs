@@ -258,9 +258,13 @@ pub fn note_channels(listing: &mut [Listing], strings: &StringTable) {
     }
 }
 
-/// The mod the MODS page's MOD row is on, open or not.
+/// The id of the mod the MODS page's MOD row is on, open or not.
+///
+/// The row is stored nowhere (a settings key would be the wrong place for a cursor), so a menu
+/// model built again starts on the first mod: a rebuild that keeps the player where they stood
+/// reads this off the old model and [`reseat`]s the new one.
 #[must_use]
-pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+pub fn selection(model: &oag_ui::menu::Menu) -> Option<String> {
     let held = model
         .definition()
         .pages
@@ -271,7 +275,26 @@ pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Optio
     let oag_ui::menu::Value::Text(id) = held else {
         return None;
     };
+    Some(id)
+}
+
+/// The mod the MODS page's MOD row is on, open or not.
+#[must_use]
+pub fn selected<'a>(model: &oag_ui::menu::Menu, listing: &'a [Listing]) -> Option<&'a Listing> {
+    let id = selection(model)?;
     listing.iter().find(|mod_| mod_.id == id)
+}
+
+/// Puts the MOD row of a menu model built again on the mod `id` and gives the ENABLED row
+/// that mod's switch.
+pub fn reseat(
+    model: &mut oag_ui::menu::Menu,
+    id: &str,
+    listing: &[Listing],
+    strings: &StringTable,
+) {
+    model.seed(SELECTED, &oag_ui::menu::Value::Text(id.to_string()));
+    resupply_switch(model, listing, strings);
 }
 
 /// Supplies and seeds the ENABLED row for whichever mod the MOD row holds.

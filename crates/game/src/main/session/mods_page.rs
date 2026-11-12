@@ -101,20 +101,9 @@ impl Session {
         }
         if texture_pack {
             self.resupply_language();
-            self.reselect_mod(&id);
         } else {
             self.rebuild_menus(Some(&id));
         }
-    }
-
-    /// Puts the MOD row back on `id` after the menus were built again.
-    fn reselect_mod(&mut self, id: &str) {
-        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
-            return;
-        };
-        stage.menu.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-        mods::resupply_switch(&mut stage.menu, &shell.mods, &shell.strings);
-        stage.menu.settle();
     }
 
     /// Builds the tree, listing, campaigns and tracks again for the switches in
@@ -167,8 +156,7 @@ impl Session {
             return;
         };
         if let Some(id) = select {
-            model.seed(mods::SELECTED, &menu::Value::Text(id.to_string()));
-            mods::resupply_switch(&mut model, &shell.mods, &shell.strings);
+            mods::reseat(&mut model, id, &shell.mods, &shell.strings);
         }
         model.settle();
         if let Stage::Menu(stage) = &mut self.stage {
@@ -179,16 +167,21 @@ impl Session {
     }
 
     /// The menu model built on `shell`'s tree and opened where the open menus stand: the
-    /// same pages, the cursor on the same rows. `None` when no menu is open.
+    /// same pages, the cursor on the same rows, the MOD row on the same mod. `None` when no
+    /// menu is open.
     pub(crate) fn reopened_menu(&mut self, shell: &super::Shell) -> Option<menu::Menu> {
         let Stage::Menu(stage) = &self.stage else {
             return None;
         };
         let trail = stage.menu.trail();
+        let held = mods::selection(&stage.menu);
         let skin = stage.skin;
         let mut model = self.menu_model(shell, &skin);
         if !model.restore_trail(&trail) {
             error!("the rebuilt menus lack a page the player was on: {trail:?}");
+        }
+        if let Some(id) = held {
+            mods::reseat(&mut model, &id, &shell.mods, &shell.strings);
         }
         Some(model)
     }
