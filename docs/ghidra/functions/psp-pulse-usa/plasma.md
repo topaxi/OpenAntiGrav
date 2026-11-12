@@ -2612,10 +2612,10 @@ update. So the gate is where the probe starts against the craft's box, not the b
 **88** for the Plasma (three records on one shot, plus 25 of the other weapons'); how far the box
 reaches ahead of the body is not one number (the linked section's table).
 
-**Two more reads of `Plasma_Update`'s decompile, neither wired.** Its travel-sweep floor arm only
+**Two more reads of `Plasma_Update`'s decompile; both wired 2026-11-12** (the floor arm in `pulse-floor-arms` for Pulse and Pure, `FloorArms::SteerToRidePoint`, unit-tested on a flat floor; the launch normal in `launch-normal-wire`). Its travel-sweep floor arm only
 moves: `next = hit + normal * g_ride_height`, with no normal adopted and no velocity written
-(the Rocket's and the Shuriken's adopt and write); this engine adopts the normal and turns the
-velocity for the Plasma too. Confidence **84**, decompile only (no capture crossed a floor on the
+(the Rocket's and the Shuriken's adopt and write); HD, 2048 and Omega (whose arms are unread) still
+adopt the normal and turn the velocity for the Plasma too. Confidence **84**, decompile only (no capture crossed a floor on the
 travel segment). And the carried normal `Plasma_Launch` stores is the track's own up at the
 craft's located point, not the craft's up (the linked section; 0.29 and 0.86 degrees from the
 nearest resampled spline sample's on the two Plasma captures).

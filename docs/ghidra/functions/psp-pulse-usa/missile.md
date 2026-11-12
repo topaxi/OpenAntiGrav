@@ -813,4 +813,8 @@ whole lane is on [rocket-visuals.md](rocket-visuals.md#2026-11-11-code-4-is-the-
   of the nearest spline sample's `-down`), not the craft's up (0.22 degrees off here, 5.24 on
   Outpost 7's ramp for the Rocket).
 
+**Wired 2026-11-12** (`pulse-floor-arms`, Pulse and Pure): the probe's floor arm steers to the ride
+point (`projectile/flight.rs`, `FloorArms::SteerToRidePoint`); unit-tested on a flat floor, not against
+the per-update states (not kept). The sweep floor arm only moves, as before.
+
 **Cross-title:** as the linked section (Pure and HD run no cage; the Missile's own arms are I:Pulse).
