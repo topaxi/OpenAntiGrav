@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 profile XP total is kept; a finished event banks its race tally (26 of 78 awards wired, chain rule included); reveal wiring, Omega events, the other 52 awards and the rank UI are open"
+summary: "2048 XP: a race tally banks 26 of 78 awards with the chain rule; reveal wiring, Omega events, the other 52 awards and the rank UI are open"
 ---
 
 # 2048 profile XP and rank
