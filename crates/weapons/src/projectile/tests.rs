@@ -7,6 +7,7 @@ use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
 mod cage;
+mod floor_arms;
 mod owner_exempt;
 mod seed;
 
@@ -108,6 +109,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
         let p = projectiles.slots[0];
@@ -148,6 +150,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -193,6 +196,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         if let Some(hit) = impacts.into_iter().flatten().next() {
             impact = Some(hit);
@@ -228,6 +232,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 None,
                 TriggerRadii::default(),
                 "VENOM",
+                crate::projectile::FloorArms::SteerToRidePoint,
             )
             .into_iter()
             .flatten()
@@ -262,6 +267,7 @@ fn an_inactive_slot_is_not_a_target() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -292,6 +298,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 None,
                 TriggerRadii::default(),
                 "VENOM",
+                crate::projectile::FloorArms::SteerToRidePoint,
             )
             .into_iter()
             .flatten()
@@ -330,6 +337,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -360,6 +368,7 @@ fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -400,6 +409,7 @@ fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
             None,
             radii,
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         for impact in impacts.iter().flatten() {
             assert_eq!(impact.kind, Weapon::Mine, "only the mine reports an ending");
@@ -461,6 +471,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             None,
             Some(&stats),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
@@ -505,6 +516,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             None,
             None,
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
@@ -668,6 +680,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             None,
             TriggerRadii::default(),
             class,
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         let after = projectiles.slots[0];
         if after.kind.is_some() && after.bounces > 0 {
@@ -705,6 +718,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             None,
             TriggerRadii::default(),
             class,
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
     }
     assert_eq!(
@@ -770,6 +784,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
             None,
             TriggerRadii::default(),
             class,
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         highest = highest.max(projectiles.slots[0].bounces);
         if projectiles.live() == 0 {
@@ -822,6 +837,7 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
             None,
             TriggerRadii::default(),
             class,
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
@@ -910,6 +926,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             None,
             Some(&table),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -954,6 +971,7 @@ fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
             None,
             TriggerRadii::default(),
             "VENOM",
+            crate::projectile::FloorArms::SteerToRidePoint,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();

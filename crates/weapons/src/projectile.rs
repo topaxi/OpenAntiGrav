@@ -535,6 +535,23 @@ impl Projectiles {
     }
 }
 
+/// How a projectile's floor arms write its velocity: the probe's, when the surface under it is a
+/// floor, and the travel sweep's, when its segment crosses one.
+///
+/// Pulse's laws are the decompile's (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+/// "The probe-hit arm" and "By-catch in the flight arms"; `shuriken.md`; `missile.md`;
+/// `plasma.md`). `Weapons::floor_arms_steer_to_ride_point` picks per title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloorArms {
+    /// Pulse's. The Missile's probe arm steers to the ride point as the Rocket's and the
+    /// Plasma's do; the Shuriken's probe arm and the Rocket's and Shuriken's sweep arm write
+    /// `(ride point - start) / dt` raw, with no rescale; the Plasma's sweep arm only moves.
+    SteerToRidePoint,
+    /// Every arm not already a steer turns the velocity parallel to the floor and keeps its
+    /// length, and the sweep adopts the normal. A title's own arms are unread (chosen).
+    ParallelToFloor,
+}
+
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
 ///
 /// Returns the impacts so a caller can put a spark where each landed. `hits` is
@@ -559,6 +576,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     cage: Option<&dyn oag_physics::cage::Containment>,
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
+    floor_arms: FloorArms,
     push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],
@@ -576,6 +594,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
         disruptor_stats.as_ref(),
         TriggerRadii::from_table(weapons),
         class,
+        floor_arms,
     );
 
     blast::apply_impacts(ships, weapons, &impacts, push, rules, hits);

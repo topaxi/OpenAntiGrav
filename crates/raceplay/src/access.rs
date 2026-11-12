@@ -479,6 +479,17 @@ impl Race {
         self.sim.weapons.as_deref()
     }
 
+    /// How this title's projectiles write their velocity on a floor,
+    /// `oag_title::weapons::Weapons::floor_arms_steer_to_ride_point`.
+    #[must_use]
+    pub fn floor_arms(&self) -> oag_weapons::projectile::FloorArms {
+        if self.sim.floor_arms_steer_to_ride_point {
+            oag_weapons::projectile::FloorArms::SteerToRidePoint
+        } else {
+            oag_weapons::projectile::FloorArms::ParallelToFloor
+        }
+    }
+
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {

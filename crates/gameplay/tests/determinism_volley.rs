@@ -85,6 +85,7 @@ fn run_volley(ticks: u32) -> (u64, u64) {
             None,
             Some(&weapon_stats()),
             "VENOM",
+            oag_weapons::projectile::FloorArms::SteerToRidePoint,
             oag_weapons::projectile::BlastPush::Posted,
             DamageRules::default(),
             &mut [],
