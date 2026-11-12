@@ -28,6 +28,9 @@ Nothing here is drawn today: our lattice is a static baked picture.
    what makes a hidden event revealable (`m_RankRequired` 10-50, player rank unread), and the found
    tile's shape (hexagon or triangle). Then wire: a persisted "found" set in the profile, the found
    tile drawn, pad navigation reaching found events.
+   Leads (from `canvas3d-lattice.md`, unread): `Canvas3D_UpdateCellHeights` `0x81071794` (confidence 60)
+   is the likeliest home of the height wave and a per-cell "static" flag; its caller is `Canvas3D_Update`
+   `0x81072220` (70). Ghidra program `/2048/eboot-vita-2048-eu-v104.elf`.
 1. RE: find what drives the cells' height. Start at the canvas vertex program's height input (the cell
    alpha "height" `canvas3d-lattice.md` names) and the per-frame writer of the cell buffer; look for an
    audio analysis call (beat detector, FFT or level meter on the music voice) feeding it. Record the
