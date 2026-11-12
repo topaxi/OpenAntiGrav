@@ -26,6 +26,13 @@ and every consumer assumes it:
 
 ## Next Steps
 
+0. **First, two fixes to the `[campaign-medals]` mod (maintainer, 2026-11-12):**
+   - Grid Selection's tier hexes draw no atlas medal, as HD's Grid Selection has no tier medal hexes:
+     with the mod on they keep the title's own swatch (`UNRECORDED_DIFFICULTY` in
+     `crates/ui-screens/src/campaign/draw.rs` then serves cells only). Mod-off stills stay byte-identical.
+   - One rule for a cell's difficulty block, shared by HD's Cell Selection (`hd.rs`,
+     `difficulty_at(x, y).unwrap_or(Difficulty::Medium)`) and the Pulse mod path: e.g.
+     `CellSelection::medal_block_at(x, y)`; both call it, the duplicate goes.
 1. `campaign.tosd`: an optional ordered `[[medal-tier]]` list (name, points, colour, string id), best
    first. Absent: gold, silver, bronze as today, so every disc campaign and existing mod is unchanged.
    Targets and requirements name tiers from that list; the loader refuses an unknown name by name.
