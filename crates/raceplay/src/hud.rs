@@ -152,9 +152,8 @@ pub(super) struct SplitViews {
 /// nothing has been chosen yet, resolved the same way everywhere else a
 /// chosen language is resolved, through [`oag_ui::language::load::chosen_language`].
 ///
-/// `style` is `race::Options::hud_style` and `add_on_campaign` is
-/// `race::Options::add_on_campaign`, both resolved by [`hud_roots`]. `track` is the circuit's
-/// path, which picks a [`oag_title::race::CircuitLineage`].
+/// `options.hud_style` and `options.add_on_campaign` are resolved by [`hud_roots`]. `track` is the
+/// circuit's path, which picks a [`oag_title::race::CircuitLineage`].
 #[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
@@ -162,14 +161,17 @@ pub(super) fn load_hud(
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
-    style: Option<&str>,
-    add_on_campaign: Option<&str>,
+    options: &Options,
     track: &str,
     views: SplitViews,
     mod_icons: &crate::extensions::ModIcons,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let lineage = title.race.circuit_lineage(track);
+    let (style, add_on_campaign) = (
+        options.hud_style.as_deref(),
+        options.add_on_campaign.as_deref(),
+    );
     let (hud, skin) = hud_roots(title, style, add_on_campaign, lineage, report);
     let art = lineage
         .map(|lineage| lineage.art)

@@ -73,6 +73,19 @@ pub fn lineage_laps(
         .map(|rung| laps[rung.index()])
 }
 
+/// The lap count a launch pins: the caller's own [`crate::Options::laps_override`], else
+/// [`lineage_laps`] for the circuit it races.
+#[must_use]
+pub fn launch_laps(
+    title: &oag_title::Title,
+    circuit: &str,
+    options: &crate::Options,
+) -> Option<u32> {
+    options
+        .laps_override
+        .or_else(|| lineage_laps(title, circuit, options.mode, &options.class))
+}
+
 /// [`race_laps`] for a race on `circuit` of `title`: [`lineage_laps`] where it answers.
 #[must_use]
 pub fn race_laps_on(
