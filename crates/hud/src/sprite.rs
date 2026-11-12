@@ -209,11 +209,6 @@ pub struct Sheet {
     /// order keeps the sheet byte-identical from one run to the next, which is
     /// what makes a screenshot comparable.
     placed: Vec<(String, Placed)>,
-    /// Per-axis sheet pixels per logical pixel of the entries a texture pack drew larger
-    /// (`oag_texture::replacer`), by entry name; every other entry is `[1.0, 1.0]`. Kept
-    /// beside [`Self::placed`] so a [`Placed`] stays the disc's own measure: the layout's
-    /// rects are in the original's pixels.
-    scales: Vec<(String, [f32; 2])>,
     /// Texels per layout unit of the entries rasterised for one size (a vector icon);
     /// an entry not listed is drawn at one texel per unit.
     density: Vec<(String, f32)>,
@@ -230,7 +225,6 @@ impl Default for Sheet {
             height: 1,
             rgba: vec![0, 0, 0, 0],
             placed: Vec::new(),
-            scales: Vec::new(),
             density: Vec::new(),
         }
     }
@@ -300,9 +294,9 @@ impl Sheet {
     /// [`Self::build_with`], each `.mip` in `blobs` drawn from the active texture pack's picture
     /// of it when it has one (`oag_texture::replacer::mip`).
     ///
-    /// Only for a sheet whose every draw goes through [`Self::sheet_rect`]: a replaced image is
-    /// larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
-    /// would sample a corner of it. The race HUD is that; the front end's screens are not yet.
+    /// Only for a sheet whose every draw goes through [`Placed::sheet_rect`]: a replaced image
+    /// is larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
+    /// would sample a corner of it. The race HUD and the front end's screens are that.
     #[must_use]
     pub fn build_replaced(
         blobs: &[(String, Vec<u8>)],
@@ -399,8 +393,6 @@ impl Sheet {
 
         let mut rgba = vec![0u8; (width * height * 4) as usize];
         let mut placed = Vec::with_capacity(decoded.len());
-        let mut scales = Vec::new();
-
         for (
             Staged {
                 src,
@@ -427,11 +419,12 @@ impl Sheet {
             }
 
             let [logical_w, logical_h] = logical.unwrap_or([w, h]);
+            let scale = if logical.is_some() {
+                [w as f32 / logical_w as f32, h as f32 / logical_h as f32]
+            } else {
+                [1.0, 1.0]
+            };
             if logical.is_some() {
-                scales.push((
-                    src.clone(),
-                    [w as f32 / logical_w as f32, h as f32 / logical_h as f32],
-                ));
                 report.push(format!(
                     "image {src}: {w}x{h} from the texture pack, for the disc's {logical_w}x{logical_h}"
                 ));
@@ -448,6 +441,7 @@ impl Sheet {
                     quad_extent,
                     quad_centre,
                     blend,
+                    scale,
                 },
             ));
         }
@@ -457,7 +451,6 @@ impl Sheet {
             height,
             rgba,
             placed,
-            scales,
             density: Vec::new(),
         }
     }
@@ -538,14 +531,11 @@ impl Sheet {
             at.y += at_y;
             (src, at)
         }));
-        let mut scales = self.scales.clone();
-        scales.extend(below.scales);
         Self {
             width,
             height,
             rgba,
             placed,
-            scales,
             density: self.density.clone(),
         }
     }
@@ -578,37 +568,10 @@ impl Sheet {
     }
 
     /// Sheet pixels per pixel of the disc's own picture, on each axis, for `src`: `[1.0, 1.0]`
-    /// unless a texture pack drew it larger. A layout's rects, [`Placed::width`] and
-    /// [`Placed::height`] stay in the disc's pixels; [`Self::sheet_rect`] is the way into the
-    /// sheet's.
+    /// unless a texture pack drew it larger ([`Placed::scale`]).
     #[must_use]
     pub fn scale(&self, src: &str) -> [f32; 2] {
-        self.scales
-            .iter()
-            .find(|(name, _)| name == src)
-            .map_or([1.0, 1.0], |(_, scale)| *scale)
-    }
-
-    /// `rect`, `[x, y, width, height]` in the disc's pixels of the image `src` is placed as,
-    /// as the sheet's pixels: the origin offset by where it sits, everything scaled by
-    /// [`Self::scale`]. A width or height may be negative (a mirrored patch) or zero.
-    #[must_use]
-    pub fn sheet_rect(&self, src: &str, placed: Placed, rect: [f32; 4]) -> [f32; 4] {
-        let [sx, sy] = self.scale(src);
-        [
-            placed.x as f32 + rect[0] * sx,
-            placed.y as f32 + rect[1] * sy,
-            rect[2] * sx,
-            rect[3] * sy,
-        ]
-    }
-
-    /// The per-axis scale of the entry placed at `placed`'s corner.
-    fn scale_at(&self, placed: Placed) -> [f32; 2] {
-        self.placed
-            .iter()
-            .find(|(_, at)| (at.x, at.y) == (placed.x, placed.y))
-            .map_or([1.0, 1.0], |(name, _)| self.scale(name))
+        self.get(src).map_or([1.0, 1.0], |placed| placed.scale)
     }
 
     /// The alpha of one texel of `placed`, addressed as a fraction of the
@@ -629,7 +592,7 @@ impl Sheet {
         let texel = |fraction: f32, size: u32| -> u32 {
             ((fraction * size as f32).floor().max(0.0) as u32).min(size.saturating_sub(1))
         };
-        let [sx, sy] = self.scale_at(placed);
+        let [sx, sy] = placed.scale;
         let x = placed.x + texel(u, (placed.width as f32 * sx) as u32);
         let y = placed.y + texel(v, (placed.height as f32 * sy) as u32);
         if x >= self.width || y >= self.height {
@@ -653,11 +616,7 @@ impl Sheet {
         let placed = self.get(src)?;
         let [sx, sy] = self.scale(src);
         let [x, y, width, height] = self.ink_within(
-            self.sheet_rect(
-                src,
-                placed,
-                [0.0, 0.0, placed.width as f32, placed.height as f32],
-            ),
+            placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             |texel| texel[3] >= 128,
         )?;
         Some([

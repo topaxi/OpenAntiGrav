@@ -38,6 +38,7 @@ fn with_art<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R 
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )]);
     let cx = Context {

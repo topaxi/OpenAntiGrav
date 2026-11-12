@@ -112,14 +112,7 @@ impl Layout {
             .find(|(src, _)| src.eq_ignore_ascii_case(spec.sheet))
             .map(|(_, placed)| *placed)
             .map(|placed| {
-                let at = |rect: [f32; 4]| {
-                    [
-                        placed.x as f32 + rect[0],
-                        placed.y as f32 + rect[1],
-                        rect[2],
-                        rect[3],
-                    ]
-                };
+                let at = |rect: [f32; 4]| placed.sheet_rect([rect[0], rect[1], rect[2], rect[3]]);
                 Arrows {
                     plain: spec.arrow.map(at),
                     glow: spec.arrow_glow.map(at),

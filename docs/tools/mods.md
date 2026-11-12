@@ -105,8 +105,8 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   the fonts it draws with, each at the picture's own size (a pack picture is a PNG or a PPSSPP `.zim`);
   the PNG is read the first time its
   texture is decoded, under a 192 MiB cache cap. The front end's faces (menu rows, ticker, loading
-  line) draw from it too, chosen when the front end boots, so a switch on the MODS page applies
-  from the next launch; its other art keeps the disc's own picture. Off, a frame is byte-identical to
+  line) and its art (the menu frame, footer, arrows, the logo) draw from it too; a switch on the
+  MODS page applies at once, without a restart. Off, a frame is byte-identical to
   the game without the mod. Rendering only: nothing reaches `World`, a snapshot or the LAN
   content fingerprint.
 - **The load** says `texture pack <name>: N key(s)` in the load report and, when it ends, `N texture(s)

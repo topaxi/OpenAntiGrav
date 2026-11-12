@@ -665,12 +665,7 @@ impl Frontend {
     pub(super) fn sprite_at(rect: [f32; 4], placed: Placed, color: [f32; 4]) -> Draw {
         Draw::Sprite {
             rect,
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color,
         }
     }
@@ -715,12 +710,12 @@ impl Frontend {
                         width - 2.0 * scale.0,
                         height - 2.0 * scale.1,
                     ],
-                    uv: [
-                        picture.x as f32 + 1.0,
-                        picture.y as f32 + 1.0,
+                    uv: picture.sheet_rect([
+                        1.0,
+                        1.0,
                         picture.width as f32 - 2.0,
                         picture.height as f32 - 2.0,
-                    ],
+                    ]),
                     color: [1.0; 4],
                 });
             }

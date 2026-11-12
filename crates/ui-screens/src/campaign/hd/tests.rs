@@ -166,6 +166,7 @@ fn medal_atlas_placed() -> Placed {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     }
 }
 
@@ -789,6 +790,7 @@ fn fury_grid_list_at(unlock_pending: bool, count: usize, index: usize) -> Vec<Dr
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     hd_grid_draw_list(
@@ -904,6 +906,7 @@ fn fury_arrow_targets(card: Option<[f32; 4]>) -> Vec<Target> {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     hd_grid_targets(&layout, &any, card)

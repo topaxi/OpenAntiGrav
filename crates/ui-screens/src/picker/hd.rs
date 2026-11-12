@@ -389,7 +389,7 @@ pub(crate) fn block_arrow(
             width,
             height,
         ],
-        uv: [placed.x as f32, placed.y as f32, width, height],
+        uv: placed.sheet_rect([0.0, 0.0, width, height]),
         color: argb_to_rgba(tint),
     });
 }
@@ -428,12 +428,7 @@ pub(super) fn body(
     {
         out.push(Draw::Sprite {
             rect,
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color: [1.0, 1.0, 1.0, 1.0],
         });
     }

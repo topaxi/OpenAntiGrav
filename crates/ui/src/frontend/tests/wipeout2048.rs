@@ -517,6 +517,7 @@ fn a_centred_image_draws_from_its_middle() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )];
     let mut input = Input::new();

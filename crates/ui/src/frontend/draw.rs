@@ -761,12 +761,12 @@ impl Frontend {
             // Pure's `Title Screen`) need their own patch of it rather than
             // all drawing its top-left corner. Absent means the whole placed
             // texture, exactly as it did before. See [`crate::screen::Image::u`].
-            let mut uv = [
-                placed.x as f32 + image.u.unwrap_or(0.0),
-                placed.y as f32 + image.v.unwrap_or(0.0),
+            let mut uv = placed.sheet_rect([
+                image.u.unwrap_or(0.0),
+                image.v.unwrap_or(0.0),
                 image.texture_width.unwrap_or(placed.width as f32),
                 image.texture_height.unwrap_or(placed.height as f32),
-            ];
+            ]);
 
             // A wrapped `<Animation>`'s own `TextureWidth` shrinks both the
             // sampled and the rendered width by the same amount, rather than
@@ -779,7 +779,7 @@ impl Frontend {
             // full and shrinking only the render rect.
             let delta = reveal_delta(&image.reveal, elapsed);
             let w = w + delta;
-            uv[2] += delta;
+            uv[2] += delta * placed.scale[0];
 
             let mut color = argb_to_rgba(image.color);
             color[3] *= fade_alpha(image.transition, elapsed);

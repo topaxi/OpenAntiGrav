@@ -33,6 +33,7 @@ fn art(fury: bool) -> BlockArt {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     BlockArt {
         frame: placed(0, 64, 64),

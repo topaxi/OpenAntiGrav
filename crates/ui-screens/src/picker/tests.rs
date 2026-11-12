@@ -445,6 +445,7 @@ fn the_hex_grid_tiles_rather_than_reading_past_its_sprite() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let layers = draw_list(
         &picker,
@@ -820,6 +821,7 @@ fn an_unsized_arrow_off_the_sheet_is_no_target() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| Some(placed));
     let up = targets
@@ -1066,6 +1068,7 @@ fn drawn_livery(picker: &Picker, layout: &Layout) -> (Vec<f32>, usize) {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let layers = draw_list(
         picker,
@@ -1142,6 +1145,7 @@ fn a_fixed_livery_offers_no_arrow_to_press() {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     for (fixed, expected) in [(false, 2), (true, 0)] {
         let picker = Picker::new(Kind::Ship, vec![entry(3)], None, None).with_fixed_livery(fixed);

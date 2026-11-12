@@ -101,6 +101,7 @@ fn a_card_draws_at_its_authored_place_and_the_shadow_scales_its_sub_rect() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         })
     };
     let draws = show.draws(3.0, &placed);
@@ -275,6 +276,7 @@ fn flat(_: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 

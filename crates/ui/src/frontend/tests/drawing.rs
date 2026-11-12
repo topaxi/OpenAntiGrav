@@ -204,6 +204,7 @@ fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
             quad_extent: None,
             quad_centre: None,
             blend: None,
+            scale: [1.0, 1.0],
         },
     )];
     let frontend = Frontend::new(

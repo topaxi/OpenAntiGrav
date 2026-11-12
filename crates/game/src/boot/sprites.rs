@@ -161,7 +161,7 @@ pub(super) fn load(
         reversed.extend(lattice_tile(archives, atlas, report));
     }
 
-    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, report);
+    let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, reversed, report);
     report.push(format!(
         "{} of {} front-end image(s) decoded into a {}x{} sheet",
         sheet.len(),

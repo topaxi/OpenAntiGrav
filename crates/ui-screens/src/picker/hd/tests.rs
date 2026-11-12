@@ -271,6 +271,7 @@ fn sheet(name: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 
@@ -432,6 +433,7 @@ fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     let frame = Frame {
         blocks: Some(oag_ui::menu::block::BlockArt {
@@ -876,6 +878,7 @@ fn art(src: &str) -> Option<Placed> {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     })
 }
 

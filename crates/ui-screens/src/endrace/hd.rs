@@ -909,12 +909,7 @@ fn block_draw(
                     ARROW_SIZE,
                     ARROW_SIZE,
                 ],
-                uv: [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ],
+                uv: arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]),
                 color: argb_to_rgba(tint),
             });
         }

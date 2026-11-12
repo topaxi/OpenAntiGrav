@@ -93,12 +93,7 @@ impl TrackLoading {
         let placed = sheet.get(IMAGE_KEY)?;
         Some((
             sheet,
-            [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
         ))
     }
 }

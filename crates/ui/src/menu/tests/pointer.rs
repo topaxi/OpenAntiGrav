@@ -28,6 +28,7 @@ fn hd_frame() -> Frame {
         quad_extent: None,
         quad_centre: None,
         blend: None,
+        scale: [1.0, 1.0],
     };
     Frame {
         ink: Some([0.4, 0.4, 0.4, 1.0]),

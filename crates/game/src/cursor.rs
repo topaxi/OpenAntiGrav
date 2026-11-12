@@ -117,12 +117,7 @@ pub fn draw(sheet: &Sheet, at: (f32, f32)) -> Option<Draw> {
     let placed = sheet.get(SRC)?;
     Some(Draw::Sprite {
         rect: [at.0, at.1, WIDTH, HEIGHT],
-        uv: [
-            placed.x as f32,
-            placed.y as f32,
-            placed.width as f32,
-            placed.height as f32,
-        ],
+        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
         color: [1.0, 1.0, 1.0, 1.0],
     })
 }

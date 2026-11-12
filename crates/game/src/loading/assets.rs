@@ -536,12 +536,7 @@ impl Assets {
             // the screen with no pictures rather than with one blank one.
             let at = |entry: &str| {
                 sheet.get(entry).map(|placed| {
-                    [
-                        placed.x as f32,
-                        placed.y as f32,
-                        placed.width as f32,
-                        placed.height as f32,
-                    ]
+                    placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32])
                 })
             };
             let mark = |want: oag_title::loading::Chrome| {
