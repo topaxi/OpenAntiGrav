@@ -338,3 +338,11 @@
 0x8151c6b4	data	g_VignetteCentreY	80	exposure.md
 0x8151c6b8	data	g_VignetteInnerRadius	80	exposure.md
 0x8151c6bc	data	g_VignetteOuterRadius	80	exposure.md
+0x81073aee	function	Canvas3D_WriteRingCell	85	campaign-map-projection.md
+0x810ef536	function	TouchCampaign_PaintBranchRings	70	campaign-map-projection.md
+0x81072a32	function	Canvas3D_InitStaticConstants	70	campaign-map-projection.md
+0x81732694	data	g_CanvasRingShift3	90	campaign-map-projection.md
+0x8173269c	data	g_CanvasRingShift4	90	campaign-map-projection.md
+0x817326a4	data	g_CanvasRingShift1	90	campaign-map-projection.md
+0x817326ac	data	g_CanvasRingShift2	90	campaign-map-projection.md
+0x8151ea78	data	g_CampaignSpeedLapNames	85	campaign-map-projection.md

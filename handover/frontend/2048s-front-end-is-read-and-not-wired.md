@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048]
 updated: 2026-11-12
-summary: "2048 front end: DLC campaigns, Select Team, map tile places and canvas prism wired; ring cells, season cards, glyph shift open"
+summary: "2048 front end: DLC campaigns, Select Team, map tile places, canvas prism and ring cells wired; season cards, glyph shift, ground relief open"
 difficulty: hard (30)
 ---
 
@@ -144,16 +144,31 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      tiers draw the same hexagonal prism as a stand-in (their `(3, 2)` step
      gives mixed `col + row` parity and `TouchCampaignHD_Item`'s footprint is
      unread).
-  2. **The striped and dotted cells** around and between tiles: the button's
-     ring (`CanvasButton_PaintIconAndRing` `0x8106fbd8`, cell writer
-     `0x81073aee`, the chain walk `0x810ef5fe`), fill types as atlas shifts.
+  2. **Resolved 2026-11-12 (`w2048-map-rings`): the ring cells.** The four fill
+     types are atlas shifts (modes 1 to 4: light dots, dark dots, light stripes,
+     dark stripes), `Canvas3D_WriteRingCell` `0x81073aee` writes a mode by the
+     cell's priority, the main chain's events (24, from `"2048 - Event 1"`) take
+     modes 3 and 4 and the branches' (36) modes 1 and 2; the speed laps (40) mode 3
+     once reached. `oag_2048::campaign::map_roles` finds the roles,
+     `oag_ui::frontend::canvas_cells` bakes the ten cell pictures off the atlas and
+     resolves the priorities, the map draws them under the prisms. Evidence, the
+     decompile and frame `13` against ours: `campaign-map-projection.md`, "The
+     ring". Left over: the ground relief, and the blink between modes 3 and 4 (an
+     event at progress 1, which this build has none of).
   3. **The season cards**: one canvas item (vtable `0x8150ad08`) of 14 x 3 cells
      at cell (51, 29) with atlas origin `v` = 0.4785; the three cards are in
      `canvasTexture.gxt`. The other item classes are unread.
-  4. **Which events get a tile.** The original raises the passed (green) and
-     the open (grey) events and gives a locked one no tile (`0x810ef78c`); ours
-     draws every event in its own four colours. Changing it needs a rule for
-     the pad cursor on an event with no tile.
+  4. **Resolved 2026-11-12: which events get a tile.** Not "passed and open only":
+     an event not reached yet (progress 0, `m_options & 0x10` clear: every event of
+     the chains) is the flat state-1 tint, `e0e0e9` on the main chain and `f3f3fa`
+     on a branch, with its light ring; no glyph. Only the 15 side challenges
+     (`m_options = 16`, all with `m_RankRequired`) have no tile until their progress is
+     raised, most probably by player rank. **Open**: this build has no rank, so
+     ours draws them as open tiles (frame `12`'s top left tile, `"Feisar - P Ship
+     Challenge"`, the original does not show at rank 1); hiding them would make
+     15 events unplayable, so it is the maintainer's call, one condition in
+     `CampaignMap::state_of`'s callers (`draw_ground_cells`, `draw_campaign_map`). No pad-cursor rule was needed: every drawn
+     event, flat or raised, is a cursor target as before.
   5. **The scroll's limits** (`0x810ef98c`, 650 px margin; sign and origin not
      read): ours are chosen. The one-second wait and the ease at the open, and
      the ease after a tap, are not played: ours arrives at once.
@@ -379,4 +394,4 @@ shape, not by screen, and would have mis-fired on `Team`'s own
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's painted cells (2026-11-10: tile places, lattice and opening view are the original's; the prism, the ring cells and the season cards are not drawn), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis
+2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's painted cells (2026-11-12: tile places, lattice, opening view, prism and ring cells are the original's; the season cards and the ground relief are not drawn), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis

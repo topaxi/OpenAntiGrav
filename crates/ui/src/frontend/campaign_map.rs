@@ -18,13 +18,15 @@
 //!
 //! A tile is the prism the canvas's own programs draw ([`super::canvas_prism`]):
 //! top face, walls and the shade at their foot, in the colours the canvas
-//! paints a state with. What stands in for the original here: the striped and
-//! dotted cells around and between tiles, the season cards and the ground
-//! relief are not drawn; every event gets a tile, where the original raises
-//! only the passed and the open ones (same page, "What the canvas draws"), and
-//! a locked one is the first state's pale colour, chosen. The view's travel limits are **chosen, not
-//! measured**: any event can be centred, with the original's 650 px of margin
-//! past the outermost ones.
+//! paints a state with. An event not reached yet is not a prism but its six cells
+//! flat in a tint, and every event with a role ([`MapRole`]) has the ring of
+//! striped or dotted cells the canvas paints around it ([`super::canvas_cells`]);
+//! both are drawn between the lattice and the prisms. What stands in for the
+//! original here: the season cards and the ground relief are not drawn, and the
+//! side challenges the original hides until the player's rank reaches
+//! `m_RankRequired` are drawn as open events (this build has no rank). The view's
+//! travel limits are **chosen, not measured**: any event can be centred, with the
+//! original's 650 px of margin past the outermost ones.
 //!
 //! # The card
 //!
@@ -48,6 +50,7 @@ use crate::kinetic::{Bounds, Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
 use super::canvas_camera::{self, Camera};
+use super::canvas_cells::{self, CanvasButton, Tile};
 use super::canvas_lattice;
 use super::canvas_prism;
 use super::touch::{LABEL_SCALE, Launch};
@@ -144,6 +147,44 @@ pub struct MapEvent {
     pub refused_craft: Vec<String>,
     /// What the event's own card says - see [`super::event_card`].
     pub card: super::event_card::EventCard,
+    /// How the original's chain walk treats it, which decides the ring of cells
+    /// painted around its tile.
+    pub role: MapRole,
+}
+
+/// Which walk of the original's campaign painter reaches an event
+/// (`TouchCampaign_PaintChainRings` `0x810ef5fe`): the main chain, a branch off
+/// it, one of the speed-lap events its second loop paints, or none.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MapRole {
+    /// On the main chain.
+    Chain,
+    /// On a branch.
+    Branch,
+    /// One of the speed-lap events.
+    SpeedLap,
+    /// None: no ring.
+    #[default]
+    Side,
+}
+
+impl MapRole {
+    /// The ring mode of an event's button, the fill its 18 ring cells take
+    /// (`canvas_cells::SHIFTS`): the chain's dark stripes (4) once the event is
+    /// reached, light stripes (3) before; a branch's dark dots (2) and light
+    /// dots (1); a speed lap's light stripes once reached. 0 is none.
+    /// `0x810ef5fe`, `0x810ef536` and the loop over the name table.
+    #[must_use]
+    pub fn ring(self, reached: bool) -> u8 {
+        match (self, reached) {
+            (Self::Chain, true) => 4,
+            (Self::Chain, false) => 3,
+            (Self::Branch, true) => 2,
+            (Self::Branch, false) => 1,
+            (Self::SpeedLap, true) => 3,
+            (Self::SpeedLap, false) | (Self::Side, _) => 0,
+        }
+    }
 }
 
 /// A finished attempt's own two-tier result - this crate's copy of
@@ -750,6 +791,81 @@ impl Frontend {
         }
     }
 
+    /// The flat tint of a tile that is not reached yet: the chain walk's colour for
+    /// its walk (`0x810ef5fe` the chain's `0x817327c4`, `0x810ef536` the branch's
+    /// `0x817327c8`).
+    fn unreached_colour(event: &MapEvent) -> [f32; 3] {
+        match event.role {
+            MapRole::Branch => canvas_prism::colours::UNREACHED_BRANCH,
+            _ => canvas_prism::colours::UNREACHED,
+        }
+    }
+
+    /// The canvas's ground cells that are neither lattice nor a raised tile: every
+    /// ring cell and every unreached event's flat tint, by the canvas's priority
+    /// rule ([`canvas_cells::resolve`]), drawn over the lattice and under the
+    /// tiles. A sheet without the cell pictures draws none.
+    fn draw_ground_cells(&self, camera: &Camera, out: &mut Vec<Draw>) {
+        let (width, height) = self.space.size;
+        let scale = (
+            width / canvas_camera::VIEWPORT.0,
+            height / canvas_camera::VIEWPORT.1,
+        );
+        let buttons: Vec<CanvasButton> = (0..self.campaign.events.len())
+            .map(|at| {
+                let event = &self.campaign.events[at];
+                let reached = self.campaign.state_of(at) != ProgressState::Locked;
+                let (col, row) = CampaignMap::cell(event);
+                CanvasButton {
+                    cell: (col.round() as i32, row.round() as i32),
+                    tile: if reached {
+                        Tile::Raised
+                    } else {
+                        Tile::Flat(Self::unreached_colour(event))
+                    },
+                    ring: event.role.ring(reached),
+                }
+            })
+            .collect();
+        for painted in canvas_cells::resolve(&buttons) {
+            let up = canvas_cells::is_up(painted.cell);
+            let Some(picture) = self.placed(canvas_cells::name(painted.fill, up)) else {
+                continue;
+            };
+            let layout = canvas_cells::layout(up);
+            // Whole pixels, as the lattice picture beneath is placed.
+            let origin = canvas_cells::origin(camera, painted.cell);
+            let (x, y) = (origin.0.round(), origin.1.round());
+            if x + layout.size.0 as f32 <= 0.0
+                || y + layout.size.1 as f32 <= 0.0
+                || x >= canvas_camera::VIEWPORT.0
+                || y >= canvas_camera::VIEWPORT.1
+            {
+                continue;
+            }
+            // One texel in from the picture's edge, which the bake leaves clear.
+            out.push(Draw::Sprite {
+                rect: [
+                    (x + 1.0) * scale.0,
+                    (y + 1.0) * scale.1,
+                    (layout.size.0 as f32 - 2.0) * scale.0,
+                    (layout.size.1 as f32 - 2.0) * scale.1,
+                ],
+                uv: picture.sheet_rect([
+                    1.0,
+                    1.0,
+                    picture.width as f32 - 2.0,
+                    picture.height as f32 - 2.0,
+                ]),
+                color: if painted.fill == 0 {
+                    canvas_prism::tint(painted.colour)
+                } else {
+                    [1.0; 4]
+                },
+            });
+        }
+    }
+
     /// The map: the lattice, then every tile in view with its mode glyph, and
     /// the cursor ring on the selected one.
     ///
@@ -777,6 +893,7 @@ impl Frontend {
         let hex_select = self.placed(HEX_SELECT);
         self.draw_map_lattice(out);
         let camera = self.campaign.camera();
+        self.draw_ground_cells(&camera, out);
         // Far to near, as the canvas's depth buffer would: a nearer tile's wall
         // covers a farther tile's shade.
         let mut order: Vec<usize> = (0..self.campaign.events.len()).collect();
@@ -796,20 +913,32 @@ impl Frontend {
             {
                 continue;
             }
-            let colour = match self.campaign.state_of(at) {
-                ProgressState::Locked => canvas_prism::colours::LOCKED,
-                ProgressState::Open => canvas_prism::colours::OPEN,
-                ProgressState::Passed => canvas_prism::colours::PASSED,
-                ProgressState::Elite => canvas_prism::colours::ELITE,
-            };
-            match self.placed(canvas_prism::TILE) {
-                Some(prism) => out.push(Self::prism_sprite(&camera, event, prism, colour, scale)),
-                None => out.push(Draw::Fill {
+            let state = self.campaign.state_of(at);
+            let reached = state != ProgressState::Locked;
+            if reached {
+                let colour = match state {
+                    ProgressState::Passed => canvas_prism::colours::PASSED,
+                    ProgressState::Elite => canvas_prism::colours::ELITE,
+                    ProgressState::Open | ProgressState::Locked => canvas_prism::colours::OPEN,
+                };
+                match self.placed(canvas_prism::TILE) {
+                    Some(prism) => {
+                        out.push(Self::prism_sprite(&camera, event, prism, colour, scale))
+                    }
+                    None => out.push(Draw::Fill {
+                        rect: on_screen(face),
+                        color: canvas_prism::tint(colour),
+                    }),
+                }
+            } else if self.placed(canvas_cells::name(0, true)).is_none() {
+                // No cell pictures in the sheet: the flat tint as a rectangle.
+                out.push(Draw::Fill {
                     rect: on_screen(face),
-                    color: [colour[0].sqrt(), colour[1].sqrt(), colour[2].sqrt(), 1.0],
-                }),
+                    color: canvas_prism::tint(Self::unreached_colour(event)),
+                });
             }
-            if let Some(icon) = self.placed(event.kind.texture_name()) {
+            // The icon writer runs for a raised tile only (`0x8106fbd8`).
+            if let Some(icon) = self.placed(event.kind.texture_name()).filter(|_| reached) {
                 // The glyph lies on the tilted face, so it is as much shorter
                 // than wide as the face is against a regular hexagon.
                 let side = face[2] * ICON_SHARE;

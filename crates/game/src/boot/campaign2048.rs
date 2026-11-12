@@ -12,7 +12,7 @@
 
 use oag_2048::campaign::EClass;
 use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
-use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
+use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent, MapRole};
 use oag_ui::language::StringTable;
 
 /// The campaign file's entry name.
@@ -59,6 +59,7 @@ pub(super) fn map_events(
     // decided until `Frontend::refresh_campaign_progress` runs, later, once
     // a save is in hand. See `oag_2048::campaign::unlock_gates`'s own doc.
     let gates = oag_2048::campaign::unlock_gates(&doc);
+    let roles = oag_2048::campaign::map_roles(&doc);
     let mut out = Vec::new();
     let mut without_cell = 0usize;
     let mut demo = 0usize;
@@ -160,6 +161,15 @@ pub(super) fn map_events(
             forced_craft,
             refused_craft,
             card: event_card(&doc, event, kind, strings),
+            role: roles.iter().find(|(name, _)| *name == event.name).map_or(
+                MapRole::Side,
+                |(_, role)| match role {
+                    oag_2048::campaign::MapRole::Chain => MapRole::Chain,
+                    oag_2048::campaign::MapRole::Branch => MapRole::Branch,
+                    oag_2048::campaign::MapRole::SpeedLap => MapRole::SpeedLap,
+                    oag_2048::campaign::MapRole::Side => MapRole::Side,
+                },
+            ),
         });
     }
     report.push(format!(

@@ -530,12 +530,11 @@ fn check_passed_tile_has_a_wall(pixels: &[u8]) {
         "the wall darkens towards its foot: face {face:?}, upper {upper:?}, lower {lower:?}"
     );
     // The corner of the 128 x 128 art's square, outside the hexagon: the hex
-    // art tinted it with the tile's colour; the canvas leaves the lattice
-    // there, shaded grey by the tile's foot at most.
+    // art tinted it with the tile's colour. The canvas leaves ring cells there
+    // (dark stripes, blue over white), never a green tint.
     let corner = at(x - 58.0, y - 55.0);
-    let spread = corner.iter().max().unwrap() - corner.iter().min().unwrap();
     assert!(
-        corner[0] > 190 && spread <= 4,
+        corner[1] <= corner[0].max(corner[2]) + 6,
         "no tinted square around the tile: {corner:?}"
     );
 }

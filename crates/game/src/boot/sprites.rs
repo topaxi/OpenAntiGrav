@@ -301,7 +301,9 @@ fn canvas_pictures(
     atlas: &str,
     report: &mut Vec<String>,
 ) -> Vec<oag_hud::sprite::DecodedImage> {
-    use oag_ui::frontend::{canvas_lattice as lattice, canvas_prism as prism};
+    use oag_ui::frontend::{
+        canvas_cells as cells, canvas_lattice as lattice, canvas_prism as prism,
+    };
     let blob = match read_front_end_first(archives, atlas) {
         Ok(blob) => blob,
         Err(e) => {
@@ -345,6 +347,25 @@ fn canvas_pictures(
         }
         None => report.push(format!(
             "lattice atlas {atlas}: {width}x{height} is too small"
+        )),
+    }
+    match cells::bake(&rgba, width, height) {
+        Some(baked) => {
+            let size = cells::layout(true).size;
+            report.push(format!(
+                "campaign ground cells baked off {atlas}: {} pictures of {}x{}",
+                baked.len(),
+                size.0,
+                size.1
+            ));
+            pictures.extend(
+                baked
+                    .into_iter()
+                    .map(|cell| image(cell.name, cell.size, cell.rgba)),
+            );
+        }
+        None => report.push(format!(
+            "lattice atlas {atlas}: {width}x{height} is too small for the ring cells"
         )),
     }
     let size = prism::layout().size;

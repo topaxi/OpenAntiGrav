@@ -758,5 +758,77 @@ pub fn unlock_gates(document: &Document) -> Vec<(String, Option<String>)> {
         .collect()
 }
 
+/// The event the original's chain walk starts from
+/// (`TouchCampaign_PaintChainRings` `0x810ef5fe`, the string literal it passes
+/// to the by-name lookup).
+pub const CHAIN_START: &str = "2048 - Event 1";
+
+/// What every name of the walk's speed-lap table (`0x8151ea78`, 40 strings)
+/// has between the circuit and the class.
+const SPEED_LAP_INFIX: &str = " Speed Lap - ";
+
+/// How the original's chain walk treats an event, which decides the ring of
+/// canvas cells painted around its tile (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+/// "The ring").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MapRole {
+    /// On the main chain: `CHAIN_START` and every event reached from it by
+    /// `M_PNEXTEVENT`. Painted by `0x810ef5fe` itself.
+    Chain,
+    /// Reached from a chain event by `M_PBRANCHEVENT`, and from there by
+    /// `M_PNEXTEVENT`: painted by `0x810ef536`.
+    Branch,
+    /// One of the 40 `"<circuit> Speed Lap - <class>"` events the walk's second
+    /// loop paints (the name table at `0x8151ea78`).
+    SpeedLap,
+    /// The rest (the per-ship and per-circuit side challenges): no ring.
+    #[default]
+    Side,
+}
+
+/// Each event's [`MapRole`], by name, in the document's order: **every event in
+/// the document**, as [`unlock_gates`] does.
+///
+/// The main chain is [`CHAIN_START`] and its `M_PNEXTEVENT` successors; a branch
+/// is a chain event's `M_PBRANCHEVENT` and that event's own successors. On the
+/// EU v1.04 package that is 24 chain and 36 branch events
+/// (`crates/2048/tests/campaign_ground_truth.rs`).
+#[must_use]
+pub fn map_roles(document: &Document) -> Vec<(String, MapRole)> {
+    let all = events(document);
+    let index_of = |id: i64| all.iter().position(|event| event.instance_id == id);
+    let mut roles = vec![MapRole::Side; all.len()];
+    // Only an event no walk has claimed is taken, so a cycle in authored data ends.
+    let walk = |start: Option<usize>, role: MapRole, roles: &mut Vec<MapRole>| {
+        let mut at = start;
+        while let Some(event) = at.filter(|&event| roles[event] == MapRole::Side) {
+            roles[event] = role;
+            at = all[event]
+                .next_event
+                .and_then(|next| index_of(next.instance_id));
+        }
+    };
+    let start = all.iter().position(|event| event.name == CHAIN_START);
+    walk(start, MapRole::Chain, &mut roles);
+    let chain: Vec<usize> = (0..all.len())
+        .filter(|&event| roles[event] == MapRole::Chain)
+        .collect();
+    for event in chain {
+        let branch = all[event]
+            .branch_event
+            .and_then(|branch| index_of(branch.instance_id));
+        walk(branch, MapRole::Branch, &mut roles);
+    }
+    for (event, role) in roles.iter_mut().enumerate() {
+        if *role == MapRole::Side && all[event].name.contains(SPEED_LAP_INFIX) {
+            *role = MapRole::SpeedLap;
+        }
+    }
+    all.iter()
+        .zip(roles)
+        .map(|(event, role)| (event.name.clone(), role))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests;

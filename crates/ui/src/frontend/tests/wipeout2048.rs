@@ -579,6 +579,7 @@ pub(super) fn three_events() -> Vec<MapEvent> {
         forced_craft: None,
         refused_craft: Vec::new(),
         card: crate::frontend::EventCard::default(),
+        role: crate::frontend::MapRole::default(),
     })
     .collect()
 }
@@ -604,6 +605,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
+            role: crate::frontend::MapRole::default(),
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
@@ -615,6 +617,7 @@ fn a_gated_event() -> Vec<MapEvent> {
             forced_craft: None,
             refused_craft: Vec::new(),
             card: crate::frontend::EventCard::default(),
+            role: crate::frontend::MapRole::default(),
         },
     ]
 }
@@ -920,6 +923,7 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
         forced_craft: None,
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
+        role: crate::frontend::MapRole::default(),
     }]
 }
 
@@ -939,6 +943,7 @@ pub(super) fn a_forced_event() -> Vec<MapEvent> {
         forced_craft: Some("Qirex2048\\1".to_string()),
         refused_craft: vec!["Feisar2048\\3".to_string()],
         card: crate::frontend::EventCard::default(),
+        role: crate::frontend::MapRole::default(),
     }]
 }
 
@@ -1100,6 +1105,96 @@ fn refresh_campaign_progress_colours_a_marker_in_the_canvases_own_state_colour()
         list.iter()
             .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite)),
         "Event 1's own marker should draw in the elite state's colour"
+    );
+}
+
+/// What the canvas paints for an event that is not reached yet
+/// (`TouchCampaign_ApplyEventStates` `0x810ef78c`): state 1, the cells flat in the
+/// state's tint, no prism and no glyph; and the ring cells of the walk that reaches
+/// it, light stripes on the main chain before it is reached, dark stripes after.
+/// Every cell picture sits at its own x in the sheet, so a sprite's `uv` names its
+/// fill.
+#[test]
+fn an_unreached_event_is_a_flat_tint_with_a_light_ring_and_the_reached_one_a_prism_with_a_dark_ring()
+ {
+    use crate::frontend::{canvas_cells, canvas_prism};
+    let mut frontend = boot(0);
+    let mut events = a_gated_event();
+    for event in &mut events {
+        event.role = crate::frontend::MapRole::Chain;
+    }
+    frontend.set_campaign(events);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let prism = canvas_prism::layout().size;
+    let mut put = |name: &str, x: u32, size: (u32, u32)| {
+        frontend.placements.push((
+            name.to_string(),
+            Placed {
+                x,
+                y: 0,
+                width: size.0,
+                height: size.1,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            },
+        ));
+    };
+    put(canvas_prism::TILE, 0, prism);
+    for fill in 0..=4_u8 {
+        for up in [true, false] {
+            put(
+                canvas_cells::name(fill, up),
+                1000 + u32::from(fill) * 200 + if up { 0 } else { 100 },
+                canvas_cells::layout(up).size,
+            );
+        }
+    }
+    let list = frontend.draw_list();
+    // The colours of the sprites of one fill, by the x its pictures start at in
+    // the sheet (one texel in from the picture's edge).
+    let of_fill = |fill: u32| -> Vec<[f32; 4]> {
+        list.iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { uv, color, .. }
+                    if [0, 100]
+                        .iter()
+                        .any(|up_down| uv[0] == (1000 + fill * 200 + up_down) as f32 + 1.0) =>
+                {
+                    Some(*color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let prisms = list
+        .iter()
+        .filter(|draw| {
+            matches!(draw, Draw::Sprite { uv, .. }
+                if (uv[0], uv[2], uv[3]) == (1.0, prism.0 as f32 - 2.0, prism.1 as f32 - 2.0))
+        })
+        .count();
+    assert_eq!(
+        prisms, 1,
+        "Event 1 is open and raised; Event 2 is not reached"
+    );
+    let flat = of_fill(0);
+    assert_eq!(flat.len(), 6, "Event 2's six cells, flat: {flat:?}");
+    assert!(
+        flat.iter()
+            .all(|colour| *colour == canvas_prism::tint(canvas_prism::colours::UNREACHED)),
+        "in the chain's state 1 tint"
+    );
+    assert!(!of_fill(4).is_empty(), "the reached event's dark stripes");
+    assert!(
+        !of_fill(3).is_empty(),
+        "the unreached event's light stripes"
+    );
+    assert!(
+        of_fill(1).is_empty() && of_fill(2).is_empty(),
+        "no branch here"
     );
 }
 

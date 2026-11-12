@@ -97,6 +97,7 @@ use oag_hd::frontend::states as hd_states;
 mod campaign_map;
 mod campaign_tiers;
 pub mod canvas_camera;
+pub mod canvas_cells;
 pub mod canvas_lattice;
 pub mod canvas_prism;
 mod event_card;
@@ -107,7 +108,9 @@ mod team;
 mod team_info;
 mod touch;
 mod wipeout2048;
-pub use campaign_map::{CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent, ProgressState};
+pub use campaign_map::{
+    CampaignMap, EarnedTier, EventIcon, HEX_SELECT, MapEvent, MapRole, ProgressState,
+};
 pub use campaign_tiers::Tier;
 pub use event_card::{
     CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,
