@@ -181,50 +181,32 @@ contains `stringtable`. The language files are
 equal to any of the 26 ids under case folding. The nearest are
 `MP_SQUARE_RACE_FLASH`-style sentences. So all 26 `PI_Track` names miss.
 
-## What the original shows for the sixteen: open
+## What the original shows for the sixteen: authored names, as text (measured)
 
-Every `PI_Track`-name site above would print `Vineta_K`, `Vineta_K_R`, and so
-on. For 2048's own ten it would print `square` just as well. A shipped game
-printing lowercase ids is unlikely. So either those sites are not on a screen a
-player sees for these circuits, or the visible names come from somewhere this
-pass did not read:
+Vita3K stills, 2026-11-12 (lane `vita-2048-trackname-still`; the full record is
+[`omega-status.md`](../../../formats/omega-status.md), "2048 Vita's circuit names"):
+the HD Campaign's event card, the mode card over the load and the pause card read
+`VINETA K`; the Anulpha Pass card reads `ANULPHA PASS`; Fury's Amphiseum cards
+read `THE AMPHISEUM`, which no re-spelling of the id `Amphiseum` produces, so it
+is the authored `19_TRACK` string. Nothing showed `Vineta_K`.
 
-- the `TrackDefinition` `m_displayName` route for the ten (consumer unread);
-- the track photos the DLC grid draws instead of text (`FUN_81108df0` draws
-  `HDTrackSelect` / `TrackSelectEmblem` images from the 4x4 table at
-  `0x8151ec34` and has no text label);
-- a source not found.
+So the rule above (confidence 80) describes the eleven `PI_Track`-name sites it
+lists and is **not** what the event card, the pause card or the AdHoc lobby
+draw: those reach an authored `NN_TRACK`-family name by a key this page did not
+read. Which key (circuit number, direction, a list) is open; a `_R` cell's card
+decides it. Ours still falls back to the id and does not match.
 
-**Checked and ruled out as a source:**
+The paths this page checked and ruled out as a source stand: no run-time insert
+into the string table, no `<StringTable>` outside the language plugins, no
+`stringtable.xml` on either region's packages. The literal `TouchButton String=`
+names in the v1.00 `NEWGUI/Definition.xml` (lines `526`-`537`) are not what
+patch 1.04 draws either.
 
-- **Run-time inserts into the string table.** `FUN_8106bb6e` (the language
-  switch) loads only the file named by the language's `Dynamic Entry File
-  Source` entry, which is `entries.xml` itself.
-- **Other `<StringTable>` elements.** All 866 `.xml` files of `PCSF00007`
-  (base, patch `data1`/`data2`, `dlc1`, `dlc2`) were extracted. No
-  `<StringTable>` element appears outside `data/plugins/languages/`, and no
-  `<Entry>` or `<entry>` `id` folds to any of the 26 ids.
-- **Literal names in front-end XML.** Outside `entries.xml`, `Vineta K` appears
-  only in the v1.00 base `data/plugins/frontend/NEWGUI/Definition.xml`, lines
-  `526`-`537`. There four `TouchButton`s (`Anulpha_Pass`, `Chenghou_Project`,
-  `Moa_Therma`, `Vineta_K`), next to the `LegacyTouchGameList` legacy
-  cross-play screen, carry `String="Anulpha Pass"` ... `"Vineta K"` beside each
-  circuit's `TrackSelectEmblem_BW.gxt`. Patch v1.04's two copies of that file
-  have none. A button that spells the name itself fits a lookup that misses.
-
-**So: "the original shows `Vineta_K` on screen" is a hypothesis at about 50,
-and is not claimed.** What *is* established (80) is that no executable path
-keys the sixteen by `soundregister`, by the `FEModelLocation` number or by
-list position. To settle what a player sees, take a Vita3K still of any
-DLC-circuit label: the Track Select details for `Vineta_K`, or the tournament
-header `"%s %d/%d"` (`FUN_81093baa`) during an HD-circuit tournament. The
-recipe is [emulator-recipes.md](../../../reverse-engineering/emulator-recipes.md),
-Vita3K, muted, with its own config directory.
-
-`01_TRACK` ... `08_TRACK` in `entries.xml` are HD's keys (HD's ids are
-`01_Track` ...), shipped in 2048's table unused by any 2048 `PI_Track`. Keying
-the sixteen to them through `soundregister` or `trackNN` would be **chosen,
-not measured**: the executable never makes that link.
+`01_TRACK` ... `24_TRACK` in `entries.xml` are HD's keys (HD's ids are
+`01_Track` ...). No 2048 `PI_Track` names them and no executable site was found
+that does, yet the original draws their strings on the HD and Fury cards.
+Wiring them in ours through `soundregister` or `trackNN` is still **chosen, not
+measured** until the card's key is read.
 
 ## Omega: checked, differs
 
