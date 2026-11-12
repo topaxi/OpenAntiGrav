@@ -331,11 +331,11 @@ measured, inherited from HD**: the field of view (1.0 radian; `FoV` 100 is unrea
 the flyer's units), pitch, the 24 s turntable and its start yaw. 2048's circuits are larger than
 HD's and overrun the frame a little at this pose.
 
-**Open**: the circuit names (`03 Track`, `altima`) - `CircuitNames::choose` takes a copy of the
-table that names all 38 listed circuits, and Omega's has none, so every circuit shows its id
-where a few (`PRO TOZO`) already have text; the emblem of a 2048 circuit; the page's white
+**Open**: the emblem of a 2048 circuit; the page's white
 backdrop, against which the rim-lit circuit loses its edge (the material is authored for a dark
-one); whether Omega's original ever shows this screen outside RACEBOX.
+one); whether Omega's original ever shows this screen outside RACEBOX. The circuit names are
+closed: see "Omega's Track Select names all 38 circuits" below (`--menu-page track-select` reads
+`ANULPHA PASS`).
 
 **2048, checked, applies, not wired.** 2048's own archives carry `fe/Track0N.vex` only for its
 DLC1 circuits (`Vineta_K`, `Moa_Therma`, `Chenghou_Project`, `Anulpha_Pass`, `zone_1..4`, under
@@ -522,9 +522,7 @@ shared with HD:
   as HD's endrace drops `RecordsCycle`) - **chosen, not measured**.
 - The HUD draws on an Omega race now (`omega-hud`, 2026-10-06, above).
 
-Still visible on Omega: circuit names read as ids (`01_Track`: the German
-`entries.xml` names only the four Zone circuits, `25_Track`..`28_Track`, the rest
-live elsewhere or under other ids); the three medal icons under the target row
+Still visible on Omega: the three medal icons under the target row
 drew bronze, silver, gold (fixed, see "The medal atlas"); no flyer and a white backdrop on `grid-select` (`flyers:
 None`); `Event 01/08` is an English literal on HD too; the Endrace screens still
 dispatch `title == HD` alone. The picker's `Svenska` x4 and `Portugus` are **the
@@ -778,6 +776,9 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   `Main Menu`, **not** `Cell Selection` as on HD.
 - **Omega draws Fury's flyer cards since 2026-10-27 and its three-way `Campaign Selection` since 2026-11-05** (`omega-chooser`): `load_omega` reads the chooser (2048, HD, Fury, each target screen's grids) with the same `Chooser::read` HD uses; `RACE CAMPAIGN` opens it on 2048, HD opens `grid0` and Fury `grid8`, and 2048 stays on the chooser with a notice (its three grids are cell-less stubs the grid reader skips, its events are `Campaign2048_Definition.xml`'s map, unread). See `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
 - **Omega's Track Select names all 38 circuits since 2026-11-05**: 28 numbered circuits are keyed `NN_TRACK` in every copy of `entries.xml`, the ten of 2048 (`altima`, `arena`, ...) author `StringTableId="Track_Altima_0"` (`Track_Rockway_Stadium_0` for `arena`, `Track_Downtown_0` for `cathedral`, `Track_Empire_Climb_0` for `tower`) and no copy names them under their bare id, so `CircuitNames::choose` found no copy covering the list and every row read its id. `choose` now takes `(id, key)` pairs and `oag_raceplay::catalogue::Track::name_key` is the authored key; all four copies (`data00`, `data05`, `data08`, `data09`) name all 38, `data09`'s is chosen. Census, same reader: HD 28 of 28 named, no `StringTableId` anywhere (**checked, unchanged**); 2048 Vita 38 tracks, no `StringTableId`, no copy chosen by `choose` (unchanged; what its own `Definition.xml` names a circuit by was **not read**: open, not checked). `omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`.
+
+  Re-checked 2026-11-12, the lane `omega-circuit-names` (brief: "no copy names all 38, add a per-circuit fallback"): that was already fixed, so no fallback was written. The ground-truth test above passes, and `--menu-page track-select` on `data/extracted/ps4` reads `ANULPHA PASS`. **2048, checked, applies, not wired**: on 2048 Vita (`PCSA00015`) the same `choose` finds no copy of `languages/american/entries.xml` naming all 26 raceable circuits (`debug` loader line: "none of the 3 copy/copies names all 26 circuit(s); each one shows its id"), and the `circuits:` line beside it lists all 26 as `id (id)` (`square (square)` ... `Sol_2_R (Sol_2_R)`), so none of them is named. Whether a per-circuit fallback or another key (what 2048's own `Definition.xml` names a circuit by) would name any of them was **not measured**: open. 2048 authors no Track Select screen, so the effect is on any other row that lists a circuit (not walked).
+
 - **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
   fixed 2026-10-06, `omega-hud`), (the 793 unresolved materials of `08_Track` quoted here
   were not re-measured; Anulpha's 81 were fixed 2026-10-27, below), and the
