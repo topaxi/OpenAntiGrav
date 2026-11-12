@@ -2,6 +2,7 @@
 //! (`oag_ai::original::Autopilot`): Pulse PSP USA, VENOM, seed 1, slot 0 on
 //! `Race::set_autopilot` for the whole race.
 
+use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
 
 /// What one autopiloted race came to.
@@ -15,6 +16,8 @@ struct Run {
     finish: Option<u64>,
     /// Rescues of slot 0.
     respawns: u32,
+    /// Where slot 0 was on the tick before each rescue.
+    rescued_from: Vec<Vec3>,
     /// Slot 0's shield at the end of each lap.
     shield_per_lap: Vec<f32>,
     /// Slot 0's shield when the run stopped.
@@ -74,7 +77,8 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
 
 /// The autopilot gets round every Pulse circuit against the original field
 /// with no rescue (weapons off, so a hit does not decide it): the
-/// round-the-lap check the original field's thread asked for.
+/// round-the-lap check the original field's thread asked for. A rescue the
+/// original's craft needs too ([`the_original_falls_here_too`]) does not count.
 ///
 /// **One test per circuit, judged on the majority of five races**
 /// (2026-10-20, lane `ai-gate-robustness`), one per scale of `perturb::GATE`
@@ -86,24 +90,36 @@ fn finishes_without_a_rescue(id: &str) {
     let Some(setup) = setup("pulse-psp-usa.chd", &track, Some(false)) else {
         return;
     };
-    let runs: Vec<(Option<u64>, u32)> = crate::perturb::GATE
+    let runs: Vec<(Option<u64>, u32, Vec<Vec3>)> = crate::perturb::GATE
         .iter()
         .map(|&eps| {
             let mut setup = setup.clone();
             crate::perturb::apply(&mut setup, eps);
             let r = run_from(oag_raceplay::Race::start(setup), 15_000);
-            (r.finish, r.respawns)
+            (r.finish, r.respawns, r.rescued_from)
         })
         .collect();
     let good = runs
         .iter()
-        .filter(|(finish, respawns)| finish.is_some() && *respawns == 0)
+        .filter(|(finish, _, from)| {
+            finish.is_some() && from.iter().all(|&at| the_original_falls_here_too(id, at))
+        })
         .count();
     assert!(
         good * 2 > runs.len(),
         "{id}: {good} of {} runs finished without a rescue: {runs:?}",
         runs.len()
     );
+}
+
+/// A rescue the original's own craft needs from the same state: de Konstruct Black's first
+/// jump (`05_Track` forward), the pit under the upper road's lip. The port flies the authored
+/// line up the magstrip at about 139 units/s; placed at that pose with the throttle held, the
+/// original's craft meets the lip at y `60` and falls, as ours does
+/// (`dekonstruct-takeoff-port-2652.csv`, `oag-trace`'s `dekonstruct_takeoff_ground_truth`;
+/// `docs/physics/body-damping.md`, "De Konstruct Black's first jump, under player input").
+fn the_original_falls_here_too(id: &str, at: Vec3) -> bool {
+    id == "05" && (-665.0..=-615.0).contains(&at.x) && (-535.0..=-490.0).contains(&at.z)
 }
 
 macro_rules! finishes_test {
@@ -180,7 +196,12 @@ fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
     let mut out = Run::default();
     let mut lap = race.sim.world.ships[0].standing.lap;
     for _ in 0..ticks {
+        let before = race.sim.world.ships[0].physics.body.position;
+        let respawns = race.respawns_of(0);
         race.tick_sim_only(&PlayerInputs::none());
+        if race.respawns_of(0) != respawns {
+            out.rescued_from.push(before);
+        }
         let ship = &race.sim.world.ships[0];
         if ship.standing.lap != lap {
             lap = ship.standing.lap;
