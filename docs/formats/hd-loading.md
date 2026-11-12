@@ -341,7 +341,7 @@ Cross, grabbing the window at 1920x1080 about 1 s apart (`TTY.log`:
 `Team Launch Transition`, `Launch Game`, `InGame`, `GetMode()==3`, Vineta K,
 `Feature type` Barrel Roll). HD's log names no loading screen, so the screen
 name of this pair is declared. Ours: `oag-game ... --loading-screen 0/1
---loading-step race --loading-live --ticks 100 --mode single_race --track
+--loading-step race --ticks 325 --mode single_race --track
 "Data\Environments\01_Vineta_K\track.vex" --size 1920x1080`, `front_end_style
 = FURY`, `aspect = wide`.
 
@@ -375,9 +375,25 @@ code layout, and is what 2026-11-01's `hd-loading-layout` replaced:
 | `LoadingScreen_HD.toml`, the measured layout in its own grid | 0.76 % |
 
 (The pair is a Racebox single race on Vineta K, Feisar, Barrel Roll, photographed 4 s after the load starts,
-`scripts/rpcs3-hd-menu-pair.py --walk loading`, 96 % Safe Area; ours is `--loading-live` at tick 100 with
-`--loading-draw` picking the original's feature. What remains is glyph rasterisation and the clip's and the
+`scripts/rpcs3-hd-menu-pair.py --walk loading`, 96 % Safe Area; ours is `--ticks 325` with
+`--loading-draw` picking the original's feature (the bar: next section). What remains is glyph rasterisation and the clip's and the
 bar's phase, which are not locked between the two.)
+
+### The bar's stated state (2026-11-12)
+
+The original's frame shows **32 lit columns of 166** (19.3 %; counted as the runs of `HD_Blue` dots between x 193 and the
+mode icon, the last lit dot ending at x 443 of 1920). `LoadingScreen_Draw` lights `(int)obj+0x104` columns, and ours lights
+`floor(Fill::shown)` (`loading::fill`), so the counts compare directly. 32 is below the first target (33.2, `0x002b9a28`),
+so the bar had only eased at 0.1 column a frame and no load stage had landed: a state ours reaches without a load.
+
+**`--loading-screen DONE/TOTAL` does not state it.** On `--loading-step race` the counts are zeroed (`main/headless.rs`),
+so the stated state is the tick: `lit = floor(0.1 t)`, capped at 33. `t = 10 n + 5` lights `n` columns with half a column of
+margin either side of the f32 sum's edge at `10 n` (ticks 320 to 330 all light 32; 319 lights 31, 331 lights 33). A
+`--loading-live` capture instead runs a real load, whose stage timing and finish vary run to run (two consecutive
+re-renders gave different `ours.png`); the pair is at `--ticks 325` and two re-renders are byte-identical.
+`scripts/rpcs3-hd-menu-pair.py --walk loading` counts the columns off every frame it photographs and refuses a bar past
+the first target, since a stated race screen cannot show one. Open: the mode icon's clip phase is the tick's, and the original's is not
+locked to anything we can read, so the ship at the icon's corner differs.
 
 **2048: checked, differs** ([2048-loading.md](2048-loading.md)): the same class, strings, deck and layout operands in a kind
 the retail executable never starts (it starts its kind 4 for a race load), so nothing is wired.
