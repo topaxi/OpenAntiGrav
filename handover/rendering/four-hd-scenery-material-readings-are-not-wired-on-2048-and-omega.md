@@ -48,7 +48,7 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
    `_glow` twin declares it and is not wired on HD.
 6. **The unsaturated `N.L`**: read per block (`Program::sun_diffuse_unsaturated`, 2,349 of 7,211 lightmapped programs, Metropia's `#21` and Moa's `#7`
    among them; `docs/formats/rcsmaterial.md`, "The sun's N.L") and **not wired: drawing it is measurably worse** (Ubermall's whole frame mean grey
-   3.80 to 5.36, Moa's box 1.40 to 1.54 and its second box 1.17 to 2.63), the cause unknown.
+   3.80 to 5.36, Moa's box 1.40 to 1.54 and its second box 1.17 to 2.63), the cause: the original clamps it (`hd-ubermall-nl-dump`).
 
 ## Next Steps
 
@@ -57,7 +57,4 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
   the `psp2` loader, and measure on a pair of that title (Omega in-game shots
   are not trusted: use the `wipeout_pc` port or a material census). Item 1
   is done.
-- For 6: an RPCS3 draw dump (the lead's approval needed) of one Ubermall right-wall draw where ours has `N.L < 0` and the atlas alpha near 1 decides
-  between "the original's unit-2 alpha there is 0" and "its `N.L` is not negative" (page, "What would decide it"); then wire it for the 2,349
-  programs behind a role bit (bit 30 with the glow index at six bits worked; reverted) or drop the reading. Omega's Moa `@0x4124` `clamp`
-  modifiers (`@0x228`, `@0x260`) are the cross-title lead.
+- For 6: **do not wire.** `hd-ubermall-nl-dump` measured the original drawing the clamped picture where the live program multiplies an unsaturated `N.L` (alpha, sun and normal all equal to ours; `docs/formats/rcsmaterial.md`, "The sun's N.L"). Next read: what bit 24 of fragment dword 2 on that `MUL` means (`scripts/ps3-microcode.py` does not decode it; 65 of 65 live lightmapped unsaturated-DP3 programs carry it). If it is a source saturate, make `Program::sun_diffuse_unsaturated` require it absent and expect the 2,349 count to fall to near zero; the shader branch then stays removed. Omega's `@0x228`/`@0x260` clamp modifiers are the cross-title lead.

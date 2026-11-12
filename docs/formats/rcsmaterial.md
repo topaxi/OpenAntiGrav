@@ -3908,11 +3908,23 @@ Ubermall's right-hand walls and the track's far edge draw a deep navy where the 
 sun's red and green and keep the blue of the lightmap. Restricting it to chunks with no tangent (no normal map) still reads worse on Ubermall
 (3.80 to 4.46), so the normal map is not the cause. The program is unsaturated and the original's pixel is not darkened.
 
-**What would decide it (a next step, needs the lead's approval for an RPCS3 draw dump).** On an Ubermall right wall where ours has `N.L < 0` and
-atlas alpha near 1, the original's `lm.a * N.L` must be near 0: either its unit-2 alpha there is 0 (our atlas read is not its), or its `N.L` is not
-negative (the patched sun direction or the normal differs). A draw dump of that wall draw gives the texel's alpha and the patched
-`directionalLight0DirectionWorldSpace`. One lead, recorded not tested: Moa's diffuse product goes through `H0.w`, the output register used as a
-temp, where Metropia's goes through `H1.x`.
+**What decided it (2026-11-12, `hd-ubermall-nl-dump`; RPCS3 draw dump of an Ubermall Time Trial start, camera `182.47 143.58 -231.47`, two frames of one boot; confidence 75 for the numbers, 45 for the mechanism).**
+Neither branch of the question held; a third did.
+
+| Quantity, Ubermall right wall (draw 98 of the frame, `d_s_n`-family program `0x01135e00`, lightmap unit 2) | Original (live) | Ours |
+| --- | --- | --- |
+| Patched `directionalLight0DirectionWorldSpace` | `(-0.842152, 0.336861, 0.421076)` in all 541 live programs | `track.envsettings` `Sun direction` `(-2, 0.8, 1)` normalised: the same triple |
+| Sun colour | `(4, 3.482353, 2.494118)` | the envsettings value, same |
+| Unit-2 texture | `0x076a8400`, DXT5 1024x1024, remap `0xaae4`, gamma nibble 0; mip 0 byte-identical to `lmaps/ile_mesh_combine22-lmap.gtf` | the same file |
+| `lm.a` at the draw's 1,513 pixels with vertex `N.L < -0.2` | mean 0.976 | same bytes |
+| `N.L` there | vertex normal mean -0.29; with the live normal map (unit 1, uv0 unflipped) 21 % of them still negative | the same vertex data |
+| Pixel RGB there (2,280 depth-visible pixels over draws 98, 102, 101, 76, `N.L<-0.2`, `lm.a>0.9`) | **103.6 113.4 119.5** | unsaturated term drawn **75.6 89.1 100.4**; clamped (as shipped) **103.2 113.6 119.1** |
+
+(a) is false (alpha 0.976 on identical bytes) and (b) is false in its stated form (identical sun, negative `N.L`). The live program does multiply `lm.a * N.L` unsaturated (`@0x26 DP3 R0.y`, `@0x29 MUL H1.x, H6.w, R0.y`), and still the original draws the **clamped** picture, so **the negative product does not reach the pixel**. Binned by normal-mapped `N.L` over draw 98's 12,638 pixels with `lm.a>0.9`: for `N.L` in `[-0.6,-0.1)` original 79 to 81, clamped 80 to 85, unsaturated 48 to 53.
+
+**The candidate mechanism: an undecoded operand flag on that `MUL`.** The `MUL` (`d0=02000282 d1=1c9dff18 d2=0100aa00`) has **bit 24 of dword 2** set, which `scripts/ps3-microcode.py` does not decode. Over the 541 live programs only `MUL` carries it (172 programs, one `MUL` each), and **65 of 65 lightmapped programs with an unsaturated sun `DP3` carry it, 0 of those without**. If it is a source saturate (Cg folding `saturate(N.L)` into the consumer), the 2,349-program census counts saturated programs and `sun_diffuse_unsaturated` is wrong, not the renderer. Meaning not verified (no RPCS3 source here; confidence 45).
+
+Reproduce: state `scripts/emu-hd-timetrial-state.sh <lane> 6 0 0 <name>`, `cross` then `rpcs3-drive.py restart`, `HOOK_TGT=1920000 HOOK_NO_HEADS=1 HOOK_FP_LEN=0x800 scripts/hd-draw-dump.py`, textures with `scripts/hd-rsx-read.py` and `scripts/dxt5-decode.py`, vertices with `scripts/hd-draw-vertices.py` (layout `s16x3` position at `raw/128 + c467`, `CMP` normal, `u8x4` tangent, `f16x2` uv0 and uv1). Ours: `git revert --no-commit 2ddd3fa2f`, build, `OAG_UNSATURATED_SUN_OFF=1` for the clamped picture. Not read: bit 24 against RPCS3's decompiler or nouveau's `nv40_fragprog.h`.
 
 **2048 / Omega: not determined.** Omega's lightmapped Moa permutation (`03_moa_therma/Materials/Diffuse_Normal_Specular_1`, `gcn_dump --at 0x4124`)
 carries two `clamp` output modifiers in its lighting chain (`@0x228`, `@0x260`) and no `v_max_f32`; which instruction is the sun's `N.L` and whether
