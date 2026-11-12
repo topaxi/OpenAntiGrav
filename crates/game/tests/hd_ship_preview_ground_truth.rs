@@ -573,24 +573,23 @@ fn omega_plays_the_settle_on_its_borrowed_pose() {
     let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    for team in ["Piranha"] {
-        let empty = ship_select_still(&source, team, "0.03");
-        let width = |step: &str| {
-            f64::from(hull_width(
-                &ship_select_still(&source, team, step),
-                &empty,
-                [740, 200, 1660, 740],
-            ))
-        };
-        let (first, settled, late) = (width("0.07"), width("3"), width("1.5"));
-        eprintln!("omega {team}: {first} px first frame, {settled} settled, 1.5 s {late}");
-        assert!(
-            (first / settled - 1.0).abs() > 0.02,
-            "{team}: {first} against {settled}"
-        );
-        assert!(
-            (late / settled - 1.0).abs() < 0.01,
-            "{team}: {late} against {settled}"
-        );
-    }
+    let team = "Piranha";
+    let empty = ship_select_still(&source, team, "0.03");
+    let width = |step: &str| {
+        f64::from(hull_width(
+            &ship_select_still(&source, team, step),
+            &empty,
+            [740, 200, 1660, 740],
+        ))
+    };
+    let (first, settled, late) = (width("0.07"), width("3"), width("1.5"));
+    eprintln!("omega {team}: {first} px first frame, {settled} settled, 1.5 s {late}");
+    assert!(
+        (first / settled - 1.0).abs() > 0.02,
+        "{team}: {first} against {settled}"
+    );
+    assert!(
+        (late / settled - 1.0).abs() < 0.01,
+        "{team}: {late} against {settled}"
+    );
 }
