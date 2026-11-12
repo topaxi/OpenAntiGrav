@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [omega, 2048]
 updated: 2026-11-12
-summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 DLC circuit names: alias table read, ready to wire"
+summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 DLC card titles: alias table read, that item ready to wire"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -63,8 +63,8 @@ content against `hd-frontend.md`.
     - **Rule to wire:** `title = strings[fold(alias(track))]`, where `alias(n)` is the row whose `name` or `key` equals `n` (byte-exact, CRC-32 in the original) and gives its `key`; no row gives `99_Track`; a string-table miss prints the key.
     - **Per direction, not per circuit:** `Vineta_K` `01`, `Anulpha_Pass` `08`, `Moa_Therma` `03`, `Chenghou_Project` `04`, `Metropia` `02`, `Sebenco_Climb` `06`, `Ubermall` `05`, `Sol_2` `07`; their `_R` `09`, `16`, `11`, `12`, `10`, `14`, `13`, `15`; `Talons_Junction` `17`/`_R` `18`, `Amphiseum` `19`/`20`, `Modesto_Heights` `21`/`22`, `Tech_De_Ra` `23`/`24`; `Zone_1`..`4` `25`..`28` (all `NN_Track`). Russian v1.04 gives `03_TRACK` and `11_TRACK` different strings, so never strip `_R` and reuse the forward key.
     - **Do not derive it from `soundregister`:** `soundregister + 8 * reversed` matches DLC1's sixteen only; DLC2 breaks it (`Amphiseum` is `10`, key `19`).
-    - **Wiring:** an `oag-2048` table citing `0x814b1578` (the 28 DLC rows, or all 102), applied where `CircuitNames` resolves an HD-lineage circuit; keep 2048's own ten on `M_DISPLAYNAME` (their events draw `m_displayName`, not the alias). Best with a ground-truth test that re-reads the rows from the decrypted `eboot.elf` when present, so the table stays re-derivable. Acceptance: ours draws `VINETA K`, `ANULPHA PASS`, `THE AMPHISEUM` on the stills' screens.
-    - Omega: the same table is at `0x01990120` (row heads read); its card site is not read. For Omega's `NN_Track` ids the alias is the identity, so Omega's `name_key` is unchanged (**checked, applies, nothing to wire**).
+    - **Wiring:** an `oag-2048` table citing `0x814b1578` (the 28 DLC rows, or all 102), applied only on the title sites read: the HD and Fury grid cell screens, the event card, the mode card over the load and `Callout_Item` (the no-event `DrawPanel` branch too, but its output for a 2048 circuit, `30_Track`, is a prediction no still checks). Track Select and the other `PI_Track`-name sites keep the case-fold(`name`) rule; what the original shows there is unmeasured. Keep 2048's own ten on `M_DISPLAYNAME` (their events draw `m_displayName`, not the alias). Best with a ground-truth test that re-reads the rows from the decrypted `eboot.elf` when present, so the table stays re-derivable. Acceptance: ours draws `VINETA K`, `ANULPHA PASS`, `THE AMPHISEUM` on the stills' screens.
+    - Omega: the same table is at `0x01990120` (row heads read); its card site is not read. For Omega's 28 `NN_Track` ids the alias is the identity, so `name_key` gives the same strings; its ten 2048 circuits stay on `StringTableId` (the line below, **checked, differs**, still holds for that path).
   - Omega: **checked, differs**. It applies the same rule with an authored `StringTableId` override (`FUN_014b1330` stores it at `+0x278`).
   - Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 

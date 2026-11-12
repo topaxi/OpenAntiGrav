@@ -388,8 +388,19 @@ item is the in-race candidate.
   pre-race callout and Racebox path): title is
   `StringTable_LookupString(TrackAlias_KeyForHash(Hash_ComputeCrc32(current
   track +0x74)))`, tournaments `"%s (%d/%d)"` of the same.
-- **`FUN_810a27f8`** (a lobby or result row; not identified): the label is
-  `StringTable_LookupString(TrackAlias_KeyForHash(row+0x1474))`.
+- **`FUN_810a27f8`**, a row of the online game list: the label is
+  `StringTable_LookupString(TrackAlias_KeyForHash(row+0x1474))`. Its only
+  caller `FUN_810a2a92` is called by `FUN_810a2cd8`, slot `0x8150c1a0` of the
+  vtable `0x8150c184` that `FUN_810a19e0` stores; that constructor labels the
+  list with `ONL_CRJ_GLIST`.
+
+**Prediction, not measured:** on these two sites a 2048 circuit (`square`)
+resolves to `30_Track`, which no English `entries.xml` holds, so they would
+print `30_Track`. No still shows either site with a 2048 circuit. The AdHoc
+lobby still (`UNITY SQUARE` over `COMBAT`, with a NAME / XP / WINS player list)
+is **not** the no-event branch: the player list is page kind `7`, which
+`DrawPanel` draws only when it is passed an event, so that title is the
+event's `m_displayName` and agrees with the rule below.
 
 With an event (`param_2 != 0`), `DrawPanel` draws `event + 0x144` unchanged:
 `GameModeBase.m_trackDef` is at `+0x104` and `TrackDefinition.m_displayName`
@@ -407,16 +418,28 @@ is copied to `+0xea` (`0x18` bytes). The element set is exactly the
 `<PI_Cell>` grammar of `data/plugins/grids/grid_NN.xml`. Not higher: the
 `PI_Cell` class's vtable was not followed to this function.
 
+### `TrackAlias_OtherHash` - `0x812324c6`
+
+**Confidence: 80.** `u32 (void *self, u32 hash)`. Returns the *other*
+spelling's hash of the matching row: `crc32(key)` when `hash` is
+`crc32(name)`, `crc32(name)` when it is `crc32(key)`; no row returns row 0's
+`crc32(key)` (`DAT_818bc25c`). Callers use it to find a track item by either
+spelling after a direct miss: `RaceSetup_SelectTrackByName`, `FUN_810c1180`,
+`FUN_8123eae0`, `FUN_8105a4f6` and ten more.
+
 ### Where the earlier rule still holds
 
-None of the eleven `PI_Track`-name sites of the section above calls the alias
-functions (`TrackAlias_KeyForHash`'s callers are the two card painters and
-`FUN_810a27f8`; `TrackAlias_NameForHash`'s are the two card painters). So the
-case-fold(`name`) rule stands for those sites, and the cards are a separate
-path. `FUN_8100077c`'s `%02d_Track` CRC list and `FUN_81059ebc` (which drops
+`TrackAlias_KeyForHash`'s only callers are the two card painters and
+`FUN_810a27f8`; `TrackAlias_NameForHash`'s are the two card painters. Three of
+the earlier section's eleven sites (`RaceSetup_SelectTrackByName`,
+`FUN_810c1180`, `FUN_8123eae0`) do touch the map, but only through
+`TrackAlias_OtherHash`, to *find* the `PI_Track` item; the text they produce is
+still `StringTable_LookupString(item + 0x74)` (read in `FUN_810c1180`: it
+returns `FUN_8106b86e(DAT_8151cdb0, item+0x74, 0)`). So the case-fold(`name`)
+rule stands for those sites, and the card titles are a separate path. `FUN_8100077c`'s `%02d_Track` CRC list and `FUN_81059ebc` (which drops
 the sixteen HD ids from a track list) stay unrelated.
 
-### Omega: checked, applies (table present, card site not read)
+### Omega: the alias table is present (card site not read)
 
 `/omega/eboot-ps4-omega-eu-v107.bin` carries the same table at `0x01990120`,
 stride 24 (8-byte pointers): row 0 `Vineta_K` / `0` / `01_Track`, row 1
@@ -425,8 +448,11 @@ stride 24 (8-byte pointers): row 0 `Vineta_K` / `0` / `01_Track`, row 1
 in about twelve functions). Which of those is Omega's event card is not read.
 For Omega's numbered circuits the map is idempotent (the key's own hash
 matches), so `oag_raceplay::catalogue::Track::name_key` (`StringTableId`, else
-the `NN_Track` id) gives the same strings it would; no change is implied for
-Omega.
+the `NN_Track` id) gives the same strings it would for those 28. This covers
+the alias table only: Omega's ten 2048 circuits would miss on it (`30_Track`
+and up), and Omega names them by `StringTableId` through the `PI_Track` path
+the section above read, so that section's **checked, differs** still holds.
+Which path Omega's event card takes is not read.
 
 ### Base build (v1.00)
 

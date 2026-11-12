@@ -353,3 +353,4 @@
 0x81232436	function	TrackAlias_KeyForName	80	circuit-name-key.md
 0x8105021c	function	CampaignEventCard_DrawCellPanel	75	circuit-name-key.md
 0x810bbfce	function	PICell_ParseValues	70	circuit-name-key.md
+0x812324c6	function	TrackAlias_OtherHash	80	circuit-name-key.md
