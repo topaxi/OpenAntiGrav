@@ -20,9 +20,10 @@ title's program was read):**
 
 1. ~~**`alpha_emissive` families**~~ **Wired 2026-11-11, `w2048-alpha-emissive`** on 2048 and Omega
    (`docs/formats/rcsmaterial.md`, "The picture's alpha times a colour": 2048 171 of 171 programs, Omega 249 of 250 plain,
-   `psp2::alpha_emissive`). **Left:** (a) Omega's 14 Metropia `dn_diffuse_specular_emiss` materials draw their
-   `SpecularTexture` as the picture (first sampler listed, programs unread), so the term is skipped there: needs a per-family
-   Omega record answer next to `lighting_only::inherited`; (b) none of the three 2048 grid pairs has these surfaces in frame
+   `psp2::alpha_emissive`). **Wired 2026-11-12, `omega-metropia-specular`:** (a) the 14 Metropia `dn_diffuse_specular_emiss`
+   materials (17 with the three whose maps share a file) draw `alpha_emissive` as the picture and weight the specular by their
+   `SpecularTexture` on the third binding, on Omega and 2048 (`oag_rcs::rcsmodel::psp2::specular_picture`, `docs/formats/rcsmaterial.md`,
+   "Omega's `dn_diffuse_specular_emiss` and 2048's"). **Left:** (a2) the `_glow` twin's own emissive term (2048: `T^2 * T.a`, no `glowtinrt`; Omega's unread) is not drawn, and no `_glow` surface is on a measured frame; (b) none of the three 2048 grid pairs has these surfaces in frame
    (on/off pixel-identical), so the 2048 effect has no original to measure against: a 2048 Anulpha Pass or Metropia pair would
    (ours at the Anulpha grid shows an amber strip light on the stand); (c) Omega Anulpha Pass pair, box `1065,268 100x35`: G 73 to
    80 against the original's 80.
@@ -42,7 +43,9 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
 
 5. **The specular map of `dn_diffuse_specular_emiss` and
    `mr_diffuse_emissive_alpha_glow_specular`** (`specular * map.rgb`, unit 1)
-   is unbound: the specular is drawn unweighted.
+   is unbound on HD: the specular is drawn unweighted. Omega and 2048 now bind it third for the first family
+   (`ALPHA_EMISSIVE_SPECULAR_MAP`, `shade.wesl`); HD's `alpha_emissive` binds nothing third, so the same flag needs its unit 1 sampled
+   there. `mr_..._specular` is not read on Omega or 2048 (its Omega program folds `glowtinrt` into the alpha-weighted specular).
 6. **The unsaturated `N.L`** of the bumped lightmapped block: the program
    multiplies the sun by `N.L` with no clamp. Wiring it on every bumped
    lightmapped slot read worse (Moa's box 1.60 against 1.47, the frame 1.92 to

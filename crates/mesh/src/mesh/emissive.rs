@@ -113,7 +113,15 @@ pub const PROGRAM_SHIELD_LIGHTNING: f32 = 11.0;
 /// `dn_diffuse_specular_emiss`): the **picture's own** alpha times the entry's tint, added
 /// after the light and before the fog, like [`PROGRAM_EMISSIVE_ALPHA_MASK`] with no third
 /// binding. See `super::rcs::alpha_emissive` (HD) and `super::rcs::psp2::alpha_emissive` (2048, Omega).
+///
+/// The entry's second lane, [`ALPHA_EMISSIVE_SPECULAR_MAP`], says the **third binding is the
+/// material's specular map** (`dn_diffuse_specular_emiss`): the specular term is weighted by its
+/// rgb in place of the picture's alpha.
 pub const PROGRAM_PICTURE_ALPHA_EMISSIVE: f32 = 12.0;
+
+/// [`Emissive::program`]'s second lane on a [`PROGRAM_PICTURE_ALPHA_EMISSIVE`] entry whose
+/// material binds a specular map third. See `super::rcs::psp2::alpha_emissive`.
+pub const ALPHA_EMISSIVE_SPECULAR_MAP: f32 = 1.0;
 
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
