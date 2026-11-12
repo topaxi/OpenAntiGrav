@@ -187,9 +187,19 @@ pub struct Instruction {
     /// `1` x2, `2` x4, `3` x8, `5` /2, `6` /4, `7` /8. `5` is measured
     /// (`scripts/ps3-microcode.py`, `FP_SCALE`); the rest follow nouveau.
     pub scale: u8,
+    /// Each source's precision modifier, 3 bits at `SRC1` word bits 19-21
+    /// (source 0), 22-24 (source 1) and 25-27 (source 2): `0` none, `1`
+    /// half, `2` fixed12, `3` fixed9, `4` saturate to `[0, 1]`, `5` unknown.
+    /// RPCS3's `SRC1::src{0,1,2}_prec_mod`; read before the source's `abs`
+    /// and `neg` (`docs/formats/rcsmaterial.md`, "Bit 24 is a source
+    /// saturate").
+    pub source_precision: [u8; 3],
     /// Whether this instruction ends the program.
     pub end: bool,
 }
+
+/// The `source_precision` code that clamps the source to `[0, 1]`.
+pub const PRECISION_SATURATE: u8 = 4;
 
 impl Instruction {
     /// The mnemonic, or `None` for an opcode this reading does not name.
@@ -314,6 +324,11 @@ impl Program {
                 ],
                 cond: ((bits[0] >> 18) & 0x7ff) as u16,
                 scale: ((bits[1] >> 28) & 7) as u8,
+                source_precision: [
+                    ((bits[1] >> 19) & 7) as u8,
+                    ((bits[1] >> 22) & 7) as u8,
+                    ((bits[1] >> 25) & 7) as u8,
+                ],
                 end: d0 & 1 != 0,
             };
             let done = insn.end;

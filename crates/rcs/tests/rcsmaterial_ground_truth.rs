@@ -455,8 +455,9 @@ const SPECULAR_TEXTURE: u32 = 0x20c3_e476;
 /// every block on the disc.
 #[derive(Default)]
 struct SunCensus {
-    /// `family -> (lightmapped programs, of which unsaturated)`.
-    families: BTreeMap<String, (usize, usize)>,
+    /// `family -> (lightmapped programs, of which unsaturated reading the modifier bits as absent,
+    /// of which still unsaturated once a source's saturate precision modifier counts)`.
+    families: BTreeMap<String, (usize, usize, usize)>,
     /// `(path suffix, block offset)` of the two blocks the doc quotes instruction by instruction.
     quoted: BTreeMap<(&'static str, usize), bool>,
     /// `family -> programs declaring SpecularTexture` (`0x20c3e476`), of every program.
@@ -496,12 +497,18 @@ impl SunCensus {
             return;
         }
         let unsaturated = program.sun_diffuse_unsaturated();
+        let mut bare = program.clone();
+        for insn in &mut bare.instructions {
+            insn.source_precision = [0; 3];
+        }
         let entry = self.families.entry(family).or_default();
         entry.0 += 1;
-        entry.1 += usize::from(unsaturated);
+        let before = bare.sun_diffuse_unsaturated();
+        entry.1 += usize::from(before);
+        entry.2 += usize::from(unsaturated);
         for (suffix, at) in Self::QUOTED {
             if path.ends_with(suffix) && block == at {
-                self.quoted.insert((suffix, at), unsaturated);
+                self.quoted.insert((suffix, at), before);
             }
         }
     }
@@ -509,8 +516,15 @@ impl SunCensus {
     fn check(&self) {
         let programs: usize = self.families.values().map(|f| f.0).sum();
         let unsaturated: usize = self.families.values().map(|f| f.1).sum();
-        println!("{programs} lightmapped program(s), {unsaturated} with an unsaturated sun N.L");
-        assert_eq!((programs, unsaturated), (7_211, 2_349));
+        let clamped_by_modifier: usize = self.families.values().map(|f| f.2).sum();
+        println!(
+            "{programs} lightmapped program(s), {unsaturated} with an unsaturated sun N.L \
+             before the source precision modifier, {clamped_by_modifier} after"
+        );
+        assert_eq!(
+            (programs, unsaturated, clamped_by_modifier),
+            (7_211, 2_349, 0)
+        );
         let family = |name: &str| self.families.get(name).copied();
         // The plain diffuse families clamp: their `N.L` is a `DP3_SAT`.
         for name in [
@@ -520,16 +534,16 @@ impl SunCensus {
             "diffuse_emissive_alpha_glow",
             "diffuse_emissive_alpha_glow_v01",
         ] {
-            let (n, u) =
+            let (n, u, _) =
                 family(name).unwrap_or_else(|| panic!("{name} has no lightmapped program"));
             assert_eq!(u, 0, "{name}: {u} of {n} programs are unsaturated");
         }
         // The specular families do not. Their mixed counts are the variants (Zone, shadowed
         // redraw, no sun) that carry no diffuse sun term.
-        assert_eq!(family("dn_diffuse_specular_emiss"), Some((24, 22)));
-        assert_eq!(family("dn_diffuse_specular_emiss_glow"), Some((18, 18)));
-        assert_eq!(family("dn_diffuse_specular"), Some((36, 36)));
-        assert_eq!(family("diffuse_normal_specular"), Some((328, 152)));
+        assert_eq!(family("dn_diffuse_specular_emiss"), Some((24, 22, 0)));
+        assert_eq!(family("dn_diffuse_specular_emiss_glow"), Some((18, 18, 0)));
+        assert_eq!(family("dn_diffuse_specular"), Some((36, 36, 0)));
+        assert_eq!(family("diffuse_normal_specular"), Some((328, 152, 0)));
         for (key, unsaturated) in &self.quoted {
             assert!(
                 unsaturated,

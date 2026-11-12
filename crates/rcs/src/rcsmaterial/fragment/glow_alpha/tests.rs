@@ -16,6 +16,7 @@ fn insn(opcode: u8) -> Instruction {
         negate: [false; 3],
         cond: 0x727,
         scale: 0,
+        source_precision: [0; 3],
         end: false,
     }
 }

@@ -1002,7 +1002,9 @@ the track is the scenery lane's. Hull box difference, Vineta K 11.25 to 10.90.
 **Read, measured, not wired: the diffuse `N.L` is unsaturated too.** The same `DP3` feeds `H3 = N.L * sunColour` unsaturated
 (`diffuse_vcol` alone has `DP3_SAT`), so a facet turned from the sun would be darker than its ambient. Wired, Vineta K's hull
 difference went 10.90 to 13.16 (worse) and Anulpha's 33.95 to 34.51, so the diffuse stays saturated. The original's self-shadow pass
-(front faces culled) zeroes most of the back-facing sun, which is the likely reason the negative term is rarely seen; not checked.
+(front faces culled) zeroes most of the back-facing sun, which is the likely reason the negative term is rarely seen; not checked. **Likely the same
+reading as the scenery's:** a consumer's source saturate (`src1_prec_mod = 4`, `docs/formats/rcsmaterial.md`, "Bit 24 is a source saturate") clamps an unsaturated
+`DP3`; whether the ship programs carry it is not censused.
 
 **Measured (the 13 HD compare pairs, Harimau classic on 12 circuits and Assegai_c1 on Talon's Junction).** The pixel metric on a hull is
 dominated by the silhouette: two captures of one state differ in camera (0.078 units on Anulpha Pass, about ten pixels at the hull), and the hull-box grey
