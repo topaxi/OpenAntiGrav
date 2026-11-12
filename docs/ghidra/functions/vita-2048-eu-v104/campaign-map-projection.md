@@ -393,7 +393,16 @@ and, for `E`'s branch (`+0x2d0`, `M_PBRANCHEVENT`) and that event's `+0x2cc` suc
 `TouchCampaign_PaintBranchRings` (`0x810ef536`) does the same with modes 1 (unreached) and 2
 (reached) and `0x817327c8` for an unreached one. Then a loop over the 40 names of the table at
 `0x8151ea78` (`"<circuit> Speed Lap - <class>"`, ten circuits by Flash, Rapier, Phantom, Super P)
-sets mode 3 on each with progress above 1.
+sets mode 3 on each with progress above 1. That loop also calls vtable `+0x70(3, 1)` on an event whose
+vtable `+0x10` result is not `0xffff` and colours its button `0x817327d0`, else `0x817327cc`; the
+meaning of those two slots was not read and ours takes the button's colour from the state alone
+(not wired).
+
+**`+0x50` is not a cursor rule.** `0x810ef78c` sets the button byte `+0x50` to 0 for the current event
+and for any event below progress 2, else 1; `CanvasItem_Paint` (`0x8106fae2`, decompiled) reads it
+as "snap": 1 writes alpha `0xff` into the cells (the raise), 0 keeps the cell's alpha. Which of the
+two events the pad or a tap may select is still unread (no caller of the select function
+`0x810eecb4` reading a lock was found in this pass); ours keeps every drawn event selectable.
 
 **The lock test** is `GameModeBase` vtable slot `+0x74`: every derived class's slot is the stub at
 `0x813ea23c` (`ldr r0, [r0, #0x1a0]; ands r0, r0, #0x10`, so `m_options & 0x10`); the base
@@ -401,8 +410,8 @@ vtable `0x81515f88` has the same entry. The campaign's 15 side challenges carry 
 (`"* P Ship Challenge"`, `"* - S Phantom Challenge"`; the census: 13 with 16, 2 with 17) and the other
 events of the map carry none, so **a main-chain or branch event is never "locked"** and an unreached
 one is state 1 (flat tint, ring 3 or 1), while a side challenge is not drawn at all until its progress
-is raised. The same 15 events carry `m_RankRequired` (10 to 50), so the raising is most probably the
-player rank ([2048-campaign.md](../../../formats/2048-campaign.md), "The unlock graph"; not read).
+is raised. The same 15 events carry `m_RankRequired` (10 to 50), so the raising is **hypothesised** to be
+the player rank (confidence 45) ([2048-campaign.md](../../../formats/2048-campaign.md), "The unlock graph"; not read).
 
 **Against frame `13`** (Events 1 to 3 passed, Event 4 open): the prediction (rings by the table, a tile's
 cells above rings, the highest fill winning) agrees with the reference's texture class on the
@@ -436,9 +445,10 @@ The season cards (item 3 of the thread) are still not drawn.
 
 ## Omega
 
-**Ring: checked, applies, not wired.** The PS4 `eboot.bin` carries the ring's four shifts as one
-literal pool of floats (`47/2048`, `141/2048`, `82/2048`, `94/2048` as `0x3cbc0000`, `0x3d8d0000`,
-`0x3d240000`, `0x3d3c0000` at `0x018030e4..0x01803112`) and the speed-lap names (ten `"... Speed Lap -
+**Ring: checked, applies, not wired.** The PS4 `eboot.bin` carries the `u` shifts of modes 4, 2 and 3 and
+the `v` shift of modes 2 and 4 as one literal pool of floats (`47/2048`, `141/2048`, `82/2048`, `94/2048` as `0x3cbc0000`,
+`0x3d8d0000`, `0x3d240000`, `0x3d3c0000` at `0x018030e4..0x01803112`); mode 1's `188/2048` (`0x3dbc0000`)
+was not found as a word beside them (it may be an immediate) and the speed-lap names (ten `"... Speed Lap -
 Flash"` strings from `0x01820ce4`), so the same canvas code ships; the walk's decompile and any live
 value were not read (no memory readout). Same atlas shifts apply to `canvasTexture.gnf`; not wired.
 

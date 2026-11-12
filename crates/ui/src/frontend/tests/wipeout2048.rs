@@ -1198,6 +1198,82 @@ fn an_unreached_event_is_a_flat_tint_with_a_light_ring_and_the_reached_one_a_pri
     );
 }
 
+/// A branch's events take the branch tints and dots: `0x810ef536` paints an
+/// unreached one flat in `0x817327c8` with light dots (fill 1), and a reached one
+/// raised with dark dots (fill 2).
+#[test]
+fn a_branch_is_flat_in_its_own_tint_with_light_dots_until_reached_then_dark_dots() {
+    use crate::frontend::{canvas_cells, canvas_prism};
+    let event = |name: &str, x: f32, requires: Option<&str>, role: oag_title::MapRole| MapEvent {
+        name: name.to_string(),
+        x,
+        y: 35.0,
+        detail: "circuit / mode".to_string(),
+        requires: requires.map(str::to_string),
+        kind: EventIcon::Race,
+        forced_craft: None,
+        refused_craft: Vec::new(),
+        card: crate::frontend::EventCard::default(),
+        role,
+    };
+    let mut frontend = boot(0);
+    frontend.set_campaign(vec![
+        event("start", 59.0, None, oag_title::MapRole::Chain),
+        event("branch", 67.0, Some("start"), oag_title::MapRole::Branch),
+    ]);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    for fill in 0..=4_u8 {
+        for up in [true, false] {
+            frontend.placements.push((
+                canvas_cells::name(fill, up).to_string(),
+                Placed {
+                    x: 1000 + u32::from(fill) * 200 + if up { 0 } else { 100 },
+                    y: 0,
+                    width: canvas_cells::layout(up).size.0,
+                    height: canvas_cells::layout(up).size.1,
+                    quad_extent: None,
+                    quad_centre: None,
+                    blend: None,
+                    scale: [1.0, 1.0],
+                },
+            ));
+        }
+    }
+    let colours_of = |frontend: &Frontend, fill: u32| -> Vec<[f32; 4]> {
+        frontend
+            .draw_list()
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { uv, color, .. }
+                    if [0, 100]
+                        .iter()
+                        .any(|up_down| uv[0] == (1000 + fill * 200 + up_down) as f32 + 1.0) =>
+                {
+                    Some(*color)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let flat = colours_of(&frontend, 0);
+    assert_eq!(flat.len(), 6, "the unreached branch event, flat: {flat:?}");
+    assert!(
+        flat.iter()
+            .all(|c| *c == canvas_prism::tint(canvas_prism::colours::UNREACHED_BRANCH)),
+        "a branch's own state 1 tint, not the chain's"
+    );
+    assert!(!colours_of(&frontend, 1).is_empty(), "light dots");
+    assert!(colours_of(&frontend, 2).is_empty());
+    frontend.refresh_campaign_progress(|name| (name == "start").then_some(EarnedTier::Pass));
+    assert!(colours_of(&frontend, 0).is_empty(), "no flat cell left");
+    assert!(
+        !colours_of(&frontend, 2).is_empty(),
+        "dark dots once reached"
+    );
+    assert!(colours_of(&frontend, 1).is_empty());
+}
+
 #[test]
 fn campaign_event_state_reads_locked_open_passed_and_elite_without_driving_input() {
     let mut frontend = boot(0);

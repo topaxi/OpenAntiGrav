@@ -167,8 +167,10 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      ours draws them as open tiles (frame `12`'s top left tile, `"Feisar - P Ship
      Challenge"`, the original does not show at rank 1); hiding them would make
      15 events unplayable, so it is the maintainer's call, one condition in
-     `CampaignMap::state_of`'s callers (`draw_ground_cells`, `draw_campaign_map`). No pad-cursor rule was needed: every drawn
-     event, flat or raised, is a cursor target as before.
+     `CampaignMap::state_of`'s callers (`draw_ground_cells`, `draw_campaign_map`). The original's own rule for which events the pad or a tap may select is
+     unread (`+0x50` is the paint's alpha snap, not a selection flag: `campaign-map-projection.md`,
+     "The ring"); ours keeps every drawn event, flat or raised, a cursor target as before.
+     Item 3 (season cards) waits on this item's answer.
   5. **The scroll's limits** (`0x810ef98c`, 650 px margin; sign and origin not
      read): ours are chosen. The one-second wait and the ease at the open, and
      the ease after a tap, are not played: ours arrives at once.
