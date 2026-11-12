@@ -120,7 +120,7 @@ impl XpTally {
     /// else `Zone`, then `Hit Zone N` on every tenth zone up to 100.
     pub fn zone_cleared(&mut self, zone: u16, perfect: bool) {
         self.award(if perfect { PERFECT_ZONE } else { ZONE });
-        if zone > 0 && zone <= 100 && zone % 10 == 0 {
+        if zone > 0 && zone <= 100 && zone.is_multiple_of(10) {
             self.award(HIT_ZONE_BASE + u32::from(zone) / 10);
         }
     }
@@ -177,7 +177,7 @@ impl XpTally {
 impl crate::Race {
     /// Starts counting this race's in-race XP into `tally`.
     pub fn arm_xp(&mut self, tally: XpTally) {
-        self.sim.xp = Some(tally);
+        self.sim.xp = Some(Box::new(tally));
     }
 
     /// Arms the tally an event's own `XPAwards.xml` and mode column call for; nothing when the
@@ -191,12 +191,12 @@ impl crate::Race {
     /// The race's XP tally, when the event pays XP.
     #[must_use]
     pub fn xp_tally(&self) -> Option<&XpTally> {
-        self.sim.xp.as_ref()
+        self.sim.xp.as_deref()
     }
 
     /// The race's XP tally, to bank it at the finish.
     pub fn xp_tally_mut(&mut self) -> Option<&mut XpTally> {
-        self.sim.xp.as_mut()
+        self.sim.xp.as_deref_mut()
     }
 
     /// Feeds the tally what the player did this tick: kills and place. Counts only while the
