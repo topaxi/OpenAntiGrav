@@ -97,6 +97,7 @@ use oag_hd::frontend::states as hd_states;
 mod campaign_map;
 mod campaign_tiers;
 pub mod canvas_camera;
+pub mod canvas_cells;
 pub mod canvas_lattice;
 pub mod canvas_prism;
 mod event_card;

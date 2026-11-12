@@ -540,3 +540,46 @@ fn the_callout_icons_and_names_run_in_weapon_type_bit_order() {
     assert_eq!((ICONS[8], NAME_IDS[8]), ("bomb", "FE_BOMB"));
     assert_eq!((ICONS[9], NAME_IDS[9]), ("mine", "FE_MINES"));
 }
+
+#[test]
+fn map_roles_walk_the_chain_then_the_branches_and_leave_the_rest_alone() {
+    use oag_title::MapRole;
+    let doc = parse(
+        r#"<mjolnir>
+<instance instanceid="1" typedefid="-1353052320" name="2048 - Event 1"><DATA>
+<M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="2" typedefid="-1915183557"/></M_PNEXTEVENT>
+</DATA></instance>
+<instance instanceid="2" typedefid="-1915183557" name="2048 - Event 2"><DATA>
+<M_PBRANCHEVENT name="m_pBranchEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="3" typedefid="-1915183557"/></M_PBRANCHEVENT>
+</DATA></instance>
+<instance instanceid="3" typedefid="-1915183557" name="2048 - Event 2-1"><DATA>
+<M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="4" typedefid="-1915183557"/></M_PNEXTEVENT>
+</DATA></instance>
+<instance instanceid="4" typedefid="-1915183557" name="2048 - Event 2-2"><DATA>
+<M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="3" typedefid="-1915183557"/></M_PNEXTEVENT>
+</DATA></instance>
+<instance instanceid="5" typedefid="-1915183557" name="Mall Speed Lap - Flash"><DATA></DATA></instance>
+<instance instanceid="6" typedefid="1018671239" name="Feisar - P Ship Challenge"><DATA></DATA></instance>
+</mjolnir>"#,
+    );
+    let roles = map_roles(&doc);
+    let role_of = |name: &str| roles.iter().find(|(n, _)| n == name).map(|(_, r)| *r);
+    assert_eq!(role_of("2048 - Event 1"), Some(MapRole::Chain));
+    assert_eq!(role_of("2048 - Event 2"), Some(MapRole::Chain));
+    assert_eq!(
+        role_of("2048 - Event 2-1"),
+        Some(MapRole::Branch),
+        "a chain event's branch"
+    );
+    assert_eq!(
+        role_of("2048 - Event 2-2"),
+        Some(MapRole::Branch),
+        "the branch's own successor; the cycle back to Event 2-1 ends the walk"
+    );
+    assert_eq!(
+        role_of("Mall Speed Lap - Flash"),
+        Some(MapRole::SpeedLap),
+        "a name of the speed-lap table's shape on no chain"
+    );
+    assert_eq!(role_of("Feisar - P Ship Challenge"), Some(MapRole::Side));
+}

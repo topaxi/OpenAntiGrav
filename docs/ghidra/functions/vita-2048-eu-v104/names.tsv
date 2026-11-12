@@ -87,11 +87,9 @@
 0x81052810	function	CampaignEventCard_DrawUnlockPage	60	campaign-event-card.md
 0x812b021a	function	GameMode_GetKindLabel	85	campaign-event-card.md
 0x8114f252	function	Time_SplitCentiseconds	85	campaign-event-card.md
-
 # The chase-camera rig and the craft scale it applies (2026-10-01).
 0x811bd89a	function	Ship_UpdateCameraRigs	78	camera.md
 0x8151fdd0	data	g_craft_scale	82	camera.md
-
 # The weapon callout, glyph row, forced-craft quads and trophy textures (2026-10-05).
 0x810626ce	function	CampaignEventCard_DrawWeaponCallout	75	weapon-callout.md
 0x81055006	function	CampaignEventCard_GlyphRowWidth	80	weapon-callout.md
@@ -111,7 +109,6 @@
 # AI branch choice (2026-10-05, ai-forks lane).
 0x81198708	function	Ai_Construct	80	ai-branch-choice.md
 0x8119ae90	function	Ai_ChooseBranch	80	ai-branch-choice.md
-
 # Crossfade system and the SCREAM name hash (2026-10-05, v2048-engine lane).
 0x8125e5d0	function	XFadeSystem_AddCrossFader	90	crossfader.md
 0x8125ed5a	function	XFadeSystem_SetInput	82	crossfader.md
@@ -163,7 +160,6 @@
 0x812b0d52	function	GameModeBase_Apply	80	ai-controls.md
 0x81965b58	data	g_CurrentGameMode	85	ai-controls.md
 0x81150730	function	Hud_UpdateMessages	85	hud-message-triggers.md
-
 # 2026-10-14 (mp-collision-re): the MPTimeTrial class that is still compiled in. See mp-time-trial-collision.md.
 0x8116385c	function	MPTimeTrialRaceManager_Construct	80	mp-time-trial-collision.md
 0x8115f3de	function	RaceManager_ConstructByMode	76	mp-time-trial-collision.md
@@ -242,7 +238,6 @@
 0x811505a8	function	Hud_SetPickupWidgetsVisible	75	pickup-backdrop.md
 0x8151f104	data	g_hud_pickup_widget_table	90	pickup-backdrop.md
 0x81154172	function	Hud_UpdatePickupBar	70	pickup-backdrop.md
-
 # 2026-10-31 hd-quake-leach-instances (weapon-instance-limits.md)
 0x81202568	function	QuakeManager_Construct	85	weapon-instance-limits.md
 0x812028f8	function	QuakeManager_Fire	80	weapon-instance-limits.md
@@ -345,3 +340,11 @@
 0x810c1f94	function	PITrack_ParseValues	85	circuit-name-key.md
 0x81001ef4	function	RaceSetup_SelectTrackByName	75	circuit-name-key.md
 0x810663ae	function	PIItem_LoadLocationStringTable	75	circuit-name-key.md
+0x81073aee	function	Canvas3D_WriteRingCell	85	campaign-map-projection.md
+0x810ef536	function	TouchCampaign_PaintBranchRings	70	campaign-map-projection.md
+0x81072a32	function	Canvas3D_InitStaticConstants	70	campaign-map-projection.md
+0x81732694	data	g_CanvasRingShift3	90	campaign-map-projection.md
+0x8173269c	data	g_CanvasRingShift4	90	campaign-map-projection.md
+0x817326a4	data	g_CanvasRingShift1	90	campaign-map-projection.md
+0x817326ac	data	g_CanvasRingShift2	90	campaign-map-projection.md
+0x8151ea78	data	g_CampaignSpeedLapNames	85	campaign-map-projection.md
