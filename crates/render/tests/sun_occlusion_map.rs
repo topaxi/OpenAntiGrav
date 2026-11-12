@@ -193,6 +193,7 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         mapped_at_creation: false,
     });
     queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    let vertex_buffer = oag_mesh::mesh_render::Geometry::single(vertex_buffer, vertices.len() as u32);
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("track indices"),
         size: std::mem::size_of_val(&indices[..]) as u64,
@@ -217,7 +218,7 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         material(&device, &queue, 12),
     ];
     let track = Track {
-        vertices: &vertex_buffer,
+        geometry: &vertex_buffer,
         indices: &index_buffer,
         draws: &draws,
         cutouts: &[],

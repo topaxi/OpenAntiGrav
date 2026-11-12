@@ -24,6 +24,7 @@ impl Drawable {
         shows: &super::Shows<'_>,
         transparent: &[u64],
         order: Option<&[u32]>,
+        cursor: &mut oag_mesh::mesh_render::Cursor<'_>,
         (set, chunks, frustum): (Option<&VisibleSet>, Option<&ChunkSet>, Option<&Frustum>),
     ) {
         let Some(stamp) = &self.stamp_pipeline else {
@@ -57,7 +58,7 @@ impl Drawable {
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
     }
 }

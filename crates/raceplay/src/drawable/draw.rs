@@ -299,7 +299,7 @@ impl Drawable {
         pass.set_pipeline(base_pipeline);
         self.bind_frame(pass, block);
         self.bind_materials(pass, &mut last_bound);
-        self.bind_vertices(pass);
+        let mut cursor = self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         let opaque_draws = if solid { &self.model.draws[..] } else { none };
@@ -361,6 +361,7 @@ impl Drawable {
         // wants the other one switches it and the rest do not - see
         // `Self::solid`.
         let mut draw_one = |pass: &mut wgpu::RenderPass<'_>,
+                            cursor: &mut mesh_render::Cursor<'_>,
                             index: u32,
                             reversed: bool,
                             shade: bool,
@@ -406,7 +407,7 @@ impl Drawable {
             } else {
                 draw.range.clone()
             };
-            pass.draw_indexed(range, 0, 0..1);
+            cursor.draw_of(pass, draw.range.start, &range);
         };
         match base_prepass {
             // Depth first, then the shading against it, **backwards** - see
@@ -432,7 +433,7 @@ impl Drawable {
                         let (_, twin, ..) = self.solid(want);
                         pass.set_pipeline(&twin.unwrap_or(prepass).depth);
                     }
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                    cursor.draw(pass, &draw.range);
                 }
                 oag_gpu::perfprobe::marks::mark(pass, "track solid, shaded");
                 pass.set_pipeline(&prepass.shade);
@@ -442,7 +443,7 @@ impl Drawable {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
                 for &index in shown.iter().rev() {
-                    draw_one(pass, index, reversed.is_some(), true, &mut culling);
+                    draw_one(pass, &mut cursor, index, reversed.is_some(), true, &mut culling);
                 }
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -451,7 +452,7 @@ impl Drawable {
             _ => {
                 let mut culling = (false, false);
                 for &index in shown.iter() {
-                    draw_one(pass, index, false, false, &mut culling);
+                    draw_one(pass, &mut cursor, index, false, false, &mut culling);
                 }
             }
         }
@@ -521,7 +522,7 @@ impl Drawable {
             }
             // Elided when unchanged, as above.
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
 
         // Third pipeline group, same pass: transparent batches, blended.
@@ -579,7 +580,7 @@ impl Drawable {
                     binds.record(slot);
                 }
                 self.bind_slot(pass, &mut last_bound, slot);
-                pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                cursor.draw(pass, &draw.range);
             }
         }
         // The original's order for list B: far to near by the mesh's view depth,
@@ -625,7 +626,7 @@ impl Drawable {
                 // Its pipeline, textures and buffers replaced ours.
                 self.bind_frame(pass, block);
                 self.bind_arrays(pass);
-                self.bind_vertices(pass);
+                cursor = self.bind_vertices(pass);
                 pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
                 current = None;
                 last_bound = None;
@@ -670,13 +671,14 @@ impl Drawable {
             }
             // Elided when unchanged, as above.
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
         self.draw_stamps(
             pass,
             &shows,
             transparent,
             blend_order,
+            &mut cursor,
             (set, chunks, frustum),
         );
         for (_, i) in inserts.drain(next_insert..) {

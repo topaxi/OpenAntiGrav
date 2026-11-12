@@ -274,8 +274,8 @@ impl Fit {
 /// cost more than the pass does.
 #[derive(Debug, Clone, Copy)]
 pub struct Caster<'a> {
-    /// The caster's vertex buffer, in [`GpuVertex`] layout.
-    pub vertices: &'a wgpu::Buffer,
+    /// The caster's vertex buffers, in [`GpuVertex`] layout.
+    pub geometry: &'a oag_mesh::mesh_render::Geometry,
     /// Its index buffer, `u32`.
     pub indices: &'a wgpu::Buffer,
     /// Which index ranges to draw - a model's opaque draw calls, so a hull
@@ -779,10 +779,10 @@ impl Map {
                 continue;
             }
             pass.set_bind_group(0, &self.bind, &[slot_offset(first + slot)]);
-            pass.set_vertex_buffer(0, caster.vertices.slice(..));
+            let mut cursor = caster.geometry.cursor(&mut pass);
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in caster.ranges {
-                pass.draw_indexed(range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, range);
             }
         }
         oag_gpu::perfprobe::marks::close(&mut pass);
@@ -888,10 +888,10 @@ impl Map {
             pass.set_viewport(x as f32, y as f32, side as f32, side as f32, 0.0, 1.0);
             pass.set_scissor_rect(x, y, side, side);
             pass.set_bind_group(0, &self.bind, &[slot_offset(index)]);
-            pass.set_vertex_buffer(0, craft.caster.vertices.slice(..));
+            let mut cursor = craft.caster.geometry.cursor(&mut pass);
             pass.set_index_buffer(craft.caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in craft.caster.ranges {
-                pass.draw_indexed(range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, range);
             }
         }
         oag_gpu::perfprobe::marks::close(&mut pass);

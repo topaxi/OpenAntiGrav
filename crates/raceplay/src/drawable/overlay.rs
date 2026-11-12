@@ -93,7 +93,7 @@ impl Drawable {
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_arrays(pass);
-        self.bind_vertices(pass);
+        let mut cursor = self.geometry.cursor(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         let shows = self.shows(block);
@@ -126,7 +126,7 @@ impl Drawable {
             }
             // Elided when unchanged, as in `draw`.
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
         stats
     }
@@ -156,7 +156,7 @@ impl Drawable {
             out.texcoord[1] = v.texcoord[1] + v_offset;
             out
         }));
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+        self.geometry.write(queue, 0, scratch);
     }
 
     /// Uploads this model's vertices with texture coordinates generated for a
@@ -191,7 +191,7 @@ impl Drawable {
             *last = Some(pose);
         }
         oag_render::shine::write(&self.model, scratch, ship, flaps, colour);
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
+        self.geometry.write(queue, 0, scratch);
     }
 
     /// Uploads texture coordinates generated for the camera `view` -
@@ -213,18 +213,17 @@ impl Drawable {
         scratch: &mut Vec<[f32; 2]>,
         spans: &[std::ops::Range<usize>],
     ) {
-        let Some(texcoords) = &self.texcoords else {
+        if self.geometry.texcoords().is_none() {
             return;
-        };
+        }
         let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
             return;
         };
         normals.write_view_spans(&self.model, scratch, view, seconds, spans);
-        let offset = (first.start * size_of::<[f32; 2]>()) as wgpu::BufferAddress;
-        queue.write_buffer(
-            texcoords,
-            offset,
-            bytemuck::cast_slice(&scratch[first.start..last.end]),
+        self.geometry.write_texcoords(
+            queue,
+            first.start as u32,
+            &scratch[first.start..last.end],
         );
     }
 
@@ -277,7 +276,7 @@ impl Drawable {
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_arrays(pass);
-        self.bind_vertices(pass);
+        let mut cursor = self.geometry.cursor(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         for index in self.track_shine_shown(block, track, sources, cull) {
@@ -294,7 +293,7 @@ impl Drawable {
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
             self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            cursor.draw(pass, &draw.range);
         }
         stats
     }

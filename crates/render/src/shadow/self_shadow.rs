@@ -267,10 +267,10 @@ impl Maps {
         if !caster.ranges.is_empty() {
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.binds[layer], &[]);
-            pass.set_vertex_buffer(0, caster.vertices.slice(..));
+            let mut cursor = caster.geometry.cursor(&mut pass);
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in caster.ranges {
-                pass.draw_indexed(range.clone(), 0, 0..1);
+                cursor.draw(&mut pass, range);
             }
         }
         oag_gpu::perfprobe::marks::close(&mut pass);

@@ -167,7 +167,7 @@ fn render_and_resolve(
     let mesh_render::Built {
         pipeline,
         bind_group: _placeholder,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         fog_bind,
@@ -302,7 +302,7 @@ fn render_and_resolve(
         // buffer `build` initialises: this test is about MSAA resolve, not
         // animation, and an identity transform draws the authored UVs.
         pass.set_bind_group(3, &anim_bind, &[]);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_vertex_buffer(0, geometry.sole().slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(1, &texture_binds[0], &[]);
         for draw in &model.draws {

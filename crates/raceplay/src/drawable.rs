@@ -62,11 +62,10 @@ pub(super) struct Drawable {
     /// The foliage depth and colour pair, for a circuit with list-B foliage - see
     /// `mesh_render::Built::foliage`.
     foliage: Option<mesh_render::Foliage>,
-    vertices: wgpu::Buffer,
-    /// The coordinates' own buffer, bound to slot 1, for a drawable built
-    /// [`mesh_render::Texcoords::Streamed`] - `None` for every other. See
-    /// [`Self::bind_vertices`].
-    texcoords: Option<wgpu::Buffer>,
+    /// The vertex buffers (one unless the model outgrew the device's buffer ceiling), and
+    /// the streamed coordinates' buffers, for a drawable built
+    /// [`mesh_render::Texcoords::Streamed`]. See [`Self::geometry`].
+    geometry: mesh_render::Geometry,
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
@@ -262,7 +261,7 @@ impl Drawable {
             stamp_pipeline,
             foliage,
             bind_group: _placeholder,
-            vertex_buffer: vertices,
+            geometry,
             index_buffer: indices,
             texture_binds: textures,
             bindless,
@@ -320,17 +319,10 @@ impl Drawable {
             oag_gpu::deferred_upload::write_buffer(queue, &buffer, reversed);
             buffer
         });
-        let texcoords = (texcoords == mesh_render::Texcoords::Streamed).then(|| {
-            let coordinates: Vec<[f32; 2]> = model.vertices.iter().map(|v| v.texcoord).collect();
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("streamed texcoords"),
-                size: std::mem::size_of_val(&coordinates[..]) as u64,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            oag_gpu::deferred_upload::write_buffer(queue, &buffer, coordinates);
-            buffer
-        });
+        let mut geometry = geometry;
+        if texcoords == mesh_render::Texcoords::Streamed {
+            geometry.stream_texcoords(device, queue, &model);
+        }
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("race uniforms"),
@@ -371,7 +363,7 @@ impl Drawable {
         model.release_texels();
         let model = std::sync::Arc::new(model);
         if oag_gpu::deferred_upload::active() {
-            mesh_render::deferred::defer_geometry(&vertices, &indices, &model);
+            mesh_render::deferred::defer_geometry(&geometry, &indices, &model);
         }
         Ok(Self {
             opaque_ranges,
@@ -395,8 +387,7 @@ impl Drawable {
             plain_draws,
             hidden: std::sync::Mutex::default(),
             reversed_indices,
-            vertices,
-            texcoords,
+            geometry,
             indices,
             uniforms,
             uniform_bind,
@@ -511,12 +502,10 @@ impl Drawable {
     }
 
     /// Binds this drawable's vertex buffer - and its streamed coordinates,
-    /// when it has them - for the pipelines it built.
-    pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) {
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        if let Some(texcoords) = &self.texcoords {
-            pass.set_vertex_buffer(1, texcoords.slice(..));
-        }
+    /// when it has them - for the pipelines it built, and returns the cursor
+    /// its draws go through.
+    pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) -> mesh_render::Cursor<'_> {
+        self.geometry.cursor(pass)
     }
 
     /// Rebuilds bind group 2 with `stage`'s four textures - see
@@ -624,7 +613,7 @@ impl Drawable {
 
     pub(super) fn caster(&self, model: Mat4) -> oag_render::shadow::map::Caster<'_> {
         oag_render::shadow::map::Caster {
-            vertices: &self.vertices,
+            geometry: &self.geometry,
             indices: &self.indices,
             ranges: &self.opaque_ranges,
             model,
@@ -887,7 +876,7 @@ impl Drawable {
                 v
             })
             .collect();
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&transformed));
+        self.geometry.write(queue, 0, &transformed);
     }
 
     /// Swings this model's airbrake flaps to `left` and `right` radians.
@@ -924,12 +913,7 @@ impl Drawable {
             let Some(span) = flap.swung(&self.model.vertices, angle, moved) else {
                 continue;
             };
-            let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
-            queue.write_buffer(
-                &self.vertices,
-                span.start as u64 * stride,
-                bytemuck::cast_slice(moved),
-            );
+            self.geometry.write(queue, span.start as u32, moved);
         }
     }
 
@@ -971,7 +955,7 @@ impl Drawable {
             }
             out
         }));
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(tinted));
+        self.geometry.write(queue, 0, tinted);
     }
 
     /// Chooses this frame's child of each authored `LodGroup` for the
@@ -1020,7 +1004,7 @@ impl Drawable {
     ) -> oag_render::ghost::Hull<'_> {
         let model = &self.model;
         oag_render::ghost::Hull {
-            vertices: &self.vertices,
+            vertices: self.geometry.sole(),
             indices: &self.indices,
             textures: &self.textures,
             draws: (model.draws.iter())

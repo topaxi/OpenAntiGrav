@@ -77,7 +77,6 @@ impl Drawable {
         colours: impl Iterator<Item = [f32; 3]>,
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
-        let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
         // A Quake's bump rolling over a pad has to survive the pad's own
         // rewrite from the authored vertices - see `Ripple::displace`.
         let ripple = lock(&self.ripple);
@@ -91,13 +90,7 @@ impl Drawable {
                 }
             },
             tinted,
-            |first, vertices| {
-                queue.write_buffer(
-                    &self.vertices,
-                    u64::from(first) * stride,
-                    bytemuck::cast_slice(vertices),
-                );
-            },
+            |first, vertices| self.geometry.write(queue, first, vertices),
         );
     }
 }

@@ -198,7 +198,7 @@ struct Session {
     authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    vertex_buffer: wgpu::Buffer,
+    geometry: mesh_render::Geometry,
     index_buffer: wgpu::Buffer,
     texture_binds: Vec<wgpu::BindGroup>,
     /// Bind group 2. The viewer never fogs, so this stays at
@@ -284,7 +284,7 @@ impl Session {
             unblended_pipeline,
             authored_pipelines,
             bind_group: placeholder_bind_group,
-            vertex_buffer,
+            geometry,
             index_buffer,
             texture_binds,
             bindless: _,
@@ -358,7 +358,7 @@ impl Session {
             authored_pipelines,
             uniform_buffer,
             bind_group,
-            vertex_buffer,
+            geometry,
             index_buffer,
             texture_binds,
             fog_bind,
@@ -564,7 +564,7 @@ impl Session {
                 // is a property of the race the asset sits in, not of the asset.
                 pass.set_bind_group(2, &self.fog_bind, &[0]);
                 pass.set_bind_group(3, &self.anim_bind, &[]);
-                pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                let mut cursor = self.geometry.cursor(&mut pass);
                 pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
                 // One draw per material run. Slot 0 is the white fallback, so a
@@ -576,7 +576,7 @@ impl Session {
                         &self.texture_binds[slot.min(self.texture_binds.len() - 1)],
                         &[],
                     );
-                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
+                    cursor.draw(&mut pass, &draw.range);
                 }
 
                 // Cutout then transparent batches, selected per draw call
@@ -584,6 +584,7 @@ impl Session {
                 // reference if it renders the same way.
                 mesh_render::draw_cutout_then_transparent(
                     &mut pass,
+                    &mut cursor,
                     &self.model,
                     mesh_render::CutoutPipelines {
                         default: &self.alpha_test_pipeline,

@@ -236,7 +236,7 @@ fn draw(
         pipeline,
         unwritten,
         blend_pipeline,
-        vertex_buffer,
+        geometry,
         index_buffer,
         texture_binds,
         fog_bind,
@@ -358,7 +358,7 @@ fn draw(
         pass.set_bind_group(1, &texture_binds[0], &[]);
         pass.set_bind_group(2, &fog_bind, &[0]);
         pass.set_bind_group(3, &anim_bind, &[]);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        pass.set_vertex_buffer(0, geometry.sole().slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         pass.draw_indexed(0..3, 0, 0..1);
     }

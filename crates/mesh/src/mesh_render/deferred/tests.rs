@@ -77,7 +77,7 @@ fn a_build_under_a_scope_leaves_its_geometry_to_the_drain() {
         "a deferring build parks its constants twice over and no geometry"
     );
     let model = Arc::new(model);
-    defer_geometry(&built.vertex_buffer, &built.index_buffer, &model);
+    defer_geometry(&built.geometry, &built.index_buffer, &model);
     let waiting = deferred_upload::pending_bytes();
     assert_eq!(
         waiting - 2 * constants,
