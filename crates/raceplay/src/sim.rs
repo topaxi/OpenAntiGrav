@@ -417,6 +417,9 @@ pub struct RaceSim {
     pub(super) autopilot_absorb_cancels: bool,
     /// Whether a pad grants a craft whose Autopilot runs - see [`Setup::autopilot_pad_grants`].
     pub(super) autopilot_pad_grants: bool,
+    /// Whether the weapons are born carrying the located track's up - see
+    /// [`Setup::launch_normal_is_track_up`].
+    pub(super) launch_normal_is_track_up: bool,
     /// Which ways a craft is put back are on, and their numbers - see
     /// [`Setup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,

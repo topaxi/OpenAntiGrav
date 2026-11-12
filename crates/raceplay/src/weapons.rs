@@ -10,6 +10,7 @@
 //! same rule again the day the LeachBeam landed.
 
 use super::*;
+use oag_weapons::Craft as _;
 
 mod disruptor;
 mod repulser;
@@ -322,6 +323,7 @@ impl Race {
                         &self.sim.class,
                         slot as u8,
                         ship.weapon_counts.rockets,
+                        ship.launch_normal(),
                     ) else {
                         return;
                     };
@@ -395,6 +397,7 @@ impl Race {
                     // world's generator mutably and the ship state immutably at
                     // once; both are small `Copy` structs.
                     let physics = self.sim.world.ships[slot].physics;
+                    let normal = self.sim.world.ships[slot].launch_normal();
                     let dimensions = self.sim.world.ships[slot].handling.dimensions;
                     // **One blade, twenty degrees off the nose, side chosen by
                     // a coin.** See `oag_weapons::projectile::shuriken::launch`
@@ -407,6 +410,7 @@ impl Race {
                         &self.sim.class,
                         &mut self.sim.world.rng,
                         slot as u8,
+                        normal,
                     ) else {
                         return;
                     };
@@ -996,7 +1000,7 @@ impl Race {
             slot as u8,
             target,
             launch_kmh,
-            self.sim.world.ships[slot].physics.body.up(),
+            self.sim.world.ships[slot].launch_normal(),
         );
         // Both `Race::spend_pickup`'s player press and
         // `Race::fire_opponent_missile` reach here, so pushing the cue in

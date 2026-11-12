@@ -498,6 +498,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         disruption: oag_weapons::disruption::Disruption::default(),
         // A replay has no hull, so a Plasma would leave from the hold point.
         muzzle: None,
+        track_up: None,
         active: true,
         // No mod moves a replayed craft.
         transit: None,
@@ -742,6 +743,7 @@ where
         disruption: oag_weapons::disruption::Disruption::default(),
         // A replay has no hull, so a Plasma would leave from the hold point.
         muzzle: None,
+        track_up: None,
         active: true,
         // No mod moves a replayed craft.
         transit: None,

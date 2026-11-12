@@ -66,6 +66,7 @@ fn a_rocket_with_no_floor_in_reach_keeps_the_launch_speed() {
         "VENOM",
         0,
         ROCKET_SHOTS as u8,
+        Vec3::Y,
     )
     .expect("Venom is authored");
     assert_eq!(fired, ROCKET_SHOTS);
@@ -95,6 +96,7 @@ fn the_first_surface_hit_sets_the_class_speed() {
         "VENOM",
         0,
         ROCKET_SHOTS as u8,
+        Vec3::Y,
     )
     .expect("Venom is authored");
     let before = projectiles.slots[0].velocity.length();
@@ -108,13 +110,14 @@ fn the_first_surface_hit_sets_the_class_speed() {
     );
 }
 
-/// The first probe goes along the craft's own normal, not world up: `Rocket_Init`
-/// seeds the stored normal from the craft. Drops if `fire` goes back to
-/// `spawn_guided`'s world-up seed.
+/// The first probe goes along the normal `fire` is handed, not world up:
+/// `Rocket_Init` seeds the stored normal from the craft's located track. Drops if
+/// `fire` goes back to `spawn_guided`'s world-up seed or to the craft's up.
 #[test]
-fn a_rocket_is_seeded_with_the_craft_up() {
+fn a_rocket_is_seeded_with_the_normal_it_is_handed() {
     let mut state = ShipState::default();
     state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+    let normal = Vec3::new(0.0, 0.8, 0.6);
     let mut projectiles = Projectiles::new();
     fire(
         &mut projectiles,
@@ -123,16 +126,13 @@ fn a_rocket_is_seeded_with_the_craft_up() {
         "VENOM",
         0,
         ROCKET_SHOTS as u8,
+        normal,
     )
     .expect("Venom is authored");
     for slot in &projectiles.slots[..ROCKET_SHOTS] {
-        assert_eq!(slot.surface, state.body.up());
+        assert_eq!(slot.surface, normal);
     }
-    assert_ne!(
-        state.body.up(),
-        Vec3::Y,
-        "the craft must be tilted for this to mean anything"
-    );
+    assert_ne!(normal, state.body.up());
 }
 
 /// On a floor hit the Rocket steers toward the ride point and re-integrates from

@@ -29,6 +29,7 @@
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_raceplay as race;
+use oag_weapons::Craft as _;
 use oag_weapons::projectile;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
@@ -86,6 +87,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
         &class,
         0,
         world.ships[0].weapon_counts.rockets,
+        world.ships[0].launch_normal(),
     )
     .expect("Venom is authored");
     assert_eq!(fired, projectile::ROCKET_SHOTS);

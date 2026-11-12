@@ -62,6 +62,10 @@ impl Craft for Ship {
         self.muzzle
     }
 
+    fn track_up(&self) -> Option<Vec3> {
+        self.track_up
+    }
+
     fn progress(&self) -> Option<f32> {
         self.standing.progress
     }

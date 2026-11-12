@@ -31,7 +31,7 @@ nothing on the title axis; the gameplay determinism reference did not move.
 
 - ~~The born normal is `Vec3::Y`.~~ Wired 2026-10-07 as the firing craft's up
   (`projectile-floor.md`). **2026-11-11:** the original's is the track's up at the craft's located
-  point, not the craft's up (item 4 of
+  point, not the craft's up; **wired 2026-11-12** (`Ship::track_up`, see Done in
   [projectiles-leave-the-track-the-original-cages-them.md](projectiles-leave-the-track-the-original-cages-them.md)).
 - **A segment landing keeps its speed here**; `Rocket_Update` writes
   `(next - prev) / dt` and rescales on the next probe. One tick of difference

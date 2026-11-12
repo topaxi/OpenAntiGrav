@@ -57,6 +57,17 @@ pub trait Craft {
     /// [`Self::disruption`], writable.
     fn disruption_mut(&mut self) -> &mut Disruption;
 
+    /// The up of the track sample the craft is located on (the original's
+    /// `-(craft+0xb10)`), or `None` where it is not known or the title does not
+    /// use it. See [`Self::launch_normal`].
+    fn track_up(&self) -> Option<Vec3>;
+
+    /// The normal a Rocket, Missile, Shuriken or Plasma bolt is born carrying:
+    /// the located track's up, else the craft's own.
+    fn launch_normal(&self) -> Vec3 {
+        self.track_up().unwrap_or_else(|| self.physics().body.up())
+    }
+
     /// How far round the circuit the craft is, as the standings last computed
     /// it, or `None` before it has been located.
     fn progress(&self) -> Option<f32>;

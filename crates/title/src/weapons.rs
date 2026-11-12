@@ -77,6 +77,16 @@ pub struct Weapons {
     /// (`docs/gameplay/pickups.md`, "Eliminator and the pads, per title"). Other modes stamp
     /// `refresh_time` on every title. A title with no Eliminator (Pure) never reads it.
     pub pads_stamp_in_eliminator: crate::pre_race::Sourced<bool>,
+    /// Whether a Rocket, Missile, Shuriken or Plasma bolt is born carrying the track's up at
+    /// the craft's located point (`true`) or the craft's own up (`false`).
+    ///
+    /// Pulse's `Rocket_Init`, `Missile_Init`, `Shuriken_Init` and `Plasma_Launch` store
+    /// `-(craft+0xb10)`, the down axis of the track sample the craft is located on: on Outpost 7's
+    /// ramp that is `(0, 1, 0)` where the craft's up is 5.24 degrees off
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The launch normal is the
+    /// track's, not the craft's"). The Cannon and the Disruptor are not in that list and keep the
+    /// craft's up on every title.
+    pub launch_normal_is_track_up: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,

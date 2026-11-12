@@ -731,7 +731,7 @@ the original's is at z -197.0, which alone moves the detonation by 30 ticks.
 | cruise speed is the class's, 222.22 u/s on Venom | live, two probes | `rocket::launch` |
 | launch speed is 0.75 x that until the first surface-probe hit | live (rows 0.7500) | `LAUNCH_SPEED_SCALE`; class speed rides in `Projectile::launch_speed_kmh` |
 | spawn at the craft's own position | live, to 0.1 unit | `launch` |
-| the stored normal `self+0x100` is seeded from the craft (`-(craft+0xb10)`), the first probe goes along it | decompiled `Rocket_Init`; live rows `(-0.03, 1.0, 0.05)` | `Projectiles::spawn_riding` seeds the craft's up (whether `+0xb10` is the craft's up or its contact normal was not separated) |
+| the stored normal `self+0x100` is seeded from the craft (`-(craft+0xb10)`), the first probe goes along it | decompiled `Rocket_Init`; live rows `(-0.03, 1.0, 0.05)`; `+0xb10` is the located track point's down, not the craft's up ("The launch normal is the track's, not the craft's") | `Projectiles::spawn_riding` seeds `Craft::launch_normal`: `Ship::track_up`, the up of the sample the step located the craft on, else the craft's up |
 | **the probe-hit arm steers toward the ride point** | decompiled `Rocket_Update`, confidence **88** | `flight.rs`, Rocket only |
 
 **The probe-hit arm, read at decompiler level 2026-10-01.** On a floor-class result the
@@ -1419,6 +1419,35 @@ instead. `rocket_floor_trace` on `07` and `10`: the rockets that reached their f
 from 14 and 7 to 0, and 78 and 101 of 174 now end at the cage (0.0 to 4.1 units outside, median
 about 1), the rest on walls and hulls as before. HD and Omega, 2048: `Spline::cage()` is `None`,
 unchanged.
+
+### Wired: the launch normal (2026-11-12, `launch-normal-wire`)
+
+`Ship::track_up` holds `-down` of the spline sample `step_player` and `step_opponents` hand the
+force law (`record_track_up`: the nearest sample for a person, the driver's own for an opponent),
+written once a step, so a weapon spent before the step reads the previous tick's, as the original
+reads a `craft+0xb10` the last locate wrote. `Craft::launch_normal` is that, or the craft's up where
+it is `None` (before the first step, a track with no samples, a title whose
+`Weapons::launch_normal_is_track_up` is `false`). `rocket::fire`, `shuriken::fire`, the Missile's
+`spawn_guided` and the Plasma charge's per-tick reseat (`flight.rs`) take it. Left on the craft's up:
+the Cannon (`Cannon_Init` copies the muzzle anchor's basis; no probe reads its normal), the
+Disruptor (its advance was never read; it is not one of the four inits), the Rocket's fan axis, the
+Shuriken's turn axis and the Plasma's muzzle offset (positions and orientations, not the carried
+normal). Test: `projectile_cage_ground_truth::outpost_7_ramp_launch_normal_is_the_tracks_up` (the
+craft posed on sample 186 with the capture's up, a Plasma press through `spend_pickup`; the charging
+bolt carries the sample's `-down` to 0.05 degrees, 5 degrees off the craft's up) and
+`seed::a_plasma_bolt_is_released_riding_the_located_track_up`. **Sample 186's `-down` is 0.26
+degrees from world up**, so the capture's `(0, 1, 0)` is the print's rounding, not an exact axis.
+The Rocket, Missile and Shuriken are not observable in a raceplay test: their first update, in the
+firing tick, replaces the seed with the floor's normal; the handed-in normal is pinned by
+`rocket::tests::a_rocket_is_seeded_with_the_normal_it_is_handed`.
+
+Per title (`Weapons::launch_normal_is_track_up`, `docs/gameplay/weapon-lineage.md`): Pulse
+**measured** `true`; Pure **inherited** from Pulse; HD **inherited** from Pulse (its `Rocket_Init`
+and siblings are unread, `a-projectile-rode-the-angle-not-the-surface-class`'s "HD's own projectile
+update is unread"); 2048 and Omega **inherited** from HD. All five have a spline sample with a
+`down` on every circuit (the same one the magstrip hold reads), so the field is `Some` wherever
+the title says `true`. 2048 and Omega: **not checkable** against their own `Rocket_Init` (unread);
+wired by inheritance, to be corrected by a read of either.
 
 ### Cross-title
 

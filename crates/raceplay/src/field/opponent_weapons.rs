@@ -18,6 +18,7 @@
 //! back on its own function.
 
 use super::*;
+use oag_weapons::Craft as _;
 
 impl Race {
     /// Fires an opponent's Missile, once `Race::opponent_decides` has decided to.
@@ -73,6 +74,7 @@ impl Race {
             &self.sim.class,
             slot as u8,
             ship.weapon_counts.rockets,
+            ship.launch_normal(),
         ) else {
             return false;
         };
@@ -236,6 +238,7 @@ impl Race {
             &self.sim.class,
             &mut self.sim.world.rng,
             slot as u8,
+            self.sim.world.ships[slot].launch_normal(),
         ) else {
             return false;
         };

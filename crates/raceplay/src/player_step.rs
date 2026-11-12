@@ -172,6 +172,7 @@ impl Race {
         let located = nearest.map(|(_, sample, _)| Vec3::from_array(sample.pos));
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
+        self.record_track_up(slot, track_sample);
         // The neighbour is the next entry in table order, which at the end of a
         // path is the *next path's* first sample rather than the geometric
         // successor through a junction. The original follows the junction graph;
@@ -332,6 +333,20 @@ impl Race {
             uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),
             speedup: autopilot.then_some(law.speedup.value),
         }
+    }
+
+    /// Stores the up of the sample a craft is located on in `Ship::track_up`, the
+    /// original's `-(craft+0xb10)`: the weapons born this tick or the next carry it
+    /// ([`oag_weapons::Craft::launch_normal`]). `None` where the title launches
+    /// along the craft's own up or the track has no sample.
+    pub(super) fn record_track_up(
+        &mut self,
+        slot: usize,
+        sample: Option<oag_physics::TrackSample>,
+    ) {
+        self.sim.world.ships[slot].track_up = sample
+            .filter(|_| self.sim.launch_normal_is_track_up)
+            .map(|sample| sample.normal());
     }
 
     /// The player's off-track, airborne and reset-zone rescue for slot `slot`,

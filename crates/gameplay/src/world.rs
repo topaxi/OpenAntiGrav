@@ -233,6 +233,18 @@ pub struct Ship {
     /// through the race like [`Self::handling`]; not hashed, for that field's
     /// reason.
     pub muzzle: Option<Vec3>,
+    /// The up of the track sample the craft is located on: `-down` of the sample
+    /// the tick's step fed the hover and magstrip probes, the original's
+    /// `-(craft+0xb10)`. A Rocket, Missile, Shuriken or Plasma bolt is born
+    /// carrying it ([`oag_weapons::Craft::launch_normal`]).
+    ///
+    /// `None` before the first step, on a track with no samples, and on a title
+    /// whose `Weapons::launch_normal_is_track_up` is `false`; the weapons then
+    /// take the craft's up. Written once a step, by the composition root, so a
+    /// weapon spent before the step reads the previous tick's, as the original's
+    /// does. Not hashed: it is re-derived from the pose every step, and the
+    /// projectile it seeds is hashed.
+    pub track_up: Option<Vec3>,
     /// Whether this slot holds a ship at all.
     pub active: bool,
     /// A jump along the circuit in progress (a simulation mod's `transit`): while it
@@ -285,6 +297,7 @@ impl Default for Ship {
             quake_lift: 0.0,
             disruption: oag_weapons::disruption::Disruption::default(),
             muzzle: None,
+            track_up: None,
             active: false,
             transit: None,
         }

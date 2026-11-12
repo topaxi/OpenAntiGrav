@@ -13,7 +13,9 @@
     reason = "the recorded f32 values, written so they round-trip"
 )]
 
-use oag_core::math::Vec3;
+use oag_core::math::{Quat, Vec3};
+use oag_gameplay::PlayerInputs;
+use oag_gameplay::input::{Button, Input};
 use oag_physics::cage::Containment;
 use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
@@ -458,4 +460,97 @@ fn outpost_7_rocket_ends_at_the_cage() {
     );
     let flight = fly(&race, cage, rocket, &ROCKET_DT);
     ends_at(&flight, 16, &[[-1003.03, 27.32, 324.72]], 0.5);
+}
+
+/// The carried normal is the track's up at the craft's located point, not the craft's up.
+///
+/// Outpost 7's first ramp is spline sample 186, where the original's stored normal read
+/// `(0, 1, 0)` while the craft's up was `(-0.014, 0.996, -0.090)`, 5.24 degrees off; across the
+/// five captures it is within 0.04 degrees of the located sample's `-down`
+/// (`rocket-visuals.md`, "The launch normal is the track's, not the craft's"). The craft is posed
+/// at that sample with that up, one tick locates it, and a Plasma press goes through the real
+/// `spend_pickup` path: the charging bolt is reseated every held tick with `launch_normal`, so
+/// its `surface` is what the Plasma carries (a Rocket's would already be the floor's by the end
+/// of the firing tick). Drops with `Ship::track_up` or the flight's reseat.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn outpost_7_ramp_launch_normal_is_the_tracks_up() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some("Data\\Environments\\07_Track\\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    let sample = *race
+        .spline()
+        .sample(186)
+        .expect("Outpost 7 has 186 samples");
+    let track_up = -v3(sample.down).normalize();
+    // The recorded normal prints as `(-0.000, 1.000, 0.000)`: the sample is 0.26 degrees from
+    // world up, so the bound against `Vec3::Y` is the print's, and the law's is the sample's own
+    // `-down` below.
+    assert!(
+        track_up.angle_between(Vec3::Y).to_degrees() < 0.5,
+        "sample 186 is not the level ramp the capture was fired on: up {track_up:?}"
+    );
+    let craft_up = Vec3::new(-0.014, 0.996, -0.090).normalize();
+
+    let craft = &mut race.sim.world.ships[0];
+    craft.physics.body.position = v3(sample.pos) + track_up * 3.0;
+    craft.physics.body.orientation = Quat::from_rotation_arc(Vec3::Y, craft_up);
+    craft.physics.body.linear_velocity = Vec3::ZERO;
+    craft.pickup.weapon = Some(Weapon::Plasma);
+    assert!(
+        (craft.physics.body.up() - craft_up).length() < 1e-4,
+        "the craft is posed at the capture's up"
+    );
+    assert!(craft_up.angle_between(track_up).to_degrees() > 5.0);
+
+    let idle = oag_gameplay::InputSnapshot::new();
+    race.tick(&PlayerInputs::single(idle));
+    let located = race.sim.world.ships[0]
+        .track_up
+        .expect("a step on a track with samples locates the craft");
+
+    let mut buttons = Input::new();
+    buttons.begin_frame(0);
+    let mut fire = oag_gameplay::InputSnapshot::new();
+    fire.buttons = buttons;
+    fire.buttons.begin_frame(Button::Square.bit());
+    race.tick(&PlayerInputs::single(fire));
+    race.tick(&PlayerInputs::single(idle));
+
+    let bolt = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .find(|p| p.kind == Some(Weapon::Plasma) && p.owner == 0)
+        .expect("the press put a Plasma bolt in the air");
+    assert!(
+        bolt.charge > 0.0,
+        "still charging, so nothing but the reseat wrote it"
+    );
+    let off = bolt.surface.angle_between(track_up).to_degrees();
+    assert!(
+        off < 0.05,
+        "the bolt carries {:?}, {off} degrees off the track's up {track_up:?}; the craft's up is {:?}",
+        bolt.surface,
+        race.sim.world.ships[0].physics.body.up()
+    );
+    assert!(located.angle_between(track_up).to_degrees() < 0.05);
+    assert!(
+        bolt.surface
+            .angle_between(race.sim.world.ships[0].physics.body.up())
+            .to_degrees()
+            > 3.0,
+        "the bolt must not be riding the craft's own up"
+    );
 }

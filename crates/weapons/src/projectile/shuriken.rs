@@ -88,8 +88,9 @@ pub fn launch(
     Some((nose, direction * speed))
 }
 
-/// Throws one blade: [`launch`], then the slot, carrying the craft's up as its
-/// ridden normal (`Shuriken_Init` stores `-craft+0xb10` at `+0x150`).
+/// Throws one blade: [`launch`], then the slot, carrying `normal` as its
+/// ridden normal: `Shuriken_Init` stores `-craft+0xb10` at `+0x150`, the located
+/// track sample's up.
 ///
 /// One entry point for both halves, as [`super::rocket::fire`] is, so dropping
 /// the seed fails a test. `None` is [`launch`]'s: the table authors no speed for
@@ -102,7 +103,8 @@ pub fn fire(
     class: &str,
     rng: &mut Rng,
     owner: u8,
+    normal: Vec3,
 ) -> Option<bool> {
     let (position, velocity) = launch(state, dimensions, stats, class, rng)?;
-    Some(projectiles.throw(position, velocity, owner, stats.fuse, state.body.up()))
+    Some(projectiles.throw(position, velocity, owner, stats.fuse, normal))
 }

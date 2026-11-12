@@ -132,9 +132,11 @@ pub fn launch(state: &ShipState, stats: &RocketStats, class: &str, count: u8) ->
 /// [`launch`] leaves at [`LAUNCH_SPEED_SCALE`] x the class speed; the class speed
 /// rides in [`super::Projectile::launch_speed_kmh`] (see
 /// [`super::Projectiles::advance`]'s Rocket arm). One entry point for both halves,
-/// so dropping either fails a test. Each rocket rides the craft's up until its
-/// first probe adopts a surface: `Rocket_Init` seeds the normal from the craft
-/// (measured: live rows read `(-0.03, 1.0, 0.05)`, not `(0, 1, 0)`).
+/// so dropping either fails a test. Each rocket rides `normal` until its first
+/// probe adopts a surface: `Rocket_Init` stores `-(craft+0xb10)`, the located track
+/// sample's up, which the caller passes (`oag_gameplay::Ship::track_up` through
+/// [`crate::Craft::launch_normal`]; `rocket-visuals.md`, "The launch normal is the track's,
+/// not the craft's").
 ///
 /// Returns how many left, or `None` where the table authors no speed for this
 /// race's class.
@@ -145,6 +147,7 @@ pub fn fire(
     class: &str,
     owner: u8,
     count: u8,
+    normal: Vec3,
 ) -> Option<usize> {
     let class_kmh = stats.speed_for_named(class)?;
     let shots = launch(state, stats, class, count)?;
@@ -155,7 +158,7 @@ pub fn fire(
             position,
             velocity,
             owner,
-            state.body.up(),
+            normal,
             class_kmh,
         ) {
             fired += 1;
