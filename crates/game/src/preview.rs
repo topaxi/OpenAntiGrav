@@ -1023,9 +1023,7 @@ impl Preview {
         write_uniforms_raw(queue, &self.uniform_buffer, view_projection, model_matrix);
         if let Some(ramp) = &self.ramp {
             ramp.shade(&mut self.model.vertices, model_matrix);
-            self.built
-                .geometry
-                .write_all(queue, &self.model.vertices);
+            self.built.geometry.write_all(queue, &self.model.vertices);
         }
         self.render(
             device,

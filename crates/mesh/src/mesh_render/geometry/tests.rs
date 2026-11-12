@@ -11,7 +11,9 @@ pub(in crate::mesh_render) fn quads(quads: u32) -> Model {
     let template = triangle_model().draws.remove(0);
     for quad in 0..quads {
         let start = model.indices.len() as u32;
-        model.indices.extend([0, 1, 2, 0, 2, 3].map(|i| quad * 4 + i));
+        model
+            .indices
+            .extend([0, 1, 2, 0, 2, 3].map(|i| quad * 4 + i));
         let mut draw = template.clone();
         draw.range = start..start + 6;
         model.draws.push(draw);

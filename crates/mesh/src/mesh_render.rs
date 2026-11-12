@@ -50,12 +50,12 @@ pub use vertex_layout::Texcoords;
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
+pub mod chunks;
 pub mod cutout;
 pub mod deferred;
-pub mod chunks;
 mod geometry;
-pub use geometry::{Cursor, Geometry};
 pub use cutout::CutoutPipelines;
+pub use geometry::{Cursor, Geometry};
 mod draw_groups;
 pub use draw_groups::draw_cutout_then_transparent;
 

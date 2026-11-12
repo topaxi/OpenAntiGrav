@@ -40,7 +40,12 @@ fn spread(half: usize, gap: u32) -> Model {
 
 /// A drawable of the spread strips, each strip more than half a buffer from its neighbour.
 fn spread_drawable(device: &wgpu::Device, queue: &wgpu::Queue, half: usize) -> Drawable {
-    drawable_of(device, queue, spread(half, vertices_per_buffer() / 2), false)
+    drawable_of(
+        device,
+        queue,
+        spread(half, vertices_per_buffer() / 2),
+        false,
+    )
 }
 
 fn pair() -> Option<((wgpu::Device, wgpu::Queue), (wgpu::Device, wgpu::Queue))> {
@@ -62,7 +67,9 @@ fn a_model_cut_into_several_buffers_draws_the_pixels_one_buffer_does() {
     assert!(
         cut.iter().all(|d| d.vertex_buffer_count() >= 4),
         "eight strips each over half a buffer from the next: {:?}",
-        cut.iter().map(Drawable::vertex_buffer_count).collect::<Vec<_>>()
+        cut.iter()
+            .map(Drawable::vertex_buffer_count)
+            .collect::<Vec<_>>()
     );
     let expected = pixels(&whole_device, &whole_queue, &whole);
     let got = pixels(&cut_device, &cut_queue, &cut);

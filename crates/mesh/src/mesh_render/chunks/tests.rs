@@ -32,7 +32,12 @@ fn a_model_past_the_cap_is_cut_between_draws_and_tiles_every_vertex() {
         VertexChunks::plan_ranges(vertices, &indices, draws.into_iter(), bytes(10)).unwrap();
     // Two quads (8 vertices) fit under 10 vertices; three (12) do not.
     assert_eq!(chunks.ranges(), [0..8, 8..16, 16..24, 24..32]);
-    assert!(chunks.ranges().iter().all(|r| r.len() as u64 * VERTEX_BYTES <= bytes(10)));
+    assert!(
+        chunks
+            .ranges()
+            .iter()
+            .all(|r| r.len() as u64 * VERTEX_BYTES <= bytes(10))
+    );
 }
 
 #[test]

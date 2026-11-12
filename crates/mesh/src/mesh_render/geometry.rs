@@ -229,7 +229,11 @@ impl Geometry {
     /// The largest buffer this geometry holds, in bytes.
     #[must_use]
     pub fn largest_buffer(&self) -> u64 {
-        self.vertices.iter().map(wgpu::Buffer::size).max().unwrap_or(0)
+        self.vertices
+            .iter()
+            .map(wgpu::Buffer::size)
+            .max()
+            .unwrap_or(0)
     }
 
     /// Binds what the pass draws from and returns the state [`Cursor::draw`]
@@ -277,13 +281,21 @@ impl Cursor<'_> {
     /// Draws `range` of an index buffer that holds the model's draw whose first
     /// index is `draw_start` somewhere else - the reversed copy of the indices
     /// is one.
-    pub fn draw_of(&mut self, pass: &mut wgpu::RenderPass<'_>, draw_start: u32, range: &Range<u32>) {
+    pub fn draw_of(
+        &mut self,
+        pass: &mut wgpu::RenderPass<'_>,
+        draw_start: u32,
+        range: &Range<u32>,
+    ) {
         if self.geometry.is_whole() {
             pass.draw_indexed(range.clone(), 0, 0..1);
             return;
         }
         let Some(chunk) = self.geometry.chunk_of_draw(draw_start) else {
-            debug_assert!(false, "index range {range:?} is not one of the model's draws");
+            debug_assert!(
+                false,
+                "index range {range:?} is not one of the model's draws"
+            );
             return;
         };
         if self.bound != Some(chunk) {

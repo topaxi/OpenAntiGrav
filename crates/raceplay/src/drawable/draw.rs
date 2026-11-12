@@ -443,7 +443,14 @@ impl Drawable {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
                 for &index in shown.iter().rev() {
-                    draw_one(pass, &mut cursor, index, reversed.is_some(), true, &mut culling);
+                    draw_one(
+                        pass,
+                        &mut cursor,
+                        index,
+                        reversed.is_some(),
+                        true,
+                        &mut culling,
+                    );
                 }
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);

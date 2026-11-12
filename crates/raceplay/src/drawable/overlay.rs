@@ -220,11 +220,8 @@ impl Drawable {
             return;
         };
         normals.write_view_spans(&self.model, scratch, view, seconds, spans);
-        self.geometry.write_texcoords(
-            queue,
-            first.start as u32,
-            &scratch[first.start..last.end],
-        );
+        self.geometry
+            .write_texcoords(queue, first.start as u32, &scratch[first.start..last.end]);
     }
 
     /// The indices into this pass's draws of those view `block` draws: each that redraws a

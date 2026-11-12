@@ -122,7 +122,8 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         mapped_at_creation: false,
     });
     queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-    let vertex_buffer = oag_mesh::mesh_render::Geometry::single(vertex_buffer, vertices.len() as u32);
+    let vertex_buffer =
+        oag_mesh::mesh_render::Geometry::single(vertex_buffer, vertices.len() as u32);
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("craft indices"),
         size: std::mem::size_of_val(&indices[..]) as u64,

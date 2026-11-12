@@ -1,6 +1,6 @@
 //! The two pipeline groups a pass draws after the opaque one.
 
-use super::{Built, CutoutPipelines, Cursor, TransparentPipelines};
+use super::{Built, Cursor, CutoutPipelines, TransparentPipelines};
 use crate::mesh::{DrawCall, Model};
 
 /// Draws [`Model::alpha_tested_draws`] and then [`Model::transparent_draws`]

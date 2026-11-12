@@ -35,8 +35,8 @@ struct Row {
 }
 
 fn row(circuit: &str, model: &Model) -> Row {
-    let chunks = VertexChunks::plan(model, DEFAULT_MAX_BUFFER)
-        .unwrap_or_else(|e| panic!("{circuit}: {e}"));
+    let chunks =
+        VertexChunks::plan(model, DEFAULT_MAX_BUFFER).unwrap_or_else(|e| panic!("{circuit}: {e}"));
     let stride = std::mem::size_of::<GpuVertex>();
     let largest = chunks.ranges().iter().map(|r| r.len()).max().unwrap_or(0);
     for draw in model
@@ -129,10 +129,17 @@ fn is_circuit(path: &str) -> bool {
 #[test]
 #[ignore = "needs data/extracted/ps4"]
 fn omega_arena_and_square_are_the_circuits_that_outgrow_a_default_device() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4/omega-eu/uroot");
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4/omega-eu/uroot");
     let Some(root) = needs(&root) else { return };
     let mut rows = Vec::new();
-    for archive in ["data00.psarc", "data01.psarc", "data02.psarc", "data03.psarc", "data04.psarc"] {
+    for archive in [
+        "data00.psarc",
+        "data01.psarc",
+        "data02.psarc",
+        "data03.psarc",
+        "data04.psarc",
+    ] {
         let Ok(mut archive) = oag_assets::psarc::Archive::open_file(&root.join(archive)) else {
             continue;
         };
@@ -145,8 +152,16 @@ fn omega_arena_and_square_are_the_circuits_that_outgrow_a_default_device() {
         .map(|r| r.circuit.as_str())
         .collect();
     assert_eq!(cut.len(), 2, "{cut:?}");
-    assert!(cut.iter().any(|c| c.to_ascii_lowercase().contains("/arena/")), "{cut:?}");
-    assert!(cut.iter().any(|c| c.to_ascii_lowercase().contains("/square/")), "{cut:?}");
+    assert!(
+        cut.iter()
+            .any(|c| c.to_ascii_lowercase().contains("/arena/")),
+        "{cut:?}"
+    );
+    assert!(
+        cut.iter()
+            .any(|c| c.to_ascii_lowercase().contains("/square/")),
+        "{cut:?}"
+    );
 }
 
 #[test]
@@ -181,8 +196,7 @@ fn every_wipeout_hd_circuit_is_one_buffer() {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &path, &data) else {
                 continue;
             };
-            let Ok((model, _)) =
-                mesh::rcs::build_scene(&path, &data, &geometry, &mut |_| None)
+            let Ok((model, _)) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |_| None)
             else {
                 continue;
             };
@@ -203,10 +217,28 @@ fn psp_rows(image: &str, title: &str) -> Vec<Row> {
     // A WAD names its entries by hash, so the circuits are found by trying every directory
     // spelling: Pulse's `NN_Track`, and Pure's and the later titles' `NN_Name`.
     const NAMES: [&str; 22] = [
-        "Track", "Vineta_K", "Metropia", "Moa_Therma", "Chenghou_Project", "Mandrake",
-        "Sebenco_Climb", "Anulpha_Pass", "Amphiseum", "Sol", "Sol_2", "Talons_Junction",
-        "Modesto_Heights", "Tech_De_Ra", "Ubermall", "Manor_Top", "Qirex", "Terminal",
-        "Altima", "Citadel", "Temtesh_Bay", "Karbonis",
+        "Track",
+        "Vineta_K",
+        "Metropia",
+        "Moa_Therma",
+        "Chenghou_Project",
+        "Mandrake",
+        "Sebenco_Climb",
+        "Anulpha_Pass",
+        "Amphiseum",
+        "Sol",
+        "Sol_2",
+        "Talons_Junction",
+        "Modesto_Heights",
+        "Tech_De_Ra",
+        "Ubermall",
+        "Manor_Top",
+        "Qirex",
+        "Terminal",
+        "Altima",
+        "Citadel",
+        "Temtesh_Bay",
+        "Karbonis",
     ];
     let mut rows: Vec<Row> = Vec::new();
     for number in 0..64 {
@@ -248,7 +280,8 @@ fn every_pure_circuit_is_one_buffer() {
 fn omega_arena_and_square_build_on_a_device_with_a_256_mib_buffer_ceiling() {
     use oag_mesh::mesh_render::{self, Anisotropy};
 
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4/omega-eu/uroot");
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4/omega-eu/uroot");
     let Some(root) = needs(&root) else { return };
     let instance = wgpu::Instance::default();
     let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
@@ -265,7 +298,13 @@ fn omega_arena_and_square_build_on_a_device_with_a_256_mib_buffer_ceiling() {
     .expect("a device");
     assert_eq!(device.limits().max_buffer_size, DEFAULT_MAX_BUFFER);
     let mut built_circuits = 0;
-    for archive in ["data00.psarc", "data01.psarc", "data02.psarc", "data03.psarc", "data04.psarc"] {
+    for archive in [
+        "data00.psarc",
+        "data01.psarc",
+        "data02.psarc",
+        "data03.psarc",
+        "data04.psarc",
+    ] {
         let Ok(mut archive) = oag_assets::psarc::Archive::open_file(&root.join(archive)) else {
             continue;
         };
@@ -284,7 +323,8 @@ fn omega_arena_and_square_build_on_a_device_with_a_256_mib_buffer_ceiling() {
             let (model, _) = mesh::rcs::psp2::build(&path, &blob, None, &mut |_| None)
                 .unwrap_or_else(|e| panic!("{path}: {e:#}"));
             assert!(
-                model.vertices.len() * std::mem::size_of::<GpuVertex>() > DEFAULT_MAX_BUFFER as usize,
+                model.vertices.len() * std::mem::size_of::<GpuVertex>()
+                    > DEFAULT_MAX_BUFFER as usize,
                 "{path} fits one buffer"
             );
             let built = mesh_render::build_with(
