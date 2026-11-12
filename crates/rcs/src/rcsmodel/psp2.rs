@@ -57,7 +57,8 @@
 //! base submeshes, two `f32`s declared `2x9`), at the offset
 //! [`vertex_decl::VertexDecl::own_diffuse_texcoord`] names in the **record's own**
 //! declaration ([`vertex_decl::find_by_header`], reached by the `u32` at
-//! `+0x28`). **Confidence 96** for the half decode,
+//! `+0x28`); a declaration with no `Uv1` and a four-half `uv1_uvDirt` (Omega's `tarmac_*`
+//! roads) takes that attribute's first pair. **Confidence 96** for the half decode,
 //! the same index-exact oracle that settled the normal (1,432 vertices, 9
 //! same-export submeshes across twelve HD-ported circuits): decoded as
 //! `f16`, mean squared distance to Wipeout HD's own diffuse UV at the same
