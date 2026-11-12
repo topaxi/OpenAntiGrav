@@ -485,7 +485,7 @@ pub fn load_shell(
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
     // The pack that is on and names this disc is active for the faces and the sprite sheet
     // below and nothing after them: it is switched off once they are built.
-    let pack = fonts::engage_pack(front_end, options, &archives, &mut report);
+    let pack = fonts::engage_pack(front_end, title, options, &archives, &mut report);
     let font = load_font(
         &mut archives,
         &languages,

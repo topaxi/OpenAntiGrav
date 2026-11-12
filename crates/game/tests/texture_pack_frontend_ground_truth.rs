@@ -41,7 +41,7 @@ fn pack_dir(name: &str) -> Option<PathBuf> {
 
 fn finder(dir: &Path) -> Finder {
     let dir = dir.to_path_buf();
-    Finder(Arc::new(move || {
+    Finder(Arc::new(move |_title| {
         let ini = std::fs::read_to_string(dir.join("textures.ini")).unwrap();
         vec![
             Replacements::new("test pack", &ini, Box::new(Dir(dir.clone())))
@@ -282,4 +282,39 @@ fn pure_keeps_the_discs_faces_with_a_pack_on_because_its_palette_moves() {
         (off.sprites.width, off.sprites.height),
         "nor is its sprite sheet"
     );
+}
+
+/// The checked-out packs are known by the title their `[games]` serials name, and the Pure
+/// pack is not a candidate on Pulse (the warning `its [games] does not name UCES-00465` it
+/// used to draw at every Pulse load).
+#[test]
+#[ignore = "needs the fetched Pulse and Pure packs"]
+fn the_fetched_packs_are_each_offered_only_to_their_own_title() {
+    let (Some(pulse), Some(pure)) = (
+        pack_dir("WipEout-Pulse-Upscale-Version"),
+        pack_dir("WipEout-Pure-HD-Texture-Pack"),
+    ) else {
+        return;
+    };
+    let base = pulse.parent().unwrap().to_path_buf();
+    let enabled = [&pulse, &pure]
+        .iter()
+        .map(|dir| oag_mod::Mod::open(dir).unwrap().manifest.id)
+        .collect();
+    let switches = oag_game::settings::Mods {
+        enabled,
+        ..Default::default()
+    };
+    let mods = oag_game::mods::Mods::load_from(&[base], &switches).unwrap();
+    let on = |title| {
+        oag_game::texture_pack::packs_for(&mods, title)
+            .into_iter()
+            .map(|pack| pack.expect("a pack opens").name().to_string())
+            .collect::<Vec<_>>()
+    };
+    let (on_pulse, on_pure) = (on(oag_pulse::TITLE), on(oag_pure::TITLE));
+    assert!(on_pulse.iter().any(|n| n.contains("Pulse")), "{on_pulse:?}");
+    assert!(!on_pulse.iter().any(|n| n.contains("Pure")), "{on_pulse:?}");
+    assert!(on_pure.iter().any(|n| n.contains("Pure")), "{on_pure:?}");
+    assert!(!on_pure.iter().any(|n| n.contains("Pulse")), "{on_pure:?}");
 }

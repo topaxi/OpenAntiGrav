@@ -657,6 +657,64 @@ Amphiseum, Modesto Heights and Tech De Ra), which with Empire Climb, Queens Mall
   data/reference/compare-page/2048.toml data/reference/compare-page/2048-vita/{empire-climb,mall,dlc-vineta-k,metropia,anulpha-pass,moa-therma,chenghou-project,ubermall,sebenco-climb,sol-2,talons-junction,amphiseum,modesto-heights,tech-de-ra}`,
   then `just compare-page`.
 
+### Real events for the substituted 2048 pairs (2026-11-12, `vita-2048-race-pairs`)
+
+**Claim: every 2048 race pair compares the original's frame against ours on the same event, craft and circuit, or its `caveats` say what differs.
+Partly true: 5 of the 11 substituted pairs are re-captured from authored events, 6 are kept with a caveat, and the substitution is shown to render the
+same as the authored event (confidence 80 on the five circuits tried, 65 on the other six, read off the cells' own values).** `dlc-vineta-k` was never
+substituted: it is the authored `grid0_3_1` node, so the brief's twelve are eleven.
+
+- **Every substituted circuit has an authored Race, Venom, 3-lap, seven-rival cell** in the HD or Fury grids (`data2.psarc`'s `data/plugins/grids/grid_00..15.xml`):
+  Anulpha Pass `grid0_5_1`, Moa Therma `grid1_3_1`, Metropia `grid2_3_1`, Ubermall `grid3_3_1`, Sol 2 `grid4_3_1`, Chenghou Project `grid5_2_3`, Sebenco Climb
+  `grid6_3_1`, Talons Junction `grid8_3_1`, Modesto Heights `grid8_4_1`, Tech De Ra `grid9_3_1`, Amphiseum `grid10_2_1`. Against `grid0_3_1` (the node the rename
+  rewrites) their `<Values>` differ only in `skillEasy`, `skillMedium`, `skillHard` (the rivals' skill, 0.3 to 0.9 and so on; Moa Therma's cell is identical) and
+  `Locked`; mode, class, `Weapons`, `damage`, laps, `AICount` and `ShipChoice` are equal. The grid's `FlyerName`, `BillboardName` and colours are the grid's own.
+  The craft is Feisar HD on both routes: Select Team opens on it on the Fury Campaign as on the HD one (read off the Select Team screen on a Fury node).
+  Ours draws the `hdships` Feisar on a DLC track (`oag_2048::race::GUEST_ROSTER`), the hull shape matches in every side image, so the hull-luma sign flip between
+  circuits that the scout read as two crafts is the circuits' lighting.
+- **Authored against substituted, one boot each.** RMSE of the new original against the old (substituted) original of the same circuit, and ours (this tree,
+  `4d76ba866`) against each:
+
+  | Pair | Authored cell | Original vs substituted original | Ours vs original, substituted | Ours vs original, authored |
+  | --- | --- | --- | --- | --- |
+  | `talons-junction` | `grid8_3_1` | 0.0566 | 0.1804 | 0.1759 |
+  | `modesto-heights` | `grid8_4_1` | 0.0577 | 0.1735 | 0.1689 |
+  | `anulpha-pass` | `grid0_5_1` | 0.0550 | 0.1284 | 0.1320 |
+  | `tech-de-ra` | `grid9_3_1` | 0.0633 | 0.1405 | 0.1477 |
+  | `amphiseum` | `grid10_2_1` | 0.0652 | 0.1666 | 0.1727 |
+  | `dlc-vineta-k` (control, same node, not renamed) | `grid0_3_1` | 0.0632 | 0.1364 | 0.1403 |
+
+  The edge correlation of the original pairs is 0.86 to 0.95, the circuit, craft, 8/8 slot and HUD agree, and the sign boards, rivals' craft and a few lamps are at another
+  phase. The spread between two boots of the same node (the control, 0.063) is as large as the substituted-to-authored gap, so the rename changes nothing that
+  a frame shows. Each ours-against-original number is one boot; the old and new ours numbers move by 0.004 to 0.008 either way, the size of the original's own spread.
+- **Vita3K 4285 against the pinned 4095.** This machine's Vita3K is `v0.2.1 4285-885f9168`; the 2048 profile pins `v0.2.1 4095-84184a36`
+  (`scripts/compare-environment.toml`), and `environment_text` writes the pin, so a re-render writes 4095 into the five new pairs again. The control (Vineta K, unchanged
+  recipe, 4285) is 0.063 from the stored 4095 frame, inside the spread, so the version is not a confounder here. The pin moved to `v0.2.1 4285-885f9168` on 2026-11-12 (maintainer); pairs captured on 4095 keep 4095 in their own `pair.json`.
+- **The map route.**
+  - **The tiles:** the Fury Campaign tile is at `(659, 162)` on the Game Mode grid (the HD one at `(477, 162)`); a first tap highlights it (orange) and the pair
+    script taps again.
+  - **The map re-centres** on the node last opened each time its card closes (the cross, `(752, 480)`), (the Fury Race icon: `(602, 352)` on the map as it opens, `(518, 264)` after two cards were closed, `(533, 335)` after Select Team). A node's tap
+    point read once is wrong after Select Team: the first run of `talons-junction` tapped `(600, 352)` twice and raced the Speed Lap `grid8_2_2` ("LAP 1/7, GOLD 0.47.5"), a
+    Speed Lap card where the Race card had been. `vita-2048-pair.py --node-template` finds the node's icon in a fresh frame (`scripts/vita-2048-map-node.py`, zero-mean
+    normalised cross-correlation, scores 0.96 to 1.0 on the right icon, 0.6 on the nearest wrong one) and `--node-pick N` takes the N-th match from the left; after
+    Select Team the match nearest `(533, 333)` is the opened node (Talons Junction, Modesto Heights `(533, 335)`, Anulpha Pass `(532, 330)`).
+  - **The Race icon template** is a crop of a frame of the Fury map, `magick <frame> -crop 90x64+473+232 +repage race-icon.png`, taken with the map centred on `grid8`
+    after one card was opened and closed (the template's frame is not stored in the repository).
+  - **Locked nodes tap open.** An unplayed Race node in an open grid (Modesto Heights `grid8_4_1`, Anulpha Pass `grid0_5_1`) opens its card and loads without `vita3k-mem.py unlock`.
+  - **Later grids by hops (Fury).** `--hop X Y` opens the card at a point and closes it, so the map re-centres and the next grid shows. From the cold map: `(693, 303)`
+    then `(928, 455)` reaches `grid9` (Impact: Tech De Ra, pick 1); then `(800, 345)` and `(800, 190)` reach `grid10` (Voltage: Amphiseum, pick 1). The points worked
+    unchanged over four boots.
+  - **The HD blocker.** On the HD map the next grid (Warped, `grid1`) shows only as a sliver under the two bottom-right buttons (`(846..944, 482..528)`); a drag
+    (`xdotool` press, move, release) and the d-pad do not pan the map, and a tap on the sliver at `(805, 515)` and `(872, 538)` opened nothing. Chenghou Project,
+    Metropia, Moa Therma, Sebenco Climb, Sol 2 and Ubermall were not reached in this effort (about 20 minutes of exploration), and their six pairs carry a caveat saying so.
+    Next: tap the Warped hex through a first hop from a node on `grid0` that sits further right, or unlock and open the grids with `vita3k-mem.py unlock`.
+  - **Load time.** At a load average of 25 to 50 the HD-campaign load took more than the pair script's 20 s wait twice (98 % on the loading bar): `--load-wait 45` to `75`
+    fixed it. About every second boot hung on "Sony Computer Entertainment presents" or on the Game Mode grid and were relaunched; `--boot-timeout 220` and the watchdog's
+    `--silence 280` were needed at that load.
+- **Fury's default craft** is Feisar HD (Select Team on a Fury node opens on it), where `2048-dlc.md` said it was unmeasured.
+- **Omega:** checked, differs. Omega reaches HD's and Fury's campaigns through HD's own `PI001` front end, with no 2048 map to tap or hop and no cell record to rewrite
+  (`omega-status.md`), so none of this ports; Omega's pairs run on shadPS4 with their own script.
+
 ### The chase camera and the craft's size (2026-11-11, `c2048-chase-camera`)
 
 **Question:** is the original's craft drawn 1.3 times larger than ours on the three 2048 grid pairs because the two sides flew different chase views

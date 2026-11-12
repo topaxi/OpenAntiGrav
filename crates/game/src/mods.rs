@@ -15,6 +15,11 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Added, Definition, Error, For, ModMenu};
 use oag_ui::strings;
 
+/// The title a texture pack's `[games]` serial belongs to, as a mod's `titles` spells it.
+fn pack_title(serial: &str) -> Option<String> {
+    oag_source::title::by_serial(serial).map(|title| title.slug())
+}
+
 #[derive(Debug)]
 /// The mods this run has: the built-in extras and what the search found.
 ///
@@ -521,7 +526,10 @@ impl Mods {
     /// As [`Self::load`].
     pub fn load_from(bases: &[PathBuf], switches: &crate::settings::Mods) -> Result<Self> {
         let extras = oag_mod::extras::builtin().context("opening the built-in oag-extras")?;
-        let found = oag_mod::load(bases, &game_version());
+        let mut found = oag_mod::load(bases, &game_version());
+        for module in &mut found.mods {
+            oag_mod::texture_pack::assign_titles(&mut module.manifest, &pack_title);
+        }
         let mut disabled = switches.disabled.clone();
         disabled.remove(oag_mod::extras::ID);
         // A mod that starts off is off until the player has turned it on.
@@ -601,6 +609,33 @@ impl Mods {
             .filter(|m| !self.disabled.contains(&m.manifest.id))
     }
 
+    /// [`Self::player`] for the mods whose `titles` admit `title`: what a race or a front end
+    /// on that title loads. A mod for other titles only is never loaded or offered on it.
+    pub fn player_for<'a>(
+        &'a self,
+        title: &oag_title::Title,
+    ) -> impl Iterator<Item = &'a oag_mod::Mod> + Clone + use<'a> {
+        let slug = title.slug();
+        self.player().filter(move |m| m.is_for(&slug))
+    }
+
+    /// The ids of the loaded mods whose `titles` leave out the title `target` builds for,
+    /// which a build treats as left out: not in the tree, the strings or the MODS page.
+    fn other_titles(&self, target: Option<For<'_>>) -> Vec<String> {
+        let Some(target) = target else {
+            return Vec::new();
+        };
+        let slug = target.title.slug();
+        self.player
+            .iter()
+            .filter(|m| !m.is_for(&slug))
+            .map(|m| {
+                log::debug!("mod {}: for {:?}, not {slug}", m.label(), m.manifest.titles);
+                m.manifest.id.clone()
+            })
+            .collect()
+    }
+
     /// The campaigns and tracks the mods that are on carry for `title`
     /// ([`crate::campaign::custom::Installed::for_title`]), a campaign racing a mod
     /// that is off refused with that reason.
@@ -653,7 +688,7 @@ impl Mods {
         language: Option<&str>,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out: Vec<String> = Vec::new();
+        let mut left_out = self.other_titles(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {
@@ -716,7 +751,7 @@ impl Mods {
         strings: &StringTable,
         target: Option<For<'_>>,
     ) -> Result<Built> {
-        let mut left_out: Vec<String> = Vec::new();
+        let mut left_out = self.other_titles(target);
         let mut problems = Vec::new();
         let mut listed = Vec::new();
         loop {

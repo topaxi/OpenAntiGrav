@@ -30,6 +30,7 @@ oag-assets.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true
 oag-mod.workspace = true
+oag-source.workspace = true
 semver = "1"
 anyhow.workspace = true
 clap.workspace = true

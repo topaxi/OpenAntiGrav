@@ -175,7 +175,7 @@ exposure_hold = 1.15
 pilot_assist = "on"
 [platform.2048.emulator]
 name = "Vita3K"
-version = "v0.2.1 4095-84184a36"
+version = "v0.2.1 4285-885f9168"
 renderer = "Vulkan"
 resolution_multiplier = 1     # 1x native 960x544
 capture = "vita-2048-pair.py (vita3k-drive.py display, launcher and input)"

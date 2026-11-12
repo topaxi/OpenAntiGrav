@@ -21,22 +21,40 @@ fn a_rain_hit_draws_a_ring_and_its_droplets_then_ends() {
     assert_eq!(draw(&splashes), (0, 0));
 }
 
+/// The first quad's alpha and half-width of the one flake drawn.
+fn flake_now(splashes: &Splashes) -> (f32, f32) {
+    let (mut additive, mut alpha) = (Vec::new(), Vec::new());
+    splashes.extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, CELL);
+    assert!(alpha.is_empty());
+    assert_eq!(additive.len(), 6);
+    let xs = additive.iter().map(|v| v.position[0]);
+    let width = xs.clone().fold(f32::MIN, f32::max) - xs.fold(f32::MAX, f32::min);
+    (additive[0].colour[3], width * 0.5)
+}
+
 #[test]
-fn a_snow_hit_settles_as_one_flake_that_fades_in_and_out() {
+fn a_snow_hit_shows_within_two_ticks() {
     let mut splashes = Splashes::default();
     splashes.spawn(Vec3::ZERO, Vec3::Y, true);
-    let alpha_at = |splashes: &Splashes| {
-        let (mut additive, mut alpha) = (Vec::new(), Vec::new());
-        splashes.extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, CELL);
-        assert!(alpha.is_empty());
-        assert_eq!(additive.len(), 6);
-        additive[0].colour[3]
-    };
-    assert!(alpha_at(&splashes) < 0.01, "born invisible");
-    splashes.advance(SNOW_LIFE * 0.5);
-    assert!(alpha_at(&splashes) > 0.8, "settled");
-    splashes.advance(SNOW_LIFE * 0.45);
-    assert!(alpha_at(&splashes) < 0.3, "fading out");
+    splashes.advance(2.0 / 60.0);
+    assert!(
+        flake_now(&splashes).0 > 0.1,
+        "a craft at speed passes a flake in about a third of a second"
+    );
+}
+
+#[test]
+fn a_flake_melts_away_to_nothing_and_shrinks_as_it_goes() {
+    let mut splashes = Splashes::default();
+    splashes.spawn(Vec3::ZERO, Vec3::Y, true);
+    splashes.advance(SNOW_IN);
+    let (peak, big) = flake_now(&splashes);
+    assert!(peak <= SNOW_PEAK + 1e-4, "a subtle peak: {peak}");
+    splashes.advance(SNOW_LIFE * 0.85 - SNOW_IN);
+    let (fading, small) = flake_now(&splashes);
+    assert!(fading < peak * 0.25, "mostly gone: {fading}");
+    assert!(small < big * 0.8, "shrunk: {small} from {big}");
+    assert!(small > big * FLAKE_MELTED * 0.99, "not to a point: {small}");
     splashes.advance(SNOW_LIFE);
     assert!(splashes.is_empty());
 }

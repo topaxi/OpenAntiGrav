@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, pulse, pure, 2048]
-updated: 2026-11-11
+updated: 2026-11-12
 summary: "Race pairs by area x error: HD GO boards, RECORD band lead; 2048 dark; PS2 frame-wide open; Talon's pack tick is capture skew, script fix ready"
 ---
 
@@ -71,7 +71,7 @@ Read px with the title in mind. A Pulse PSP frame is 480x272 and an HD frame
 3. 2048, `2048-empire-climb-grid`, 960x544, px 401700, err 24.1, impact 9.67 M. Layer 3, tone: ours darker by 11 to 18 luma. Medium.
 4. 2048, `2048-mall-grid`, 960x544, px 356520, err 20.6, impact 7.33 M. Layer 3, tone: ours darker by 5 to 8 luma. Medium.
 5. ~~HD, `hd-metropia`, box 180,0 1740x480~~ fixed 2026-11-11 (`hd-worst-pairs`): the box 8.97 to 3.18 on a fresh render (four material readings, `docs/formats/rcsmaterial.md`), the frame 4.35 to 1.97.
-6. 2048, `2048-dlc-vineta-k-grid`, 960x540, px 229500, err 22.7, impact 5.22 M. Layer 3, tone: ours darker by 2 to 10 luma. Medium.
+6. 2048, `2048-dlc-vineta-k-grid`, 960x540, px 229500, err 22.7, impact 5.22 M. Layer 3, tone: ours darker by 2 to 10 luma. Medium. Checked 2026-11-12: the pair is the authored HD Campaign node (never substituted; a second grab is 0.063 RMSE from the first), so the row holds as ranked; it flies Feisar HD where rows 3 and 4 fly `feisar2048`.
 7. HD, `hd-the-amphiseum`, box 600,0 1080x600, px 277200, err 16.1, impact 4.47 M. Layer 3, GO gantry board. Medium.
 8. HD, `hd-sebenco-climb`, box 0,0 1560x480, px 198000, err 13.8, impact 2.73 M. Layer 3, sky and scenery at the top edge. Low.
 9. HD, `hd-sol-2`, box 840,120 660x300, px 140400, err 17.8, impact 2.50 M. Layer 3, GO gantry board. Medium.

@@ -3764,6 +3764,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-mod",
+ "oag-source",
  "oag-tables",
  "oag-texture",
  "semver",

@@ -554,7 +554,7 @@ the original's guest memory, not by an asset name. The design that fits:
   `name` the same, `version` `0.0.0` unless written, `license` `License::None` (a mod
   without one "loads, and says so wherever it is listed": exactly the state of these
   packs), `titles` from the `[games]` serials through a serial-to-title table (the
-  2026 pack: `pulse` and `pure`; the Pulse snapshot: `pulse`). A written manifest gains a
+  2026 pack: `pulse` and `pure`; the Pulse snapshot: `pulse`; done, see below). A written manifest gains a
   `[texture-pack]` table: `format = "ppsspp"`, optionally `ini = "textures.ini"` and
   `serials`.
 - **Kind.** A texture pack changes only what is drawn: no simulation module, no menu row,
@@ -563,8 +563,15 @@ the original's guest memory, not by an asset name. The design that fits:
   names it), and a recognised pack is always `false`. **Done, with one correction to this
   design**: `disabled` cannot say "on although it starts off", so the settings file gained
   `[mods] enabled`, the opt-in list for a mod that starts off. The pack is filtered by the
-  disc's serial against its `[games]` rather than by `titles`, which a recognised pack leaves
-  empty (the serial-to-title table was not needed).
+  disc's serial against its `[games]` as well as by `titles`. **Titles (done)**: a pack's
+  `titles` follow its `[games]` serials through `oag_source::title::by_serial` (the titles'
+  own release tables and the sibling deny-lists; `oag-mod` takes the answer as a closure and
+  knows no title), filled at load for any pack whose manifest names none and written by
+  `oag-mod init-pack`; a pack for another title is not a candidate for a load, so Pulse no
+  longer warns about the Pure pack. On the two fetched packs: the Pure pack lists `UCES00001`
+  and `UCUS98612` (resolve to Pure) and `UCJS10007`, `ULES00229`, `ULUS10058` (no title lists
+  them, so they add nothing); the Pulse pack lists `UCES00465` and `UCUS98712` (Pulse).
+  2048 and Omega: not applicable, PPSSPP keys are the PSP's.
 - **Search path (done).** `oag_mod::mods_search_path` gains `data/texture-packs/` (one level, a
   folder holding `textures.ini`, or `textures.zip`), the device's
   `<XDG_DATA_HOME>/oag/texture-packs/`, and, when it exists, a PPSSPP memstick's
@@ -581,8 +588,8 @@ the original's guest memory, not by an asset name. The design that fits:
   submodule branch, then the pointer) and `docs/tools/mods.md`. This lane changed no mod
   format and left the skill alone.
 
-Open: whether a pack that targets two games (the 2026 one) is one mod or two (one mod,
-`titles = ["pulse", "pure"]`, is the cheaper reading); whether `default-enabled` is a
+Open: whether a pack that targets two games is one mod or two (one mod with both titles is
+what the resolution above gives it); whether `default-enabled` is a
 manifest field or a property of the kind.
 
 ### ZIM images
