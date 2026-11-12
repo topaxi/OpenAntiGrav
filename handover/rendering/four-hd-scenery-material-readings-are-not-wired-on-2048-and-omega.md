@@ -46,9 +46,7 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
    `mr_diffuse_emissive_alpha_glow_specular` declares no `SpecularTexture` on HD (units 1 and 2 are shadow maps): nothing to wire. **Left:** 14 other HD
    families declare the sampler (`pb_window` 156 programs, `cf_diff_spec`, `base_diffusespecular` and the rest, listed on that page), not read; the
    `_glow` twin declares it and is not wired on HD.
-6. **The unsaturated `N.L`**: read per block (`Program::sun_diffuse_unsaturated`, 2,349 of 7,211 lightmapped programs, Metropia's `#21` and Moa's `#7`
-   among them; `docs/formats/rcsmaterial.md`, "The sun's N.L") and **not wired: drawing it is measurably worse** (Ubermall's whole frame mean grey
-   3.80 to 5.36, Moa's box 1.40 to 1.54 and its second box 1.17 to 2.63), the cause: the original clamps it (`hd-ubermall-nl-dump`).
+6. ~~**The unsaturated `N.L`**~~ **Closed, 2026-11-12 (`rsx-bit24`)**: bit 24 of the `MUL`'s dword 2 is `src1_prec_mod = 4`, a saturate of the source (RPCS3 `SRC1`; `docs/formats/rcsmaterial.md`, "Bit 24 is a source saturate"). `Program::sun_diffuse_unsaturated` now skips a reader whose `Instruction::source_precision[k]` for the dot's operand is `PRECISION_SATURATE`, and all 2,349 programs fall to 0 of 7,211: HD clamps the sun term everywhere, nothing to wire. **Left:** Omega's `@0x228`/`@0x260` clamp modifiers and 2048's equivalent have not been censused; the other precision codes (1 half, 2 fixed12, 3 fixed9) are decoded in the reader but no census says where they occur.
 
 ## Next Steps
 
@@ -57,4 +55,4 @@ differs** on Omega (a three-lane `.gnf`, already bound) and needs nothing.
   the `psp2` loader, and measure on a pair of that title (Omega in-game shots
   are not trusted: use the `wipeout_pc` port or a material census). Item 1
   is done.
-- For 6: **do not wire.** `hd-ubermall-nl-dump` measured the original drawing the clamped picture where the live program multiplies an unsaturated `N.L` (alpha, sun and normal all equal to ours; `docs/formats/rcsmaterial.md`, "The sun's N.L"). Next read: what bit 24 of fragment dword 2 on that `MUL` means (`scripts/ps3-microcode.py` does not decode it; 65 of 65 live lightmapped unsaturated-DP3 programs carry it). If it is a source saturate, make `Program::sun_diffuse_unsaturated` require it absent and expect the 2,349 count to fall to near zero; the shader branch then stays removed. Omega's `@0x228`/`@0x260` clamp modifiers are the cross-title lead.
+- For 6: closed (above).

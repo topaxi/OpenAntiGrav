@@ -174,6 +174,8 @@ fn node(
         forced_craft: None,
         refused_craft: Vec::new(),
         card: card(cell, track, &circuit, kind, strings),
+        role: oag_title::MapRole::default(),
+        rank_gated: false,
     })
 }
 

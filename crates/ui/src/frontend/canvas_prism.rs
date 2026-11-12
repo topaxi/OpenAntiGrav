@@ -98,12 +98,18 @@ pub mod colours {
     pub const PASSED: [f32; 3] = [0x20 as f32 / 255.0, 0xd0 as f32 / 255.0, 0.0];
     /// `0x817327d4`, an event passed at elite.
     pub const ELITE: [f32; 3] = [0xd0 as f32 / 255.0, 0xd0 as f32 / 255.0, 0.0];
-    /// `0x817327c4`, the colour of the first state. **Chosen for a locked
-    /// event**: the original paints none.
-    pub const LOCKED: [f32; 3] = [
+    /// `0x817327c4`, an event of the main chain that is not reached yet: the flat
+    /// state-1 tint.
+    pub const UNREACHED: [f32; 3] = [
         0xe0 as f32 / 255.0,
         0xe0 as f32 / 255.0,
         0xe9 as f32 / 255.0,
+    ];
+    /// `0x817327c8`, the same for an event of a branch.
+    pub const UNREACHED_BRANCH: [f32; 3] = [
+        0xf3 as f32 / 255.0,
+        0xf3 as f32 / 255.0,
+        0xfa as f32 / 255.0,
     ];
 }
 

@@ -47,6 +47,7 @@ fn insn(opcode: u8) -> Instruction {
         negate: [false; 3],
         cond: 0x727,
         scale: 0,
+        source_precision: [0; 3],
         end: false,
     }
 }
@@ -1169,4 +1170,16 @@ fn an_overwrite_of_the_dots_lane_ends_the_search() {
     overwrite.mask = 0b0010;
     program.instructions.insert(1, overwrite);
     assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_that_saturates_the_source_it_reads_the_dot_through_clamps_the_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions[1].source_precision = [0, super::PRECISION_SATURATE, 0];
+    assert!(!program.sun_diffuse_unsaturated());
+    program.instructions[1].source_precision = [0, 1, 0];
+    assert!(
+        program.sun_diffuse_unsaturated(),
+        "a half-precision modifier is not a clamp to [0, 1]"
+    );
 }

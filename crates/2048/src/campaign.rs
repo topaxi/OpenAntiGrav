@@ -758,5 +758,76 @@ pub fn unlock_gates(document: &Document) -> Vec<(String, Option<String>)> {
         .collect()
 }
 
+/// The event the original's chain walk starts from
+/// (`TouchCampaign_PaintChainRings` `0x810ef5fe`, the string literal it passes
+/// to the by-name lookup).
+pub const CHAIN_START: &str = "2048 - Event 1";
+
+/// The `m_options` bit `GameModeBase` vtable slot `+0x74` tests (the stub at
+/// `0x813ea23c`): the event is "locked" and the map paints nothing for it until its
+/// progress is raised.
+pub const OPTION_LOCKED: i64 = 0x10;
+
+/// Whether `event` authors [`OPTION_LOCKED`]: on the EU v1.04 package the 15 side
+/// challenges (five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`), each
+/// of which also carries `M_RankRequired`.
+#[must_use]
+pub fn is_rank_gated(document: &Document, event: &Event) -> bool {
+    document
+        .instance(event.instance_id)
+        .and_then(|instance| instance.field("M_OPTIONS"))
+        .and_then(Field::int)
+        .is_some_and(|options| options & OPTION_LOCKED != 0)
+}
+
+/// What every name of the walk's speed-lap table (`0x8151ea78`, 40 strings)
+/// has between the circuit and the class.
+const SPEED_LAP_INFIX: &str = " Speed Lap - ";
+
+/// Each event's [`oag_title::MapRole`], by name, in the document's order: **every event in
+/// the document**, as [`unlock_gates`] does.
+///
+/// The main chain is [`CHAIN_START`] and its `M_PNEXTEVENT` successors; a branch
+/// is a chain event's `M_PBRANCHEVENT` and that event's own successors. On the
+/// EU v1.04 package that is 24 chain and 36 branch events
+/// (`crates/2048/tests/campaign_ground_truth.rs`).
+#[must_use]
+pub fn map_roles(document: &Document) -> Vec<(String, oag_title::MapRole)> {
+    use oag_title::MapRole;
+    let all = events(document);
+    let index_of = |id: i64| all.iter().position(|event| event.instance_id == id);
+    let mut roles = vec![MapRole::Side; all.len()];
+    // Only an event no walk has claimed is taken, so a cycle in authored data ends.
+    let walk = |start: Option<usize>, role: MapRole, roles: &mut Vec<MapRole>| {
+        let mut at = start;
+        while let Some(event) = at.filter(|&event| roles[event] == MapRole::Side) {
+            roles[event] = role;
+            at = all[event]
+                .next_event
+                .and_then(|next| index_of(next.instance_id));
+        }
+    };
+    let start = all.iter().position(|event| event.name == CHAIN_START);
+    walk(start, MapRole::Chain, &mut roles);
+    let chain: Vec<usize> = (0..all.len())
+        .filter(|&event| roles[event] == MapRole::Chain)
+        .collect();
+    for event in chain {
+        let branch = all[event]
+            .branch_event
+            .and_then(|branch| index_of(branch.instance_id));
+        walk(branch, MapRole::Branch, &mut roles);
+    }
+    for (event, role) in roles.iter_mut().enumerate() {
+        if *role == MapRole::Side && all[event].name.contains(SPEED_LAP_INFIX) {
+            *role = MapRole::SpeedLap;
+        }
+    }
+    all.iter()
+        .zip(roles)
+        .map(|(event, role)| (event.name.clone(), role))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests;

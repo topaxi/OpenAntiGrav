@@ -11,7 +11,9 @@ fn the_two_atlas_triangles_map_corner_to_corner() {
             } else {
                 1.0
             };
-            let at = atlas_at([p[0], p[1] + row * CELL_DY]).expect("inside a cell");
+            let at = cell_at([p[0], p[1] + row * CELL_DY])
+                .expect("inside a cell")
+                .1;
             assert!((at[0] - texel[0]).abs() < 0.5 && (at[1] - texel[1]).abs() < 0.5);
         }
     }
@@ -22,7 +24,7 @@ fn every_point_of_the_plane_is_in_some_cell() {
     for i in 0..200 {
         for j in 0..200 {
             let p = [i as f32 / 100.0 - 1.0, j as f32 / 100.0 - 1.0];
-            assert!(atlas_at(p).is_some(), "{p:?}");
+            assert!(cell_at(p).is_some(), "{p:?}");
         }
     }
 }

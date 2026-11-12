@@ -84,10 +84,11 @@ fn barycentric(p: [f32; 2], tri: &[[f32; 2]; 3]) -> [f32; 3] {
     [a, b, 1.0 - a - b]
 }
 
-/// Where the lattice's own pixel at world `p` reads the atlas, in atlas
-/// pixels: the cell containing `p`, the triangle it is textured with, and the
-/// barycentric carry from corners to atlas triangle.
-fn atlas_at(p: [f32; 2]) -> Option<[f32; 2]> {
+/// The cell containing world point `p` on the lattice plane, `(col, row)`, and
+/// where its pixel there reads the atlas, in atlas pixels: the triangle the
+/// cell is textured with and the barycentric carry from corners to atlas
+/// triangle.
+pub(super) fn cell_at(p: [f32; 2]) -> Option<((i32, i32), [f32; 2])> {
     let row = (p[1] / CELL_DY).round();
     let local_y = p[1] - row * CELL_DY;
     let col0 = (p[0] / CELL_DX).floor();
@@ -101,10 +102,13 @@ fn atlas_at(p: [f32; 2]) -> Option<[f32; 2]> {
         let local = [p[0] - col * CELL_DX, local_y];
         let w = barycentric(local, corners);
         if w.iter().all(|&weight| weight >= -1e-4) {
-            return Some([
-                w[0] * atlas[0][0] + w[1] * atlas[1][0] + w[2] * atlas[2][0],
-                w[0] * atlas[0][1] + w[1] * atlas[1][1] + w[2] * atlas[2][1],
-            ]);
+            return Some((
+                (col as i32, row as i32),
+                [
+                    w[0] * atlas[0][0] + w[1] * atlas[1][0] + w[2] * atlas[2][0],
+                    w[0] * atlas[0][1] + w[1] * atlas[1][1] + w[2] * atlas[2][1],
+                ],
+            ));
         }
     }
     None
@@ -144,7 +148,7 @@ fn plane_matrix() -> (f32, f32, f32) {
 }
 
 /// The lattice plane point under the centre of screen pixel `(px, py)`.
-fn world_at(px: u32, py: u32) -> [f32; 2] {
+pub(super) fn world_at(px: u32, py: u32) -> [f32; 2] {
     let offset = COMPOSITE_SAMPLE_OFFSET;
     let (ax, bx, by) = plane_matrix();
     let half = [VIEWPORT[0] as f32 / 2.0, VIEWPORT[1] as f32 / 2.0];
@@ -172,7 +176,7 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity((VIEWPORT[0] * VIEWPORT[1] * 4) as usize);
     for py in 0..VIEWPORT[1] {
         for px in 0..VIEWPORT[0] {
-            let rgb = atlas_at(world_at(px, py)).map_or([255.0; 3], |at| {
+            let rgb = cell_at(world_at(px, py)).map_or([255.0; 3], |(_, at)| {
                 let texel = bilinear(atlas, width, height, at);
                 [texel[0], texel[1], texel[2]]
             });

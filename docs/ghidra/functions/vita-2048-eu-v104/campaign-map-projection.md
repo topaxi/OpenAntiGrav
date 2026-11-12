@@ -170,9 +170,15 @@ around and between tiles in the captures; the fill types are atlas shifts in `ca
 | 3 | state 2 | `0x817327d0`, green `20d000` |
 | 4 | state 2 | `0x817327d4`, yellow `d0d000` |
 
-On the measured save the three passed events are 3 and the three events open next are 2: **an
-open, unpassed event is the grey tile**, and an event that is not yet reachable has no tile.
-Confidence 75 for the table (one save).
+On the measured save the three passed events are 3 and the three events open next are 2:
+**an open, unpassed event is the grey tile**. An event not reached yet (progress 0) is not
+absent: state 1 paints its six cells flat in `0x817327c4` (a main-chain event) or `0x817327c8`
+(a branch event, `0x810ef536`), at the ground, with its own ring ("The ring", below). Only an
+event whose `m_options & 0x10` is set (the authored "locked" bit, `GameModeBase` vtable slot
+`+0x74`) and whose progress is 0 gets no tile and no ring. Confidence 75 for the table (one save);
+the flat tint and the absent events were checked against frame `13` ("The ring").
+Correction to the sentence this paragraph carried before 2026-11-12, "an event that is not yet
+reachable has no tile": it has the flat tint, not nothing.
 
 **Ground relief.** Unpainted cells carry alpha `0x01..0x22` that changes from frame to frame
 (`Canvas3D_UpdateCellHeights`, the music spectrum and the ripple): the faint shaded triangles of the
@@ -206,6 +212,14 @@ map's own tiles, blurred, behind the five tiles (the parked question of
 | `0x811042ca` | `TouchScroll_IsNearTarget` | 85 | Decompile is four lines; the live stop distance |
 | `0x81104228` | `TouchScroll_ExtendBounds` | 80 | Four compares and stores |
 | `0x81104272` | `TouchScroll_ResetBounds` | 85 | Stores +-10000 |
+| `0x81073aee` | `Canvas3D_WriteRingCell` | 85 | `(canvas, col, row, mode)`: the mode's shift into `canvasTex2` if the cell's priority is not above it; decompiled, "The ring" |
+| `0x810ef536` | `TouchCampaign_PaintBranchRings` | 70 | The chain walk's twin over a branch: modes 1 and 2, colour `0x817327c8` for an unreached event |
+| `0x81072a32` | `Canvas3D_InitStaticConstants` | 70 | Stores the offset indices, the ring shifts `0x81732694..ac` and `g_CanvasStateColours` |
+| `0x81732694` | `g_CanvasRingShift3` | 90 | `(94, 0)` atlas px: light stripes |
+| `0x8173269c` | `g_CanvasRingShift4` | 90 | `(47, 82)`: dark stripes |
+| `0x817326a4` | `g_CanvasRingShift1` | 90 | `(188, 0)`: light dots |
+| `0x817326ac` | `g_CanvasRingShift2` | 90 | `(141, 82)`: dark dots |
+| `0x8151ea78` | `g_CampaignSpeedLapNames` | 85 | 40 name pointers, `"<circuit> Speed Lap - <class>"` |
 | `0x81880448` | `g_CampaignCellScaleBias` | 90 | Initialiser, live read, the frames |
 | `0x81965b60` | `g_CampaignEventList` | 75 | 120 events live; begin and end at `+4/+8` |
 | `0x817327c4` | `g_CanvasStateColours` | 70 | Five RGBA words, live |
@@ -251,13 +265,11 @@ their visible edges agree to 2 px in `x`. The lattice under the map: row lines a
 Pinned by `crates/ui/src/frontend/canvas_camera/tests.rs` (the law against the live reads),
 `the_campaign_map_puts_its_tiles_where_the_canvas_camera_does` in
 `crates/game/tests/vita_2048_boot_ground_truth.rs` (the disc's events at the two reference views;
-red on the even grid) and, for the prism, `a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map`
+red on the even grid) and, for the prism, `the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_event`
 in the same file (the rendered map: green face, a wall that darkens towards its foot, no tinted square
 around the tile).
 
-Not wired, with what each needs: the ring and path cells (`0x81073aee` and the
-fill types), the season cards and the other item classes, the state table above
-(ours draws every event, a locked one in a chosen pale colour), the ground relief,
+Not wired, with what each needs: the season cards and the other item classes, the ground relief,
 the scroll bounds, the wait and the eases (ours arrives at once), the icon
 glyph through the cells' atlas shift (below). The prism itself is wired
 ("The prism", below).
@@ -309,8 +321,9 @@ off in `y` against 1.76 unrounded (the table above is the unrounded place).
 **Colours: the canvas's own, `g_CanvasStateColours`** (read live above):
 `20d000` a passed event, `d0d000` an elite one, `909090` an open one. The
 `Skin.xml` globals the flat art used (`Pass2048` `0x018400`, `Blue2048`) are a
-different set and the frames show the canvas's. A locked event is `e0e0e9`,
-`0x817327c4`, the first state's colour: **chosen**, the original paints none.
+different set and the frames show the canvas's. An event not reached
+yet is not a prism: it is the flat state-1 tint, `e0e0e9` (`0x817327c4`) on the main chain and `f3f3fa`
+(`0x817327c8`) on a branch ("The ring").
 
 **Against frame `13`** (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`,
 the opening view with Events 1 to 3 passed): green `(90, 230, 0)` on the face
@@ -334,11 +347,113 @@ neighbouring tiles overlap (a hexagon is 4 columns wide); they are drawn far to
 near by row.
 
 Not drawn, and said so: the glyph through the cells' shift (the disc's own mode
-icon sprite lies over the face instead, as before), the ring and path cells, the
-season cards, a locked event's absence. The original's frame `13` shows only six
-tiles; ours also draws every locked event as a pale prism (item 4 of the thread).
+icon sprite lies over the face instead, as before), the season cards. The ring cells and
+the flat tint of an unreached event are "The ring", below.
+
+## The ring: the chain walk and the cells it paints (2026-11-12, lane `w2048-map-rings`)
+
+**Fill types** (confidence 90, the static initialiser `Canvas3D_InitStaticConstants` `0x81072a32`
+stores them, `0x8107303e..0x81073148`): the ring mode `+0x34` of a button picks a `(u, v)` shift of
+the cell's atlas triangle in `canvasTex2`, in units of the 2048 px atlas.
+
+| Mode | Data | `(u, v)` | Atlas pixels | Picture in `canvasTexture.gxt` |
+| --- | --- | --- | --- | --- |
+| 1 | `0x817326a4` | `0x3dbc0000, 0` | (188, 0) | light dots |
+| 2 | `0x817326ac` | `0x3d8d0000, 0x3d240000` | (141, 82) | dark dots |
+| 3 | `0x81732694` | `0x3d3c0000, 0` | (94, 0) | light stripes |
+| 4 | `0x8173269c` | `0x3cbc0000, 0x3d240000` | (47, 82) | dark stripes |
+
+The pictures are the other four outlined triangle pairs beside the lattice's own in the top left of
+the atlas (decoded: stripes and dots in a pale blue and a dark navy). The live cell counts of the
+earlier read (619, 335, 60, 28 for `(188,0)`, `(94,0)`, `(47,82)`, `(141,82)`) are the number of
+cells of modes 1, 3, 4, 2: most of the map is light dots (modes 1, unreached branches) and light
+stripes (unreached chain), few are dark.
+
+**The writer** `Canvas3D_WriteRingCell` (`0x81073aee`, confidence 85, decompiled): for `(canvas, col, row,
+mode)` the cell is written (shift stored into `canvasTex2` at `(col + row * 512) * 8`) only if its priority
+`canvas + (row * 401 + col) * 4 + 0x2f0c4` is not above the mode, and the write sets the priority to
+the mode. So the highest mode wins and the order of buttons does not matter. A tile's own cells hold 6
+(state 1) or 7 (state 2) (`CanvasItem_Paint`), above every ring. `CanvasButton_PaintIconAndRing`
+(`0x8106fbd8`) calls it for 18 cells (decompiled): `(c-2, r) (c-1, r) (c+3, r) (c+4, r)`, the same four
+on row `r+1`, and `c-1 .. c+3` on rows `r-1` and `r+2`.
+
+**The walk** (confidence 85 for the modes, decompiled; 60 for the name). `TouchCampaign_PaintChainRings`
+(`0x810ef5fe`) starts at the event `"2048 - Event 1"` and follows `+0x2cc` (`M_PNEXTEVENT`); for each
+event `E` it sets the button's ring mode `+0x34` and colour `+0x38` by the progress word `+0x2d8`
+and the lock test (`vtable +0x74`):
+
+| `E` | progress | lock test | mode | colour |
+| --- | --- | --- | --- | --- |
+| main chain | 0 | open | 3 | `0x817327c4` |
+| main chain | 0 | locked | 0 | none |
+| main chain | not 0 | open | 4 | `0x817327cc` (2), `0x817327d0` (3), `0x817327d4` (4), none (1) |
+| main chain | not 0 | locked | 3 | `0x817327c4` |
+
+and, for `E`'s branch (`+0x2d0`, `M_PBRANCHEVENT`) and that event's `+0x2cc` successors,
+`TouchCampaign_PaintBranchRings` (`0x810ef536`) does the same with modes 1 (unreached) and 2
+(reached) and `0x817327c8` for an unreached one. Then a loop over the 40 names of the table at
+`0x8151ea78` (`"<circuit> Speed Lap - <class>"`, ten circuits by Flash, Rapier, Phantom, Super P)
+sets mode 3 on each with progress above 1. That loop also calls vtable `+0x70(3, 1)` on an event whose
+vtable `+0x10` result is not `0xffff` and colours its button `0x817327d0`, else `0x817327cc`; the
+meaning of those two slots was not read and ours takes the button's colour from the state alone
+(not wired).
+
+**`+0x50` is not a cursor rule.** `0x810ef78c` sets the button byte `+0x50` to 0 for the current event
+and for any event below progress 2, else 1; `CanvasItem_Paint` (`0x8106fae2`, decompiled) reads it
+as "snap": 1 writes alpha `0xff` into the cells (the raise), 0 keeps the cell's alpha. Which of the
+two events the pad or a tap may select is still unread (no caller of the select function
+`0x810eecb4` reading a lock was found in this pass); ours keeps every drawn event selectable.
+
+**The lock test** is `GameModeBase` vtable slot `+0x74`: every derived class's slot is the stub at
+`0x813ea23c` (`ldr r0, [r0, #0x1a0]; ands r0, r0, #0x10`, so `m_options & 0x10`); the base
+vtable `0x81515f88` has the same entry. The campaign's 15 side challenges carry `m_options = 16`
+(`"* P Ship Challenge"`, `"* - S Phantom Challenge"`; the census: 13 with 16, 2 with 17) and the other
+events of the map carry none, so **a main-chain or branch event is never "locked"** and an unreached
+one is state 1 (flat tint, ring 3 or 1), while a side challenge is not drawn at all until its progress
+is raised. The same 15 events carry `m_RankRequired` (10 to 50), so the raising is **hypothesised** to be
+the player rank (confidence 45) ([2048-campaign.md](../../../formats/2048-campaign.md), "The unlock graph"; not read).
+
+**Against frame `13`** (Events 1 to 3 passed, Event 4 open): the prediction (rings by the table, a tile's
+cells above rings, the highest fill winning) agrees with the reference's texture class on the
+visible ring cells: 38 of 51 predicted dark-stripe cells carry dark stripes in the frame, and the 13
+that do not are under the notification banner or a prism's wall; no predicted light cell shows
+dark stripes. Around the open Event 4 are dark stripes on its chain side and dark dots on the
+side of its branch Event 4-1 (state 1, flat `f3f3fa`, light dots about it); Event 5 (main chain, not
+reached) is the flat `e0e0e9` hexagon with light stripes. The mean texture energy (mean absolute
+difference of horizontally adjacent pixels over a window inside one cell) over six probe cells:
+frame `13` 20.6 for dark stripes, 8.4 dark dots, 3.5 light stripes, 0.3 plain lattice; ours 19.9, 10.7, 3.2,
+0.0. Pinned by `the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_event`
+(`crates/game/tests/vita_2048_boot_ground_truth.rs`: red on `e7eede403`, dark stripes 1.7 against 10).
+
+**Wired.** `oag_2048::campaign::map_roles` (24 chain, 36 branch, 40 speed laps on the EU v1.04 package,
+`crates/2048/tests/campaign_ground_truth.rs`), `oag_title::MapRole` (the role type, shared by the title package and the front end) on every `MapEvent`,
+`oag_ui::frontend::canvas_cells` (the 18-cell ring, the priority rule, the ten cell pictures baked off
+the atlas by the lattice's own sampler with the fill's shift, placed by the camera), drawn between the
+lattice and the prisms. A tile not reached yet is the fill-0 cell picture tinted by the state colour
+(`sqrt` commutes with the composite's encode, as for the prism), without a glyph (the icon writer runs
+for state 2 only). The cells are placed to whole pixels from the camera's projection: up to a pixel
+off the lattice beneath, which the outlines hide.
+
+**Not drawn, and said so.** The ground relief (the unpainted cells' alpha, so the soft shading of frame
+`13` around a flat tile is missing: our flat tile is flat), the blink between modes 3 and 4 for progress 1
+(`CanvasButton_PaintIconAndRing` swaps `+0x34` each paint of a state-3 button; ours has no event in
+that state), progress 0 on an open event (state 1 with the ring 3, ours has none: an event is reached or
+locked). The 15 rank-gated side challenges (`m_options & 0x10`, `MapEvent::rank_gated`) are **hidden**
+as the original hides them at rank 1 (frame `12`: no tile at top left): no tile, no ring, skipped by the pad,
+the pointer and the travel limits, until a pass is earned on one. The original raises their progress by
+player rank (hypothesis, confidence 45); this build has no rank, so until a rank model exists they cannot be
+launched from the map (open: "player rank model needed to unlock the 15 rank-gated 2048 challenges
+(`m_RankRequired` 10-50)").
+The season cards (item 3 of the thread) are still not drawn.
 
 ## Omega
+
+**Ring: checked, applies, not wired.** The PS4 `eboot.bin` carries the `u` shifts of modes 4, 2 and 3 and
+the `v` shift of modes 2 and 4 as one literal pool of floats (`47/2048`, `141/2048`, `82/2048`, `94/2048` as `0x3cbc0000`,
+`0x3d8d0000`, `0x3d240000`, `0x3d3c0000` at `0x018030e4..0x01803112`); mode 1's `188/2048` (`0x3dbc0000`)
+was not found as a word beside them (it may be an immediate) and the speed-lap names (ten `"... Speed Lap -
+Flash"` strings from `0x01820ce4`), so the same canvas code ships; the walk's decompile and any live
+value were not read (no memory readout). Same atlas shifts apply to `canvasTexture.gnf`; not wired.
 
 **Prism: checked, applies, not wired.** Same item and programs ship
 (`Canvas3D_vp`/`Canvas3D_fp`, `3dCanvas_Item.cpp`, `canvasTexture.gnf`, the reset

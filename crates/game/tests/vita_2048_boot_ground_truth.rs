@@ -290,6 +290,11 @@ fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
     let Some(source) = source() else { return };
     let loaded = boot::load(&options(&source)).expect("the whole boot");
     let mut frontend = loaded.frontend;
+    // A fresh save has Event 1 open and the rank-gated side challenges hidden;
+    // a pass on Event 1 opens Event 2 beside it.
+    frontend.refresh_campaign_progress(|name| {
+        (name == "2048 - Event 1").then_some(frontend::EarnedTier::Pass)
+    });
     assert!(drive_until(
         &mut frontend,
         &[Button::Cross],
@@ -428,16 +433,46 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
     );
 }
 
-/// A passed tile on the campaign map is the canvas's prism, rendered: a green
-/// top face, a wall below it that darkens towards its foot, and no pale box over
-/// the lattice around it. The reference is frame 13
-/// (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`), where Event
-/// 3's green prism has a lit wall under its face; the flat hex art this
-/// replaced had neither and tinted a faint square around itself. Dropping the
-/// prism bake or the sprite that draws it fails this.
+/// The 15 events the original's "locked" option (`m_options & 0x10`) hides, off the
+/// authored flag: five `"* P Ship Challenge"`, ten `"* - S Phantom Challenge"`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_rank_gated_side_challenges_are_the_authored_locked_option() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let events = loaded.frontend.campaign_events();
+    let gated = events.iter().filter(|event| event.rank_gated);
+    let side =
+        |name: &str| name.contains("P Ship Challenge") || name.contains("S Phantom Challenge");
+    assert_eq!(gated.clone().count(), 15);
+    assert!(gated.clone().all(|event| side(&event.name)));
+    assert_eq!(events.iter().filter(|event| side(&event.name)).count(), 15);
+}
+
+/// The map's opening view, rendered, against frame 13
+/// (`data/reference/2048-frontend/13-campaign-map-mid-cluster.png`, Events 1 to 3
+/// passed): one capture, three named checks.
+///
+/// - [`check_passed_tile_has_a_wall`]: Event 3's green prism has a lit wall that
+///   darkens towards its foot, and no pale box over the lattice around it.
+/// - [`check_ring_cells`]: the striped and dotted cells the canvas paints around
+///   and between the tiles (`CanvasButton_PaintIconAndRing`). Each probe is one
+///   cell's centre, placed by the canvas camera; the statistic is the mean
+///   absolute difference between horizontally adjacent pixels over a window
+///   inside the cell (stripes and dots have texture, the plain lattice and a flat
+///   tint have none). The bounds are half the figure measured on frame 13 over
+///   the same cells: 20.6 dark stripes, 8.4 dark dots, 3.5 light stripes.
+/// - [`check_unreached_events_raise_no_prism`]: Events 4-1 and 5 are not reached
+///   yet; the canvas paints them as flat tinted cells (`0x810ef78c`, state 1),
+///   not as a prism, so no wall and no shade hangs below them. Frame 13: the
+///   darkest red in the 60 px under the face is 215 (Event 5) and 225
+///   (Event 4-1); a prism's foot reads 179.
+///
+/// The profile pins `[dev] unlock_everything = false`: a debug build opens every
+/// gate without it.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/ and a GPU adapter"]
-fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
+fn the_opening_view_renders_the_prism_the_rings_and_no_prism_for_an_unreached_event() {
     let Some(source) = source() else { return };
     let scratch = std::env::temp_dir().join(format!("oag-prism-map-{}", std::process::id()));
     let records = scratch.join("config/oag");
@@ -454,6 +489,11 @@ fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
             .concat(),
     )
     .expect("writing the records");
+    std::fs::write(
+        records.join("settings.toml"),
+        "[dev]\nunlock_everything = false\n",
+    )
+    .expect("writing the settings");
     let out = scratch.join("map.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(&source)
@@ -476,14 +516,22 @@ fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
     assert!(status.success(), "oag-game --until newFEshell");
     let pixels = pixels_of(&std::fs::read(&out).expect("reading the screenshot"));
     std::fs::remove_dir_all(&scratch).ok();
-    let at = |x: f32, y: f32| -> [i32; 3] {
-        let i = (y.round() as usize * 960 + x.round() as usize) * 4;
-        [
-            i32::from(pixels[i]),
-            i32::from(pixels[i + 1]),
-            i32::from(pixels[i + 2]),
-        ]
-    };
+    check_passed_tile_has_a_wall(&pixels);
+    check_ring_cells(&pixels);
+    check_unreached_events_raise_no_prism(&pixels);
+}
+
+fn pixel_at(pixels: &[u8], x: f32, y: f32) -> [i32; 3] {
+    let i = (y.round() as usize * 960 + x.round() as usize) * 4;
+    [
+        i32::from(pixels[i]),
+        i32::from(pixels[i + 1]),
+        i32::from(pixels[i + 2]),
+    ]
+}
+
+fn check_passed_tile_has_a_wall(pixels: &[u8]) {
+    let at = |x: f32, y: f32| pixel_at(pixels, x, y);
     // Event 3 at the opening view: the top face's centre in frame 13, and the
     // face's half height (95.4 px / 2); the wall hangs 26 px below its edge.
     let (x, y) = (412.0, 174.7);
@@ -503,14 +551,119 @@ fn a_passed_tile_has_a_wall_and_no_pale_box_in_the_rendered_map() {
         "the wall darkens towards its foot: face {face:?}, upper {upper:?}, lower {lower:?}"
     );
     // The corner of the 128 x 128 art's square, outside the hexagon: the hex
-    // art tinted it with the tile's colour; the canvas leaves the lattice
-    // there, shaded grey by the tile's foot at most.
+    // art tinted it with the tile's colour. The canvas leaves ring cells there
+    // (dark stripes, blue over white), never a green tint.
     let corner = at(x - 58.0, y - 55.0);
-    let spread = corner.iter().max().unwrap() - corner.iter().min().unwrap();
     assert!(
-        corner[0] > 190 && spread <= 4,
+        corner[1] <= corner[0].max(corner[2]) + 6,
         "no tinted square around the tile: {corner:?}"
     );
+}
+
+/// Mean absolute difference between horizontally adjacent pixels, over a
+/// window of 19 x 13 pixels centred on `(x, y)`.
+fn texture_energy(pixels: &[u8], x: f32, y: f32) -> f32 {
+    let (cx, cy) = (x.round() as i32, y.round() as i32);
+    let mut sum = 0;
+    let mut count = 0;
+    for yy in cy - 6..=cy + 6 {
+        for xx in cx - 9..cx + 9 {
+            let a = pixel_at(pixels, xx as f32, yy as f32);
+            let b = pixel_at(pixels, xx as f32 + 1.0, yy as f32);
+            sum += (0..3).map(|c| (a[c] - b[c]).abs()).sum::<i32>();
+            count += 3;
+        }
+    }
+    sum as f32 / count as f32
+}
+
+fn check_ring_cells(pixels: &[u8]) {
+    // Cell centres at the opening view, (col, row) of the lattice in the comment.
+    // Ring fill 4 (dark stripes) around the passed and the open chain tiles;
+    // fill 2 (dark dots) around the open branch tiles; fill 3 (light stripes)
+    // around the chain event not reached yet.
+    /// A ring fill's name, its probe cell centres and the least mean energy.
+    type Group<'a> = (&'a str, &'a [(f32, f32)], f32);
+    let groups: [Group; 3] = [
+        (
+            "dark stripes",
+            &[
+                (239.0, 169.0),
+                (478.0, 169.0),
+                (354.0, 264.0),
+                (443.0, 280.0),
+                (469.0, 359.0),
+                (589.0, 359.0),
+            ],
+            10.0,
+        ),
+        (
+            "dark dots",
+            &[
+                (538.0, 169.0),
+                (598.0, 169.0),
+                (145.0, 280.0),
+                (235.0, 264.0),
+                (89.0, 185.0),
+                (267.0, 216.0),
+            ],
+            4.0,
+        ),
+        (
+            "light stripes",
+            &[
+                (650.0, 328.0),
+                (709.0, 328.0),
+                (765.0, 423.0),
+                (703.0, 455.0),
+                (823.0, 455.0),
+                (584.0, 455.0),
+            ],
+            1.5,
+        ),
+    ];
+    for (what, centres, bound) in groups {
+        let mean = centres
+            .iter()
+            .map(|&(x, y)| texture_energy(pixels, x, y))
+            .sum::<f32>()
+            / centres.len() as f32;
+        assert!(
+            mean >= bound,
+            "{what}: the ring cells carry texture (mean {mean:.2}, frame 13 reads about \
+             twice {bound}): the canvas's fill types are not drawn"
+        );
+    }
+}
+
+fn check_unreached_events_raise_no_prism(pixels: &[u8]) {
+    // Frame 13: Event 5 (chain, tint e0e0e9) and Event 4-1 (branch, tint f3f3fa).
+    for (name, x, y, face_range, foot_floor) in [
+        ("Event 5", 641.0, 365.0, 222.0..=240.0, 205),
+        ("Event 4-1", 403.0, 365.0, 236.0..=249.0, 215),
+    ] {
+        let mut face = 0;
+        for yy in -12..12 {
+            for xx in -25..25 {
+                face += pixel_at(pixels, x + xx as f32, y + yy as f32)[0];
+            }
+        }
+        let face = face as f32 / 1200.0;
+        assert!(
+            face_range.contains(&face),
+            "{name}: the face is the flat state tint (mean red {face:.1}, frame 13 reads \
+             232 and 243)"
+        );
+        let foot = (30..90)
+            .map(|dy| pixel_at(pixels, x, y + dy as f32)[0])
+            .min()
+            .unwrap();
+        assert!(
+            foot >= foot_floor,
+            "{name}: no prism wall or foot shade under an unreached event (darkest red {foot}, \
+             frame 13's is at least {foot_floor}, a prism's foot is 179)"
+        );
+    }
 }
 
 /// The pale triangle lattice is one picture baked off `canvasTexture.gxt` with
