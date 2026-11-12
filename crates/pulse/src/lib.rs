@@ -140,6 +140,7 @@ pub const TITLE: &Title = &Title {
         autopilot_pad_grants: oag_title::pre_race::Sourced::measured(false),
         // Run on PPSSPP: the stamp store takes `elimination_refresh_time` in game mode 8.
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(true),
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
         ),

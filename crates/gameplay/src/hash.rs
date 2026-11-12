@@ -140,6 +140,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         quake_lift,
         disruption,
         muzzle,
+        track_up,
         active,
         transit,
     } = ship;
@@ -156,6 +157,9 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // `muzzle` is the same kind of thing: the hull's locator, loaded once and
     // constant through the race. Named for the same reason.
     let _ = muzzle;
+    // `track_up` is a cache of the pose's own track sample, written every step; the
+    // projectile it seeds is hashed.
+    let _ = track_up;
     hasher.write_u32(u32::from(*segment));
     write_held(hasher, pickup);
     write_driver(hasher, driver);

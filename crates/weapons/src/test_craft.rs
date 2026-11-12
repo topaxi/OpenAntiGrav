@@ -23,6 +23,7 @@ pub(crate) struct Ship {
     pub quake_lift: f32,
     pub disruption: Disruption,
     pub muzzle: Option<Vec3>,
+    pub track_up: Option<Vec3>,
     pub active: bool,
 }
 
@@ -37,6 +38,7 @@ impl Default for Ship {
             quake_lift: 0.0,
             disruption: Disruption::default(),
             muzzle: None,
+            track_up: None,
             active: false,
         }
     }
@@ -81,6 +83,9 @@ impl Craft for Ship {
     }
     fn progress(&self) -> Option<f32> {
         self.standing.progress
+    }
+    fn track_up(&self) -> Option<Vec3> {
+        self.track_up
     }
     fn course_index(&self) -> Option<u32> {
         self.standing.course_index

@@ -141,6 +141,7 @@ pub const TITLE: &Title = &Title {
         // Pulse's law, inherited: Pure's pad grant is unread.
         autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
+        launch_normal_is_track_up: oag_title::pre_race::Sourced::inherited(true, "Wipeout Pulse"),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
