@@ -1207,6 +1207,20 @@ impl Race {
     pub fn nozzle_local_of(&self, slot: usize) -> Option<Vec3> {
         self.view.nozzles.get(slot).copied().flatten()
     }
+
+    /// Puts the player's craft on `position` and `orientation`, and carries its engine ribbon
+    /// with it (the same rigid move, from the pose the craft has now).
+    ///
+    /// A posed capture that runs the clock and then restores the pose it started from would
+    /// otherwise leave the ribbon hanging off the pose the craft had turned to.
+    pub fn place_player(&mut self, position: Vec3, orientation: Quat) {
+        let body = &mut self.sim.world.ships[FOLLOWED_SLOT].physics.body;
+        let turn = orientation * body.orientation.inverse();
+        let from = body.position;
+        body.position = position;
+        body.orientation = orientation;
+        self.view.exhaust[FOLLOWED_SLOT].move_rigidly(turn, from, position);
+    }
 }
 
 /// The slot the one view belongs to: [`Race::view`] is built around

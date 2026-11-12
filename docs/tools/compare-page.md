@@ -411,7 +411,7 @@ animated surfaces of a grab a few tenths of a second after the load. The metrics
 **What the pictures show (all 16 pairs read as half-scale contact sheets; Edgewinter, Orcus and Platinum Rush also at native 1280x720).** Circuit, grid slot, camera, GO board, HUD and its clock agree on all
 sixteen. Differences that are ours, for a lane that owns them: the original's GO board has not yet turned on at Talon's Junction
 (a flat green bar where ours draws `GO`, and on Vostok Reef too); the neon strips on Orcus were yellow in the original and
-magenta in ours, which was ours' clock and not a rendering defect (below); a pink streak beside the hull on Platinum Rush; ours draws no `pos 8/8` readout at the top right on any pair; a faint caption at the bottom left of the original on Talon's Junction,
+magenta in ours, which was ours' clock and not a rendering defect (below); a pink streak beside the hull on Platinum Rush (the ribbon `--pose-hold` left behind, below); ours draws no `pos 8/8` readout at the top right on any pair; a faint caption at the bottom left of the original on Talon's Junction,
 Platinum Rush and Vostok Reef that ours does not draw. The
 mean grey difference is 11 to 20, the edge correlation 0.05 to 0.13, near the stored pair's 13.1 and 0.11.
 
@@ -431,7 +431,13 @@ rmse 0.141 / 0.135 / 0.130 / 0.132 at 3.5 / 3.7 / 3.9 / 4.1 s; Gemini Dam White 
 race pairs (a re-render with the original's clock against ours' tick clock, rmse): better on Orcus (0.159 to 0.138), Metropia and Vostok Reef (each by 0.007), Talon's
 Junction and Tech de Ra (0.003), Amphiseum (0.002), Arc Prime, Basilico and de Konstruct (0.001); flat on Edgewinter and Outpost 7; worse by 0.001 to 0.004 on Vertica, Fort Gale and Gemini Dam, where
 a 0.2 s step in the offset moves the rmse by more than that (a tick-clock phase can land beside the original's by chance on a 1.7 s loop). The three menu pairs gain no flag (no grab bracket).
-Platinum Rush's pink streak beside the hull is not on this clock: its crop (`300x180+290+540`) is pixel-identical at offsets 0, 3, 7.43 and 12 s (mean 66,65,66), cause not identified, still open.
+Platinum Rush's pink streak beside the hull is not on this clock: its crop (`300x180+290+540`) is pixel-identical at offsets 0, 3, 7.43 and 12 s (mean 66,65,66).
+It was the engine ribbon, left behind by `--pose-hold`: the pair runs 1,617 ticks of the clock, the resting craft on the banked slot yaws about 18 degrees
+(bank-to-yaw, `docs/physics/grid-state.md`) and laid its trail along the turned hull, and the hold then put the hull back and left the ribbon where it was.
+Ours at tick 120 (before the turn) and the original both hang the ribbon straight back. `Race::place_player` now carries the ribbon rigidly with the hull
+(`Exhaust::move_rigidly`); the box `300x180+290+540` reads 66,66,66 before, 58,61,58 after, original 55,58,55, and the nozzle box `90x140+590+580` 70,70,75, 98,86,100, original 79,71,83
+(ours' nozzle glow is brighter than the PS2 original's, a separate difference). Test: `pose_hold_ground_truth::a_held_pose_takes_the_engine_ribbon_with_the_hull`.
+Pulse PSP's pair takes the same path (its craft turned 9 degrees over 1,646 ticks) and moves by 19 pixels below a 2 % difference.
 
 **Open.** The other 16 Track Select entries (the second layout of each circuit, Black or White) were not walked: a pair is one
 `--entry` away. The states and sidecars are in `data/saves/pulse-ps2/` (a sidecar records the circuit, the craft, the grid position
