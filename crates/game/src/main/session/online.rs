@@ -1034,6 +1034,19 @@ impl Session {
                 .map(|(track, name)| (track.entry_name().to_string(), name.clone()))
                 .collect()
         });
+        // The game list titles a circuit by the title's alias table where it has a row
+        // (`oag_game::boot::tiers2048::alias_title`); the room form keeps the picker's names.
+        let list_labels: Vec<(String, String)> = self.shell.as_ref().map_or_else(Vec::new, |shell| {
+            let aliases = shell.title.front_end.map_or(&[][..], |front_end| front_end.card_track_aliases);
+            shell
+                .tracks
+                .iter()
+                .map(|(track, name)| {
+                    let title = oag_game::boot::tiers2048::alias_title(aliases, &track.id, &shell.strings);
+                    (track.entry_name().to_string(), title.unwrap_or_else(|| name.clone()))
+                })
+                .collect()
+        });
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
             return;
         };
@@ -1058,7 +1071,7 @@ impl Session {
             match screen_rows {
                 Some(Rows::Rooms(rooms)) => {
                     oag_game::online_screen::fill_list(screen, &rooms, &shell.strings, &|entry| {
-                        track_labels
+                        list_labels
                             .iter()
                             .find(|(known, _)| known == entry)
                             .map(|(_, name)| name.clone())

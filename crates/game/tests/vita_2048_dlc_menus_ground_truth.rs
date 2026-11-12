@@ -705,6 +705,21 @@ fn an_hd_event_card_titles_its_circuit_by_the_alias_key_per_direction() {
         boot::tiers2048::card_title(&turned, "ignored", aliases, &campaigns.shell.strings),
         "VINETA K"
     );
+    // The game list asks the same table by circuit id, and leaves 2048's own ten
+    // to their picker names rather than answering for them.
+    let strings = &campaigns.shell.strings;
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Metropia_R", strings).as_deref(),
+        Some("METROPIA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "Tech_De_Ra", strings).as_deref(),
+        Some("TECH DE RA")
+    );
+    assert_eq!(
+        boot::tiers2048::alias_title(aliases, "square", strings),
+        None
+    );
     let mut keyed = 0;
     for (_, _, cell) in campaigns.cells() {
         let Some(id) = cell.track.as_deref() else {
