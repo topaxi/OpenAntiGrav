@@ -170,6 +170,7 @@ mod refraction;
 mod snow_rock;
 mod static_hologram;
 mod twin_blend;
+mod uv_overlay;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;

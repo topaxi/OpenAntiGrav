@@ -93,6 +93,12 @@ pub const PROGRAM_STATIC_HOLOGRAM: f32 = 7.0;
 /// and before the fog. See `super::rcs::psp2`'s `emissive_add`.
 pub const PROGRAM_EMISSIVE_ADD: f32 = 8.0;
 
+/// [`Emissive::program`]'s mode for HD's `uvdistortion_*plusoverlay*` banner: the entry and the
+/// one after it carry the program's values, and the overlay of the Ossego logo (third binding)
+/// on the distorted clouds (second binding) is added after the light. See
+/// `super::rcs::uv_overlay`.
+pub const PROGRAM_UV_OVERLAY: f32 = 13.0;
+
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;

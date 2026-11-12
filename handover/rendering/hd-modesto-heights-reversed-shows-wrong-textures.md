@@ -1,31 +1,33 @@
 ---
-status: ready-to-wire
-titles: [hd]
+status: measure
+titles: [hd, omega, 2048]
 updated: 2026-11-12
-summary: "Modesto Heights banner band (uvdistortion_diff_vertexcolplusoverlay) draws white; the original draws it dark with teal. Wire the family."
-size: S (30)
+summary: "Modesto banner wired (0.26 % over grey 200, original 0.1-0.3 %); open: units' gamma nibbles, Omega/2048 wiring, Amphiseum copy unseen."
+size: S (25)
 difficulty: medium (40)
 ---
 
-# HD Modesto Heights: the banner band is drawn white
+# HD Modesto Heights: the banner band
 
-Measured 2026-11-12 on a pair (ours against RPCS3 at the maintainer's spot, two boots), written up in
-`docs/formats/rcsmaterial.md`, "Two surfaces the maintainer saw wrong". Not reversed-only: forward `track.vex` carries the same
-family as slot 551, and the 8 chunk-less nodes and 21 unresolved materials are the same on both directions.
+Landed 2026-11-12 (`hd-modesto-banner`): `mesh::rcs::uv_overlay` binds the grille as the albedo and adds the logo overlay
+after the light. Evidence, read values, before and after numbers and the cross-title outcomes are on
+`docs/formats/rcsmaterial.md`, "Two surfaces the maintainer saw wrong" (Modesto part). Tests:
+`hd_uv_overlay_ground_truth`, `hd_uv_overlay_lit_path`.
 
 ## Open
 
-- Surface: reversed slot 550, `materials_reversed/uvdistortion_diff_vertexcolplusoverlay.rcsmaterial`, pictures
-  `and_ossego` (unit 2), `and_tunnelscreens_small` (unit 1), `and_line_rgb_clouds_alpha` (unit 0). Top band over grey 200:
-  original 0.1 to 0.3 %, ours 8.5 % (0.3 % with the slot skipped). Cause, confidence 70: ours binds the white Ossego logo as the
-  diffuse; the program (`fp` block `0x2ad0`) uses it only inside an overlay of a dark teal cloud term.
-- The unread values: unit 0's UV distortion (parameters `d0989794`, `c0594d0e`, `fe619466`, `96e30da5`, `2bdce348`) and
-  the overlay colour `961662ae`.
+- The gamma nibbles of the three units (clouds, grille, logo): decoded like every colour tap on this path, **chosen, not
+  measured**; reading them raw lifts the band's mean grey by about 2. A live `SET_TEXTURE_ADDRESS` read on this draw decides it
+  (RPCS3, `rpcs3-capture.md`).
+- The bloom copy's output alpha (`@0x26 MOV H0.w, H0`, the logo's alpha) is not wired.
+- Amphiseum's `...plusoverlay` (slots 355/445 forward, 357/447 reversed) binds the same way (same block law) and draws a cyan
+  screen without the Feisar logo the generic reading drew in the tower windows (`--pose=-524,46,-379`); compare with the original
+  there.
+- Omega (`data02.psarc`, GNM) and 2048 (`dlc2.psarc`, the `...bloom` copy, GXP): same inputs declared, programs unread, not wired.
 
 ## Next Steps
 
-1. Give the `uvdistortion_*` family (8 slots per direction on Modesto; Amphiseum carries `...plusoverlay` too) its own reading in `mesh::rcs::skin`: output =
-   `vertex colour x tunnelscreens.rgb x light + overlay(teal x clouds x screens.alpha, ossego)`.
-2. Re-render the pair at `--pose=729.72,58.95,-119.54` and compare the top-band boxes (target: original 0.1 to 0.3 % over
-   grey 200). Check the forward circuit's slot 551 and `uvdistortion_diff_vertexcol` slots (464, 467, 472, 486, 527, 539) do not move.
-3. Omega (`data02.psarc`, Modesto `uvdistortion_*`) and 2048 (`dlc2.psarc`, the `...bloom` variant) ship the family: checked, applies, not wired; render ours on each at the spot.
+1. Capture the original at Amphiseum's tower windows (`place --pose=-524,46,-379`) and compare with ours: do the Feisar logos
+   show?
+2. Read the three units' gamma nibbles live on Modesto reversed and replace the "chosen" decode in `shade.wesl`'s overlay block.
+3. Omega/2048: disassemble one `plusoverlay` program per title and wire it through the psp2 builder if the law matches.
