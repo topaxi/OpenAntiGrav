@@ -488,7 +488,13 @@ hash-images:
 play *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    args=("$@")
+    # `--interpreter` is ours, not the game's: it builds with `wasm-interpreter` (the
+    # simulation mods on wasmtime's Pulley interpreter instead of Cranelift).
+    interpreter=""
+    args=()
+    for arg in "$@"; do
+        if [ "$arg" = "--interpreter" ]; then interpreter=1; else args+=("$arg"); fi
+    done
     first="${args[0]:-}"
     case "$first" in
         ""|--*)
@@ -578,8 +584,10 @@ play *ARGS:
             ;;
     esac
     # Simulation mods run by default (`oag-game`'s default `extensions` feature,
-    # wasmtime); `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more.
+    # wasmtime); `OAG_NO_EXTENSIONS=1` builds without it. `OAG_PLAY_FEATURES` adds more;
+    # `--interpreter` adds `wasm-interpreter`, which turns `extensions` back on.
     features="${OAG_PLAY_FEATURES:-}"
+    [ -z "$interpreter" ] || features="${features:+$features,}wasm-interpreter"
     no_default=""
     [ -z "${OAG_NO_EXTENSIONS:-}" ] || no_default="--no-default-features"
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game $no_default {{native_video_flags}} ${features:+--features "$features"} -- "${args[@]}"

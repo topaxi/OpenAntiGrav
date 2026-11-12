@@ -148,6 +148,59 @@ fn a_craft_scraping_a_wall_is_slower_with_the_curse() {
     );
 }
 
+/// The state hash every 100 ticks of the cursed Time Trial, one `tick hash` line each.
+fn hash_lines(mut race: race::Race, ticks: usize) -> Vec<String> {
+    (1..=ticks)
+        .filter_map(|t| {
+            race.tick(&PlayerInputs::single(held(0.0)));
+            (t % 100 == 0).then(|| format!("{t} {:#018x}", race.sim.state_hash()))
+        })
+        .collect()
+}
+
+/// The same race on native Cranelift code and on the Pulley interpreter
+/// (`--features wasm-interpreter`) has the same state hash at every checkpoint. The two
+/// are different builds: set `OAG_ENGINE_HASHES` to a file path, run once per build; the
+/// first run writes the file, the second compares against it. Without the variable it
+/// only prints the hashes and names the engine.
+///
+/// ```sh
+/// OAG_ENGINE_HASHES=hashes.txt OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
+///     --features extensions --run-ignored only --no-capture \
+///     -E 'test(/wall_penalty_ground_truth::a_modded_race_hashes_the_same_on_either_engine/)'
+/// # then again with --features wasm-interpreter in place of extensions
+/// ```
+#[test]
+#[ignore = "needs a Pulse disc image, the mod examples and --features extensions"]
+fn a_modded_race_hashes_the_same_on_either_engine() {
+    let Some(source) = wall_penalty() else { return };
+    let Some(cursed) = race_with(vec![source]) else {
+        return;
+    };
+    assert!(cursed.is_modded(), "the module loaded");
+    let want = if cfg!(feature = "wasm-interpreter") {
+        "Pulley"
+    } else {
+        "Cranelift"
+    };
+    assert_eq!(oag_modhost::engine_name(), Some(want));
+    let lines = hash_lines(cursed, 900);
+    let plain = hash_lines(race_with(Vec::new()).unwrap(), 900);
+    assert_ne!(
+        lines.last(),
+        plain.last(),
+        "the curse moved the race, so the hash reads the module's work"
+    );
+    println!("engine {want}:\n{}", lines.join("\n"));
+    if let Ok(path) = std::env::var("OAG_ENGINE_HASHES") {
+        let text = lines.join("\n");
+        match std::fs::read_to_string(&path) {
+            Ok(other) => assert_eq!(other.trim_end(), text, "the other engine's hashes ({path})"),
+            Err(_) => std::fs::write(&path, text).expect("writing the hashes"),
+        }
+    }
+}
+
 /// Every craft's speed, km/h, every tick for `ticks` ticks, the player idle on the grid.
 fn field_speeds(mut race: race::Race, ticks: usize) -> Vec<[f32; oag_gameplay::MAX_SHIPS]> {
     (0..ticks)

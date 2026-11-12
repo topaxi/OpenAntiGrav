@@ -114,6 +114,9 @@ ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
 # Off, nothing of wasmtime is compiled or linked and a race offered a module says it
 # was left out. See `crate::extensions`.
 extensions = ["dep:oag-modhost"]
+# Simulation mods on wasmtime's Pulley interpreter instead of Cranelift's native code
+# (`oag-modhost`'s `pulley`). Implies `extensions`.
+wasm-interpreter = ["extensions", "oag-modhost/pulley"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["view", "oag-render/perf-probe"]
 

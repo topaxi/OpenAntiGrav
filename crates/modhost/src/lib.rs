@@ -17,9 +17,10 @@
 //! Wall time is not measured here (`docs/architecture/determinism.md`): the caller
 //! times the call if it wants to show it.
 
-// Cranelift only: the web build runs modules on the browser's own engine and iOS needs
-// Pulley (no JIT), neither built yet (README, section 5). `oag-game` builds both with
-// `--no-default-features`.
+// The web build runs modules on the browser's own engine and iOS needs Pulley without a
+// JIT, neither built yet (README, section 5). `oag-game` builds both with
+// `--no-default-features`. On desktop the `pulley` feature swaps native Cranelift code
+// for the interpreter, for measuring.
 #[cfg(any(target_arch = "wasm32", target_os = "ios"))]
 compile_error!(
     "oag-modhost runs modules on wasmtime's Cranelift, which the web and iOS builds cannot use; build oag-game with --no-default-features there"
@@ -67,6 +68,30 @@ fn engine() -> Result<&'static Engine, LoadError> {
     if let Some(engine) = ENGINE.get() {
         return Ok(engine);
     }
+    let built = build_engine(cfg!(feature = "pulley"))?;
+    let engine = ENGINE.get_or_init(|| {
+        ENGINES_CREATED.fetch_add(1, Ordering::SeqCst);
+        built
+    });
+    Ok(engine)
+}
+
+/// What runs the process's modules: `"Pulley"` (wasmtime's interpreter, the `pulley`
+/// feature) or `"Cranelift"` (native code); `None` until the first module is compiled.
+#[must_use]
+pub fn engine_name() -> Option<&'static str> {
+    ENGINE.get().map(|engine| {
+        if engine.is_pulley() {
+            "Pulley"
+        } else {
+            "Cranelift"
+        }
+    })
+}
+
+/// An engine with the pinned settings; `pulley` compiles to the interpreter's bytecode
+/// (`pulley64`) instead of the host's native code.
+fn build_engine(pulley: bool) -> Result<Engine, LoadError> {
     let mut pool = wasmtime::PoolingAllocationConfig::default();
     pool.total_memories(POOL_INSTANCES)
         .total_tables(POOL_INSTANCES)
@@ -83,13 +108,16 @@ fn engine() -> Result<&'static Engine, LoadError> {
         .wasm_relaxed_simd(false)
         .wasm_multi_memory(false)
         .wasm_memory64(false);
+    #[cfg(feature = "pulley")]
+    if pulley {
+        config
+            .target("pulley64")
+            .map_err(|e| LoadError::Engine(e.to_string()))?;
+    }
+    #[cfg(not(feature = "pulley"))]
+    let _ = pulley;
     // No `threads` cargo feature: a module declaring shared memory does not compile.
-    let built = Engine::new(&config).map_err(|e| LoadError::Engine(e.to_string()))?;
-    let engine = ENGINE.get_or_init(|| {
-        ENGINES_CREATED.fetch_add(1, Ordering::SeqCst);
-        built
-    });
-    Ok(engine)
+    Engine::new(&config).map_err(|e| LoadError::Engine(e.to_string()))
 }
 
 /// Why a module was left out of a race. Each says what to fix.
@@ -283,7 +311,10 @@ impl Module {
                 limits.state_bytes
             )));
         }
-        let engine = engine()?;
+        Self::compile_on(engine()?, wasm, limits)
+    }
+
+    fn compile_on(engine: &Engine, wasm: &[u8], limits: Limits) -> Result<Self, LoadError> {
         let module = wasmtime::Module::new(engine, wasm)
             .map_err(|e| LoadError::Compile(format!("{e:#}")))?;
         // The linker holds the `oag` namespace, which is empty in ABI 1: any import at

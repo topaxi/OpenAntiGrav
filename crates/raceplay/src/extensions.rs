@@ -471,6 +471,10 @@ pub fn prepare(
                     oag_modhost::Module::compile(&wasm, limits).map_err(|e| e.to_string())
                 }) {
                 Ok(module) => {
+                    log::debug!(
+                        "{label}: runs on the {} engine",
+                        oag_modhost::engine_name().unwrap_or("unbuilt")
+                    );
                     push(
                         report,
                         format!(
