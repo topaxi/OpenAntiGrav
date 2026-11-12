@@ -1,16 +1,20 @@
 //! A title's race cues played as the Wwise events its executable posts for
 //! them: [`oag_title::WwiseCues`], one row per cue of this port.
 //!
-//! Each posted cue loads twice, as `<cue>__<slot>` (every emitter but the
-//! player's) and `<cue>_PC__<slot>` (the player's), each through
-//! [`super::wwise_start`]: the player's event is often a relay to the other,
-//! but not always (Omega's `NGP_MissileFire_PC` plays its own sound first).
+//! Each posted cue loads as `<cue>__<slot>` (every emitter but the player's)
+//! and, where the bank authors it, `<cue>_PC__<slot>` (the player's), each
+//! through [`super::wwise_start`]: the player's event is often a relay to the
+//! other, but not always (Omega's `NGP_MissileFire_PC` sets states besides). A
+//! player event that is authored and does not load leaves the cue silent from
+//! the player's emitter rather than playing the other event in its place.
 //! `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`.
+
+use std::collections::BTreeSet;
 
 use log::{debug, trace};
 use oag_assets::source::Archives;
 use oag_core::Rng;
-use oag_formats::wwise::name_hash;
+use oag_formats::wwise::{Bank, Kind, name_hash};
 
 use super::banks::Banks;
 use super::{Cue, CueTables};
@@ -19,6 +23,22 @@ use super::{Cue, CueTables};
 struct SlotBlobs {
     slot: &'static str,
     blobs: Vec<(&'static str, Vec<u8>)>,
+    /// The id of every event the slot's entries define.
+    events: BTreeSet<u32>,
+}
+
+/// The id of every event `blob` defines; none when it is not a Wwise bank.
+fn event_ids(blob: &[u8]) -> BTreeSet<u32> {
+    Bank::parse(blob).map_or_else(
+        |_| BTreeSet::new(),
+        |bank| {
+            bank.objects()
+                .iter()
+                .filter(|o| o.kind == Kind::Event)
+                .map(|o| o.id)
+                .collect()
+        },
+    )
 }
 
 impl Banks {
@@ -33,9 +53,8 @@ impl Banks {
         let slots: Vec<SlotBlobs> = cues
             .banks
             .iter()
-            .map(|bank| SlotBlobs {
-                slot: bank.slot,
-                blobs: bank
+            .map(|bank| {
+                let blobs: Vec<(&'static str, Vec<u8>)> = bank
                     .entries
                     .iter()
                     .filter_map(|&entry| match archives.read_name(entry) {
@@ -45,7 +64,13 @@ impl Banks {
                             None
                         }
                     })
-                    .collect(),
+                    .collect();
+                let events = blobs.iter().flat_map(|(_, b)| event_ids(b)).collect();
+                SlotBlobs {
+                    slot: bank.slot,
+                    blobs,
+                    events,
+                }
             })
             .collect();
         let (mut played, mut player) = (0, 0);
@@ -71,8 +96,15 @@ impl Banks {
             if self.load_posted(cue, &format!("{posted}__{slot}"), blobs, false) {
                 played += 1;
             }
-            if self.load_posted(cue, &format!("{posted}_PC__{slot}"), blobs, true) {
-                player += 1;
+            // The player's version where the bank authors one; where it does
+            // not, the player hears what everyone does.
+            let mine = format!("{posted}_PC__{slot}");
+            if blobs.events.contains(&name_hash(&mine)) {
+                if self.load_posted(cue, &mine, blobs, true) {
+                    player += 1;
+                } else {
+                    self.player_silent.insert(cue);
+                }
             }
         }
         let line = format!(

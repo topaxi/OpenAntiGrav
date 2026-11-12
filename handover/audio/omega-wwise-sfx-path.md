@@ -79,8 +79,9 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
 - **Held loops (12 cues)**: Omega's `_` cues are kept handles; `wwise_start` reads no loop flags. Read the
   sound's loop property, then wire them through the held-voice paths (`travel`, `magstrip`, shield).
 - **`QUAKELAUNCH`'s media `405228712`** fails `oag_music`'s ATRAC9 decode at frame 0 ("invalid reuse band params").
-- **`NGP_LEACH__Weapons_NGP` and `NGP_LEACHENERGY_PC__Weapons_NGP` start no sound** in the shipped banks
-  (dangling targets, above); the player hears the non-player LeachEnergy event.
+- **`NGP_LEACH__Weapons_NGP` and `NGP_LEACHENERGY_PC__Weapons_NGP` start no sound this loader reads**
+  (a relay into another bank, a dangling target or state actions alone: unread). The player's LeachEnergy
+  is silent rather than the non-player event.
 - **Unread choices**: `.COLLISIONS` (`_COLLISIONS_1`/`_COLLSHIELD`/`_GRIND*`, `FUN_0130b100`), the missile's
   ship hit (no `MISSILEEXPSHIP` post), the speed pad's per-team `Pad_<team>` layer on `Ship_NGP`.
 - **2048** shares the cue strings (7 of 8 probed in its executable) but plays `SBlk`; not wired.

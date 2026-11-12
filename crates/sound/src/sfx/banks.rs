@@ -5,7 +5,7 @@
 //! at load time from per-title data, so it cannot go through [`load_cue`].
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use log::warn;
@@ -76,6 +76,9 @@ pub struct Banks {
     /// `<cue>_PC__<bank>`), played in place of [`Self::timelines`]'s from the
     /// player's emitter. See [`Self::load_wwise_cues`].
     pub(super) player_timelines: BTreeMap<Cue, Vec<Timeline>>,
+    /// Cues whose player version the title authors and this port cannot play:
+    /// silent from the player's emitter, never the non-player event in its place.
+    pub(super) player_silent: BTreeSet<Cue>,
 }
 
 /// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
@@ -568,9 +571,13 @@ impl Banks {
     }
 
     /// [`Self::voices`], from the player's emitter when `player`: the cue's
-    /// player version where the title authors one, else the same as anyone's.
+    /// player version where the title authors one, nothing where that version
+    /// is authored but did not load, else the same as anyone's.
     #[must_use]
     pub fn voices_for(&self, cue: Cue, player: bool, rng: &mut Rng) -> Option<Vec<CueVoice>> {
+        if player && self.player_silent.contains(&cue) {
+            return None;
+        }
         if player && let Some(variants) = self.player_timelines.get(&cue) {
             let index = self.draw(cue, variants.len(), rng);
             return Some(variants[index].voices(rng));

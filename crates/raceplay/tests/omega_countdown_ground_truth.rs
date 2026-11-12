@@ -224,7 +224,8 @@ const POSTED: [oag_gameplay::cue::Cue; 26] = {
     ]
 };
 
-/// The posted cues whose event loads for every emitter: 10 of the 26. The rest reach a switch
+/// The posted cues whose event loads for every emitter: 10 of the 26, each with the player's own
+/// event or the same one but `LeachEnergy`, whose player event is authored and loads nothing. The rest reach a switch
 /// container (its group value is the game's, refused at play), media the ATRAC9 decoder rejects
 /// (`QUAKELAUNCH`), or no sound in the shipped banks (`NGP_LEACH`, whose player event does load).
 const WIRED: [oag_gameplay::cue::Cue; 10] = {
@@ -275,7 +276,7 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
     let silent: Vec<Cue> = WIRED
         .iter()
         .copied()
-        .filter(|&cue| !plays(cue, false) || !plays(cue, true))
+        .filter(|&cue| !plays(cue, false) || (cue != Cue::LeachEnergy && !plays(cue, true)))
         .collect();
     assert!(
         silent.is_empty(),
@@ -286,6 +287,19 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
     assert!(
         !plays(Cue::Leach, false) && plays(Cue::Leach, true),
         "NGP_LEACH plays for the player alone: {report:#?}"
+    );
+    // `NGP_LEACHENERGY_PC__Weapons_NGP` is authored and loads nothing: the player hears nothing,
+    // not the non-player event in its place.
+    assert!(
+        !plays(Cue::LeachEnergy, true),
+        "the player's LeachEnergy is silent: {report:#?}"
+    );
+    assert!(
+        report.iter().any(
+            |l| l.starts_with("sfx: NGP_LEACHENERGY_PC__Weapons_NGP not loaded: ")
+                && l.contains("starts no sound that plays")
+        ),
+        "{report:#?}"
     );
     for held in [Cue::RocketTravel, Cue::Shield, Cue::Magstrip] {
         assert!(

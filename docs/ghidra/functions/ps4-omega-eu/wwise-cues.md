@@ -11,8 +11,8 @@ are [wwise-sound.md](wwise-sound.md); this page is the per-cue table that page l
 **The headline: 26 of this port's 43 race cues (`oag_gameplay::cue::Cue::ALL`) have a cue string the
 executable posts; 10 of them load and play for every emitter today, plus `NGP_LEACH` for the player
 alone.** The other 16 posted cues stop at a switch container (14), an ATRAC9 frame the decoder rejects
-(1, `QUAKELAUNCH`) or an event whose sounds are not in the shipped banks (1, `NGP_LEACH` for non-player
-emitters). The 17 cues with no post are 12 held loops, 4 legacy events the executable never posts, and
+(1, `QUAKELAUNCH`) or an event that starts no sound this loader reads (1, `NGP_LEACH` for non-player
+emitters; why is unread). The 17 cues with no post are 12 held loops, 4 legacy events the executable never posts, and
 the collision cue, whose choice is unread.
 
 ## How a cue string was read (confidence 80 for the method)
@@ -67,9 +67,9 @@ The event is `<cue>__<slot>` from a non-player emitter and `<cue>_PC__<slot>` fr
 | `Missile` | `NGP_MissileFire` | `Weapons_NGP` | `0x0137d01a`, `FUN_0137c0c0` (wwise-sound.md) | 85 | yes (5) |
 | `CannonHitShip` | `CANNONEXPLSHIP` | `Weapons_NGP` | `0x01358c74`, `FUN_01356b20` (`CannonManager`) | 75 | yes (1; player 2) |
 | `LeachFail` | `NGP_LEACHFAIL` | `Weapons_NGP` | `0x0136a1c2`, `FUN_0136a0a0` | 75 | yes (4; player 3) |
-| `LeachEnergy` | `NGP_LEACHENERGY` | `Weapons_NGP` | `0x0136b2df`, `FUN_0136a490` | 65 | yes (1); the player's `_PC` event starts no sound and the player hears the non-player event |
+| `LeachEnergy` | `NGP_LEACHENERGY` | `Weapons_NGP` | `0x0136b2df`, `FUN_0136a490` | 65 | yes (1) for non-player emitters; the player's `_PC` event is authored and starts no sound this loader reads, so the player hears nothing |
 | `Repulsor` | `REPULSOR` | `Weapons_NGP` | `0x0139597b`, `FUN_013952c0` (with `_REPULSORTRAVEL`) | 75 | yes (8) |
-| `Leach` | `NGP_LEACH` | `Weapons_NGP` | `0x01369bfe`, `FUN_01369a70` (with `_NGP_LEACHATTACH`) | 75 | player only: `NGP_LEACH__Weapons_NGP` starts no sound in the shipped banks |
+| `Leach` | `NGP_LEACH` | `Weapons_NGP` | `0x01369bfe`, `FUN_01369a70` (with `_NGP_LEACHATTACH`) | 75 | player only: `NGP_LEACH__Weapons_NGP` starts no sound this loader reads (why is unread) |
 | `SpeedupPad` | `Pad_General` | `Weapons_NGP` | `0x0173bae4`, `FUN_0173b210` | 70 | no: switch container |
 | `Turbo` | `NGP_Turbo` | `Weapons_NGP` | `0x0173c679` `FUN_0173be50`; `0x012b03b9` `FUN_012afea0` | 70 | no: switch container |
 | `ShieldActive` | `shieldactive` | `Speech_NGP` | `0x0133e335`, `FUN_0133e2a0` (with `_SHIELD`) | 70 | no: switch container |
@@ -99,7 +99,10 @@ Notes on single rows:
   slot 0, `Ship_NGP`. Only the first is in the table; the team layer needs the emitter's team.
 * **`Message` and `LeachEnergy` (65).** No slot global is read within 250 instructions of the store; the
   event exists only in `Weapons_NGP`'s listing, which is why the slot is that one.
-* **The player's version.** Of the 11 loaded, 10 also load a `_PC` event (`Leach` loads only that).
+* **The player's version.** The loader loads `<cue>_PC__<slot>` where the bank defines that event (an
+  `Event` object of that hash in the slot's entries); where none is authored (the three speech cues) the
+  player hears the non-player event, and where it is authored and does not load (`LeachEnergy`) the
+  player hears nothing rather than a substitute. 10 cues load a player event (`Leach` only that).
   `NGP_MissileFire_PC__Weapons_NGP` is its own event: three `SetState` (`0x1204`) actions beside its relay,
   where the non-player event is a bare relay (wwise-sound.md, "One weapon sound").
 
@@ -121,6 +124,9 @@ Notes on single rows:
 * **Positioning:** every loaded cue plays through the existing craft placement (pan and distance from the
   emitter), not the event's own 3D parameters, which are unread ([audio-3d.md](audio-3d.md)).
 * **Action kinds** `0x1204` (`SetState`) and `0x0103` are reported, not played.
+* **"Starts no sound this loader reads"** (`NGP_LEACH`, `NGP_LEACHENERGY_PC`): the event's actions reach
+  no sound `wwise_start` plays: a relay into another bank, a dangling target or state and stop actions
+  alone; which, is unread.
 * **`QUAKELAUNCH`'s media** fails in `oag_music`'s ATRAC9 decoder at frame 0.
 
 ## Cross-title
