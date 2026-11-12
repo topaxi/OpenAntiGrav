@@ -1,6 +1,6 @@
 //! Whether the sun's `N.L` reaches the diffuse light unclamped.
 
-use super::{Instruction, Program, Source};
+use super::{Instruction, PRECISION_SATURATE, Program, Source};
 use crate::rcsmaterial::SUN_DIRECTION;
 
 impl Program {
@@ -8,7 +8,8 @@ impl Program {
     /// `directionalLight0DirectionWorldSpace` constant with no `_SAT`, whose result a later
     /// unsaturated `MUL`, `MAD` or `ADD` reads (the diffuse sun term, `sun * (lm.a * N.L)`).
     ///
-    /// A reader that saturates does not count: every lit program also reads the same `DP3` through
+    /// A reader that saturates its result or the source it reads the dot through (the `SRC1`
+    /// precision modifier, `PRECISION_SATURATE`) does not count: every lit program also reads the same `DP3` through
     /// `MOV_SAT x8` for the specular's facing term, and a program that saturates its diffuse term
     /// dots again with `DP3_SAT`. Walks the result's lanes through the program in order and stops
     /// where a later instruction overwrites all of them.
@@ -35,6 +36,7 @@ impl Program {
             let reads = later.operands().enumerate().any(|(k, source)| {
                 matches!(source, Source::Register { index, half } if (index, half) == reg)
                     && read_lanes(later, k) & dot.mask != 0
+                    && later.source_precision[k] != PRECISION_SATURATE
             });
             if reads && !later.saturate && matches!(later.name(), Some("MUL" | "MAD" | "ADD")) {
                 return true;
