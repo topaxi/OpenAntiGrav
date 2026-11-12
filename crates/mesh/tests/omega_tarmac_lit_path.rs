@@ -182,6 +182,15 @@ fn dirt_then_markings_are_laid_over_the_diffuse_by_their_own_alpha() {
         markings_second[1] > 24 && markings_second[0] < 8,
         "markings read the second texel at texcoord2.x = 0.75: {markings_second:?}"
     );
+    // The fourth binding is the road's `EmissiveTexture`, added after the light.
+    let mut glowing = model(PROGRAM_TARMAC, &[clear], &[clear], 0.5, 0.5);
+    glowing.wave_maps = vec![texture("emissive", &[blue])];
+    glowing.emissive[0].tint = [1.0, 0.0, 0.0];
+    let glow = at(&glowing);
+    assert!(
+        glow[2] > asphalt[2] + 24 && glow[0] <= asphalt[0] + 2,
+        "the emissive picture is added: {glow:?} against {asphalt:?}"
+    );
     // Without the mode the entry is inert: neither picture is read, whatever they hold.
     let plain = at(&model(0.0, &[blue], &[red], 0.5, 0.5));
     assert_eq!(

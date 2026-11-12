@@ -1147,9 +1147,13 @@ fn bind_textures(
                 debug_assert_eq!(model.sixth_maps.len(), at);
                 model.sixth_maps.push(layers.map(|l| l.dirt.clone()));
             }
-            if twin.any() {
+            if twin.any() || tarmac.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);
-                model.wave_maps.push(twin_here.and_then(|t| t.bars.clone()));
+                model.wave_maps.push(
+                    twin_here
+                        .and_then(|t| t.bars.clone())
+                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone())),
+                );
             }
             if glow.has_layers()
                 || twin.any()

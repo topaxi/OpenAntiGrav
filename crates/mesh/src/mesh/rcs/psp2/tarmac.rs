@@ -18,8 +18,9 @@
 //!
 //! Admitted per material by name and by both samplers carrying a path that decodes; a material
 //! one of whose submeshes lacks either pair is counted and left to the generic reading. The
-//! `tarmac_dirt` families and the emissive layer (`EmissiveTexture`, added after the light) are
-//! not drawn here: their combines were read by sample order only.
+//! `tarmac_dirt` families are not drawn here: their combines were read by sample order only. The
+//! `_emis` member's `EmissiveTexture` rides the fourth binding and is added after the light at
+//! the diffuse pair.
 
 use std::sync::Arc;
 
@@ -33,12 +34,17 @@ use crate::mesh::{Emissive, ModelTexture, PROGRAM_TARMAC, slots};
 const MARKINGS: u32 = 0x4a5b_d928;
 /// The `Dirt` sampler's hash: `~crc32("Dirt")`.
 const DIRT: u32 = 0xc7aa_b177;
+/// The `EmissiveTexture` sampler's hash: `~crc32("EmissiveTexture")`.
+const EMISSIVE: u32 = 0xb1f2_a176;
 
 /// One admitted material: its glow-table slot (entry index plus one) and its two pictures.
 pub(super) struct Layers {
     pub slot: u32,
     pub markings: Arc<ModelTexture>,
     pub dirt: Arc<ModelTexture>,
+    /// `EmissiveTexture`, added after the light at the diffuse coordinate; `None` on the
+    /// family without one.
+    pub emissive: Option<Arc<ModelTexture>>,
 }
 
 /// Per material, the layers it binds.
@@ -106,7 +112,7 @@ pub(super) fn plan(
             report.tarmac_unread += 1;
             continue;
         }
-        let [markings, dirt] = paths.map(|path| {
+        let mut picture = |path: &str| {
             cache
                 .entry(path.to_string())
                 .or_insert_with(|| {
@@ -115,13 +121,17 @@ pub(super) fn plan(
                         .map(Arc::new)
                 })
                 .clone()
-        });
+        };
+        let [markings, dirt] = paths.map(&mut picture);
+        let emissive_path = material.sampler(EMISSIVE).filter(|p| !p.is_empty());
+        let emissive_picture = emissive_path.map(&mut picture);
         let (Some(markings), Some(dirt)) = (markings, dirt) else {
             report.tarmac_unread += 1;
             continue;
         };
+        let has_emissive = matches!(emissive_picture, Some(Some(_)));
         let entry = Emissive {
-            tint: [0.0; 3],
+            tint: [if has_emissive { 1.0 } else { 0.0 }, 0.0, 0.0],
             offset: 0.0,
             scale: 0.0,
             rate: 0.0,
@@ -141,6 +151,7 @@ pub(super) fn plan(
             slot,
             markings,
             dirt,
+            emissive: emissive_picture.flatten(),
         });
         report.tarmac_materials += 1;
     }
@@ -156,6 +167,7 @@ mod tests {
     fn the_sampler_constants_are_the_hashes_of_their_names() {
         assert_eq!(MARKINGS, name_hash("Markings"));
         assert_eq!(DIRT, name_hash("Dirt"));
+        assert_eq!(EMISSIVE, name_hash("EmissiveTexture"));
     }
 
     #[test]

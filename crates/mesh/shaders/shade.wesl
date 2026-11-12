@@ -846,6 +846,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // fog, so it is neither lit nor shadowed (mode 9, the plain `*_emmissive`: `Texture2.a * Constant1`, unsquared). The picture is the third binding, the tint the
     // entry's. `decode` is the square on 2048.
     var emissive_add = vec3<f32>(0.0);
+    // **The tarmac roads' `EmissiveTexture`** (mode 14): the fourth binding's rgb at the diffuse
+    // coordinate, weighted by the entry's tint `x` (1 when the material has one, else 0), added
+    // after the light like the mode 8 term, as the pixel programs add it
+    // (`out = emissive + ambient * c`).
+    if tarmac {
+        emissive_add = decode(material_sample(MATERIAL_WAVE_MAP, in.texcoord).rgb) * glow_tint_offset.x;
+    }
     if glow_program > 7.5 && glow_program < 9.5 {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
