@@ -409,6 +409,8 @@ pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
     window: [535.0, 389.0],
     step: 0.1,
     start: 13.0,
+    depth_ease: 0.125,
+    slide_ease: 0.0625,
     floor: 11.0,
     zone_box: [-4.2, 4.2],
 };
@@ -446,6 +448,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_hull: Some("ship.vex"),
     ship_preview_pose: None,
     ship_preview_fit: Some(SHIP_FIT),
+    ship_preview_settle: None,
     circuit_models: &CIRCUIT_MODELS,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence

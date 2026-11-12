@@ -507,8 +507,13 @@ pub(crate) fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
 
 /// The selected livery's own ratings, where the entry carries them.
 fn selected_stats(picker: &Picker) -> Option<Stats> {
-    match picker.selected().map(|entry| &entry.details) {
-        Some(Details::Ship { stats, .. }) => {
+    stats_of(picker, picker.selected()?)
+}
+
+/// `entry`'s ratings for the livery the picker has chosen, where it carries them.
+fn stats_of(picker: &Picker, entry: &super::Entry) -> Option<Stats> {
+    match &entry.details {
+        Details::Ship { stats, .. } => {
             let variant = picker
                 .variant()
                 .and_then(|chosen| picker.variants().iter().position(|v| v == chosen))
@@ -523,9 +528,18 @@ fn selected_stats(picker: &Picker) -> Option<Stats> {
 /// fit `oag_game::preview::ship_model` frames the craft with.
 #[must_use]
 pub fn selected_length(picker: &Picker) -> Option<f32> {
-    selected_stats(picker)?
-        .length_milli
-        .map(|milli| f32::from(milli) / 1000.0)
+    length_milli(selected_stats(picker)?)
+}
+
+/// The `<FE length>` entry `index` would have under the livery now chosen: the
+/// model the screen was on before a step to it.
+#[must_use]
+pub fn entry_length(picker: &Picker, index: usize) -> Option<f32> {
+    length_milli(stats_of(picker, picker.entries().get(index)?)?)
+}
+
+fn length_milli(stats: Stats) -> Option<f32> {
+    stats.length_milli.map(|milli| f32::from(milli) / 1000.0)
 }
 
 /// The ratings of the team's classic hull - the livery row's empty id, which

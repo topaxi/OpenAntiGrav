@@ -1021,6 +1021,60 @@ pub(super) fn picker_page(
         }
         _ => None,
     };
+    // The live screen's rule, `PickerStage::draw_preview`.
+    let (ship_fit, ship_scale) = title
+        .front_end
+        .and_then(|front_end| {
+            let frames_craft = front_end.ship_preview_fit.is_some();
+            front_end
+                .ship_preview_fit
+                .or(front_end.ship_preview_settle)
+                .map(|fit| (fit, frames_craft))
+        })
+        .filter(|_| kind == Kind::Ship)
+        .and_then(|(fit, frames_craft)| {
+            let box_of = |index: usize, length: Option<f32>| {
+                let zone_hull = teams.get(index).is_some_and(|team| {
+                    crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
+                });
+                crate::preview::ship_model::box_z(&fit, zone_hull, length)
+            };
+            let aspect = skin.space().display_aspect;
+            let now = box_of(
+                picker.index(),
+                oag_ui_screens::picker::hd::selected_length(&picker),
+            )?;
+            let frames = step_seconds
+                .filter(|since| *since < seconds.unwrap_or(SETTLED_SECONDS))
+                .map(|since| (since / crate::preview::ship_model::FRAME_SECONDS).round());
+            let framing = match frames {
+                // The model before a step, which a right press arrives from: the
+                // entry above, wrapping. Which neighbour is chosen; the film's
+                // team order is not read.
+                Some(frames) => {
+                    let before =
+                        (picker.index() + picker.entries().len() - 1) % picker.entries().len();
+                    let from = box_of(
+                        before,
+                        oag_ui_screens::picker::hd::entry_length(&picker, before),
+                    )
+                    .unwrap_or(now);
+                    crate::preview::ship_model::FitMotion::stepped(
+                        &fit,
+                        aspect,
+                        from,
+                        now,
+                        frames as usize,
+                    )
+                    .framing()
+                }
+                None => crate::preview::ship_model::rest(&fit, aspect, now),
+            };
+            let (framing, scale) =
+                crate::preview::ship_model::placement(frames_craft, &fit, aspect, now, framing);
+            Some((framing.map(|framing| (fit, framing)), scale))
+        })
+        .unwrap_or((None, 1.0));
     let request = previews
         .get(picker.index())
         .and_then(Option::as_ref)
@@ -1042,18 +1096,8 @@ pub(super) fn picker_page(
             hull_only: crate::preview::draws_hull(title, kind),
             ship_model: layout.hd.as_ref().and_then(|screen| screen.ship_model),
             // The live screen's rule, `PickerStage::draw_preview`.
-            ship_fit: title
-                .front_end
-                .and_then(|front_end| front_end.ship_preview_fit)
-                .filter(|_| kind == Kind::Ship)
-                .and_then(|fit| {
-                    let zone_hull = teams.get(picker.index()).is_some_and(|team| {
-                        crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
-                    });
-                    let length = oag_ui_screens::picker::hd::selected_length(&picker);
-                    crate::preview::ship_model::box_z(&fit, zone_hull, length)
-                        .map(|box_z| (fit, box_z))
-                }),
+            ship_fit,
+            ship_scale,
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {

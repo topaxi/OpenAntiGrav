@@ -354,13 +354,10 @@ fn silhouette(
 ) -> [f32; 4] {
     let model =
         oag_game::preview::model(archives, entry).unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-    let (view_projection, placed) = oag_game::preview::ship_model::framed(
-        widget,
-        Some((fit, box_z)),
-        oag_display::space::Space::HD,
-        1.0,
-        safe_area,
-    );
+    let space = oag_display::space::Space::HD;
+    let framing = oag_game::preview::ship_model::rest(fit, space.display_aspect, box_z);
+    let (view_projection, placed) =
+        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, 1.0, safe_area);
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
@@ -380,4 +377,219 @@ fn silhouette(
         down[skip],
         down[down.len() - 1 - skip],
     ]
+}
+
+/// A still of `team`'s Ship Select `step_seconds` after a step, as RGBA.
+fn ship_select_still(
+    image: &std::path::Path,
+    team: &str,
+    step_seconds: &str,
+) -> oag_texture::replacer::Image {
+    let dir = std::env::temp_dir().join(format!(
+        "oag-hd-ship-swap-ground-truth-{}-{team}",
+        image
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+    ));
+    std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
+    std::fs::write(
+        dir.join("config/oag/settings.toml"),
+        format!("[race]\nteam = \"{team}\"\n"),
+    )
+    .expect("a settings file");
+    let out = dir.join(format!("{step_seconds}.png"));
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "ship-select",
+        ])
+        .args([
+            "--menu-picker-seconds",
+            "5",
+            "--menu-picker-step-seconds",
+            step_seconds,
+        ])
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page ship-select");
+    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+}
+
+/// Where the hull's left and right edges are, pixels: the 2nd and 98th percentile of x of what `still` draws beyond
+/// `empty` (the same page while the craft is cut, the gap after a step) inside `SHIP MODEL`'s
+/// frame, `[left, top, right, bottom]` in the still's own pixels. A percentile, not an edge, so
+/// the backdrop's embers drifting between two frames do not widen it.
+fn hull_edges(
+    still: &oag_texture::replacer::Image,
+    empty: &oag_texture::replacer::Image,
+    frame: [u32; 4],
+) -> [u32; 2] {
+    let mut across = Vec::new();
+    for y in frame[1]..frame[3] {
+        for x in frame[0]..frame[2] {
+            let at = ((y * still.width + x) * 4) as usize;
+            if (0..3).any(|c| still.rgba[at + c].abs_diff(empty.rgba[at + c]) > 40) {
+                across.push(x);
+            }
+        }
+    }
+    assert!(across.len() > 1000, "no hull in the frame");
+    across.sort_unstable();
+    [
+        across[across.len() * 2 / 100],
+        across[across.len() * 98 / 100],
+    ]
+}
+
+/// How wide the hull is: [`hull_edges`]' span.
+fn hull_width(
+    still: &oag_texture::replacer::Image,
+    empty: &oag_texture::replacer::Image,
+    frame: [u32; 4],
+) -> u32 {
+    let [left, right] = hull_edges(still, empty, frame);
+    right - left
+}
+
+/// The live screen's swap through the real binary: the first frames after a step draw the new
+/// hull at the last model's depth, so it is larger than at rest when the last model rested
+/// nearer and smaller when it rested farther, and it has settled within a second and a half.
+/// The roster steps from EGX (`<FE length>` 3.8) to Assegai (4.4), and from Qirex (4.5) to
+/// Piranha (3.9). A fixed start scale cannot be both.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn a_step_starts_the_hull_at_the_last_models_depth_and_settles() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    for (team, larger) in [("Assegai", true), ("Piranha", false)] {
+        let empty = ship_select_still(&image, team, "0.03");
+        let width = |step: &str| {
+            f64::from(hull_width(
+                &ship_select_still(&image, team, step),
+                &empty,
+                [740, 200, 1660, 740],
+            ))
+        };
+        let (first, settled) = (width("0.07"), width("3"));
+        let late = width("1.5") / settled;
+        let early = first / settled;
+        eprintln!(
+            "{team}: {first} px first frame, {settled} settled, ratio {early:.3}, 1.5 s {late:.3}"
+        );
+        assert_eq!(
+            early > 1.0,
+            larger,
+            "{team}: {first} px against {settled} settled"
+        );
+        assert!(
+            (early - 1.0).abs() > 0.02,
+            "{team}: {first} px against {settled} settled"
+        );
+        assert!(
+            (late - 1.0).abs() < 0.01,
+            "{team}: {late:.3} a second and a half on"
+        );
+    }
+}
+
+/// The live screen through `--drive`, the real session ticking the picker, a press of the pad
+/// and frames read back: after a step right (Assegai to Mirage on a fresh profile) the settled
+/// hull is the width the capture draws for Mirage at rest. A screen that does not tick the fit
+/// draws the hull on the widget's own pose, a different size.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("hd-ship-swap-live");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("mods")).expect("a scratch directory");
+    let shot = |name: &str| dir.join(format!("{name}.png"));
+    let script = format!(
+        "boot; select racebox; press cross; until page=race; select launch_race; \
+         press cross; until screen=picker; press cross; until screen.id=ship-select; \
+         until opening_reads=landed; ticks 120; press right; ticks 1; screenshot {gap}; \
+         ticks 240; screenshot {settled}; quit",
+        gap = shot("gap").display(),
+        settled = shot("settled").display(),
+    );
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args(["--no-audio", "--no-intro", "--drive", &script])
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("OAG_MODS", dir.join("mods"))
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY")
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --drive");
+    let read = |name: &str| {
+        oag_texture::replacer::decode_png(&std::fs::read(shot(name)).expect("a screenshot"))
+            .expect("a PNG")
+    };
+    let (empty, settled) = (read("gap"), read("settled"));
+    // `SHIP MODEL`'s frame, 740..1660 by 200..740 of the 1920 by 1080 grid, in this picture.
+    let scale = empty.width as f32 / 1920.0;
+    let frame = [740.0, 200.0, 1660.0, 740.0].map(|edge| (edge * scale) as u32);
+    let live = hull_edges(&settled, &empty, frame).map(|x| f64::from(x) / f64::from(empty.width));
+    let capture_empty = ship_select_still(&image, "Mirage", "0.03");
+    let capture = ship_select_still(&image, "Mirage", "3");
+    let at_rest = hull_edges(&capture, &capture_empty, [740, 200, 1660, 740])
+        .map(|x| f64::from(x) / f64::from(capture.width));
+    eprintln!("live edges {live:.4?} of the width, capture at rest {at_rest:.4?}");
+    // The left edge is the hull's own; the right edge picks up the backdrop's embers, which
+    // are not the same two frames. The widget's own pose puts them 0.017 and 0.078 off.
+    assert!(
+        (live[0] - at_rest[0]).abs() < 0.01,
+        "{live:.4?} against {at_rest:.4?}"
+    );
+    assert!(
+        (live[1] - at_rest[1]).abs() < 0.04,
+        "{live:.4?} against {at_rest:.4?}"
+    );
+}
+
+/// Omega's craft is posed on a borrowed pose with no fit, and a step plays HD's depth law on it
+/// as a scale: the first frames after a step are off rest size and settled by 1.5 s, which a
+/// title with no settle (the craft cutting in at rest) does not do. Piranha arrives from Qirex
+/// (4.5) in HD's order, farther than its 3.9, so it starts smaller; Omega's own order puts the
+/// first frame 7 % off.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and a GPU adapter"]
+fn omega_plays_the_settle_on_its_borrowed_pose() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let team = "Piranha";
+    let empty = ship_select_still(&source, team, "0.03");
+    let width = |step: &str| {
+        f64::from(hull_width(
+            &ship_select_still(&source, team, step),
+            &empty,
+            [740, 200, 1660, 740],
+        ))
+    };
+    let (first, settled, late) = (width("0.07"), width("3"), width("1.5"));
+    eprintln!("omega {team}: {first} px first frame, {settled} settled, 1.5 s {late}");
+    assert!(
+        (first / settled - 1.0).abs() > 0.02,
+        "{team}: {first} against {settled}"
+    );
+    assert!(
+        (late / settled - 1.0).abs() < 0.01,
+        "{team}: {late} against {settled}"
+    );
 }

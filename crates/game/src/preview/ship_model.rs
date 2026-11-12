@@ -33,8 +33,8 @@ pub const FAR: f32 = 1000.0;
 pub const NEAR: f32 = 1.0;
 
 /// The view-projection and model matrices of the craft on the widget's own
-/// origin and depth, `scale` times its rest size (the swap's settle,
-/// [`super::hull_swap`]), for a title with no [`ShipFit`].
+/// origin and depth, for a title with no [`ShipFit`], `scale` times its rest size
+/// ([`settle_scale`]).
 #[must_use]
 pub fn matrices(widget: &ShipModel, space: Space, scale: f32) -> (Mat4, Mat4) {
     let projection = camera::perspective(FOV_Y, space.display_aspect, NEAR, FAR);
@@ -148,6 +148,134 @@ pub fn rest(fit: &ShipFit, aspect: f32, box_z: [f32; 2]) -> Framing {
     }
 }
 
+/// The seconds of one frame of the screen's update: the original counts frames
+/// at sixty a second.
+pub const FRAME_SECONDS: f32 = 1.0 / 60.0;
+
+/// Frames that bring the fit to rest from its opening state for any model on the
+/// disc: the target walks 2 units at most (a hundred frames at most), and the
+/// ease then leaves under a millionth of it.
+const SETTLED_FRAMES: usize = 600;
+
+/// The fit's state across frames: the depth and slide it is moving to and the
+/// ones it draws, which follow them.
+///
+/// The original keeps this on the screen and updates it once a frame, whether
+/// or not the craft is drawn, and a step to another model resets none of it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "What the
+/// update writes over the widget"). A model that rests at another depth is
+/// therefore drawn from the last one's depth, while the target walks to its own
+/// at one step a frame and the drawn depth follows it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FitMotion {
+    target: f32,
+    depth: f32,
+    slide_target: [f32; 2],
+    slide: [f32; 2],
+}
+
+impl FitMotion {
+    /// The screen as it opens: the target at the fit's start. The drawn depth
+    /// is unread, and is placed on the target; the craft is absent for the
+    /// first 0.9 s (`hull_swap::ENTRY_SECONDS`), which is 54 frames of the ease.
+    #[must_use]
+    pub fn open(fit: &ShipFit) -> Self {
+        Self {
+            target: fit.start,
+            depth: fit.start,
+            slide_target: [0.0; 2],
+            slide: [0.0; 2],
+        }
+    }
+
+    /// One frame of the screen's update for a selected model whose box is
+    /// `box_z`: the fit measures the box at the target and steps it, and the
+    /// drawn depth and slide ease toward the new targets.
+    ///
+    /// The order inside a frame (fit, then ease) is chosen, a frame's difference
+    /// at most.
+    pub fn frame(&mut self, fit: &ShipFit, aspect: f32, box_z: [f32; 2]) {
+        let (slide, inside) = measure(fit, aspect, box_z, self.target);
+        self.slide_target = slide;
+        self.target = stepped(fit, self.target, inside);
+        self.depth += (self.target - self.depth) * fit.depth_ease;
+        for axis in 0..2 {
+            self.slide[axis] += (self.slide_target[axis] - self.slide[axis]) * fit.slide_ease;
+        }
+    }
+
+    /// The screen settled on the model whose box is `from`, then `frames` frames
+    /// after a step to the one whose box is `to`: how a capture stands where a
+    /// film would.
+    #[must_use]
+    pub fn stepped(
+        fit: &ShipFit,
+        aspect: f32,
+        from: [f32; 2],
+        to: [f32; 2],
+        frames: usize,
+    ) -> Self {
+        let mut motion = Self::open(fit);
+        for _ in 0..SETTLED_FRAMES {
+            motion.frame(fit, aspect, from);
+        }
+        for _ in 0..frames {
+            motion.frame(fit, aspect, to);
+        }
+        motion
+    }
+
+    /// The depth the fit is moving to.
+    #[must_use]
+    pub fn target(&self) -> f32 {
+        self.target
+    }
+
+    /// Where the craft is drawn this frame.
+    #[must_use]
+    pub fn framing(&self) -> Framing {
+        Framing {
+            depth: self.depth,
+            slide: self.slide,
+        }
+    }
+}
+
+/// A [`FitMotion`] driven by a fixed tick of any length: one frame of the
+/// update for each [`FRAME_SECONDS`] that has passed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FitPlayer {
+    motion: FitMotion,
+    owed: f32,
+}
+
+impl FitPlayer {
+    #[must_use]
+    pub fn open(fit: &ShipFit) -> Self {
+        Self {
+            motion: FitMotion::open(fit),
+            owed: 0.0,
+        }
+    }
+
+    /// Advances by `dt` seconds with `box_z` the box of the model selected now.
+    pub fn tick(&mut self, fit: &ShipFit, aspect: f32, box_z: [f32; 2], dt: f32) {
+        self.owed += dt;
+        // A tick of exactly a frame is a frame, whatever the float rounding.
+        while self.owed >= FRAME_SECONDS * 0.999 {
+            self.motion.frame(fit, aspect, box_z);
+            self.owed -= FRAME_SECONDS;
+        }
+        self.owed = self.owed.max(0.0);
+    }
+
+    /// Where the craft is drawn now.
+    #[must_use]
+    pub fn framing(&self) -> Framing {
+        self.motion.framing()
+    }
+}
+
 /// The fore and aft extent of the fit's box: the Zone box where the screen
 /// draws the Zone hull, else the selected model's own length each way. `None`
 /// where neither is known, and the craft is then not fitted.
@@ -161,19 +289,12 @@ pub fn box_z(fit: &ShipFit, zone_hull: bool, length: Option<f32>) -> Option<[f32
 }
 
 /// The view-projection and model matrices of the craft as the screen's fit
-/// frames a box `box_z` fore and aft, `scale` times its rest size (the swap's
-/// settle, [`super::hull_swap`]). `safe_area` is the title's `Safe Area Setting`
+/// frames it at `framing`: [`rest`] for a still, [`FitMotion::framing`] for the
+/// screen as it plays. `safe_area` is the title's `Safe Area Setting`
 /// as a scale, `1.0` for a widget that does not obey it: the original scales the
 /// finished picture and the origin's distance from the middle of the screen by it.
 #[must_use]
-pub fn fitted(
-    fit: &ShipFit,
-    box_z: [f32; 2],
-    space: Space,
-    scale: f32,
-    safe_area: f32,
-) -> (Mat4, Mat4) {
-    let framing = rest(fit, space.display_aspect, box_z);
+pub fn fitted(fit: &ShipFit, framing: Framing, space: Space, safe_area: f32) -> (Mat4, Mat4) {
     let projection = camera::perspective(
         fit.fov_degrees.to_radians(),
         space.display_aspect,
@@ -182,8 +303,7 @@ pub fn fitted(
     );
     let model = Mat4::from_translation(Vec3::new(0.0, 0.0, -framing.depth))
         * Mat4::from_rotation_x(fit.rotation[0])
-        * Mat4::from_rotation_y(fit.rotation[1])
-        * Mat4::from_scale(Vec3::splat(scale));
+        * Mat4::from_rotation_y(fit.rotation[1]);
     let origin = [
         fit.origin[0] + framing.slide[0],
         fit.origin[1] + framing.slide[1],
@@ -196,26 +316,53 @@ pub fn fitted(
     )
 }
 
+/// How large the craft is against its rest size while the fit moves it: the rest depth over
+/// the depth it is drawn at. For a title that poses the craft itself, where the fit's depth
+/// only says how far off rest the last model left it.
+#[must_use]
+pub fn settle_scale(fit: &ShipFit, aspect: f32, box_z: [f32; 2], drawn: Framing) -> f32 {
+    rest(fit, aspect, box_z).depth / drawn.depth
+}
+
+/// Where the fit's depth state puts the craft: `(Some(framing), 1.0)` for a title whose fit frames
+/// it (`frames_craft`, [`oag_title::FrontEnd::ship_preview_fit`]), `(None, scale)` for one that
+/// poses the craft itself and only plays the fit's settle on it
+/// ([`oag_title::FrontEnd::ship_preview_settle`]).
+#[must_use]
+pub fn placement(
+    frames_craft: bool,
+    fit: &ShipFit,
+    aspect: f32,
+    box_z: [f32; 2],
+    drawn: Framing,
+) -> (Option<Framing>, f32) {
+    if frames_craft {
+        (Some(drawn), 1.0)
+    } else {
+        (None, settle_scale(fit, aspect, box_z, drawn))
+    }
+}
+
 /// The matrices the screen draws its craft with: the title's fit when it has
-/// one and the box is known, else the widget's own pose. `safe_area` is the
+/// one and the framing is known, else the widget's own pose at `scale`. `safe_area` is the
 /// title's `Safe Area Setting` as a scale, which the fit's picture takes when
 /// the widget authors `ObeySafeZone`.
 #[must_use]
 pub fn framed(
     widget: &ShipModel,
-    fit: Option<(&ShipFit, [f32; 2])>,
+    fit: Option<(&ShipFit, Framing)>,
     space: Space,
     scale: f32,
     safe_area: f32,
 ) -> (Mat4, Mat4) {
     match fit {
-        Some((fit, box_z)) => {
+        Some((fit, framing)) => {
             let safe_area = if widget.obey_safe_zone {
                 safe_area
             } else {
                 1.0
             };
-            fitted(fit, box_z, space, scale, safe_area)
+            fitted(fit, framing, space, safe_area)
         }
         None => matrices(widget, space, scale),
     }
@@ -240,9 +387,6 @@ mod tests {
         let (_, model) = matrices(&widget, Space::HD, 1.0);
         let at = model.transform_point3(Vec3::ZERO);
         assert!((at.z + 24.0).abs() < 1e-4);
-        let (_, bigger) = matrices(&widget, Space::HD, 2.0);
-        let nose = bigger.transform_point3(Vec3::X) - bigger.transform_point3(Vec3::ZERO);
-        assert!((nose.length() - 2.0).abs() < 1e-4);
     }
 
     /// The rest pair straddles the window's edge: the box fits a twentieth of a
@@ -276,7 +420,7 @@ mod tests {
     fn the_window_is_measured_in_device_coordinates_times_the_screen() {
         let box_z = [-3.8, 3.8];
         let framing = rest(&FIT, ASPECT, box_z);
-        let (view_projection, model) = fitted(&FIT, box_z, Space::HD, 1.0, 1.0);
+        let (view_projection, model) = fitted(&FIT, framing, Space::HD, 1.0);
         let (mut low, mut high) = (f32::MAX, f32::MIN);
         for corner in 0..8 {
             let at = Vec3::new(
@@ -307,10 +451,11 @@ mod tests {
             rot_y: -0.5,
             obey_safe_zone: true,
         };
+        let framing = rest(&FIT, ASPECT, [-3.8, 3.8]);
         let authored = framed(&widget, None, Space::HD, 1.0, 1.0);
-        let fit = framed(&widget, Some((&FIT, [-3.8, 3.8])), Space::HD, 1.0, 1.0);
+        let fit = framed(&widget, Some((&FIT, framing)), Space::HD, 1.0, 1.0);
         assert_ne!(authored, fit);
-        assert_eq!(fit, fitted(&FIT, [-3.8, 3.8], Space::HD, 1.0, 1.0));
+        assert_eq!(fit, fitted(&FIT, framing, Space::HD, 1.0));
     }
 
     /// `ObeySafeZone` shrinks the picture and pulls its origin towards the
@@ -324,7 +469,7 @@ mod tests {
             rot_y: -0.5,
             obey_safe_zone: true,
         };
-        let fit = Some((&FIT, [-3.8, 3.8]));
+        let fit = Some((&FIT, rest(&FIT, ASPECT, [-3.8, 3.8])));
         let at =
             |matrices: (Mat4, Mat4), point: Vec3| (matrices.0 * matrices.1).project_point3(point);
         let full = framed(&widget, fit, Space::HD, 1.0, 1.0);
@@ -336,5 +481,92 @@ mod tests {
         }
         widget.obey_safe_zone = false;
         assert_eq!(framed(&widget, fit, Space::HD, 1.0, 0.96), full);
+    }
+
+    /// A step to a model that rests deeper keeps the fit's state: the target
+    /// walks a step a frame from where the last model left it, and the drawn
+    /// depth eases to the target at the fit's rate. A plain ease from the old
+    /// rest to the new one would move the first frame by an eighth of the whole
+    /// 1.6, not by an eighth of the 0.1 the target has walked.
+    #[test]
+    fn a_step_walks_the_target_and_the_drawn_depth_follows_it() {
+        let (from, to) = ([-3.8, 3.8], [-4.5, 4.5]);
+        let (old, new) = (rest(&FIT, ASPECT, from).depth, rest(&FIT, ASPECT, to).depth);
+        let mut motion = FitMotion::open(&FIT);
+        for _ in 0..600 {
+            motion.frame(&FIT, ASPECT, from);
+        }
+        let before = motion.target();
+        let (mut drawn, mut target) = (vec![motion.framing().depth], vec![before]);
+        assert!((drawn[0] - old).abs() < 0.02, "{drawn:?} against {old}");
+        for _ in 0..80 {
+            motion.frame(&FIT, ASPECT, to);
+            drawn.push(motion.framing().depth);
+            target.push(motion.target());
+        }
+        for frame in 0..80 {
+            let eased = drawn[frame] + FIT.depth_ease * (target[frame + 1] - drawn[frame]);
+            assert!(
+                (drawn[frame + 1] - eased).abs() < 1.0e-4,
+                "frame {frame}: {} against {eased}",
+                drawn[frame + 1]
+            );
+        }
+        for frame in 1..8 {
+            assert!(
+                (target[frame + 1] - target[frame] - FIT.step).abs() < 1.0e-4,
+                "{target:?}"
+            );
+        }
+        assert!(drawn[1] - drawn[0] < 0.05, "{drawn:?}");
+        assert!(drawn[10] < new - 0.5, "{drawn:?}");
+        assert!(
+            (drawn[80] - new).abs() < 0.02,
+            "{} against {new}",
+            drawn[80]
+        );
+    }
+
+    /// The tick may be any length: sixty ticks of a sixtieth and thirty of a
+    /// thirtieth play the same sixty frames, and the box
+    /// asked for on each tick is the one the frame uses, so a step needs no
+    /// event of its own.
+    #[test]
+    fn a_tick_of_any_length_plays_the_same_frames() {
+        let play = |ticks: u32| {
+            let mut player = FitPlayer::open(&FIT);
+            let dt = 1.0 / ticks as f32;
+            for tick in 0..ticks {
+                let length = if tick < ticks / 2 { 3.2 } else { 4.5 };
+                player.tick(&FIT, ASPECT, [-length, length], dt);
+            }
+            player.framing()
+        };
+        let (a, b) = (play(60), play(30));
+        assert!((a.depth - b.depth).abs() < 0.05, "{a:?} against {b:?}");
+        assert!(a.depth > FIT.floor + 0.05, "{a:?}");
+    }
+
+    /// A title that poses the craft itself plays the same state as a scale of that pose: a step
+    /// to a model resting farther starts the craft larger (nearer than its rest) and the scale
+    /// settles on one, where a title the fit frames takes the framing and no scale.
+    #[test]
+    fn a_title_that_poses_the_craft_plays_the_settle_as_a_scale() {
+        let (from, to) = ([-3.8, 3.8], [-4.5, 4.5]);
+        let mut motion = FitMotion::open(&FIT);
+        for _ in 0..600 {
+            motion.frame(&FIT, ASPECT, from);
+        }
+        let scale = |motion: &FitMotion| placement(false, &FIT, ASPECT, to, motion.framing()).1;
+        for _ in 0..4 {
+            motion.frame(&FIT, ASPECT, to);
+        }
+        assert!(scale(&motion) > 1.05, "{}", scale(&motion));
+        for _ in 0..80 {
+            motion.frame(&FIT, ASPECT, to);
+        }
+        assert!((scale(&motion) - 1.0).abs() < 0.005, "{}", scale(&motion));
+        let (framing, one) = placement(true, &FIT, ASPECT, to, motion.framing());
+        assert_eq!((framing, one), (Some(motion.framing()), 1.0));
     }
 }

@@ -426,6 +426,10 @@ pub(crate) struct PickerStage {
     /// race box, which reads that seat's device alone - see
     /// `crate::session::picker`'s `seat` module. `None` is every ordinary screen.
     pub(crate) seat: Option<(usize, usize)>,
+    /// The title's depth fit as it plays across frames, where it has one: ticked
+    /// every frame with whatever model is selected, so a step carries the last
+    /// model's depth into the next - see [`oag_game::preview::ship_model::FitPlayer`].
+    fit_motion: Option<oag_game::preview::ship_model::FitPlayer>,
 }
 
 impl PickerStage {
@@ -468,6 +472,7 @@ impl PickerStage {
             sheet_uploaded: false,
             laps: Vec::new(),
             seat: None,
+            fit_motion: None,
         }
     }
 
@@ -695,25 +700,25 @@ impl PickerStage {
             .as_ref()
             .and_then(|screen| screen.ship_model)
             .filter(|_| self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship);
-        let swap_scale = self.hull_phase().scale;
         // The screen's own fit of the craft's depth, where the title has one and the
         // selected model's box is known.
-        let ship_fit = self
+        let frames_craft = self
             .previews
             .front_end
-            .and_then(|front_end| front_end.ship_preview_fit.as_ref())
-            .and_then(|fit| {
-                let zone_hull = matches!(
-                    self.sources.get(self.model.index()),
-                    Some(PreviewSource::Ship {
-                        zone_entry: Some(_),
-                        ..
-                    })
+            .is_some_and(|front_end| front_end.ship_preview_fit.is_some());
+        let (ship_fit, scale) = match self.ship_fit().zip(self.fit_motion) {
+            Some(((fit, box_z), player)) => {
+                let (framing, scale) = oag_game::preview::ship_model::placement(
+                    frames_craft,
+                    fit,
+                    space.display_aspect,
+                    box_z,
+                    player.framing(),
                 );
-                let length = picker::hd::selected_length(&self.model);
-                oag_game::preview::ship_model::box_z(fit, zone_hull, length)
-                    .map(|box_z| (fit, box_z))
-            });
+                (framing.map(|framing| (*fit, framing)), scale)
+            }
+            None => (None, 1.0),
+        };
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
@@ -732,8 +737,12 @@ impl PickerStage {
         } else if let Some(widget) = ship_model {
             let (view_projection, model) =
                 oag_game::preview::ship_model::framed(
-                &widget, ship_fit, space, swap_scale, safe_area,
-            );
+                    &widget,
+                    ship_fit.as_ref().map(|(fit, framing)| (fit, *framing)),
+                    space,
+                    scale,
+                    safe_area,
+                );
             preview.draw_matrices(
                 &gpu.device,
                 &gpu.queue,
@@ -763,6 +772,40 @@ impl PickerStage {
         }
     }
 
+    /// The title's depth fit and the box of the selected model, where the title
+    /// has a fit and the box is known.
+    fn ship_fit(&self) -> Option<(&oag_title::ShipFit, [f32; 2])> {
+        if self.model.kind() != picker::Kind::Ship {
+            return None;
+        }
+        let front_end = self.previews.front_end?;
+        let fit = front_end
+            .ship_preview_fit
+            .as_ref()
+            .or(front_end.ship_preview_settle.as_ref())?;
+        let zone_hull = matches!(
+            self.sources.get(self.model.index()),
+            Some(PreviewSource::Ship {
+                zone_entry: Some(_),
+                ..
+            })
+        );
+        let length = picker::hd::selected_length(&self.model);
+        oag_game::preview::ship_model::box_z(fit, zone_hull, length).map(|box_z| (fit, box_z))
+    }
+
+    /// Advances the depth fit by the fixed ticks `dt` seconds make, one frame of
+    /// the original's update each. Runs while the craft is hidden and on every
+    /// step, as the original's does. `aspect` is the screen's own.
+    pub(crate) fn tick_fit(&mut self, aspect: f32, dt: f32) {
+        let Some((fit, box_z)) = self.ship_fit().map(|(fit, box_z)| (*fit, box_z)) else {
+            return;
+        };
+        self.fit_motion
+            .get_or_insert_with(|| oag_game::preview::ship_model::FitPlayer::open(&fit))
+            .tick(&fit, aspect, box_z, dt);
+    }
+
     /// The craft's swap state this tick on a title that draws the race hull -
     /// see [`oag_game::preview::hull_swap`].
     fn hull_phase(&self) -> oag_game::preview::hull_swap::Phase {
@@ -772,9 +815,7 @@ impl PickerStage {
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
         if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
-            let mut orbit = oag_game::preview::hull_orbit();
-            orbit.zoom /= self.hull_phase().scale;
-            return orbit;
+            return oag_game::preview::hull_orbit();
         }
         oag_game::preview::orbit_for(self.model.kind(), self.model.seconds())
     }

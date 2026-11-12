@@ -364,28 +364,38 @@ presents at least 60 fps there). Reference frames and the per-frame series:
 | Opening the screen | craft **absent** while the screen's particle transition plays, then **cut in** whole at rest pose, no settle: first frame 119-120 of a press at frame 90, 30 fps, so 0.97 s less about 0.1 s of input latency | 60 |
 | Stepping, either direction | old craft cut in **one frame**; **empty frame 3 captured frames at 60 fps twice, 4 once (50-67 ms)**, and 3 at 30 fps (100 ms) in the heavier capture - counted in emulator frames, not a fixed time; new craft cut in solid (no alpha ramp, no slide) | 70 |
 | Settle after a step | the new craft appears slightly off its rest size and **eases to it in 0.45 s** (5% left at 26-28 frames of 60). Excess per 50 ms: `1.00 1.03 0.97 0.83 0.56 0.39 0.24 0.17 0.10 0.06 0.03 0.01 0`. Pure scale about a pivot right of and above the hull's centre (Qirex: fit of both silhouette edges to 1 px) | 65 (curve), 40 (what is scaled) |
-| Start size of the settle | **per team**: 0.95 of rest (Feisar), 1.08 and 1.12 (two others), independent of the step direction (the same team entered from either side starts alike). **Recovered, not wired**: the depth fit's target is not reset on a step, so the new model starts at the last one's rest depth and the drawn depth eases to its own at 0.125 a frame (`team-selection-model.md`, "What the update writes over the widget") | 50 (measured), 85 (law) |
+| Start size of the settle | **per team**: 0.95 of rest (Feisar), 1.08 and 1.12 (two others), independent of the step direction (the same team entered from either side starts alike). **Wired 2026-11-12** (`hd-ship-swap-settle`): the depth fit's target is not reset on a step, so the new model starts at the last one's rest depth and the drawn depth eases to its own at 0.125 a frame (`team-selection-model.md`, "What the update writes over the widget"; the law against this film: "The swap against the 60 fps film" there) | 50 (measured), 85 (law) |
 | Particle burst | a red then orange/yellow streak cloud starts about 2 frames after each cut at the left of the craft and decays over about a second; red wisps also drift past with no press. Which is the screen's backdrop and which a step effect is **not separated**; no `.pob` named | open |
 | Camera | **The screen's own code, not the widget's authored pose.** `Team_Selection_Definition.xml`'s `<Model name="ShipModel">` authors `OriginX=1220 OriginY=412 x=0 y=0 z=-24 RotX=0.4 RotY=-0.5 nearZ=1 ObeySafeZone=true delay=1.0` (`delay` matches the 0.9 s absence), and `TeamSelectionScreen_Update` writes over the rotation, depth, lens and origin every frame: rest `RotX 0.25`, `RotY -0.6`, vertical field of view `57.3` degrees, origin `(1220, 500)` plus a slide, and a depth stepped by `TeamSelectionScreen_FitModelDepth` until a box of the selected model's `<FE length>` fits a window (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`). The per-team `Data\Ships\<team>\screen.xml` files are Pulse-lineage leftovers naming a `ship_FE.vex` HD does not ship, and are not this screen's | 90 (static read; five teams' rest frames agree to 4 px) |
 | Lens and pitch | superseded by the row above. Before the update was read, the authored pose was drawn with a silhouette fit (vertical FOV 0.41 rad, pitch 0.22, a 0.36 slide; overlap 0.45). Those three numbers now frame only Omega's borrowed pose (`oag_game::preview::ship_model::matrices`) | **fitted, not authored**; no score |
 | Step burst | **not a `.pob`.** The red and gold field is the Fury backdrop widget, `BackgroundAnimFury_Item` (a point cloud of a team hull through the `RadioHead` effect modes, `docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`). A 26 s film with steps at 7, 13 and 19 s shows the cloud thicken around each cut and a gold starburst at about 12 s with no press; HD's `data/psys/*.pob` are weapon, damage and number effects only. Measured 2026-10-10 on RPCS3 (menu-backdrop.md, "The tint is applied in linear light"): the screen is the **`default`** row, `0.125`, like every screen without a row (not white), and a tint of 0.125 reads about 0.4 as bright because it is applied in linear light; this build now draws the backdrop under Ship Select and Track Select that way. The widget's `OnEnable` pulse fires on **screen changes**, not on a team step (five presses, the pulse block did not move), so the step reaction is **not** wired and its mechanism is unlocated | 60 (not a pob), 90 (row), 75 (law), open (step) |
 
 Framing: [`oag_game::preview::ship_model`] (replaces the fixed `hull_orbit` on
-HD; its swap scale multiplies the model), on `oag_title::ShipFit`
+HD), on `oag_title::ShipFit`
 (`oag_hd::frontend::SHIP_FIT`), inside the Safe Area as the widget's
-`ObeySafeZone` asks. Omega: checked, differs - the
-`Team_Selection_Definition.xml` in `data09` is the `PI_Team` plugin list and
-authors no `ShipModel`, and its hull is not drawn (`ship_preview_hull` is
-`None`), so nothing is wired. Reference frames: `data/reference/hd-capture/ship-framing/`.
+`ObeySafeZone` asks. Omega's `ShipModel` authors its own pose and its update
+poses the craft on other rest angles (see the Omega section of
+`team-selection-model.md`); this build draws Omega's hull on a pose borrowed from
+HD, with no `ShipFit`. Reference frames: `data/reference/hd-capture/ship-framing/`.
 
-What this build does ([`oag_game::preview::hull_swap`](../../crates/game/src/preview/hull_swap.rs)):
-absent for 0.9 s after the screen opens, a 60 ms gap on every step, then the
-craft eases from 1.06x to 1x over 0.45 s along the measured curve. **The
-1.06 start scale is chosen, not measured** (the original's is per team).
+What this build does: [`oag_game::preview::hull_swap`](../../crates/game/src/preview/hull_swap.rs)
+holds the measured timings, the craft absent for 0.9 s after the screen opens and
+a 60 ms gap on every step. The craft's size across a step is the screen's own
+depth fit, played frame by frame ([`oag_game::preview::ship_model::FitMotion`],
+held by `PickerStage` and ticked at 60 Hz beside the picker's clock, while the
+craft is hidden too): the new hull is drawn at the last model's rest depth and
+eases to its own, so the start size is per team and follows from the two
+models' `<FE length>`. There is no start scale and no measured curve of its own;
+the former 1.06 start and the 13-point curve are gone.
 Headless stills: `--menu-page ship-select --menu-picker-seconds T` (entry) and
-`--menu-picker-step-seconds T` (a step). Omega: checked, applies, not wired
-(`ship_preview_hull` is `None` there and its `Team_Selection_Definition.xml` is
-HD's own; the swap is title-agnostic and reaches Omega with the hull itself).
+`--menu-picker-step-seconds T` (a step; the model stepped from is the entry
+above the selected one, **chosen**: the film's team order is not read).
+Omega: checked, applies, ported by inheritance. `ship_preview_hull` is
+`Some("ship.vex")` there (the hull is drawn, on a borrowed pose with no `ShipFit`),
+the swap's timings reach it, and `ship_preview_settle` is HD's fit, **inherited
+from HD**: the craft is scaled by the rest depth over the drawn depth on that
+pose. `FUN_015a3b80` eases its own targets the same way; its rates and pose are
+unread (`team-selection-model.md`, "Omega").
 
 **The livery row is the skin axis, as on the original.** `Classic` is the
 disc's own string id for the baseline paint (the Japanese plugin

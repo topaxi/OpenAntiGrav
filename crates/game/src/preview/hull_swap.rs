@@ -8,10 +8,10 @@
 //!   second after the press that opened the screen.
 //! - **Stepping** (either direction): the old craft is cut in one frame, the
 //!   frame is empty for a few frames, and the new craft cuts in, already
-//!   solid, slightly off its rest size and eases back to it.
+//!   solid. It is slightly off its rest size and eases to it; that is the
+//!   screen's depth fit, not a curve of its own ([`super::ship_model::FitMotion`]).
 //!
-//! The timings are measured; the size the settle starts from is **chosen, not
-//! measured** - see [`SETTLE_START_SCALE`].
+//! This module holds the timings, which are measured.
 
 /// Seconds from the screen opening to the craft's first frame. One press at
 /// frame 90 of a 30 fps film, craft first present at frame 119-120: 0.97 s,
@@ -24,35 +24,11 @@ pub const ENTRY_SECONDS: f32 = 0.9;
 /// emulator frames and varies with the emulator's speed.
 pub const GAP_SECONDS: f32 = 0.06;
 
-/// Spacing of [`SETTLE`]'s samples, seconds: three captured frames at 60 fps.
-const SETTLE_STEP_SECONDS: f32 = 0.05;
-
-/// How far the new craft still is from its rest size, as a fraction of where it
-/// started, every [`SETTLE_STEP_SECONDS`] after it appears. The mean of two
-/// right steps onto the same team at 60 fps, read off the hull silhouette's
-/// width; a third, to a different team, eased the same way over the same time
-/// (5% left at 0.45 s) with a faster first half. Confidence 65.
-const SETTLE: [f32; 13] = [
-    1.0, 1.0, 0.97, 0.83, 0.56, 0.39, 0.24, 0.17, 0.10, 0.06, 0.03, 0.01, 0.0,
-];
-
-/// The size a craft starts its settle at, against its rest size.
-///
-/// **Chosen, not measured.** The original's start differs per team and was
-/// seen at 0.95 (Feisar), 1.08 and 1.12 (two other teams) of rest width. It is
-/// the last model's rest depth, which the screen's depth fit eases away from
-/// (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "What the
-/// update writes over the widget"); that easing is not played here, and 1.06
-/// is a middle of the three.
-pub const SETTLE_START_SCALE: f32 = 1.06;
-
 /// What to draw of the craft this tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Phase {
     /// Whether the craft is on screen at all.
     pub visible: bool,
-    /// Size against rest, 1.0 at rest.
-    pub scale: f32,
 }
 
 /// The craft's phase `open` seconds after the screen opened and `since`
@@ -65,20 +41,7 @@ pub fn phase(open: f32, since: f32) -> Phase {
     } else {
         open >= ENTRY_SECONDS
     };
-    let scale = if stepped && visible {
-        let index = (since - GAP_SECONDS) / SETTLE_STEP_SECONDS;
-        let low = index.floor() as usize;
-        let excess = if low + 1 >= SETTLE.len() {
-            0.0
-        } else {
-            let t = index - low as f32;
-            SETTLE[low] + (SETTLE[low + 1] - SETTLE[low]) * t
-        };
-        1.0 + (SETTLE_START_SCALE - 1.0) * excess
-    } else {
-        1.0
-    };
-    Phase { visible, scale }
+    Phase { visible }
 }
 
 #[cfg(test)]
@@ -86,20 +49,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_screen_opens_empty_then_cuts_the_craft_in_at_rest() {
+    fn the_screen_opens_empty_then_cuts_the_craft_in() {
         assert!(!phase(0.3, 0.3).visible);
-        let on = phase(ENTRY_SECONDS + 0.01, ENTRY_SECONDS + 0.01);
-        assert!(on.visible);
-        assert_eq!(on.scale, 1.0);
+        assert!(phase(ENTRY_SECONDS + 0.01, ENTRY_SECONDS + 0.01).visible);
     }
 
     #[test]
-    fn a_step_cuts_the_craft_for_the_gap_then_settles_to_rest() {
+    fn a_step_cuts_the_craft_for_the_gap() {
         assert!(!phase(5.0, 0.02).visible);
-        let first = phase(5.0, GAP_SECONDS + 0.001);
-        assert!(first.visible);
-        assert!((first.scale - SETTLE_START_SCALE).abs() < 1.0e-3);
-        assert!(phase(5.0, GAP_SECONDS + 0.2).scale < first.scale);
-        assert_eq!(phase(5.0, 1.0).scale, 1.0);
+        assert!(phase(5.0, GAP_SECONDS + 0.001).visible);
+        assert!(phase(5.0, 1.0).visible);
     }
 }
