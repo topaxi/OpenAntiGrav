@@ -61,8 +61,8 @@ content against `hd-frontend.md`.
   - **What a player sees, measured 2026-11-12 (`vita-2048-trackname-still`, Vita3K, EU patch 1.04 + DLC1): `VINETA K` and `ANULPHA PASS` as text** on the HD Campaign event card, the mode card over the load and the pause card (never the id; the ten read `METRO PARK`, `UNITY SQUARE` in the same font). So the sixteen are named through a path the `PI_Track` sites do not describe: **re-first**, and ours (which draws `Vineta_K`) does **not** match. Stills `data/reference/2048-circuit-names/`; `docs/formats/omega-status.md`, "2048 Vita's circuit names".
   - **Not ready:** our `CircuitNames` folds case and falls back to the id, which is the rule the executable's `PI_Track` sites follow but not what the cards draw.
   - **What remains is a decision, not RE:**
-    - Keying the sixteen to `01_TRACK`..`08_TRACK` would reproduce the two photographed names (`VINETA K`, `ANULPHA PASS`) but is a **chosen stand-in** until the title setter is read.
-    - Next RE: read the event card's title setter (the `grid0_3_1` card back to its label string) to find how `Vineta_K` becomes `VINETA K` (underscore to space and upper case, or a `NN_TRACK` route), then photograph the other six HD circuits' cards (`Sol_2`, `Chenghou_Project`, ...) before wiring any rule.
+    - Keying the sixteen to `01_TRACK`..`08_TRACK` would reproduce the photographed HD names (`VINETA K`, `ANULPHA PASS`; `THE AMPHISEUM` is `19_TRACK`) but is a **chosen stand-in** until the title setter is read.
+    - Next RE: read the event card's title setter (the `grid0_3_1` card back to its label string). It is a lookup, not the id re-spelled (`Amphiseum` reads `THE AMPHISEUM`, entries `19_TRACK`). A Vita3K still of a `_R` cell's card (Fury `grid_09`/`grid_10`) says whether the key is per circuit or per direction.
   - Omega: **checked, differs**. It applies the same rule with an authored `StringTableId` override (`FUN_014b1330` stores it at `+0x278`).
   - Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 
