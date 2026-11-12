@@ -85,6 +85,9 @@ pub const LOWERCASE_UV1_HASH: u32 = 0x7a3f_521c;
 pub const UV1_UV2_HASH: u32 = 0x1aef_e524;
 /// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
+/// `~crc32("uv1_uvDirt")`: four halves, the tiling pair in `.xy` and the dirt pair in `.zw`. The
+/// vertex input of Omega's `tarmac_*` road programs, which name no `Uv1`.
+pub const UV1_UVDIRT_HASH: u32 = 0x273a_b13e;
 /// `~crc32("lightmapUV")`.
 pub const LIGHTMAP_HASH: u32 = 0x26a7_b665;
 /// `~crc32("NOVAColor")`: the baked per-vertex light of a Vita circuit's vertex-lit surfaces, four
@@ -202,37 +205,55 @@ impl VertexDecl {
             .filter(|a| a.components == 4)
     }
 
+    /// The tiling pair of a road declaration that carries [`UV1_UVDIRT_HASH`] (four halves of
+    /// the container's half type): its `.xy`, which is what the first two components at the
+    /// attribute's own offset are. Not the declaration's lower-case `uv1` entry, which sits at
+    /// the dirt pair's offset.
+    #[must_use]
+    pub fn uv_dirt_tiling(&self, half: u8) -> Option<&Attribute> {
+        self.attribute(UV1_UVDIRT_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == half)
+    }
+
     /// The diffuse coordinate of a declaration known to be **this submesh's
-    /// own** - `Uv1` where it is named, otherwise the first two-component
+    /// own** - `Uv1` where it is named, then the tiling pair of `uv1_uvDirt`
+    /// ([`Self::uv_dirt_tiling`]), otherwise the first two-component
     /// attribute that is not the lightmap's and is a pair of `half`s (the
     /// container's half type: [`PS4_HALF2`] or [`VITA_HALF2`]) or of `f32`s
     /// (the container's float type: [`PS4_FLOAT2`] or [`FLOAT2`]).
     ///
     /// **Only sound on a declaration reached through the record's own pointer**
-    /// (`PS4_DECLARATION_POINTER`), on both containers. Where no `Uv1` is
+    /// (`PS4_DECLARATION_POINTER`), on both containers. Where neither is
     /// named, the diffuse set is the file's own `uv1` (`0x7a3f521c`), `Uv2`
     /// (`0xdb7b4546`) or an unnamed hash, with the lightmap's `lightmapUV`
     /// after it - HD's own rule, "a two-component coordinate that is not
     /// `lightmapUV`" (`crate::rcsmodel::vertex_decl::VertexDecl::diffuse_texcoord`);
     /// **confidence 70**, so [`Self::diffuse_texcoord_is_fallback`] says when
-    /// it is the one answering.
+    /// it is the one answering. `uv1_uvDirt` is by name, not that rule: the road's
+    /// `uvMarkings` is first in file order and is a unique unwrap, not a tiling set
+    /// (`docs/formats/omega-status.md`, "The `tarmac_*` road families draw the wrong
+    /// coordinate set", confidence 85).
     #[must_use]
     pub fn own_diffuse_texcoord(&self, half: u8, float: u8) -> Option<&Attribute> {
-        self.diffuse_texcoord().or_else(|| {
-            self.attributes.iter().find(|a| {
-                a.name_hash != LIGHTMAP_HASH
-                    && a.components == 2
-                    && (a.gxm_type == half
-                        || a.gxm_type == FLOAT2
-                        || (a.gxm_type == float && a.name_hash == LOWERCASE_UV1_HASH))
+        self.diffuse_texcoord()
+            .or_else(|| self.uv_dirt_tiling(half))
+            .or_else(|| {
+                self.attributes.iter().find(|a| {
+                    a.name_hash != LIGHTMAP_HASH
+                        && a.components == 2
+                        && (a.gxm_type == half
+                            || a.gxm_type == FLOAT2
+                            || (a.gxm_type == float && a.name_hash == LOWERCASE_UV1_HASH))
+                })
             })
-        })
     }
 
     /// True when [`Self::own_diffuse_texcoord`] answers by the confidence-70 rule, not by name.
     #[must_use]
     pub fn diffuse_texcoord_is_fallback(&self, half: u8, float: u8) -> bool {
-        self.diffuse_texcoord().is_none() && self.own_diffuse_texcoord(half, float).is_some()
+        self.diffuse_texcoord().is_none()
+            && self.uv_dirt_tiling(half).is_none()
+            && self.own_diffuse_texcoord(half, float).is_some()
     }
 }
 
@@ -300,4 +321,73 @@ fn scan(cpu_bytes: &[u8]) -> impl Iterator<Item = (usize, VertexDecl)> + '_ {
 #[must_use]
 pub fn find_by_header(cpu_bytes: &[u8]) -> HashMap<usize, VertexDecl> {
     scan(cpu_bytes).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn attr(name_hash: u32, components: u8, gxm_type: u8, offset: u8) -> Attribute {
+        Attribute {
+            name_hash,
+            components,
+            gxm_type,
+            offset,
+        }
+    }
+
+    /// Rockway Stadium's road submesh: `uvMarkings` (20), `lightmapUV` (24), `uv1_uvDirt` as
+    /// four halves (28), and the lower-case `uv1` and `uvDirt` both at 32. No `Uv1`.
+    fn arena_road() -> VertexDecl {
+        VertexDecl {
+            stride: 36,
+            attributes: vec![
+                attr(POSITION_HASH, 3, PS4_FLOAT2, 0),
+                attr(NORMAL_HASH, 4, PS4_SBYTE4_NORM, 12),
+                attr(
+                    crate::rcsmaterial::name_hash("uvMarkings"),
+                    2,
+                    PS4_HALF2,
+                    20,
+                ),
+                attr(LIGHTMAP_HASH, 2, PS4_HALF2, 24),
+                attr(UV1_UVDIRT_HASH, 4, PS4_HALF2, 28),
+                attr(LOWERCASE_UV1_HASH, 2, PS4_HALF2, 32),
+                attr(crate::rcsmaterial::name_hash("uvDirt"), 2, PS4_HALF2, 32),
+            ],
+        }
+    }
+
+    #[test]
+    fn the_uv1_uvdirt_constant_is_the_hash_of_its_name() {
+        assert_eq!(UV1_UVDIRT_HASH, crate::rcsmaterial::name_hash("uv1_uvDirt"));
+    }
+
+    #[test]
+    fn a_road_declaration_without_uv1_draws_the_tiling_pair_at_offset_28() {
+        let decl = arena_road();
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.name_hash, UV1_UVDIRT_HASH);
+        assert_eq!(own.offset, 28);
+        assert!(!decl.diffuse_texcoord_is_fallback(PS4_HALF2, PS4_FLOAT2));
+    }
+
+    #[test]
+    fn a_named_uv1_still_wins_over_uv1_uvdirt() {
+        let mut decl = arena_road();
+        decl.attributes.push(attr(UV1_HASH, 2, PS4_HALF2, 16));
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!((own.name_hash, own.offset), (UV1_HASH, 16));
+    }
+
+    #[test]
+    fn a_uv1_uvdirt_that_is_not_four_halves_is_not_taken() {
+        let mut decl = arena_road();
+        decl.attributes[4] = attr(UV1_UVDIRT_HASH, 2, PS4_HALF2, 28);
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.offset, 20);
+        decl.attributes[4] = attr(UV1_UVDIRT_HASH, 4, PS4_FLOAT2, 28);
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!(own.offset, 20);
+    }
 }
