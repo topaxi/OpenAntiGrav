@@ -1,6 +1,6 @@
 ---
 status: re-first
-titles: [omega]
+titles: [omega, 2048]
 updated: 2026-11-12
 summary: "Omega front end: load order unresolved, campaign pages open, 2048 emblem and Team Select undrawn (circuit names closed 2026-11-05)"
 ---
@@ -52,6 +52,8 @@ content against `hd-frontend.md`.
   circuit's emblem is missing, `constantAmbientColour` and the field of view
   are **chosen, not measured**, the page's white backdrop hides the rim, and
   Team Select (`team_select: None`) is still undrawn.
+
+- **2048's circuits show ids (open, ready to scout, 2026-11-12)**: on 2048 Vita `CircuitNames::choose` finds no copy of `entries.xml` naming all 26 raceable circuits, and every one of them reads as its id (`square`, `Vineta_K_R`). Next: census the three `american/entries.xml` copies' keys against the 26 ids and 2048's `Definition.xml` for a name key (a `StringTableId`-style field); if some copy names some circuits, a per-circuit fallback in `choose` is the fix, with HD's 28 asserted unchanged (`hd_boot_ground_truth`). Evidence: `docs/formats/omega-status.md`, "Omega's Track Select names all 38 circuits".
 
 - **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
   is in a state HD/Fury's was in earlier** ("the menu items do not render
