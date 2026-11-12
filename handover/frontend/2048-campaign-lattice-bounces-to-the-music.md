@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 campaign map: music wave (per-track .fft, band 1, radius 7 round the current event), hidden events' reveal by tap and XP rank gate read; wire XP rank, unlock rule, reveal, then the wave"
+summary: "2048 map: music wave (.fft band 1, radius 7), hidden-event tap reveal and XP rank gate read; wire XP rank, unlock rule, reveal, wave"
 categories: [audio]
 difficulty: hard (30)
 ---
