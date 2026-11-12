@@ -134,3 +134,29 @@ seed it shares with HD and Omega) copies the cursor `craft+0x6e60..+0x6e6c` into
 stores `FloatVectorNeg(craft+0x6e90)` at `+0x110`. `+0x6e90` is cursor `+0x30`, HD's own
 `+0x7820`/`+0x7850` relation with four-byte pointers. Confidence **75**: one init, the writer not
 traced.
+
+## Turning it on in this engine (2026-11-12): not the whole change
+
+`Weapons::launch_normal_is_track_up` set to `true` on HD, Omega and 2048 is the law above, and
+the field it gates (`Ship::track_up`) has no reader but `oag_weapons::Craft::launch_normal`. With
+it on, the three runs that went red when Pulse's law was first tried on HD go red again; the
+diagnosis is that each is a chaotic divergence at a margin, not a wrong normal:
+
+- **The Rocket's flight barely moves.** `rocket_floor_trace` on Anulpha Pass, off / on: swept
+  into geometry 149 / 148, probed a wall 8 / 6, struck a hull 14 / 15, expired 7 / 5, median
+  lifetime 49 / 48 ticks.
+- **Omega, Amphiseum reversed, Flash, seed 1.** The first volley leaves at tick 909 in both runs
+  with the eight craft's track up 0.27 to 7.53 degrees from their own; its last rocket ends one
+  tick earlier (932 against 933), the craft part at tick 1209, and slot 5 respawns at 5601, with
+  no weapon hit, 4,700 ticks downstream.
+- **HD Novice Eliminator, seeds 1 to 12, ticks to 200 points.** Off: every seed ends, leader laps
+  sorted `2 3 6 6 8 8 10 11 11 14 18 18`, seed 1 at 51,417 ticks (857 s). On: eleven end,
+  `4 7 7 7 7 10 10 13 13 17 20`, median 10 (the test's window is 6 to 12), and seed 1 does not
+  reach 200 inside 60,000 ticks, its eight scores spread 117 to 187. Shield drops of 5 or more
+  (hits and walls) per minute average 13.0 off and 10.1 on, with per-seed spreads of 2.5 to 23.5
+  and 3.6 to 15.2.
+
+The tests that fail are `hd_eliminator_hud_ground_truth::a_finished_eliminator_leaves_a_board_ranked_on_points`,
+`::a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace` and
+`omega_original_ai_ground_truth::the_field_finishes_amphiseum_reversed`; all three pass with
+the field off, as does the lone-craft regression.
