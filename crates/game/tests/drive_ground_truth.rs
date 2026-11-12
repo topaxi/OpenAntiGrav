@@ -833,6 +833,11 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
             .filter(|line| line.contains(".fnt") && line.contains("from the texture pack"))
             .count()
     };
+    let art_from_pack = |text: &str| {
+        text.lines()
+            .filter(|line| line.contains(".mip") && line.contains("from the texture pack, for"))
+            .count()
+    };
     assert_eq!(
         from_pack(&stderr[..turned_on]),
         0,
@@ -846,5 +851,19 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
         from_pack(&stderr[turned_off..]),
         0,
         "turning it off builds the disc's faces again:\n{stderr}"
+    );
+    assert_eq!(
+        art_from_pack(&stderr[..turned_on]),
+        0,
+        "the boot's sheet is the disc's:\n{stderr}"
+    );
+    assert!(
+        art_from_pack(&stderr[turned_on..turned_off]) >= 1,
+        "turning the pack on rebuilds the sprite sheet from it:\n{stderr}"
+    );
+    assert_eq!(
+        art_from_pack(&stderr[turned_off..]),
+        0,
+        "turning it off builds the disc's sheet again:\n{stderr}"
     );
 }

@@ -485,7 +485,7 @@ impl Frontend {
         if let Some(photo) = card.photo.as_deref().and_then(|src| self.placed(src)) {
             out.push(Draw::Sprite {
                 rect: PHOTO,
-                uv: [photo.x as f32, photo.y as f32, PHOTO[2], PHOTO[3]],
+                uv: photo.sheet_rect([0.0, 0.0, PHOTO[2], PHOTO[3]]),
                 color: white,
             });
         }
@@ -589,12 +589,7 @@ impl Frontend {
             out.push(Self::sprite_at([429.0, 266.0, 32.0, 32.0], arrow, blue));
             out.push(Draw::RotatedSprite {
                 rect: [904.0, 266.0, 32.0, 32.0],
-                uv: [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ],
+                uv: arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]),
                 color: blue,
                 rotation: std::f32::consts::PI,
             });

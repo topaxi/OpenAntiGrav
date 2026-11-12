@@ -946,12 +946,12 @@ pub(crate) fn fill_draw(fill: &Fill) -> Draw {
 /// module's own walk.
 #[must_use]
 pub fn image_uv(image: &Image, placed: Placed) -> [f32; 4] {
-    [
-        placed.x as f32 + image.u.unwrap_or(0.0),
-        placed.y as f32 + image.v.unwrap_or(0.0),
+    placed.sheet_rect([
+        image.u.unwrap_or(0.0),
+        image.v.unwrap_or(0.0),
         image.texture_width.unwrap_or(placed.width as f32),
         image.texture_height.unwrap_or(placed.height as f32),
-    ]
+    ])
 }
 
 #[cfg(test)]

@@ -435,6 +435,55 @@ fn sprite_draw_samples_a_sub_rect_and_tiles_past_the_placed_rect() {
     );
 }
 
+/// A texture pack's picture is larger than the disc's: the sampled rect grows with it and the
+/// drawn rect, in the layout's own pixels, does not.
+#[test]
+fn a_picture_a_pack_drew_larger_is_sampled_at_its_size_and_drawn_at_the_layouts() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Loose">
+    <Image name="Patch">
+      <Values x="4" y="5" width="12" height="9" U="3" V="2" TxtrWidth="6" TxtrHeight="8" Color="0xFF804020" src="a.mip"></Values>
+    </Image>
+    <Image name="Wide">
+      <Values x="1" y="2" width="90" height="10" TxtrWidth="32" TxtrHeight="16" Color="0xFFFFFFFF" src="b.mip"></Values>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let images = &screens.by_name("Loose").unwrap().images;
+    let placed = crate::frontend::Placed {
+        x: 100,
+        y: 200,
+        width: 16,
+        height: 16,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [4.0, 2.0],
+    };
+    assert_eq!(
+        images[0].sprite_draw(placed, 7.0, 8.0, 0xff80_4020),
+        crate::frontend::Draw::Sprite {
+            rect: [7.0, 8.0, 12.0, 9.0],
+            uv: [112.0, 204.0, 24.0, 16.0],
+            color: argb_to_rgba(0xff80_4020),
+        }
+    );
+    // Still tiled twice across: the repeat is the ratio of the disc's own sizes.
+    assert_eq!(
+        images[1].sprite_draw(placed, 1.0, 2.0, 0xffff_ffff),
+        crate::frontend::Draw::TiledSprite {
+            rect: [1.0, 2.0, 90.0, 10.0],
+            uv: [100.0, 200.0, 64.0, 32.0],
+            repeat: [2.0, 1.0],
+            color: [1.0; 4],
+        }
+    );
+}
+
 #[test]
 fn plain_draws_are_the_fills_then_the_placed_images() {
     let screens = Screens::from_xml(

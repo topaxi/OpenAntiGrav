@@ -220,12 +220,7 @@ fn draw_list_rows(
                 };
                 let [left_rect, right_rect] =
                     arrow_rects(&numbers, list.x, label_width, y + geometry.lift, (sx, sy));
-                let uv = [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ];
+                let uv = arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]);
                 // The left arrow is the right one drawn with a negative
                 // width from its anchor, so it extends leftward, mirrored.
                 out.push(Draw::Sprite {
@@ -523,9 +518,9 @@ fn step_arrows(
     let rects = layout.arrow_rects(y);
     if focused {
         let (dx, dy) = layout.spec.glow_inset;
-        for (rect, glow) in rects.iter().zip(art.glow) {
+        for ((rect, glow), drawn) in rects.iter().zip(art.glow).zip(layout.spec.arrow_glow) {
             out.push(Draw::Sprite {
-                rect: [rect[0] + dx, rect[1] + dy, glow[2], glow[3]],
+                rect: [rect[0] + dx, rect[1] + dy, drawn[2], drawn[3]],
                 uv: glow,
                 color: ink,
             });

@@ -187,6 +187,9 @@ impl Session {
                 shell.title_font.clone(),
                 shell.buttons_font.clone(),
             );
+            // The art a texture pack draws is in the sheet: the frame and rows just rebuilt
+            // sample the new one.
+            stage.renderer.set_sprites(device, queue, &shell.sprites);
             self.stalled = true;
         }
         self.shell = Some(shell);

@@ -455,12 +455,12 @@ fn patch_uv(frame: Placed, uv: [f32; 4]) -> [f32; 4] {
     // a sheet that scaled it still samples the same features.
     let scale_x = frame.width as f32 / PATCH;
     let scale_y = frame.height as f32 / PATCH;
-    [
-        frame.x as f32 + uv[0] * scale_x,
-        frame.y as f32 + (PATCH - uv[1]) * scale_y,
+    frame.sheet_rect([
+        uv[0] * scale_x,
+        (PATCH - uv[1]) * scale_y,
         uv[2] * scale_x,
         -uv[3] * scale_y,
-    ]
+    ])
 }
 
 /// `color` with its alpha replaced.

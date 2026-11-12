@@ -256,12 +256,7 @@ fn lerp_colour(from: u32, to: u32, t: f32) -> [f32; 4] {
 fn sprite(placed: Placed, rect: [f32; 4], color: [f32; 4]) -> Draw {
     Draw::Sprite {
         rect,
-        uv: [
-            placed.x as f32,
-            placed.y as f32,
-            placed.width as f32,
-            placed.height as f32,
-        ],
+        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
         color,
     }
 }

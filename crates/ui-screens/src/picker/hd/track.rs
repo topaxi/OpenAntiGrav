@@ -427,12 +427,7 @@ pub(in crate::picker) fn body(
     {
         out.push(Draw::Sprite {
             rect,
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
+            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color: [1.0, 1.0, 1.0, 1.0],
         });
     }

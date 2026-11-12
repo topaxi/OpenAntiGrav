@@ -393,12 +393,7 @@ fn block_draw(
                     ARROW_SIZE,
                     ARROW_SIZE,
                 ],
-                uv: [
-                    arrow.x as f32,
-                    arrow.y as f32,
-                    arrow.width as f32,
-                    arrow.height as f32,
-                ],
+                uv: arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]),
                 color: argb_to_rgba(tint),
             });
         }
@@ -467,12 +462,7 @@ fn list_draw(
         }
         if let Some(arrow) = art.arrow {
             let tint = widget.arrow_color.map_or([1.0; 4], argb_to_rgba);
-            let uv = [
-                arrow.x as f32,
-                arrow.y as f32,
-                arrow.width as f32,
-                arrow.height as f32,
-            ];
+            let uv = arrow.sheet_rect([0.0, 0.0, arrow.width as f32, arrow.height as f32]);
             let [left, right] = oag_ui::menu::block::list_arrow_rects(&list, label, (1.0, 1.0));
             out.push(Draw::Sprite {
                 rect: left,

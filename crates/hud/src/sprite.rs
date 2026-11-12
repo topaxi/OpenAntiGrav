@@ -294,9 +294,9 @@ impl Sheet {
     /// [`Self::build_with`], each `.mip` in `blobs` drawn from the active texture pack's picture
     /// of it when it has one (`oag_texture::replacer::mip`).
     ///
-    /// Only for a sheet whose every draw goes through [`Self::sheet_rect`]: a replaced image is
-    /// larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
-    /// would sample a corner of it. The race HUD is that; the front end's screens are not yet.
+    /// Only for a sheet whose every draw goes through [`Placed::sheet_rect`]: a replaced image
+    /// is larger than its [`Placed`] says, and a draw that adds a rect to `placed.x` as it was
+    /// would sample a corner of it. The race HUD and the front end's screens are that.
     #[must_use]
     pub fn build_replaced(
         blobs: &[(String, Vec<u8>)],
