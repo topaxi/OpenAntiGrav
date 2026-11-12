@@ -170,6 +170,19 @@ impl Session {
     /// same pages, the cursor on the same rows, the MOD row on the same mod. `None` when no
     /// menu is open.
     pub(crate) fn reopened_menu(&mut self, shell: &super::Shell) -> Option<menu::Menu> {
+        let (model, restored) = self.model_where_stood(shell)?;
+        if !restored {
+            error!("the rebuilt menus lack a page the player was on");
+        }
+        Some(model)
+    }
+
+    /// A menu model built on `shell`, standing where the open menus stand: the trail of pages
+    /// and rows, and the mod the MOD row is on, which no setting holds. `None` when no menu is
+    /// open; the flag says whether every page of the trail exists in the new tree. Every rebuild
+    /// that keeps the player in place goes through this, so none can forget a row that is stored
+    /// nowhere.
+    pub(crate) fn model_where_stood(&mut self, shell: &super::Shell) -> Option<(menu::Menu, bool)> {
         let Stage::Menu(stage) = &self.stage else {
             return None;
         };
@@ -177,12 +190,10 @@ impl Session {
         let held = mods::selection(&stage.menu);
         let skin = stage.skin;
         let mut model = self.menu_model(shell, &skin);
-        if !model.restore_trail(&trail) {
-            error!("the rebuilt menus lack a page the player was on: {trail:?}");
-        }
+        let restored = model.restore_trail(&trail);
         if let Some(id) = held {
             mods::reseat(&mut model, &id, &shell.mods, &shell.strings);
         }
-        Some(model)
+        Some((model, restored))
     }
 }

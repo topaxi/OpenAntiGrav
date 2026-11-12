@@ -337,13 +337,18 @@ out, so two machines that differ in one still match and can race. The filter is
   shared by the switch and `Session::resupply_language`), so a mod row and the MODS page
   read the new language's `strings/<language>.toml` at once and the menus reopen on the
   same page and row, **and the same mod on the MOD row**: that row is stored nowhere, so
-  `Session::reopened_menu` and the MUSIC pool's rebuild (`poll_music_pool`, run when a music scan
-  lands, which under load is after the player has picked a mod) read it off the old model
-  (`oag_game::mods::selection`) and put it back on the new one (`mods::reseat`). A rebuild that
-  forgot it moved the row to the first mod, and a switch pressed next acted on the wrong mod
-  (`crates/game/tests/mods_page.rs`, `a_menu_built_again_keeps_the_mod_the_row_was_on`; the drive
-  test `the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live` failed
-  4 to 5 times in 8 with eight copies running over a CPU stress, and not in 16 after).
+  `Session::model_where_stood` (behind `reopened_menu` and the MUSIC pool's rebuild
+  `poll_music_pool`, which runs when a music scan lands, and under load that is after the
+  player has picked a mod) reads it off the old model (`oag_game::mods::selection`) and puts it
+  back on the new one (`mods::reseat`). A rebuild that forgot it moved the row to the first mod,
+  and the next switch pressed acted on the wrong mod. Helpers:
+  `crates/game/tests/mods_page.rs`, `a_menu_built_again_keeps_the_mod_the_row_was_on`. The call
+  sites only show under load: eight copies of the `--drive` script of the drive test
+  `the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow_live` run at
+  once over `stress-ng --cpu 40` failed 2, 4 and 5 times in 8 before the fix (the last two on a
+  build logging the rebuild) and 0 times in 16 after; the drive test alone passes in about 5 to
+  13 s, and the first rebuild always finds the MOD row on `oag.extras`, which is why only the
+  late one hurts.
   A language the mod ships no file for reads its English, as at boot.
   `crates/game/tests/mods_menu.rs` runs the rebuild for two languages and with a mod on and off;
   the `Session` wiring itself has no test surface (it needs a GPU), see "Switching language
