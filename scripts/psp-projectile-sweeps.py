@@ -19,7 +19,7 @@ Two ways to reach the place:
 - the original's own Autopilot flies the craft and the weapon fires at a spline index
   (`--spline` from `oag-trace track`, `--fire-index`); a Plasma releases 60 frames later, so
   fire it about 85 samples early;
-- `--player-fire-frame N`: no Autopilot, thrust held, fire N frames after GO.
+- `--player-fire-frame N`: no Autopilot, thrust held (`--no-thrust`: parked), fire N frames after GO.
 
     cargo run -q -p oag-trace -- track --source data/images/pulse-psp-usa.chd \\
         --track 'Data\\Environments\\03_Track\\track.vex' > data/scratch/<lane>/03.csv
@@ -29,6 +29,11 @@ Two ways to reach the place:
     uv run --with websocket-client --with evdev python3 scripts/emu-run.py -- \\
         python3 scripts/psp-projectile-sweeps.py --port 45791 --spline data/scratch/<lane>/03.csv \\
         --fire-index 1415 --out data/scratch/<lane>/rocket.json rocket
+
+`--box` also records, at each update's entry and at each query's return, the firing craft's box
+collider (`body+0x3bc`, 0x1e0 bytes: AABB at `+0x00`, pose rows `+0x80`, centre `+0xb0`, scaled axes
+`+0xc0`, dimensions `+0x1d0`) and the body's 16-float pose, and checks that `world + index * 0xc + 0x2454`
+(world from the pointer at `0x08ab0820`) is that collider when a query hit a box.
 
 `--rows-out FILE` also writes one whitespace row per update (entity index, update number, dt,
 age, position, velocity, normal, probe code, sweep code, the `+0x48` word as a float) for a
@@ -55,6 +60,10 @@ PLAYER_OFFSET = 0x2C0
 ENTITY_CRAFT = 0x94
 ENTITY_RECORD = 0x4C
 ENTITY_BODY = 0x794
+BODY_BOX_COLLIDER = 0x3BC
+WORLD_POINTER = 0x08AB0820
+COLLIDER_TABLE = 0x2454
+BOX_BYTES = 0x1E0
 AUTOPILOT_BIT = 0x1000
 FIRE_WORD = 0x1B8
 HELD_WORD = 0x1BC
@@ -143,6 +152,13 @@ def swap(dbg, old, new):
     dbg.add_breakpoint(new)
 
 
+def box_snapshot(dbg, body):
+    """The craft's body pose and its box collider, as hex, read together."""
+    collider = dbg.read_u32(body + BODY_BOX_COLLIDER)
+    return {"collider": collider, "body": f32s(dbg, body, 16),
+            "box": dbg.read(collider, BOX_BYTES).hex()}
+
+
 def flat_rows(log):
     """One row per update: entity index, update number, dt, age, pos, vel, normal, codes, `+0x48`."""
     entities, counts, lines = [], {}, []
@@ -174,6 +190,10 @@ def main():
     parser.add_argument("--max-frames", type=int, default=4000)
     parser.add_argument("--budget", type=float, default=520.0)
     parser.add_argument("--no-fire", action="store_true", help="only log the craft's path")
+    parser.add_argument("--no-thrust", action="store_true",
+                        help="with --player-fire-frame: hold nothing, so the craft fires parked")
+    parser.add_argument("--box", action="store_true",
+                        help="also snapshot the firing craft's box collider beside its body pose")
     parser.add_argument("--player-fire-frame", type=int,
                         help="no Autopilot: hold thrust and fire this many frames after GO")
     args = parser.parse_args()
@@ -187,7 +207,7 @@ def main():
     current = None
     try:
         dbg.resume()
-        dbg.hold(cross=True)
+        dbg.hold(cross=not args.no_thrust)
         dbg.brk()
         dbg.add_breakpoint(WEAPONS_DISPATCH_FIRE)
         current = WEAPONS_DISPATCH_FIRE
@@ -204,7 +224,9 @@ def main():
             if p is None:
                 continue
             if go is None:
-                if f32s(dbg, p["craft"] + 0x2B8, 1)[0] > 0.0:
+                # The manager's race time, not the craft's throttle word: that reads positive on a
+                # held button during the countdown and is zero on a parked craft.
+                if f32s(dbg, dbg.read_u32(RACE_MANAGER) + 0x2B8, 1)[0] > 0.0:
                     go = frame
                     print("GO at frame %d" % frame, flush=True)
                 continue
@@ -279,6 +301,8 @@ def main():
                        "words": list(struct.unpack("<%dI" % (0x180 // 4), blob)),
                        "craft_pose": f32s(dbg, p["body"], 16),
                        "craft_vel": f32s(dbg, p["body"] + 0x140, 3)}
+                if args.box:
+                    rec["entry_box"] = box_snapshot(dbg, p["body"])
                 log["updates"].append(rec)
                 probing = weapon["ret1"] is not None and (
                     args.weapon != "rocket" or not rec["flags"] & 4)
@@ -295,6 +319,12 @@ def main():
                 entry["mesh_point"] = list(struct.unpack_from("<3f", below, 0x10))
                 entry["mesh_collider"] = struct.unpack_from("<i", below, 0x30)[0]
                 entry["mesh_kind"] = struct.unpack_from("<i", below, 0x38)[0]
+                if args.box:
+                    entry["box_snapshot"] = box_snapshot(dbg, p["body"])
+                    world = dbg.read_u32(WORLD_POINTER)
+                    if ram(world) and 0 <= entry["mesh_collider"] < 1024:
+                        entry["table_entry"] = dbg.read_u32(
+                            world + COLLIDER_TABLE + entry["mesh_collider"] * 0xC)
                 if current == weapon["ret1"]:
                     rec["probe"] = entry
                     new = weapon["ret2"]
