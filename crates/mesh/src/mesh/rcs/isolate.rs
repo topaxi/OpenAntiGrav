@@ -38,8 +38,9 @@
 //! - `OAG_ALPHA_EMISSIVE_OFF=1` turns the emissive-in-alpha families' reading
 //!   off (`alpha_emissive`), for the same before and after.
 //!
-//! - `OAG_SPECULAR_PICTURE_OFF=1` leaves `dn_diffuse_specular_emiss` to the sampler order (the
-//!   specular map as the picture, no map weighting the specular).
+//! - `OAG_SPECULAR_PICTURE_OFF=1` leaves `dn_diffuse_specular_emiss` to the sampler order on
+//!   2048 and Omega (the specular map as the picture), and on every title draws its specular
+//!   unweighted by the map.
 //!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or

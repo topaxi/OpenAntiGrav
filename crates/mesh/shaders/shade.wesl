@@ -836,7 +836,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     }
     // **HD's emissive-in-alpha families** (`Emissive::program` mode 12, `mesh::rcs::alpha_emissive`):
     // `MAD H.xyz, T.wwww, C, lit`, `T` the picture's own fetch and `C` the material's emissive
-    // colour in the entry's tint. No third binding: the mask is the unit-0 alpha. The Zone
+    // colour in the entry's tint. The mask is the unit-0 alpha; a `dn_diffuse_specular_emiss` entry (second lane set) binds its SpecularTexture third, read in the specular below. The Zone
     // variants of these programs do not declare the colour, so a Zone race adds nothing.
     if glow_program > 11.5 && glow_program < 12.5 {
         emissive_add = first.a * glow_tint_offset.rgb * (1.0 - zone_on);

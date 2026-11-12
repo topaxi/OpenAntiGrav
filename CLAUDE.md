@@ -45,6 +45,7 @@ just blender-fixtures        # Blender add-on fixtures; needs Blender 4.2+, not 
 just bench-render [title...] # whole-race render benchmark to data/bench/; takes the gate lock itself, never inside a gate; `just bench-compare A B`; docs/tools/render-bench.md
 just audit-leakage           # no tracked game content
 just unpack|wad|view|play ...   # asset tools and the game (see the justfile); just build-allegrex (JDK 21); just mine-names <image>
+just sync-saves <host> [-n]     # data/saves/ both ways with another workstation over ssh, newer file wins, nothing deleted
 ```
 
 Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not
@@ -128,6 +129,7 @@ committed** (`.gitignore`, CI's `leakage` job, `just audit-leakage`;
 
 - **`fd` and `rg` skip `.gitignore`d paths and return nothing under `data/` with exit code 0.** Use `--no-ignore`, or `ls`/`find`/`grep`.
 - **A spawned agent that sees `data/images/` empty has a sandbox limitation, not missing images**: `data/` does not travel into a worktree or restricted sandbox. Check `/bin/ls -la data/images/` first. If empty, **say so in your report** rather than skipping the real-data check, and give the orchestrator the exact command to run.
+- **Save states never go in a repository**, the private one included (they are memory dumps, [ADR-0085](docs/architecture/adr/0085-comparison-originals-live-in-a-private-repository.md) rule 4). Between the maintainer's workstations they travel with `just sync-saves <host>`; a state another host made is there after a sync, not a pull.
 - **In a worktree run `just link-data`** right after `git worktree add` (symlinks `data/` subdirectories from the main checkout; no-op in the main checkout). Without it, tests skip silently, or fail in a heap under `OAG_REQUIRE_GAME_DATA=1`.
 
 ## Commit messages

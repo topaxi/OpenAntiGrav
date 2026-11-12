@@ -36,7 +36,8 @@ model"; this answers it: it renders a procedural triangle-cell mesh, and the cam
 ### Mesh law (read, confidence 75; rewritten 2026-10-27 after the shaders were decoded)
 
 - Grid of 90 columns (`< 0x5a`) by 32 rows (`< 0x20`) of cells; each cell is 6 vertices of 36
-  bytes and 18 indices, `bVar6` alternating per column and per row. Vertex layout, 9 floats: `position`
+  bytes and 21 indices (7 triangles: the top and three walls, 2026-11-12,
+  [campaign-map-projection.md](campaign-map-projection.md), "The prism"), `bVar6` alternating per column and per row. Vertex layout, 9 floats: `position`
   xyz at `+0`, `texCoord` (atlas uv) at `+0x0c`, `texCoord2` (the cell's texel in the cell textures)
   at `+0x14`, `offsetIndices` at `+0x1c`.
 - Cell centre: `x = col * 0.5`, `y = row * 0.8660254` (`DAT_81732ab4`, `DAT_81732ab8`). Adjacent cells

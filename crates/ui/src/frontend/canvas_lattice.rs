@@ -64,13 +64,13 @@ pub const BAKED_VIEW: (f32, f32) = (3000.0, 1500.0);
 
 /// The two outlined triangles in `canvasTexture.gxt`, in atlas pixels: apex
 /// up, then apex down (`DAT_81732ac0..aec` times 2048).
-const ATLAS_UP: [[f32; 2]; 3] = [[14.0, 122.0], [107.0, 122.0], [60.0, 40.0]];
-const ATLAS_DOWN: [[f32; 2]; 3] = [[60.0, 40.0], [107.0, 122.0], [155.0, 40.0]];
+pub(super) const ATLAS_UP: [[f32; 2]; 3] = [[14.0, 122.0], [107.0, 122.0], [60.0, 40.0]];
+pub(super) const ATLAS_DOWN: [[f32; 2]; 3] = [[60.0, 40.0], [107.0, 122.0], [155.0, 40.0]];
 /// The cell's corners for each type, in the same order as the atlas triangles
 /// (`DAT_81732c38`, `DAT_81732c20`).
 const HALF_DY: f32 = CELL_DY / 2.0;
-const CORNERS_UP: [[f32; 2]; 3] = [[-0.5, HALF_DY], [0.5, HALF_DY], [0.0, -HALF_DY]];
-const CORNERS_DOWN: [[f32; 2]; 3] = [[-0.5, -HALF_DY], [0.0, HALF_DY], [0.5, -HALF_DY]];
+pub(super) const CORNERS_UP: [[f32; 2]; 3] = [[-0.5, HALF_DY], [0.5, HALF_DY], [0.0, -HALF_DY]];
+pub(super) const CORNERS_DOWN: [[f32; 2]; 3] = [[-0.5, -HALF_DY], [0.0, HALF_DY], [0.5, -HALF_DY]];
 
 fn barycentric(p: [f32; 2], tri: &[[f32; 2]; 3]) -> [f32; 3] {
     let d = (tri[1][1] - tri[2][1]) * (tri[0][0] - tri[2][0])
@@ -110,7 +110,8 @@ fn atlas_at(p: [f32; 2]) -> Option<[f32; 2]> {
     None
 }
 
-fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 3] {
+/// The atlas texel at `at` (atlas pixels), bilinear, `[r, g, b, a]` in 0 to 255.
+pub(super) fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 4] {
     let x = (at[0] - 0.5).clamp(0.0, (width - 1) as f32);
     let y = (at[1] - 0.5).clamp(0.0, (height - 1) as f32);
     let (x0, y0) = (x.floor(), y.floor());
@@ -120,7 +121,7 @@ fn bilinear(rgba: &[u8], width: u32, height: u32, at: [f32; 2]) -> [f32; 3] {
         let ty = (ty as u32).min(height - 1);
         f32::from(rgba[((ty * width + tx) * 4) as usize + channel])
     };
-    let mut out = [0.0; 3];
+    let mut out = [0.0; 4];
     for (channel, value) in out.iter_mut().enumerate() {
         let top = texel(x0, y0, channel) * (1.0 - fx) + texel(x0 + 1.0, y0, channel) * fx;
         let bottom =
@@ -155,7 +156,7 @@ fn world_at(px: u32, py: u32) -> [f32; 2] {
 }
 
 /// The composite's square-root encode of one channel (0 to 255 in, out).
-fn composite_encode(channel: f32) -> u8 {
+pub(super) fn composite_encode(channel: f32) -> u8 {
     ((channel / 255.0).clamp(0.0, 1.0).sqrt() * 255.0).round() as u8
 }
 
@@ -171,8 +172,10 @@ pub fn bake(atlas: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity((VIEWPORT[0] * VIEWPORT[1] * 4) as usize);
     for py in 0..VIEWPORT[1] {
         for px in 0..VIEWPORT[0] {
-            let rgb = atlas_at(world_at(px, py))
-                .map_or([255.0; 3], |at| bilinear(atlas, width, height, at));
+            let rgb = atlas_at(world_at(px, py)).map_or([255.0; 3], |at| {
+                let texel = bilinear(atlas, width, height, at);
+                [texel[0], texel[1], texel[2]]
+            });
             out.extend(rgb.map(composite_encode));
             out.push(255);
         }

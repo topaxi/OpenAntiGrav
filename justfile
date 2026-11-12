@@ -1144,6 +1144,18 @@ compare-rerender-all *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
+# Sync data/saves/ with another workstation over ssh, both ways: the newer copy of a file wins and
+# nothing is deleted. The other checkout sits at the same path under its own $HOME as this one
+# (OAG_REMOTE_REPO overrides it). Save states are memory dumps, so they travel only between your
+# own machines, never through a repository (ADR-0085). Pass -n for a dry run.
+[doc("Sync data/saves/ with another workstation over ssh, both ways, newer file wins")]
+sync-saves host *flags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    remote="${OAG_REMOTE_REPO:-${PWD#"$HOME"/}}/data/saves/"
+    rsync -a --update --info=stats1 {{flags}} data/saves/ "{{host}}:$remote"
+    rsync -a --update --info=stats1 {{flags}} "{{host}}:$remote" data/saves/
+
 # Rebuild data/compare/ strictly from the curated manifest directory (default data/reference/curated,
 # never the seed set), then upload it to the separate compare Pages project with wrangler. Refuses
 # unless the screenshot-policy ADR's status reads Accepted; never run in CI.

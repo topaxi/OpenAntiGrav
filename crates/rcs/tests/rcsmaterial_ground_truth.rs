@@ -393,6 +393,7 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
     let (mut blocks, mut clean, mut instructions) = (0usize, 0usize, 0usize);
     let mut unnamed: BTreeMap<u8, usize> = BTreeMap::new();
     let mut fencb = 0usize;
+    let mut sun = SunCensus::default();
     for (path, bytes) in &every_material() {
         let mut at = 0usize;
         while let Some(i) = bytes[at..].windows(4).position(|w| w == b"SHO\x08") {
@@ -406,6 +407,7 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
             match fragment::Program::parse(bytes, block) {
                 Some(p) if p.instructions.last().is_some_and(|i| i.end) => {
                     clean += 1;
+                    sun.record(path, block, &p);
                     instructions += p.instructions.len();
                     for i in &p.instructions {
                         fencb += usize::from(i.opcode == 0x3e);
@@ -442,6 +444,124 @@ fn every_fragment_program_on_the_disc_decodes_to_a_clean_end() {
         "330 in DATA00 alone, which is where an independent Python census counted the \
          same number"
     );
+    sun.check();
+}
+
+/// `~crc32("SpecularTexture")`.
+const SPECULAR_TEXTURE: u32 = 0x20c3_e476;
+
+/// The lightmapped fragment programs by family, and how many leave the sun's `N.L` unsaturated
+/// (`Program::sun_diffuse_unsaturated`). A named check over the pass above, which already decodes
+/// every block on the disc.
+#[derive(Default)]
+struct SunCensus {
+    /// `family -> (lightmapped programs, of which unsaturated)`.
+    families: BTreeMap<String, (usize, usize)>,
+    /// `(path suffix, block offset)` of the two blocks the doc quotes instruction by instruction.
+    quoted: BTreeMap<(&'static str, usize), bool>,
+    /// `family -> programs declaring SpecularTexture` (`0x20c3e476`), of every program.
+    specular_texture: BTreeMap<String, usize>,
+}
+
+impl SunCensus {
+    /// Metropia's `dn_diffuse_specular_emiss` (`@0x1f` `DP3 R0.y`, read by `@0x21 MUL`) and Moa
+    /// Therma's `diffuse_normal_specular` (`@0x29` `DP3 R1.w`, read by `@0x2e MUL`).
+    const QUOTED: [(&'static str, usize); 2] = [
+        (
+            "02_track/materials/dn_diffuse_specular_emiss.rcsmaterial",
+            0xbb60,
+        ),
+        (
+            "03_track/materials/diffuse_normal_specular.rcsmaterial",
+            0x9960,
+        ),
+    ];
+
+    fn record(&mut self, path: &str, block: usize, program: &fragment::Program) {
+        let family = path
+            .rsplit('/')
+            .next()
+            .and_then(|f| f.strip_suffix(".rcsmaterial"))
+            .unwrap_or(path)
+            .to_string();
+        if program
+            .declared
+            .samplers
+            .iter()
+            .any(|&(hash, _)| hash == SPECULAR_TEXTURE)
+        {
+            *self.specular_texture.entry(family.clone()).or_default() += 1;
+        }
+        if !program.declared.samples_lightmap() {
+            return;
+        }
+        let unsaturated = program.sun_diffuse_unsaturated();
+        let entry = self.families.entry(family).or_default();
+        entry.0 += 1;
+        entry.1 += usize::from(unsaturated);
+        for (suffix, at) in Self::QUOTED {
+            if path.ends_with(suffix) && block == at {
+                self.quoted.insert((suffix, at), unsaturated);
+            }
+        }
+    }
+
+    fn check(&self) {
+        let programs: usize = self.families.values().map(|f| f.0).sum();
+        let unsaturated: usize = self.families.values().map(|f| f.1).sum();
+        println!("{programs} lightmapped program(s), {unsaturated} with an unsaturated sun N.L");
+        assert_eq!((programs, unsaturated), (7_211, 2_349));
+        let family = |name: &str| self.families.get(name).copied();
+        // The plain diffuse families clamp: their `N.L` is a `DP3_SAT`.
+        for name in [
+            "diffuse",
+            "diffuse_emissive",
+            "diffuse_emissive_alpha",
+            "diffuse_emissive_alpha_glow",
+            "diffuse_emissive_alpha_glow_v01",
+        ] {
+            let (n, u) =
+                family(name).unwrap_or_else(|| panic!("{name} has no lightmapped program"));
+            assert_eq!(u, 0, "{name}: {u} of {n} programs are unsaturated");
+        }
+        // The specular families do not. Their mixed counts are the variants (Zone, shadowed
+        // redraw, no sun) that carry no diffuse sun term.
+        assert_eq!(family("dn_diffuse_specular_emiss"), Some((24, 22)));
+        assert_eq!(family("dn_diffuse_specular_emiss_glow"), Some((18, 18)));
+        assert_eq!(family("dn_diffuse_specular"), Some((36, 36)));
+        assert_eq!(family("diffuse_normal_specular"), Some((328, 152)));
+        for (key, unsaturated) in &self.quoted {
+            assert!(
+                unsaturated,
+                "{key:?}: the doc quotes an unsaturated N.L here"
+            );
+        }
+        assert_eq!(
+            self.quoted.len(),
+            Self::QUOTED.len(),
+            "a quoted block was not reached"
+        );
+        // Only the `dn_` families multiply their specular by a `SpecularTexture`: the `mr_`
+        // family's units 1 and 2 are shadow maps (`TXP`) and it declares no such sampler.
+        println!("SpecularTexture declared by {:?}", self.specular_texture);
+        assert_eq!(
+            self.specular_texture
+                .get("dn_diffuse_specular_emiss")
+                .copied(),
+            Some(120)
+        );
+        assert_eq!(
+            self.specular_texture
+                .get("dn_diffuse_specular_emiss_glow")
+                .copied(),
+            Some(132)
+        );
+        assert_eq!(
+            self.specular_texture
+                .get("mr_diffuse_emissive_alpha_glow_specular"),
+            None
+        );
+    }
 }
 
 /// **The dataflow reproduces two blocks that were read by hand.**

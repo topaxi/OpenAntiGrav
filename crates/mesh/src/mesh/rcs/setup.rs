@@ -136,7 +136,7 @@ pub(super) fn material_setup(
     let mut emissive = emissive;
     // The emissive-in-alpha families take their slot before any other program
     // reading looks at the table: none of those reads the same sampler.
-    super::alpha_emissive::alpha_emissive(
+    let specular_maps = super::alpha_emissive::alpha_emissive(
         model,
         &material_variants,
         &picks,
@@ -174,6 +174,7 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    super::mag_wave::merge(&mut mag_emissive, specular_maps);
     super::mag_wave::merge(&mut mag_emissive, cell_blues);
     super::mag_wave::merge(&mut wave_maps, cell_masks);
     // The light cone's own combine claims its slots after the glow table is

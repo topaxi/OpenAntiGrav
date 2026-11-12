@@ -1089,3 +1089,84 @@ fn a_three_lane_fetch_or_swapped_lanes_are_not_the_packed_normal() {
     assert!(!packed_normal_program(0b0111, [3, 1, 3, 1]).samples_as_packed_normal(1));
     assert!(!packed_normal_program(0b1010, [1, 3, 1, 3]).samples_as_packed_normal(1));
 }
+
+/// Metropia's `dn_diffuse_specular_emiss` lightmapped block (`@0x1f`..`@0x25`): a plain `DP3`
+/// against the sun, read by an unsaturated `MUL` (the diffuse term) and by `MOV_SAT x8` (the
+/// specular's facing term).
+fn sun_program(dot_saturates: bool) -> Program {
+    const SUN: u32 = crate::rcsmaterial::SUN_DIRECTION;
+    let mut dot = insn(0x05); // DP3 R0.y, R0, {sun}
+    dot.dst = 0;
+    dot.mask = 0b0010;
+    dot.saturate = dot_saturates;
+    dot.sources = [reg(0, false), Source::Constant, Source::Input];
+    dot.constant = Some([0.0; 4]);
+    dot.const_slot = Some(9);
+
+    let mut diffuse = insn(0x02); // MUL H1.x, H4.w, R0.yyyy
+    diffuse.dst = 1;
+    diffuse.dst_half = true;
+    diffuse.mask = 0b0001;
+    diffuse.sources = [reg(4, true), reg(0, false), Source::Input];
+    diffuse.swizzles = [[3, 3, 3, 3], [1, 1, 1, 1], [0, 1, 2, 3]];
+
+    let mut facing = insn(0x01); // MOV_SAT x8 R1.w, R0.yyyy
+    facing.dst = 1;
+    facing.mask = 0b1000;
+    facing.saturate = true;
+    facing.sources = [reg(0, false), Source::Input, Source::Input];
+    facing.swizzles = [[1, 1, 1, 1]; 3];
+
+    Program {
+        declared: Declared::default(),
+        parameter_patches: vec![(9, SUN)],
+        instructions: vec![dot, diffuse, facing],
+    }
+}
+
+#[test]
+fn an_unsaturated_dot_with_an_unsaturated_diffuse_reader_leaves_the_sun_unclamped() {
+    assert!(sun_program(false).sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_saturated_dot_is_clamped() {
+    assert!(!sun_program(true).sun_diffuse_unsaturated());
+}
+
+#[test]
+fn the_specular_facing_reader_alone_is_not_a_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions.remove(1);
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_that_saturates_clamps_the_diffuse_term() {
+    let mut program = sun_program(false);
+    program.instructions[1].saturate = true;
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_dot_against_something_other_than_the_sun_is_not_the_sun_term() {
+    let mut program = sun_program(false);
+    program.parameter_patches.clear();
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn a_reader_of_another_lane_does_not_read_the_dot() {
+    let mut program = sun_program(false);
+    program.instructions[1].swizzles[1] = [2, 2, 2, 2];
+    assert!(!program.sun_diffuse_unsaturated());
+}
+
+#[test]
+fn an_overwrite_of_the_dots_lane_ends_the_search() {
+    let mut program = sun_program(false);
+    let mut overwrite = insn(0x01); // MOV R0.y, input
+    overwrite.mask = 0b0010;
+    program.instructions.insert(1, overwrite);
+    assert!(!program.sun_diffuse_unsaturated());
+}
