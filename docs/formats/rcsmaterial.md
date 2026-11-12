@@ -4193,11 +4193,67 @@ three pushbuffer reads and is not used).
   rows give 88.5 and 80.2: those boxes fall on the rail wall and kerb, where the floor is not). The lattice sits lower in the
   frame, so the last two rows are the boxes that see it; the original reads 100.0 and 78.6 in the first two, a little under
   the 102.6 and 81.3 written above (boot 1 against the stored `theirs.png`). Read off the picture, the city, the lit towers
-  and the lights now show through the holes as in the original. **What is left:** the wires are darker than the original's
-  grey (the constant is black, so ours has only the reflection and specular on them; left box 94 against 100, 13 % under
-  grey 12 against 7 %): the lit specular term (`H4`) and whether it reads the lightmap through the alpha is still unread.
+  and the lights now show through the holes as in the original. **What was left:** the wires were darker than the original's
+  grey (left box 94 against 100, 13 % under grey 12 against 7 %). Read and closed below: `H4` is the light, not a
+  specular, and ours lacked the sky reflection (the guess here that ours drew a reflection was wrong).
   Test: `hd_lightmapped_albedo_ground_truth::metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant` (red before:
   "slot 508 binds constant diffuse 02ab9f07"; green after).
+- **The wires' brightness: `H4` is the light, not a specular, and the wire is the sky (`hd-metropia-h4`, 2026-11-12;
+  formula confidence 88).** Block #7 (`@0x5c80`, `ps3-microcode.py fp-file mesh_colour_constant.rcsmaterial 7`, the
+  material out of `DATA02.PSARC` `/data/environments/02_track/materials/`). Units: 0 `Normal` (`0xd9d6922d`, `ds_mesh_n`,
+  at `TC4.xy`), 1 `lightmap` (`0x37b5db58`, at `TC4.zw`), 2 `paraboloidReflectionTex` (`0x9edd3243`, engine-bound).
+  Per instruction:
+
+  ```text
+  N     = normalize(TBN (2 n.rgb - 1))                       @0x00..@0x0c, @0x13
+  sun   = lm.a * sat(N.L) * 0x2dba643d                       @0x14 DP3_SAT, @0x17, @0x34
+  H4    = lm.rgb ^ 0x002c73e8 * 0x8670f0be + sun             @0x12..@0x3b (LG2/MUL/EX2), @0x3c
+  env   = paraboloid(reflect(-V, N))                         @0x1c..@0x38 TEX unit2
+  refl  = lerp(env * T.rgb, luma(env) * T.rgb, T.w)          @0x39, @0x3f, @0x42, @0x44 (T = 0x7480de6d)
+  alpha = n.a                                                @0x3e MOV H0.w, R0
+  rgb   = fog(H4 * C + n.a * refl) / 2                       @0x48 MUL R0.w, @0x49 MAD [C = 0x02ab9f07], @0x4b
+  ```
+
+  So **`H4` is the whole light sum (baked atlas plus the sun), and it multiplies the constant `C`, which is
+  `(0, 0, 0)` on Metropia: it contributes nothing.** There is no specular term in this block, and no specular-map
+  weight like `dn_diffuse_specular_emiss`'s (no specular parameter or sampler is declared). The lightmap does **not**
+  enter through the normal map's alpha: `R0.w` (the unit-0 texel's alpha, which no later instruction overwrites:
+  `R0.x`, `.z` and `.xy` are rewritten, `.w` never) gates only the reflection, and is also the output alpha. N.L is
+  clamped (the decoder prints `DP3_SAT` at `@0x14`), which is moot under a black `C`. **The wire is `n.a` times the tinted sky reflection, and nothing else before fog.**
+- **The same program as `ds_booth_glass`.** Sebenco Climb's `ds_booth_glass` block #7 (`@0x5ca0`) computes the same
+  sum: the same normal decode, atlas power and scale, sun, dual-paraboloid address (`-V.x > R.x` select, `0.25`/`0.5`
+  offsets), luma `{0.300049, 0.589844, 0.109985}`, `0x7480de6d` lerp, `R0.w` gate and `MAD /2` fog, scheduled
+  differently (a line diff of the two listings differs in register allocation and order only). Three differences: the
+  constant hash (`0x7611a2d8` there), the map's sampler (`Texture1` there) and the output alpha (`0` there, `n.a`
+  here). `mesh::rcs::window_glass` already draws the booth's reflection as `Mode::Gated` (`tint` `[1, 0, 2]`), so this
+  family is a second call site of a measured reading.
+- **Ours against the original, before this lane:** ours drew `fog(light * C)` with alpha `n.a` and **no reflection**
+  (`mesh_colour_constant` was in no `window_glass` row), so a wire was `0 * light`, black, plus whatever generic
+  specular the authored path adds (the before frame's wires are black, so that term is near zero on the pair; not
+  measured apart). **The differing term is `n.a * refl`, missing.** It is the darker-than-the-original's-grey wire.
+- **Wired: one `window_glass::FAMILIES` row,** `mesh_colour_constant`, `weight: None`, `Mode::Gated`, no picture, glow
+  or specular, the booth's row with the family's name. Same pair, camera and boxes as the table above, re-rendered from
+  the branch before and after (the before frame reproduces the table's "ours after" column exactly):
+
+  | box (frame fractions) | original | before | after | slot 510 skipped |
+  | --- | --- | --- | --- | --- |
+  | x .04-.22, y .58-.76 | 100.0 / 7 % | 94.1 / 13 % | 97.0 / 7 % | 95.4 / 10 % |
+  | x .70-.88, y .52-.69 | 78.6 / 2 % | 80.7 / 5 % | 81.8 / 3 % | 80.8 / 5 % |
+  | x .04-.22, y .78-.96 | 104.3 / 2 % | 80.7 / 10 % | 92.3 / 2 % | 96.2 / 3 % |
+  | x .70-.88, y .78-.96 | 72.4 / 8 % | 73.0 / 18 % | 86.8 / 5 % | 86.7 / 7 % |
+  | lower 65 % under grey 12 | 3.2 % | 7.7 % | 2.8 % | 4.3 % |
+
+  Grey is the mean of R, G and B; the share is of pixels under 12. Every under-12 share now meets or beats the
+  original's. The fourth box's mean rises past the original's (86.8 against 72.4): the two frames do not hold the same
+  content there (the original's craft and speed readout cover part of it; ours, rendered from the pushbuffer camera,
+  does not show the craft), and the before value's match was black wires over a brighter city, so it is not read as an
+  overshoot of the reflection's gain. Read off the frames, the wires go from black to the original's brownish grey.
+  Confidence 88: a static read whose instruction listing agrees with a second family already drawn and measured
+  through the same reading, and the pair's black shares close. It is short of the 90s because `env_gain`/`env_desat`
+  (the `0x7480de6d` tint, engine-supplied) and the normal map's perturbation of `N` (not drawn: a track vertex carries
+  no tangent frame here) are shared approximations, not re-measured on this surface. Test:
+  `hd_sky_reflection_ground_truth::metropias_lattice_reflects_the_sky_through_its_normal_maps_alpha` (red before:
+  "slot 508 carries no glow-table entry"; green after).
 - **Other circuits (census, `psarc.py list` over the seven `DATA0n.PSARC`).** `mesh_colour_constant.rcsmaterial` exists
   only under `02_track/materials/` and `02_track/materials_dlc/`: the one circuit, so a wired `ALPHA_DIFFUSE` entry moves
   Metropia's slots and no other circuit's.
@@ -4210,7 +4266,9 @@ three pushbuffer reads and is not used).
   `mesh::rcs::psp2`, which has no `mesh_colour_constant` reading (the family draws as the generic path there), so
   `skin::ALPHA_DIFFUSE` does not reach them; the same fix there is a `psp2` family module like `alpha_product.rs`, after the
   program's alpha use is read from the GXP and GCN compiles. Checked, applies, not wired (named in the
-  `omega-and-2048-draw-normal-maps-as-colour` thread).
+  `omega-and-2048-draw-normal-maps-as-colour` thread). **The gated sky reflection (`hd-metropia-h4`) does not reach them either**: `window_glass` runs from
+  `rcs::setup`'s `material_setup`, which `psp2` never calls, and `psp2` binds no sky probe. Checked, applies, not wired:
+  a `psp2` reading would need both the coverage and the reflection, after the GXP and GCN programs are read.
 
 ### Modesto Heights: the banner band is drawn white (slot 550 reversed, 551 forward)
 

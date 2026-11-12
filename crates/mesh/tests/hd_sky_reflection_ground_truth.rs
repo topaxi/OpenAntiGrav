@@ -358,6 +358,42 @@ fn tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha() {
     );
 }
 
+/// Metropia's lattice floor (`docs/formats/rcsmaterial.md`, "Metropia: the lattice floor"):
+/// `mesh_colour_constant`'s lit block #7 is `ds_booth_glass`'s program with its own constant
+/// (`0x02ab9f07`, black): the light times the constant plus the sky times the `Normal` map's alpha.
+/// So every slot's entry reflects unweighted through `a` (`tint` `[1, 0, 2]`). Dropped, the wires
+/// draw black where the original shows them grey.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn metropias_lattice_reflects_the_sky_through_its_normal_maps_alpha() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/02_track/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Metropia builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/mesh_colour_constant.rcsmaterial") {
+            continue;
+        }
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [1.0, 0.0, 2.0], "slot {slot}");
+        checked += 1;
+    }
+    assert!(checked >= 1, "Metropia names mesh_colour_constant in a drawn slot");
+}
+
 /// The same build, honouring HD's render-state rule
 /// (`oag_title::Looks::material_render_state`): every `cf_tree` draw (`0xbd`,
 /// state bit 7) leaves the blended list for the cutout list, unblended, as all
