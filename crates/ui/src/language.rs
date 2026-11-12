@@ -439,6 +439,20 @@ impl CircuitNames {
         })
     }
 
+    /// Names `id` with `name` where the copy chosen (or none) did not, and
+    /// labels `source` as where it came from when no copy was chosen. For a name the
+    /// disc authors beside the circuit rather than in a string table; a circuit
+    /// the table already named keeps the table's.
+    pub fn name_if_absent(&mut self, id: &str, name: &str, source: &str) {
+        if name.is_empty() || self.get(id).is_some() {
+            return;
+        }
+        if self.source.is_empty() {
+            self.source = source.to_string();
+        }
+        self.by_id.insert(id.to_lowercase(), name.to_string());
+    }
+
     /// This circuit's name, or `None` when no copy named it.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&str> {
@@ -653,5 +667,27 @@ mod tests {
         assert_eq!(names.get("altima"), Some("ALTIMA"));
         let bare = [("altima".to_string(), "altima".to_string())];
         assert!(CircuitNames::choose(&copies, &bare).is_none());
+    }
+
+    /// A name the disc authors beside the circuit fills a gap, and never replaces a name a copy gave.
+    #[test]
+    fn an_authored_name_fills_only_what_the_copy_left_unnamed() {
+        let copy = StringTable::from_xml(
+            r#"<StringTable><entry id="01_TRACK" string="VINETA K"/></StringTable>"#,
+        );
+        let copies = [("DATA09".to_string(), copy)];
+        let circuits = [("01_Track".to_string(), "01_Track".to_string())];
+        let mut names = CircuitNames::choose(&copies, &circuits).expect("named");
+        names.name_if_absent("01_Track", "OTHER", "SP.xml");
+        names.name_if_absent("Square", "UNITY SQUARE", "SP.xml");
+        names.name_if_absent("blank", "", "SP.xml");
+        assert_eq!(names.get("01_Track"), Some("VINETA K"));
+        assert_eq!(names.get("square"), Some("UNITY SQUARE"));
+        assert_eq!(names.get("blank"), None);
+        assert_eq!(names.source(), "DATA09", "a chosen copy stays the source");
+        let mut alone = CircuitNames::default();
+        alone.name_if_absent("square", "UNITY SQUARE", "SP.xml");
+        assert_eq!(alone.source(), "SP.xml");
+        assert_eq!(alone.len(), 1);
     }
 }
