@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [omega]
-updated: 2026-11-11
-summary: "Omega front end: circuit names show ids, load order unresolved, campaign pages open"
+updated: 2026-11-12
+summary: "Omega front end: load order unresolved, campaign pages open, 2048 emblem and Team Select undrawn (circuit names closed 2026-11-05)"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -45,9 +45,10 @@ content against `hd-frontend.md`.
 - **Omega's Track Select draws its circuit models (`omega-track-model`,
   2026-10-09)**: 26 scenes, a fresnel material read off the PS4 shader, the
   widget's own `orthoScale` placement; `docs/formats/omega-status.md`, "The
-  circuit model on Track Select". Still open there: circuit names show ids
-  (`CircuitNames::choose` finds no copy naming all 38 circuits, 2048's ten
-  included - a per-circuit fallback would name the 28 the table has), a 2048
+  circuit model on Track Select". Circuit names closed 2026-11-05 (all 38 named, see the same page; re-checked
+  2026-11-12: `--menu-page track-select` reads `ANULPHA PASS`, and
+  `omega_track_model_ground_truth::every_circuit_a_menu_reaches_has_a_name_not_an_id`
+  passes). Still open there: a 2048
   circuit's emblem is missing, `constantAmbientColour` and the field of view
   are **chosen, not measured**, the page's white backdrop hides the rim, and
   Team Select (`team_select: None`) is still undrawn.
