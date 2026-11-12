@@ -43,6 +43,32 @@ pub fn serials(container: &Container, ini: &str) -> Vec<String> {
         .collect()
 }
 
+/// The titles a pack is for: the title `resolve` names for each of `serials` (the answer is a
+/// title's slug, as `titles` spells it), each once, in the order first met. A serial `resolve`
+/// does not know adds nothing, so a pack none of whose serials resolve is for every title, as a
+/// manifest with no `titles` is. The caller owns the answer because this crate knows no title.
+#[must_use]
+pub fn titles(serials: &[String], resolve: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for slug in serials.iter().filter_map(|serial| resolve(serial)) {
+        if !out.contains(&slug) {
+            out.push(slug);
+        }
+    }
+    out
+}
+
+/// Names the titles of a texture pack whose manifest names none, from its `[games]` serials
+/// ([`titles`]); anything else is left as it is, so an author's own `titles` always wins.
+pub fn assign_titles(manifest: &mut Manifest, resolve: &dyn Fn(&str) -> Option<String>) {
+    if !manifest.titles.is_empty() {
+        return;
+    }
+    if let Some(pack) = &manifest.texture_pack {
+        manifest.titles = titles(&pack.serials, resolve);
+    }
+}
+
 /// The manifest of a container that holds a PPSSPP pack and no `oag-mod.toml`; `None`
 /// when it holds no `textures.ini`.
 #[must_use]
@@ -113,6 +139,8 @@ struct ModTable<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<&'a str>,
     keywords: &'a [String],
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    titles: &'a [String],
     #[serde(rename = "default-enabled")]
     default_enabled: bool,
 }
@@ -131,9 +159,10 @@ fn owner(repository: Option<&str>) -> String {
         .map_or_else(|| UNKNOWN_AUTHOR.to_string(), str::to_string)
 }
 
-/// `manifest` (what [`recognise`] made) as the text of an `oag-mod.toml`. The
-/// `[texture-pack]` table names no `serials`: the ini is read on every load, so they follow
-/// the pack when it moves to another commit. The author is the repository's owner, and no
+/// `manifest` (what [`recognise`] made, with [`assign_titles`] applied) as the text of an
+/// `oag-mod.toml`. The `[texture-pack]` table names no `serials`: the ini is read on every
+/// load, so they follow the pack when it moves to another commit. `titles` is written when the
+/// serials resolved to any, so a pack is known as a Pure pack in its own file. The author is the repository's owner, and no
 /// licence is named, as recognition has none.
 ///
 /// # Errors
@@ -156,6 +185,7 @@ pub fn manifest_text(manifest: &Manifest, repository: Option<&str>) -> Result<St
             description: &manifest.description,
             repository,
             keywords: &manifest.keywords,
+            titles: &manifest.titles,
             default_enabled: manifest.default_enabled,
         },
         texture_pack: PackTable { format: "ppsspp" },
@@ -166,13 +196,17 @@ pub fn manifest_text(manifest: &Manifest, repository: Option<&str>) -> Result<St
 /// Writes `folder`'s `oag-mod.toml` from what [`recognise`] makes of it, unless one is
 /// there: **an existing manifest is never touched**, so a hand edit survives every re-run.
 /// Nothing the file says goes stale (id and name follow the folder, serials the ini), which
-/// is why keeping it is enough. A pack read from a `textures.zip` is not written for: a
+/// is why keeping it is enough. `resolve` maps a serial to a title's slug ([`titles`]). A pack read from a `textures.zip` is not written for: a
 /// folder manifest would shadow the zip PPSSPP prefers.
 ///
 /// # Errors
 ///
 /// `folder` holds no `textures.ini` at its root, or the file cannot be written.
-pub fn write_manifest(folder: &Path, repository: Option<&str>) -> Result<Written, Error> {
+pub fn write_manifest(
+    folder: &Path,
+    repository: Option<&str>,
+    resolve: &dyn Fn(&str) -> Option<String>,
+) -> Result<Written, Error> {
     let path = folder.join(MANIFEST);
     if path.exists() {
         return Ok(Written::Kept(path));
@@ -182,8 +216,9 @@ pub fn write_manifest(folder: &Path, repository: Option<&str>) -> Result<Written
         origin: container.label(),
         source: std::io::Error::other(why),
     };
-    let manifest =
+    let mut manifest =
         recognise(&container).ok_or_else(|| not_written(format!("no {INI} at its root")))?;
+    assign_titles(&mut manifest, resolve);
     let text = manifest_text(&manifest, repository).map_err(not_written)?;
     std::fs::write(&path, text).map_err(|source| Error::Io {
         origin: path.display().to_string(),

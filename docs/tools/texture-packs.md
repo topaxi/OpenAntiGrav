@@ -38,7 +38,8 @@ tracked file about them.
 
 Each checkout also gets an `oag-mod.toml`: the manifest the game would otherwise recognise from
 the folder (id `ppsspp.<name>`, `default-enabled = false`, `[texture-pack] format = "ppsspp"`, the
-pin's URL as `repository` and its owner as author), written by `oag-mod init-pack`. It is listed in
+pin's URL as `repository` and its owner as author, and `titles` from the `[games]` serials,
+`["wipeout-pure"]` for the Pure pack), written by `oag-mod init-pack`. It is listed in
 the checkout's `.git/info/exclude`, so it never makes the tree dirty, and a re-run never rewrites
 one that is there: edit it freely (a licence, a name). `just push-data` carries it with the rest
 of the folder. [mods.md](mods.md), "Texture packs", has the details.

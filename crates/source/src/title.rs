@@ -203,6 +203,38 @@ pub const ALL: [&Title; 5] = [
     oag_2048::TITLE,
 ];
 
+/// The title a disc `serial` belongs to, in either spelling (`UCES00465`, `UCES-00465`), when
+/// this build knows it: a serial a title lists for its own releases (language manifests,
+/// pressings), or one a sibling's deny-list names as this title's
+/// ([`oag_title::ForeignSerial`]). `None` means unknown, not "no title": the lists are what
+/// was measured, not every pressing there is.
+#[must_use]
+pub fn by_serial(serial: &str) -> Option<&'static Title> {
+    let bare = |s: &str| s.replace('-', "").to_ascii_uppercase();
+    let wanted = bare(serial);
+    ALL.into_iter().find(|title| {
+        let own = title
+            .front_end
+            .iter()
+            .flat_map(|front_end| front_end.language_manifests)
+            .map(|manifest| manifest.serial)
+            .chain(
+                title
+                    .pressings
+                    .iter()
+                    .flat_map(|pressings| pressings.listed)
+                    .map(|pressing| pressing.serial),
+            );
+        let named_by_sibling = ALL
+            .into_iter()
+            .filter(|other| other.name != title.name)
+            .flat_map(|other| other.foreign_serials)
+            .filter(|foreign| foreign.title == title.name)
+            .map(|foreign| foreign.serial);
+        own.chain(named_by_sibling).any(|s| bare(s) == wanted)
+    })
+}
+
 /// The title whose [`crate::layers::slug`] is `slug` (`wipeout-pulse`), the
 /// spelling a track file's `track.host` and a mod's `titles` use.
 #[must_use]
@@ -255,6 +287,19 @@ pub fn is_preferred_trail_hit_lender(title: &Title) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pulse's and Pure's serials resolve in either spelling through the deny-lists, and one
+    /// no table lists is unknown rather than a guess.
+    #[test]
+    fn a_serial_resolves_to_its_title_in_either_spelling() {
+        let name = |serial| by_serial(serial).map(|title| title.name);
+        assert_eq!(name("UCES-00465"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("UCES00465"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("ucus98712"), Some(oag_pulse::TITLE.name));
+        assert_eq!(name("UCUS98612"), Some(oag_pure::TITLE.name));
+        assert_eq!(name("UCES-00001"), Some(oag_pure::TITLE.name));
+        assert_eq!(name("UCJS10007"), None);
+    }
 
     /// A source that will not open is `None` rather than a guess.
     #[test]

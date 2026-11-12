@@ -11,23 +11,30 @@ pub fn attach(options: &mut oag_raceplay::Options, switches: &crate::settings::M
     options.find_texture_packs = Some(finder(switches));
 }
 
-/// The [`oag_raceplay::texture_pack::Finder`] for the packs `switches` leave on: a race's load
-/// and the front end's boot (`crate::boot::Options::find_texture_packs`) open them the same way.
+/// The [`oag_raceplay::texture_pack::Finder`] for the packs `switches` leave on and whose
+/// `titles` admit the title being loaded: a race's load and the front end's boot
+/// (`crate::boot::Options::find_texture_packs`) open them the same way. A pack for another
+/// title never reaches the load, so it is not reported as unusable.
 #[must_use]
 pub fn finder(switches: &crate::settings::Mods) -> oag_raceplay::texture_pack::Finder {
     let switches = switches.clone();
-    oag_raceplay::texture_pack::Finder(Arc::new(move || match crate::mods::Mods::load(&switches) {
-        Ok(mods) => open(mods.player()),
-        Err(why) => vec![Err(format!("{why:#}"))],
+    oag_raceplay::texture_pack::Finder(Arc::new(move |title| {
+        match crate::mods::Mods::load(&switches) {
+            Ok(mods) => packs_for(&mods, title),
+            Err(why) => vec![Err(format!("{why:#}"))],
+        }
     }))
 }
 
-/// The pack each of `mods` is, those that are not packs left out. Each is opened again from
-/// its path, so the load thread owns its readers.
-fn open<'a>(
-    mods: impl Iterator<Item = &'a oag_mod::Mod>,
+/// The pack each of `mods` that is on and made for `title` is, other mods and packs for other
+/// titles left out. Each is opened again from its path, so the load thread owns its readers.
+#[must_use]
+pub fn packs_for(
+    mods: &crate::mods::Mods,
+    title: &oag_title::Title,
 ) -> Vec<Result<Arc<oag_texture::replacer::Replacements>, String>> {
-    mods.filter(|module| module.manifest.texture_pack.is_some())
+    mods.player_for(title)
+        .filter(|module| module.manifest.texture_pack.is_some())
         .map(|module| {
             let label = module.label();
             oag_mod::Mod::open(Path::new(&label))

@@ -10,11 +10,12 @@ use std::sync::Arc;
 
 use oag_assets::Archives;
 use oag_texture::replacer::{self, Replacements};
+use oag_title::Title;
 
-/// Opens the packs that are on, on the load thread: the pack list reads each pack's
-/// `textures.ini`, which a front end has no reason to do before a race is asked for.
+/// Opens the packs that are on and made for `title`, on the load thread: the pack list reads
+/// each pack's `textures.ini`, which a front end has no reason to do before a race is asked for.
 #[derive(Clone)]
-pub struct Finder(pub Arc<dyn Fn() -> Vec<Result<Arc<Replacements>, String>> + Send + Sync>);
+pub struct Finder(pub Arc<dyn Fn(&Title) -> Vec<Result<Arc<Replacements>, String>> + Send + Sync>);
 
 impl std::fmt::Debug for Finder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,13 +28,18 @@ impl std::fmt::Debug for Finder {
 /// A PPSSPP pack is keyed by the PSP's guest memory, so it applies to a PSP disc whose
 /// serial the pack's `[games]` names; a disc of another platform, or of another serial,
 /// draws the disc's own textures. Asked for and not usable is an absence in the report.
-pub fn engage(finder: Option<&Finder>, archives: &Archives, report: &mut Vec<String>) -> Engaged {
+pub fn engage(
+    finder: Option<&Finder>,
+    title: &Title,
+    archives: &Archives,
+    report: &mut Vec<String>,
+) -> Engaged {
     replacer::install(None);
     let Some(finder) = finder else {
         return Engaged;
     };
     let mut packs = Vec::new();
-    for pack in (finder.0)() {
+    for pack in (finder.0)(title) {
         match pack {
             Ok(pack) => packs.push(pack),
             Err(why) => report.push(format!("texture pack not used: {why}")),

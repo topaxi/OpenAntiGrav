@@ -44,6 +44,7 @@ use oag_ui::language::load::{role_border, role_font};
 /// a pack is then not asked, and the report says why.
 pub(super) fn engage_pack(
     front_end: &oag_title::FrontEnd,
+    title: &oag_title::Title,
     options: &super::Options,
     archives: &oag_assets::Archives,
     report: &mut Vec<String>,
@@ -59,7 +60,7 @@ pub(super) fn engage_pack(
         .find_texture_packs
         .as_ref()
         .filter(|_| !front_end.runtime_palette_faces);
-    oag_raceplay::texture_pack::engage(finder, archives, report)
+    oag_raceplay::texture_pack::engage(finder, title, archives, report)
 }
 
 /// `font`'s atlas as the front end draws it: from the active texture pack's picture of the

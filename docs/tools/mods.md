@@ -53,8 +53,10 @@ A mod **with no licence loads**, and the mods list and the load report print `no
 stated`. `oag` is a semver requirement against this build; a mod asking for another
 version is left out and named. `titles` names the titles the mod is for, by
 `oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
-a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
-opens a mod and checks its manifest.
+a mod whose `titles` leave out the running title is neither loaded nor offered on it: its
+menu rows, strings, MODS page entry, campaigns and (for a texture pack) the pack a load
+considers are all left out, and a `debug` line names the skip (empty `titles`: any title).
+`just mods-check <path>` opens a mod and checks its manifest.
 
 ## Texture packs
 
@@ -64,7 +66,7 @@ the evidence). It needs no `oag-mod.toml`: a folder or a zip with a `textures.in
 or a folder holding a `textures.zip`, is **recognised** and given a manifest: `id`
 `ppsspp.<name, lower-cased and slugged>` (a bare `textures.zip` takes its folder's name), `name`
 that name, version `0.0.0`, no authors, no licence (`no license stated` on the MODS page),
-`titles` empty, and the pack's `[games]` serials. A pack's author who wants a name, release
+the pack's `[games]` serials, and `titles` from them (below). A pack's author who wants a name, release
 and licence writes an `oag-mod.toml`, which wins, and so does the one `just fetch-texture-packs` writes
 into each checkout it makes (below):
 
@@ -80,12 +82,25 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
 # serials = ["UCES00465"]    # absent: read from the ini's [games]
 ```
 
+- **Titles.** A pack's `[games]` serials name the title it is for: the game resolves each serial
+  (`UCES00465` or `UCES-00465`) through the titles' own tables (`oag_source::title::by_serial`: a
+  serial a title lists for its releases, or one a sibling's deny-list names as that title's) and
+  gives a pack whose manifest names no `titles` the slugs of the titles that resolved, each
+  once. A Pure pack is a `wipeout-pure` mod, so it is not loaded, offered or reported on a
+  Pulse race (the old `texture pack not used: ... its [games] does not name UCES-00465` warning
+  was that pack being tried and refused). A serial no title lists adds nothing, and a pack none
+  of whose serials resolve is for every title. An author's own `titles` win. A pack for the
+  right title but another pressing (an EU pack on a US disc) still reaches the load and still
+  warns, since the serial check there is the PSP's.
+
 - **Generated manifest.** `just fetch-texture-packs` runs `oag-mod init-pack` on each checkout,
   which writes the manifest `oag_mod::texture_pack::recognise` would have made (same id, name,
   version `0.0.0`, no licence, `default-enabled = false`, `format = "ppsspp"`) from the same
-  function, so the two cannot drift; the pin's URL becomes `repository` and its owner the author
+  function, so the two cannot drift, plus the `titles` the serials resolve to (the caller hands
+  `oag-mod` the serial-to-title answer, as it knows no title); the pin's URL becomes `repository` and its owner the author
   (the schema wants one; `unknown` when the URL names none). It names **no `serials`**, so they
-  keep following the ini when the pin moves. **An `oag-mod.toml` that is already there is never
+  keep following the ini when the pin moves; its `titles` is written once, so a pack that gains
+  a serial of another title later needs the file regenerated or edited. **An `oag-mod.toml` that is already there is never
   rewritten**, edited or not, which is safe because nothing in the file goes stale (id and name
   follow the folder name). The file is added to the checkout's `.git/info/exclude`, so the script's
   clean-tree check and `--update` still pass. A pack in a PPSSPP install's `PSP/TEXTURES/<serial>/`
@@ -97,7 +112,7 @@ format = "ppsspp"            # the one format; anything else refuses the mod by 
   off is switched on through `[mods] enabled = ["ppsspp.my-pack"]`, beside `disabled` for a mod
   that starts on; an id is in at most one. The MODS page's ENABLED row writes the right one.
   The page's ADDS line for a pack that is on reads **TEXTURES**.
-- **What it does.** A race load opens the packs that are on, takes the first whose `[games]`
+- **What it does.** A race load opens the packs that are on and made for the running title, takes the first whose `[games]`
   names the disc's serial (a PSP disc only: the keys are the PSP's), and the decoders ask it as
   they build a picture (the pack is switched off again when the load ends, so a menu preview draws
   the disc's own): a `.vex` texture (hulls, tracks) by its key, and the whole-image `.mip`
