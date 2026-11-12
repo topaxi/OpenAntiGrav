@@ -954,3 +954,4 @@
 0x000a97f0	function	Track_UpdateCursor	78	projectile-launch-normal.md
 0x000a8198	function	Track_SampleNearestPoint	78	projectile-launch-normal.md
 0x000a7cc8	function	Track_EvaluateSpline	80	projectile-launch-normal.md
+0x003aa0e8	function	FrontEnd_LoadEnvSettings	85	front-end-model-lighting.md
