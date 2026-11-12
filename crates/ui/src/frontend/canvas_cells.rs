@@ -112,12 +112,8 @@ struct Slot {
     raised: bool,
 }
 
-/// The cells the canvas ends up painting at the ground, from every button:
-/// the ring cells and the flat tiles, each by the priority rule above. A raised
-/// tile's cells are left out (the prism picture draws them) but still hold
-/// their priority, so no ring is drawn there.
-#[must_use]
-pub fn resolve(buttons: &[CanvasButton]) -> Vec<Painted> {
+/// The priority each button's writes leave on every cell, raised tiles included.
+fn slots(buttons: &[CanvasButton]) -> std::collections::BTreeMap<(i32, i32), Slot> {
     use std::collections::BTreeMap;
     let mut cells: BTreeMap<(i32, i32), Slot> = BTreeMap::new();
     let mut write = |cell: (i32, i32), slot: Slot| {
@@ -165,6 +161,15 @@ pub fn resolve(buttons: &[CanvasButton]) -> Vec<Painted> {
         }
     }
     cells
+}
+
+/// The cells the canvas ends up painting at the ground, from every button:
+/// the ring cells and the flat tiles, each by the priority rule above. A raised
+/// tile's cells are left out (the prism picture draws them) but still hold
+/// their priority, so no ring is drawn there.
+#[must_use]
+pub fn resolve(buttons: &[CanvasButton]) -> Vec<Painted> {
+    slots(buttons)
         .into_iter()
         .filter(|(_, slot)| slot.priority > 0 && !slot.raised)
         .map(|(cell, slot)| Painted {
@@ -172,6 +177,16 @@ pub fn resolve(buttons: &[CanvasButton]) -> Vec<Painted> {
             fill: slot.fill,
             colour: slot.colour,
         })
+        .collect()
+}
+
+/// The canvas priority of every cell a button wrote, raised tiles included
+/// (`canvas + 0x2f0c4`); a cell not listed is plain ground, 0.
+#[must_use]
+pub fn priorities(buttons: &[CanvasButton]) -> std::collections::BTreeMap<(i32, i32), u8> {
+    slots(buttons)
+        .into_iter()
+        .map(|(cell, slot)| (cell, slot.priority))
         .collect()
 }
 

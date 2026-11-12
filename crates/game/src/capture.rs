@@ -353,6 +353,7 @@ pub fn run(
         // the sound had got to at the end of the previous tick - the last
         // moment it is a measurement rather than a prediction. See
         // `movie::Player::follow`.
+        frontend.set_music_levels(audio.music_levels());
         let events = frontend.update(dt, &mut input, audio.movie_playhead());
         // Every entered screen offered its own movie's track, the same handover
         // `App::tick` does.

@@ -158,6 +158,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         // avoiding a disc read with no fixture. See `psp_boot_fixture`.
         race_cache: Some((Platform::Psp, 0, Arc::clone(&psp_track))),
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -231,6 +232,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         // `start_race_music` decodes nothing: only the menu's loop remains.
         race_cache: None,
         menu_sound: Some(Arc::clone(&menu_sound)),
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,

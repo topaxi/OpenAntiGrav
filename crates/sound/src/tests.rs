@@ -297,6 +297,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -402,6 +403,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -469,6 +471,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -555,6 +558,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -624,6 +628,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -684,6 +689,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -747,6 +753,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -795,6 +802,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -840,6 +848,7 @@ fn a_run_with_no_dump_accumulates_nothing() {
         race_tracks: 0,
         race_cache: None,
         menu_sound: None,
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -904,6 +913,7 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         race_tracks: 0,
         race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
         menu_sound: Some(Arc::clone(&menu_sound)),
+        menu_spectrum: None,
         race_context: None,
         race_prefetch: None,
         race_job: None,
@@ -920,4 +930,36 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         .output
         .with_mixer(|mixer| mixer.play(Play::looping(Arc::clone(&menu_sound), Bus::Music)));
     (audio, menu_sound, race_sound)
+}
+
+/// The map's levels are the spectrum row at the music voice's own position, and nothing without
+/// a spectrum or a voice.
+#[test]
+fn the_music_levels_follow_the_voice_through_the_spectrum() {
+    let (mut audio, ..) = psp_boot_fixture();
+    assert_eq!(audio.music_levels(), None, "no sidecar loaded");
+
+    // 300 rows, band 1 rising from 0 to 1 over ten seconds.
+    let mut bytes = b"AFEX".to_vec();
+    for word in [1u32, 12, 300] {
+        bytes.extend(word.to_le_bytes());
+    }
+    for row in 0..300 {
+        for band in 0..12 {
+            let level = if band == 1 { row as f32 / 300.0 } else { 0.0 };
+            bytes.extend(level.to_le_bytes());
+        }
+    }
+    audio.menu_spectrum = Some(oag_music::spectrum::Spectrum::parse(&bytes).unwrap());
+    let voice = audio.music.expect("the fixture plays the menu loop");
+    assert!(audio.output.with_mixer(|mixer| mixer.seek(voice, 5.0)));
+    let levels = audio.music_levels().expect("a spectrum and a voice");
+    assert!(
+        (levels[1] - 0.5).abs() < 0.01,
+        "5 s of 10 s is 0.5, got {}",
+        levels[1]
+    );
+
+    audio.music = None;
+    assert_eq!(audio.music_levels(), None, "no voice, no levels");
 }

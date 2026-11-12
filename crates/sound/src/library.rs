@@ -143,6 +143,21 @@ pub fn load_front_end(
     oag_music::load_front_end(title, &mut archives, cache_dir)
 }
 
+/// The spectrum sidecar of the front end's music, for a title that ships one.
+///
+/// # Errors
+///
+/// A declared sidecar that is absent or will not parse.
+pub fn load_front_end_spectrum(
+    library: &dyn Library,
+    source: &str,
+) -> Result<Option<oag_music::spectrum::Spectrum>> {
+    let Some((title, mut archives)) = open_archived(library, source) else {
+        return Ok(None);
+    };
+    oag_music::load_front_end_spectrum(title, &mut archives)
+}
+
 /// Decodes the archive entry `name` of `source`, a clip outside the soundtrack.
 ///
 /// # Errors

@@ -39,7 +39,8 @@ impl Draw {
             | Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
             | Self::GlowStamp { .. }
-            | Self::GlowText { .. } => None,
+            | Self::GlowText { .. }
+            | Self::Triangles(_) => None,
         }
     }
 
@@ -118,6 +119,12 @@ impl Draw {
                 rect[1] = about(rect[1], origin.1);
                 rect[2] *= scale;
                 rect[3] *= scale;
+            }
+            // Triangles are opaque (no alpha to fade) and scale with their page.
+            Self::Triangles(triangles) => {
+                for corner in triangles.iter_mut().flatten() {
+                    corner.at = [about(corner.at[0], origin.0), about(corner.at[1], origin.1)];
+                }
             }
             // A movie and the point-cloud pass have no alpha channel to fade
             // and are never part of a page; a text's glow stamp follows its glyph quads, which

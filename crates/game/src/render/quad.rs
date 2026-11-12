@@ -106,6 +106,33 @@ pub(super) const MODE_BUTTONS_ATLAS: f32 = 5.0;
 /// fragment stage an ordinary [`MODE_SPRITE`] quad.
 pub(super) const MODE_SPRITE_GRADIENT: f32 = 6.0;
 
+/// One sheet-textured triangle - [`super::Draw::Triangles`]. The instance has no
+/// room for a triangle under its own names, so [`Quad::triangle`] packs the
+/// three corners into its fields and the vertex stage of `ui.wesl` unpacks them;
+/// the quad's six vertices then draw it once and a degenerate copy.
+pub(super) const MODE_TRIANGLE: f32 = 7.0;
+
+impl Quad {
+    /// The triangle `corners` as one instance. Packing, which `ui.wesl`'s
+    /// `triangle_vertex` mirrors: `rect` holds positions 0 and 1, `uv` position 2
+    /// then sheet pixel 0, `color` sheet pixels 1 and 2, `border` the colour of
+    /// corner 0 and the red of corner 1, `chamfer` its green and blue, `tile` the
+    /// red and green of corner 2 and `rotation` its blue.
+    pub(super) fn triangle(corners: &[oag_ui::frontend::Corner; 3]) -> Self {
+        let [a, b, c] = corners;
+        Self {
+            rect: [a.at[0], a.at[1], b.at[0], b.at[1]],
+            uv: [c.at[0], c.at[1], a.uv[0], a.uv[1]],
+            color: [b.uv[0], b.uv[1], c.uv[0], c.uv[1]],
+            border: [a.color[0], a.color[1], a.color[2], b.color[0]],
+            mode: MODE_TRIANGLE,
+            rotation: c.color[2],
+            chamfer: [b.color[1], b.color[2]],
+            tile: [c.color[0], c.color[1]],
+        }
+    }
+}
+
 impl Renderer {
     pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: [f32; 2]) {
         let solid = self.atlas.solid;

@@ -350,6 +350,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     // `RaceManager_UpdateCountdown` ends in `MusicManager_ClearHold`, and the authored mix's
     // `PreRace` and `Countdown` rows have music at 0.0: the song sounds from the release
     // (`docs/ghidra/functions/ps3-hdfury-eu/now-playing.md`, "When the song starts").
+    spectrum_extension: None,
     race_song_start: oag_title::pre_race::Sourced::measured(
         oag_title::race_song::RaceSongStart::AtGo,
     ),

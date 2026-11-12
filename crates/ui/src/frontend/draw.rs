@@ -23,6 +23,18 @@ use super::rows::LanguageRows;
 use super::*;
 use oag_display::space::pillarbox_in;
 
+/// One corner of a [`Draw::Triangles`] triangle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Corner {
+    /// Where it lands on the screen, in the same space as a [`Draw::Sprite`]'s rect.
+    pub at: [f32; 2],
+    /// The sheet pixel it samples.
+    pub uv: [f32; 2],
+    /// Modulating colour, interpolated across the triangle; the draw is opaque
+    /// to it, so the sampled texel's own alpha is all the transparency there is.
+    pub color: [f32; 3],
+}
+
 /// One thing to draw, in the PSP's 480x272 screen space.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Draw {
@@ -182,6 +194,14 @@ pub enum Draw {
         /// Modulating colour. White leaves the texture alone.
         color: [f32; 4],
     },
+    /// Textured triangles from the sprite sheet, each corner with its own
+    /// position, sheet pixel and colour, drawn in list order.
+    ///
+    /// What a [`Self::Sprite`] cannot say: a picture that is not an
+    /// axis-aligned rectangle of the sheet, or one whose shading differs from
+    /// corner to corner. 2048's campaign map raises lattice cells with it
+    /// (`canvas_wave`).
+    Triangles(Vec<[Corner; 3]>),
     /// A sprite spun about its own centre.
     ///
     /// **A separate variant rather than a `rotation` on [`Self::Sprite`]**: the

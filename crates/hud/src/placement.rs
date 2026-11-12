@@ -117,7 +117,8 @@ fn place_owned(mut draw: Draw, p: &Placement) -> Option<Draw> {
             Draw::Video { .. }
             | Draw::FuryBackdrop(_)
             | Draw::SceneBackdrop(_)
-            | Draw::GlowText { .. } => return None,
+            | Draw::GlowText { .. }
+            | Draw::Triangles(_) => return None,
         }
     }
     Some(draw)

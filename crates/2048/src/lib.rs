@@ -368,8 +368,8 @@ const EFFECTS: oag_title::Effects = {
 /// The soundtrack is declared in [`names::MUSIC_PLUGIN_DEFINITION`], eleven
 /// `PI_Music` nodes whose `location` is a directory holding
 /// [`names::MUSIC_TRACK_FILE`] (read 2026-10-05, `data/audio/music/01` to
-/// `11`). Each track carries an `.fft` sidecar beside it, which nothing here
-/// reads.
+/// `11`). Each track carries an `.fft` sidecar beside it; the front end's is read
+/// through [`oag_title::Music::spectrum_extension`].
 ///
 /// [`oag_title::Music::front_end`] is [`names::FRONT_END_MUSIC`] - see that
 /// constant's own doc for the evidence and for why it names a standalone
@@ -384,6 +384,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     now_playing: Some(NOW_PLAYING),
     // 2048's music player is unread for this; it runs HD's rule through Omega, per the
     // lineage rule for an unmeasured 2048 law. Inherited, not measured.
+    spectrum_extension: Some("fft"),
     race_song_start: oag_title::pre_race::Sourced::inherited(
         oag_title::race_song::RaceSongStart::AtGo,
         "Wipeout HD",

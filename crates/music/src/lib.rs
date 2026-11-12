@@ -49,6 +49,7 @@ pub mod mp3;
 pub mod omega;
 pub mod playlist;
 pub mod song_names;
+pub mod spectrum;
 pub mod wem;
 
 use anyhow::{Context, Result, bail};
@@ -416,6 +417,41 @@ pub fn load_front_end(
     let pcm = decode(&blob, cache_dir).with_context(|| format!("decoding {name}"))?;
     let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name)?;
     Ok(Some((name.to_string(), sound)))
+}
+
+/// The spectrum sidecar of the front end's music, for a title that ships one
+/// ([`oag_title::Music::spectrum_extension`]): the front-end entry name with its
+/// extension replaced.
+///
+/// `Ok(None)` for a title that declares none. A title that declares one and has
+/// no such entry is `Err`, so the caller can say so.
+///
+/// # Errors
+///
+/// A declared sidecar that is absent, will not read, or will not parse.
+pub fn load_front_end_spectrum(
+    title: &Title,
+    archives: &mut Archives,
+) -> Result<Option<spectrum::Spectrum>> {
+    let Some(music) = title.music else {
+        return Ok(None);
+    };
+    let (Some(front_end), Some(extension)) = (music.front_end, music.spectrum_extension) else {
+        return Ok(None);
+    };
+    let stem = front_end
+        .rsplit_once('.')
+        .map_or(front_end, |(stem, _)| stem);
+    let name = format!("{stem}.{extension}");
+    if archives.locate(&name).is_none() {
+        bail!("{name} is not in the archives");
+    }
+    let blob = archives
+        .read_name(&name)
+        .with_context(|| format!("reading {name}"))?;
+    spectrum::Spectrum::parse(&blob)
+        .map(Some)
+        .with_context(|| format!("parsing {name}"))
 }
 
 /// Decodes the ATRAC3+ archive entry `name` to PCM: a clip the game plays through its music
