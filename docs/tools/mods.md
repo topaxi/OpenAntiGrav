@@ -46,7 +46,7 @@ license = "CC-BY-4.0"        # an SPDX expression ("MIT OR Apache-2.0"), or:
 # license-file = "LICENSE"   # a file in the mod (not both)
 description = "What it adds."
 repository = "https://example.org/example"   # optional
-# homepage, keywords = [...], titles = ["wipeout-pulse"], oag = ">=0.1", default-enabled = false (optional)
+# homepage, keywords = [...], titles = ["wipeout-pulse"], needs-titles = ["wipeout-hd"], oag = ">=0.1", default-enabled = false (optional)
 ```
 
 A mod **with no licence loads**, and the mods list and the load report print `no license
@@ -54,7 +54,42 @@ stated`. `oag` is a semver requirement against this build; a mod asking for anot
 version is left out and named. `titles` names the titles the mod is for, by
 `oag_title::Title::slug` (`wipeout-pulse`, `wipeout-hd`, `wipeout-omega-collection`);
 a mod's campaigns are offered only on those (empty: any). `just mods-check <path>`
-opens a mod and checks its manifest.
+opens a mod and checks its manifest. `needs-titles` names titles whose disc the mod draws from:
+the mod loads without one, and its MODS entry says `NEEDS  WIPEOUT HD DISC` while none is on the
+search path.
+
+## Campaign medals: `[campaign-medals]`
+
+A mod may replace the colour swatch Pulse's **Cell Selection** and **Grid Selection** fill a medal
+hexagon with by frames of a medal atlas:
+
+```toml
+[campaign-medals]
+source = { title = "wipeout-hd" }   # or { mod = "<key of [icons]>" }
+per-difficulty = true               # one block of three tiers per difficulty
+# tiers = ["gold", "silver", "bronze"]   # a { mod } atlas: the tier of each row, top to bottom
+```
+
+- **`source`**: exactly one key. `title` is a title slug whose own disc ships the atlas. Only
+  `wipeout-hd` is read today (`Data\FE\Images\Hexmedal_HD.gtf`, DATA04's three-block copy); the
+  mod runs wherever its `titles` allow and shows the swatches when that disc is not on the search
+  path (the load log says why, and `needs-titles = ["wipeout-hd"]` puts a NEEDS line on the MODS
+  page). The frames are read off the player's disc at run time; the mod ships none of them. `mod`
+  names a key of `[icons]`; a mod's own atlas is parsed and checked, and not drawn yet.
+- **`per-difficulty`**: a cell draws the block of the difficulty its best medal was earned on
+  (`best_difficulty`: easy, medium, hard from the top, 183 px apart); a medal with no saved
+  difficulty and every tier hex of Grid Selection draw the middle block (chosen, not measured).
+  Without it, the first block.
+- **`tiers`**: names the tier of each atlas row, so a later tier is a name, not a position. Only
+  `gold`, `silver`, `bronze` load, each once, all three or none; a fourth name is refused with
+  "campaign-defined tiers are not supported yet". A `title` source uses the title's own row order
+  (`oag_title::Campaign::medal_rows`) and ignores it.
+- **Placement**: a 60 px atlas frame is drawn scaled to the hexagon's own rect (Pulse's
+  `Outline_x_y`, 32 x 32 layout units), untinted, the same rect the swatch fills. Frames are 60 px
+  tall at a 61 px row pitch.
+
+The schema stays `v1` (ADR-0064: a compatible addition goes into the same major; the header
+`version` is the TOML Schema language version, not ours).
 
 ## Texture packs
 
@@ -241,6 +276,11 @@ the engine names none of them.
   `--ballisticng-track` still race custom tracks. It changes no race, so the LAN fingerprint
   leaves it out. `crates/game/tests/official_remix.rs` builds every title's tree with it on
   and off.
+- **`hd-medals/` (`oag.hd-medals`): HD Medals.** Off until turned on. Wipeout Pulse's Cell
+  Selection and Grid Selection draw each earned medal as Wipeout HD's own `Hexmedal_HD` frame
+  (`[campaign-medals]` above) from a Wipeout HD disc on the search path; without one the
+  swatches stay and the MODS page names the missing disc. Art only: it changes no rule, so the LAN
+  fingerprint leaves it out.
 - **Delivery** (ADR-0083 decision 5): a checkout finds the submodule; packaged builds
   (AppImage, AUR, Windows, macOS) copy the folder beside the executable, which the release
   recipes do not do yet. Web and phone builds have no official mods.

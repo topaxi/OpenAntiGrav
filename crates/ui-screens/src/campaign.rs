@@ -92,6 +92,7 @@ pub mod flyer;
 pub mod footer;
 pub mod hd;
 mod hex;
+pub mod medal_art;
 pub mod pointer;
 pub mod pulse;
 pub mod selection;
@@ -99,6 +100,7 @@ pub mod selection;
 pub(crate) use hex::{hex_image, hex_rect};
 
 pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
+pub use medal_art::MedalArt;
 
 #[cfg(test)]
 mod tests;
@@ -292,6 +294,8 @@ pub struct GridSelection {
     pulse: pulse::SelectorPulse,
     /// The finger gesture in progress on HD's `Grid Selection`, see [`hd::Swipe`].
     swipe: hd::Swipe,
+    /// What a tier's medal hex is filled with, see [`Self::with_medal_art`].
+    medal_art: MedalArt,
 }
 
 impl GridSelection {
@@ -303,7 +307,26 @@ impl GridSelection {
             per_page: GRIDS_PER_PAGE,
             pulse: pulse::SelectorPulse::default(),
             swipe: hd::Swipe::default(),
+            medal_art: MedalArt::default(),
         }
+    }
+
+    /// Fills the tier hexes with `art` instead of the title's colour swatch.
+    #[must_use]
+    pub fn with_medal_art(mut self, art: MedalArt) -> Self {
+        self.medal_art = art;
+        self
+    }
+
+    /// [`Self::with_medal_art`], on a screen already open.
+    pub fn set_medal_art(&mut self, art: MedalArt) {
+        self.medal_art = art;
+    }
+
+    /// What a tier's medal hex is filled with.
+    #[must_use]
+    pub fn medal_art(&self) -> &MedalArt {
+        &self.medal_art
     }
 
     /// Overrides [`Self::per_page`] - HD/Fury's own `Grid Selection` calls
@@ -510,6 +533,8 @@ pub struct CellSelection {
     fixed_locks: Vec<Option<bool>>,
     index: usize,
     help_open: bool,
+    /// What a cell's medal hex is filled with, see [`Self::with_medal_art`].
+    medal_art: MedalArt,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
     /// The rung the `DifficultyButton` widget's square-button prompt
@@ -605,9 +630,28 @@ impl CellSelection {
             difficulties,
             fixed_locks: Vec::new(),
             help_open: false,
+            medal_art: MedalArt::default(),
             pulse: pulse::SelectorPulse::default(),
             difficulty: Difficulty::Medium,
         }
+    }
+
+    /// Fills the cells' medal hexes with `art` instead of the title's colour swatch.
+    #[must_use]
+    pub fn with_medal_art(mut self, art: MedalArt) -> Self {
+        self.medal_art = art;
+        self
+    }
+
+    /// [`Self::with_medal_art`], on a screen already open.
+    pub fn set_medal_art(&mut self, art: MedalArt) {
+        self.medal_art = art;
+    }
+
+    /// What a cell's medal hex is filled with.
+    #[must_use]
+    pub fn medal_art(&self) -> &MedalArt {
+        &self.medal_art
     }
 
     #[must_use]

@@ -12,7 +12,9 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{Fill, Image, Text, argb_to_rgba};
 
-use super::{CellSelection, GRIDS_PER_PAGE, GridSelection, GridSummary, Layout, hex_rect};
+use super::{
+    CellSelection, GRIDS_PER_PAGE, GridSelection, GridSummary, Layout, MedalArt, hex_rect,
+};
 
 #[cfg(test)]
 mod tests;
@@ -110,7 +112,15 @@ pub fn grid_draw_list(
                     .as_deref()
                     .and_then(|n| hex_slot_xy(n, "Medal_"))
                     .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
-                out.push(tinted_medal_draw(image, placed, hex, medal_argb(medal)));
+                out.push(medal_hex_draw(
+                    image,
+                    placed,
+                    hex,
+                    medal,
+                    model.medal_art(),
+                    None,
+                    sprites,
+                ));
             }
             continue;
         }
@@ -256,12 +266,19 @@ pub fn cell_draw_list(
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
-            out.push(tinted_medal_draw(
-                image,
-                placed,
-                hex_rect(screen, x as usize, y as usize, sprites),
-                model.medal_at(x, y).map_or(0xffff_ffff, medal_argb),
-            ));
+            let hex = hex_rect(screen, x as usize, y as usize, sprites);
+            out.push(match model.medal_at(x, y) {
+                Some(medal) => medal_hex_draw(
+                    image,
+                    placed,
+                    hex,
+                    medal,
+                    model.medal_art(),
+                    model.difficulty_at(x, y),
+                    sprites,
+                ),
+                None => tinted_medal_draw(image, placed, hex, 0xffff_ffff),
+            });
             continue;
         }
         out.push(image_draw(image, placed));
@@ -613,6 +630,41 @@ pub(super) fn medal_argb(medal: Medal) -> u32 {
         Medal::Silver => 0xffda_e3e4,
         Medal::Bronze => 0xffdf_942f,
     }
+}
+
+/// The difficulty block a medal with no saved difficulty is drawn from. **Chosen, not
+/// measured**: Pulse's own default rung is `Medium` (`CellSelection::difficulty`), and a
+/// tier's hex belongs to no single event.
+const UNRECORDED_DIFFICULTY: Difficulty = Difficulty::Medium;
+
+/// A medal's hex: `art`'s atlas frame for the medal and the difficulty it was earned on when
+/// the atlas is in the sprite sheet, the title's tinted swatch otherwise.
+pub(super) fn medal_hex_draw(
+    image: &Image,
+    placed: Placed,
+    hex: Option<[f32; 4]>,
+    medal: Medal,
+    art: &MedalArt,
+    difficulty: Option<Difficulty>,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Draw {
+    if let Some(frame) = art.frame(medal, difficulty.unwrap_or(UNRECORDED_DIFFICULTY))
+        && let Some(atlas) = art.image().and_then(sprites)
+    {
+        let [x, y, width, height] = hex.unwrap_or([image.x, image.y, 32.0, 32.0]);
+        let [u, v, frame_width, frame_height] = frame;
+        let cropped = Image {
+            width: Some(width),
+            height: Some(height),
+            u: Some(u),
+            v: Some(v),
+            texture_width: Some(frame_width),
+            texture_height: Some(frame_height),
+            ..image.clone()
+        };
+        return cropped.sprite_draw(atlas, x, y, 0xffff_ffff);
+    }
+    tinted_medal_draw(image, placed, hex, medal_argb(medal))
 }
 
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored

@@ -20,6 +20,7 @@ pub mod editor;
 mod emblems;
 pub mod hit;
 pub mod launch;
+pub mod medal_art;
 pub mod pure_art;
 pub mod pure_chain;
 pub mod pure_list;
@@ -382,7 +383,7 @@ fn read_hd_texture(
     archives: &mut oag_assets::Archives,
     path: &str,
 ) -> Result<Vec<u8>, oag_assets::Error> {
-    if path == r"Data\FE\Images\Hexmedal_HD.gtf"
+    if path == oag_hd::campaign::MEDAL_ATLAS
         && let Some((_, blob)) = archives
             .read_every_name(path)
             .into_iter()

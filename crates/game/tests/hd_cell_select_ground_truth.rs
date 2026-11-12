@@ -217,3 +217,52 @@ fn every_cell_of_every_grid_names_emblems_that_are_on_the_sheet() {
         "only NitroBattle has no mode icon: {no_event_icon:?}"
     );
 }
+
+/// The medal atlas `oag.hd-medals` draws on Pulse's hexagons resolves off the HD disc as
+/// DATA04's three-block copy, and every tier's frame in every block is a hexagon of opaque texels
+/// that differs from its neighbours; with no HD disc the swatch stays, said by name.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_hd_medal_atlas_resolves_for_a_mod_and_every_frame_is_a_drawn_hexagon() {
+    use oag_tables::race_campaign::{Difficulty, Medal};
+    let Some(source) = oag_testdata::exact("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let medals = oag_mod::CampaignMedals {
+        source: oag_mod::MedalSource::Title("wipeout-hd".to_string()),
+        per_difficulty: true,
+        tiers: Vec::new(),
+    };
+    let none = oag_game::campaign::medal_art::resolve("t", &medals, &[]).unwrap_err();
+    assert!(
+        none.contains("needs") && none.contains("Wipeout HD"),
+        "{none}"
+    );
+
+    let rows = oag_game::launcher::survey(&[source]);
+    let resolved = oag_game::campaign::medal_art::resolve("t", &medals, &rows).expect("resolves");
+    let sheet = Sheet::build(&[], &mut Vec::new()).extended(&resolved.blobs, &mut Vec::new());
+    let image = resolved.art.image().expect("an atlas");
+    let placed = sheet.get(image).expect("the atlas is on the sheet");
+    let mut seen = Vec::new();
+    for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
+            let [u, v, w, h] = resolved.art.frame(medal, difficulty).expect("a frame");
+            let mut texels = Vec::new();
+            for row in 0..h as u32 {
+                let at = ((placed.y + v as u32 + row) * sheet.width + placed.x + u as u32) * 4;
+                texels.extend_from_slice(&sheet.rgba[at as usize..(at + w as u32 * 4) as usize]);
+            }
+            let opaque = texels.chunks_exact(4).filter(|t| t[3] > 200).count();
+            assert!(
+                opaque > 1200,
+                "{medal:?} {difficulty:?}: {opaque} opaque texels"
+            );
+            assert!(
+                !seen.contains(&texels),
+                "{medal:?} {difficulty:?} repeats a frame"
+            );
+            seen.push(texels);
+        }
+    }
+}

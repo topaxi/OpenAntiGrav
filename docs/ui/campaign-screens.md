@@ -438,6 +438,33 @@ They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip
 already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
 (below) and the ticker clip (above).
 
+## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
+
+With the official mod `oag.hd-medals` on and a Wipeout HD disc on the search path, `Medal_x_y`
+on Pulse's `Cell Selection` and `Grid Selection` draws a frame of HD's `Hexmedal_HD` atlas in
+place of the tinted `hex_filled` swatch (`oag_ui_screens::campaign::MedalArt`, chosen by the
+mod's `[campaign-medals]`, `docs/tools/mods.md`). Mod off, or HD absent, draws the swatch:
+`cell-select`/`grid-select` stills are byte-identical to before.
+
+- **Frame choice.** Tier row and difficulty block are `hd_medal_frame`'s (60 px frames, 61 px row
+  pitch, 183 px block pitch, `DATA04`'s three-block copy read by
+  `oag_game::campaign::read_hd_texture`; block-to-difficulty mapping confidence 90, HD's
+  section above). A cell takes the block of its saved `best_difficulty`; one with none, and every
+  `Grid Selection` tier hexagon, takes the middle block. **Chosen, not measured**: Pulse's own
+  default rung is medium and a tier belongs to no one event.
+- **Placement.** The frame is drawn at the slot's `Outline_x_y` rect (32 x 32 layout units),
+  scaled 32/60, untinted, no offset: the same rect `tinted_medal_draw` fills with the swatch.
+  Measured on a 1440 x 816 still (`--menu-page cell-select`, same record file, mod off against
+  on, the top-left hexagon): the swatch's coloured extent is 92 x 80 px, the frame's 89 x 78, 2 px
+  in from the left edge and 1 px from the top. Both hexagons are flat-topped.
+- **Tiers.** Gold, silver and bronze rows read as pale yellow, grey-white and brown with the
+  title's own shading baked in, so no tint is applied.
+- **Omega, 2048.** Not wired: Omega's atlas is a `.gnf` with its own row order and the resolver
+  refuses a title that is not HD's dialect; 2048 ships none. Checked, differs.
+- **Capture caveat.** `--menu-page cell-select` on Pulse feeds the saved difficulty to the model
+  only when art is on (it chooses the block); with the swatch the still keeps its old
+  `Best  Bronze` row, where a live session reads `Bronze (Hard)`.
+
 ## Captures
 
 `--menu-page grid-select` / `--menu-page cell-select`
