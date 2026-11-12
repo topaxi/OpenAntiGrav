@@ -730,10 +730,7 @@ impl Frontend {
     ) -> Draw {
         let layout = canvas_prism::layout();
         let at = camera.project(canvas_camera::tile_top(CampaignMap::cell(event)));
-        let origin = (
-            at.0.round() - layout.anchor.0,
-            at.1.round() - layout.anchor.1,
-        );
+        let origin = (at.0 - layout.anchor.0, at.1 - layout.anchor.1);
         // One texel in from the picture's edge, which the bake leaves clear, so
         // a filtered draw never reads the sheet's neighbour along it.
         Draw::Sprite {

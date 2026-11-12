@@ -140,7 +140,10 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      `0x81072702` read: `u + 0.0459 k`, `v + 0.0400 row`; the per-shape
      `icon_u`/`icon_v` are the unread input, 0.415 flag and 0.507 stopwatch
      being the two live `u`). Reading those would draw the glyph from the
-     canvas and is the natural next step with item 2.
+     canvas and is the natural next step with item 2. The downloadable
+     tiers draw the same hexagonal prism as a stand-in (their `(3, 2)` step
+     gives mixed `col + row` parity and `TouchCampaignHD_Item`'s footprint is
+     unread).
   2. **The striped and dotted cells** around and between tiles: the button's
      ring (`CanvasButton_PaintIconAndRing` `0x8106fbd8`, cell writer
      `0x81073aee`, the chain walk `0x810ef5fe`), fill types as atlas shifts.

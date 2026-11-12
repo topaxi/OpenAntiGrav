@@ -303,8 +303,8 @@ picture serve every state through a sprite tint; the picture is derived from the
 mesh and the programs, with no hand-placed art. The ground is drawn as a black
 overlay with alpha `1 - sqrt(c)`, so it darkens the lattice picture beneath it
 and does not repeat it. A tile is placed by the camera's projection of
-`tile_top` and not rounded: a rounded place moved a tile 0.2 px further from
-frame `13`'s Event 4.
+`tile_top` and not rounded to a pixel: rounded, Event 4 of frame `13` read 2.0 px
+off in `y` against 1.76 unrounded (the table above is the unrounded place).
 
 **Colours: the canvas's own, `g_CanvasStateColours`** (read live above):
 `20d000` a passed event, `d0d000` an elite one, `909090` an open one. The
@@ -322,6 +322,16 @@ the green channel goes `231 -> 161` in the frame and `230 -> 192` in ours, so
 0.70. The ground's relief alpha (`0x01..0x22`, unread; the bake's ground is flat
 at 0) raises the six-cell sum, and one tile's shade at a vertex shared with a
 neighbouring tile is taken from an isolated tile; neither was separated.
+
+**The downloadable tiers share the picture and are not measured with it.** Their
+step is `(3, 2)` plus a grid offset, so `col + row` is even only when
+`dx + dy + x` is (grid 0's offset `(1, 1)` alternates with `x`). A 3 x 2 block of
+odd parity is not the hexagon around a lattice vertex, and the HD/Fury button
+class (`TouchCampaignHD_Item`) was not read, so its footprint is unknown. Ours
+draws the same hexagonal prism at the block's centre, as the flat art did: a
+stand-in for those tiers, not a measurement. A step of 3 columns also makes
+neighbouring tiles overlap (a hexagon is 4 columns wide); they are drawn far to
+near by row.
 
 Not drawn, and said so: the glyph through the cells' shift (the disc's own mode
 icon sprite lies over the face instead, as before), the ring and path cells, the
