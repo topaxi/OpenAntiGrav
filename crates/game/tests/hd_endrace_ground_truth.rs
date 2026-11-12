@@ -496,6 +496,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
     };
 
     let layers = draw(&oag_ui_screens::endrace::HdRewards {
+        tier: None,
         place: Some(3),
         medal: Some(oag_tables::race_campaign::Medal::Bronze),
         campaign: true,
@@ -519,6 +520,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
 
     // Not a campaign race and no place: only the authored labels.
     let bare = texts(&draw(&oag_ui_screens::endrace::HdRewards {
+        tier: None,
         place: None,
         medal: None,
         campaign: false,

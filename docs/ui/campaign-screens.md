@@ -441,17 +441,19 @@ already gets. PSP output is unchanged. Nothing else on these two screens has bee
 ## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
 
 With the official mod `oag.hd-medals` on and a Wipeout HD disc on the search path, `Medal_x_y`
-on Pulse's `Cell Selection` and `Grid Selection` draws a frame of HD's `Hexmedal_HD` atlas in
+on Pulse's `Cell Selection` draws a frame of HD's `Hexmedal_HD` atlas in
 place of the tinted `hex_filled` swatch (`oag_ui_screens::campaign::MedalArt`, chosen by the
 mod's `[campaign-medals]`, `docs/tools/mods.md`). Mod off, or HD absent, draws the swatch:
-`cell-select`/`grid-select` stills are byte-identical to before.
+`cell-select`/`grid-select` stills are byte-identical to before. `Grid Selection`'s tier hexagons
+keep the swatch with the mod on too (2026-11-12, maintainer): HD's Grid Selection has no tier medal
+hexagons (`grid-select@N` stills, mod on against off: byte-identical).
 
 - **Frame choice.** Tier row and difficulty block are `hd_medal_frame`'s (60 px frames, 61 px row
   pitch, 183 px block pitch, `DATA04`'s three-block copy read by
   `oag_game::campaign::read_hd_texture`; block-to-difficulty mapping confidence 90, HD's
-  section above). A cell takes the block of its saved `best_difficulty`; one with none, and every
-  `Grid Selection` tier hexagon, takes the middle block. **Chosen, not measured**: Pulse's own
-  default rung is medium and a tier belongs to no one event.
+  section above). A cell takes the block of its saved `best_difficulty`; one with none takes the middle
+  block, through `CellSelection::medal_block_at`, which HD's own Cell Selection calls too (one
+  rule). **Chosen, not measured**: Pulse's own default rung is medium.
 - **Placement.** The frame is drawn at the slot's `Outline_x_y` rect (32 x 32 layout units),
   scaled 32/60, untinted, no offset: the same rect `tinted_medal_draw` fills with the swatch.
   Measured on a 1440 x 816 still (`--menu-page cell-select`, same record file, mod off against

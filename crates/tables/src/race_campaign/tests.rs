@@ -50,7 +50,7 @@ fn parses_a_grid_and_its_cells() {
     assert_eq!(grid.unlock_grid.as_deref(), Some("GridW"));
     assert_eq!(grid.group, None);
     assert_eq!(grid.cells.len(), 4);
-    assert_eq!(grid.max_points(), 12);
+    assert_eq!(grid.max_points(MedalTiers::standard()), 12);
 }
 
 #[test]
@@ -261,9 +261,9 @@ fn a_negative_value_is_also_no_result() {
 
 #[test]
 fn medal_points_match_the_measured_table() {
-    assert_eq!(Medal::Gold.points(), 3);
-    assert_eq!(Medal::Silver.points(), 2);
-    assert_eq!(Medal::Bronze.points(), 1);
+    assert_eq!(Medal::Gold.points(MedalTiers::standard()), 3);
+    assert_eq!(Medal::Silver.points(MedalTiers::standard()), 2);
+    assert_eq!(Medal::Bronze.points(MedalTiers::standard()), 1);
 }
 
 #[test]
@@ -299,11 +299,11 @@ const SMALL_GRID_FIXTURE: &str = r#"
 fn points_earned_sums_medal_points_by_cell_name() {
     let grid = parse(SMALL_GRID_FIXTURE).expect("parses");
     let gold_first = |name: &str| (name == "gridW_1_1").then_some(Medal::Gold);
-    assert_eq!(grid.points_earned(&gold_first), 3);
+    assert_eq!(grid.points_earned(MedalTiers::standard(), &gold_first), 3);
     let none = |_: &str| None;
-    assert_eq!(grid.points_earned(&none), 0);
+    assert_eq!(grid.points_earned(MedalTiers::standard(), &none), 0);
     let both_silver = |_: &str| Some(Medal::Silver);
-    assert_eq!(grid.points_earned(&both_silver), 4);
+    assert_eq!(grid.points_earned(MedalTiers::standard(), &both_silver), 4);
 }
 
 /// `Unlock_GridPointsMet`'s case-insensitive name match (`"GridW"` against
@@ -316,17 +316,37 @@ fn grid_points_met_matches_the_named_grid_case_insensitively() {
         parse(SMALL_GRID_FIXTURE).expect("parses"),
     ];
     let gold_everything = |_: &str| Some(Medal::Gold);
-    assert!(grid_points_met(&grids, "GridW", &gold_everything));
-    assert!(grid_points_met(&grids, "gridw", &gold_everything));
+    assert!(grid_points_met(
+        &grids,
+        MedalTiers::standard(),
+        "GridW",
+        &gold_everything
+    ));
+    assert!(grid_points_met(
+        &grids,
+        MedalTiers::standard(),
+        "gridw",
+        &gold_everything
+    ));
     let none = |_: &str| None;
-    assert!(!grid_points_met(&grids, "GridW", &none));
+    assert!(!grid_points_met(
+        &grids,
+        MedalTiers::standard(),
+        "GridW",
+        &none
+    ));
 }
 
 #[test]
 fn grid_points_met_is_false_for_an_unknown_grid_name() {
     let grids = vec![parse(FIXTURE).expect("parses")];
     let gold_everything = |_: &str| Some(Medal::Gold);
-    assert!(!grid_points_met(&grids, "GridQ", &gold_everything));
+    assert!(!grid_points_met(
+        &grids,
+        MedalTiers::standard(),
+        "GridQ",
+        &gold_everything
+    ));
 }
 
 #[test]
@@ -334,7 +354,12 @@ fn grid_points_met_fails_below_the_threshold() {
     let grids = vec![parse(SMALL_GRID_FIXTURE).expect("parses")];
     // Only one of gridW's two cells medalled: 3 points < 5 required.
     let one_gold = |name: &str| (name == "gridW_1_1").then_some(Medal::Gold);
-    assert!(!grid_points_met(&grids, "gridW", &one_gold));
+    assert!(!grid_points_met(
+        &grids,
+        MedalTiers::standard(),
+        "gridW",
+        &one_gold
+    ));
 }
 
 /// A standalone fixture, since other tests index `grid.cells` positionally.

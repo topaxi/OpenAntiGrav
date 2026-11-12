@@ -240,17 +240,20 @@ impl Session {
             let key = stage.result_key.clone();
             let observation = stage.observation();
             if let Some(cell) = stage.campaign_cell.as_ref() {
-                self.records.record_campaign(
-                    stage
-                        .campaign_custom
-                        .as_ref()
-                        .map(|custom| custom.records_title.as_str())
-                        .or(campaign_title.as_deref())
-                        .unwrap_or(&key.title),
-                    &cell.name,
-                    observation.campaign_medal,
-                    observation.campaign_difficulty,
-                );
+                match stage.campaign_custom.as_ref() {
+                    Some(launch) => launch.record_result(
+                        &mut self.records,
+                        &cell.name,
+                        stage.campaign_tier_name().as_deref(),
+                        observation.campaign_difficulty,
+                    ),
+                    None => self.records.record_campaign(
+                        campaign_title.as_deref().unwrap_or(&key.title),
+                        &cell.name,
+                        observation.campaign_medal,
+                        observation.campaign_difficulty,
+                    ),
+                }
             }
             if let Some(progress) = stage.campaign_2048_event.as_ref() {
                 self.records.record_campaign(

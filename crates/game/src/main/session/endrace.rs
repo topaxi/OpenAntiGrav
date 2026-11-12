@@ -159,7 +159,10 @@ impl Session {
             suggested_ship: false,
         });
 
-        let strings = shell.strings.clone();
+        let mut strings = shell.strings.clone();
+        if let Some(launch) = stage.campaign_custom.as_ref() {
+            oag_game::campaign::custom::layer_words(&mut strings, launch.words.as_deref());
+        }
         let skin_line_height = shell.menu_font.as_ref().unwrap_or(&shell.font).line_height;
         let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, skin_line_height);
         let frame = shell.frame.clone();
@@ -211,6 +214,11 @@ impl Session {
             });
             Some(oag_ui_screens::endrace::Rewards {
                 medal: observation.campaign_medal.map(to_campaign_medal),
+                tier: stage
+                    .campaign_custom
+                    .as_ref()
+                    .zip(stage.campaign_tier_name())
+                    .and_then(|(launch, name)| launch.own_phrase_tier(&name)),
                 campaign,
                 loyalty,
             })
@@ -288,6 +296,7 @@ impl Session {
                         });
                         split_rewards.push(oag_ui_screens::endrace::Rewards {
                             medal: None,
+                            tier: None,
                             campaign: false,
                             loyalty,
                         });

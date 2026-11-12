@@ -61,7 +61,7 @@ pub fn phrase(medal: Medal) -> &'static str {
     match medal {
         Medal::Gold => "ER_GMA",
         Medal::Silver => "ER_SMA",
-        Medal::Bronze => "ER_BMA",
+        _ => "ER_BMA",
     }
 }
 
@@ -124,7 +124,7 @@ pub fn voice(medal: Medal) -> oag_gameplay::cue::Cue {
     match medal {
         Medal::Gold => Cue::SpeedLapGold,
         Medal::Silver => Cue::SpeedLapSilver,
-        Medal::Bronze => Cue::SpeedLapBronze,
+        _ => Cue::SpeedLapBronze,
     }
 }
 

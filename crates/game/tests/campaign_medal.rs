@@ -86,7 +86,7 @@ fn to_records_medal(medal: oag_tables::race_campaign::Medal) -> Medal {
     match medal {
         oag_tables::race_campaign::Medal::Gold => Medal::Gold,
         oag_tables::race_campaign::Medal::Silver => Medal::Silver,
-        oag_tables::race_campaign::Medal::Bronze => Medal::Bronze,
+        _ => Medal::Bronze,
     }
 }
 
@@ -119,7 +119,7 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
     assert_eq!(row.best_medal, Some(Medal::Bronze));
     assert_eq!(
         row.best_points,
-        Some(medal.points()),
+        Some(medal.points(oag_tables::race_campaign::MedalTiers::standard())),
         "records::Medal::points must agree with race_campaign::Medal::points"
     );
 

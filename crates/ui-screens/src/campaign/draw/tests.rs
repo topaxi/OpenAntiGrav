@@ -5,6 +5,7 @@
 
 mod medal_art;
 mod tier_medal;
+mod tiers;
 mod tint;
 
 use super::*;
@@ -887,8 +888,8 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
     assert!(
         texts.contains(&&format!(
             "{}/{}",
-            Medal::Silver.points(),
-            Medal::Gold.points()
+            Medal::Silver.points(MedalTiers::standard()),
+            Medal::Gold.points(MedalTiers::standard())
         )),
         "{texts:?}"
     );

@@ -549,6 +549,36 @@ impl RaceStage {
         finished: bool,
         best_lap_ticks: Option<u32>,
     ) -> Option<oag_game::records::Medal> {
+        let tier = self.campaign_tier(finished, best_lap_ticks)?;
+        Some(oag_game::unlock::to_records_medal(
+            self.campaign_tiers().class(tier),
+        ))
+    }
+
+    /// The medal tiers this race's campaign awards: a mod campaign's own list, else the title's.
+    pub(crate) fn campaign_tiers(&self) -> &oag_tables::race_campaign::MedalTiers {
+        self.campaign_custom.as_ref().map_or(
+            oag_tables::race_campaign::MedalTiers::standard(),
+            |launch| &launch.tiers,
+        )
+    }
+
+    /// The name of the tier this race has earned on its campaign cell, as the campaign's own
+    /// list calls it; recorded under a mod campaign's title by
+    /// `Launch::record_result`.
+    pub(crate) fn campaign_tier_name(&self) -> Option<String> {
+        let standing = self.race.player_standing();
+        let tier = self.campaign_tier(self.race.finished(), standing.best_lap_ticks)?;
+        Some(self.campaign_tiers().get(tier)?.name.clone())
+    }
+
+    /// The tier this race earns against [`Self::campaign_cell`]: [`Self::campaign_medal`]'s law,
+    /// as a position in [`Self::campaign_tiers`].
+    fn campaign_tier(
+        &self,
+        finished: bool,
+        best_lap_ticks: Option<u32>,
+    ) -> Option<oag_tables::race_campaign::Medal> {
         use oag_tables::race_campaign::Mode as CampaignMode;
         let cell = self.campaign_cell.as_ref()?;
         let value = match cell.mode {
@@ -582,12 +612,12 @@ impl RaceStage {
         let difficulty = self
             .campaign_difficulty
             .unwrap_or(oag_tables::race_campaign::Difficulty::Medium);
-        let medal = cell.evaluate_medal_for_difficulty(value, difficulty)?;
-        Some(match medal {
-            oag_tables::race_campaign::Medal::Gold => oag_game::records::Medal::Gold,
-            oag_tables::race_campaign::Medal::Silver => oag_game::records::Medal::Silver,
-            oag_tables::race_campaign::Medal::Bronze => oag_game::records::Medal::Bronze,
-        })
+        match &self.campaign_custom {
+            Some(launch) => launch
+                .tier_targets
+                .evaluate(&cell.mode, value, difficulty),
+            None => cell.evaluate_medal_for_difficulty(value, difficulty),
+        }
     }
 
     /// [`oag_tables::race_campaign::Difficulty`] -> `oag_game::records::Difficulty`,

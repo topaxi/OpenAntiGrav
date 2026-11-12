@@ -302,6 +302,14 @@ touch front end within one process - see
 carries no dependency on this file's own schema at all; only the tier
 *earned* against a gate's own name comes from `[[campaign]]`.
 
+**A mod campaign's own medal tiers (`[[medal-tier]]`, `docs/formats/custom-campaign.md`)
+are kept by name** in the same `[[campaign]]` row: `best_tier`/`last_tier`, written only when the
+tier is not the word of `best_medal`/`last_medal` (`best_medal` keeps the gold, silver or bronze
+that stands in for it, `MedalTiers::class`, so the trophy and jingle code and every older reader
+keep working). A row written before the keys existed has none and reads as the tier its
+`best_medal` names; a disc campaign's row is the file it always was. The better of two results
+is decided by the campaign's own tier order (`Store::record_campaign_tier`).
+
 ## What is not built yet
 
 There is still no records **browser** - a circuit list plus every stored best

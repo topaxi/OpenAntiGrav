@@ -451,6 +451,10 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 # looking dead. `crates/game/src/main/campaign_stage.rs`.
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
+# The end-of-race award line for a tier a campaign mod declares that the title has no phrase for
+# (`%s` is the tier's name): the title's own lines (`ER_GMA`, `ER_SMA`, `ER_BMA`) cover gold, silver
+# and bronze. `crates/ui-screens/src/endrace/draw.rs`.
+OAG_MEDAL_AWARD = { text = "%s MEDAL AWARDED", human = false }
 OAG_CAMPAIGN_NOT_PLAYABLE = { text = "THIS CAMPAIGN CANNOT BE PLAYED IN THIS BUILD YET", human = false }
 # A mod campaign event naming a team, pilot or disc this machine does not have
 # (ADR-0077), and the page that picks the disc's campaign or a mod's.

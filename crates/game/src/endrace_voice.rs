@@ -65,7 +65,7 @@ pub fn medal_cue(medal: Medal) -> Cue {
     match medal {
         Medal::Gold => Cue::MedalGold,
         Medal::Silver => Cue::MedalSilver,
-        Medal::Bronze => Cue::MedalBronze,
+        _ => Cue::MedalBronze,
     }
 }
 

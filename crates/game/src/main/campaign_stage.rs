@@ -16,7 +16,7 @@ use oag_tables::race_campaign;
 use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 
 use oag_game::campaign::with_opening_difficulty;
-use oag_game::unlock::{campaign_medal_of, to_campaign_difficulty, to_campaign_medal};
+use oag_game::unlock::{campaign_medal_of, campaign_tier, to_campaign_difficulty};
 
 /// One open campaign screen: `Campaign Selection` (HD and Omega), `Grid
 /// Selection`, or `Cell Selection` over one of its tiers.
@@ -225,6 +225,8 @@ pub(crate) struct CampaignStage {
     /// The mod campaign on screen, `None` for the disc's own: its `open` and
     /// `requires` locks, and its hidden cells.
     custom: Option<oag_game::campaign::custom::Custom>,
+    /// The medal tiers: the mod campaign's own list, the standard one on a disc campaign.
+    tiers: race_campaign::MedalTiers,
     /// [`oag_title::Campaign::dialect`] of the title, the draw list's choice.
     dialect: oag_title::CampaignDialect,
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
@@ -283,6 +285,10 @@ impl CampaignStage {
             || oag_game::records::campaign_title(title_ref, platform),
             |custom| custom.records_title.clone(),
         );
+        let tiers = custom.as_ref().map_or_else(
+            || race_campaign::MedalTiers::standard().clone(),
+            |custom| custom.tiers.clone(),
+        );
         let grid_range = 0..grids.len();
         let cell_cursor = CellCursor::kept(records.campaign_cursor(&campaign_title));
         let kept_grid = cell_cursor.grid_in(grids.iter().map(|grid| grid.name.as_str()), &grid_range);
@@ -301,9 +307,10 @@ impl CampaignStage {
             let model = oag_ui_screens::campaign::GridSelection::new(
                 grids
                     .iter()
-                    .map(|grid| Self::grid_summary(grid, &campaign_title, &records))
+                    .map(|grid| Self::grid_summary(grid, &campaign_title, &records, &tiers, custom.as_ref()))
                     .collect(),
-            );
+            )
+            .with_tiers(tiers.clone());
             // A mod campaign on HD's screens has no `Campaign Selection` ahead
             // of it, and HD's grid pages one tier at a time.
             let mut model = if custom.is_some() && title_ref.campaign.dialect.draws_hd_screens() {
@@ -339,6 +346,7 @@ impl CampaignStage {
             title,
             campaign_title,
             custom,
+            tiers: tiers.clone(),
             dialect: title_ref.campaign.dialect,
             circuit_names,
             records,
@@ -611,13 +619,18 @@ impl CampaignStage {
         grid: &race_campaign::Grid,
         title: &str,
         records: &oag_game::records::Store,
+        tiers: &race_campaign::MedalTiers,
+        custom: Option<&oag_game::campaign::custom::Custom>,
     ) -> oag_ui_screens::campaign::GridSummary {
-        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, &|cell_name| {
-            records
-                .campaign_medal(title, cell_name)?
-                .best_medal
-                .map(to_campaign_medal)
-        })
+        let mut summary = oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+            grid,
+            tiers,
+            &|cell_name| campaign_tier(records.campaign_medal(title, cell_name)?, tiers),
+        );
+        if let Some(custom) = custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
     }
 
     /// Every grid this campaign carries - `crate::main::session::endrace`'s
@@ -651,12 +664,12 @@ impl CampaignStage {
         let Some(grid) = self.grids.get(which) else {
             return false;
         };
-        let medal_of = campaign_medal_of(&self.records, &self.campaign_title);
-        if !grid.locked || grid.points_earned(&medal_of) > 0 {
+        let medal_of = campaign_medal_of(&self.records, &self.campaign_title, &self.tiers);
+        if !grid.locked || grid.points_earned(&self.tiers, &medal_of) > 0 {
             return true;
         }
         match grid.unlock_grid.as_deref() {
-            Some(target) => race_campaign::grid_points_met(&self.grids, target, &medal_of),
+            Some(target) => race_campaign::grid_points_met(&self.grids, &self.tiers, target, &medal_of),
             None => true,
         }
     }
@@ -693,7 +706,13 @@ impl CampaignStage {
                 let earned = grids
                     .iter()
                     .map(|grid| {
-                        Self::grid_summary(grid, &self.campaign_title, &self.records).gold_medals
+                        Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ).gold_medals
                     })
                     .sum();
                 let total = grids
@@ -795,11 +814,18 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
+                .map(|grid| Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ))
                 .collect(),
         )
         .with_per_page(1)
-        .with_medal_art(self.medal_art.clone());
+        .with_medal_art(self.medal_art.clone())
+        .with_tiers(self.tiers.clone());
         let mut model = model;
         if let Some(which) = self.cell_cursor.grid_in(self.grids.iter().map(|grid| grid.name.as_str()), &self.grid_range) {
             model.set_index(which - self.grid_range.start);
@@ -868,7 +894,7 @@ impl CampaignStage {
         let title = &self.title;
         let campaign_title = &self.campaign_title;
         let records = &self.records;
-        let medal_of = campaign_medal_of(records, campaign_title);
+        let medal_of = campaign_medal_of(records, campaign_title, &self.tiers);
         let build = |cells: Vec<race_campaign::Cell>| {
             let by_name = cells.clone();
             let model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
@@ -882,9 +908,14 @@ impl CampaignStage {
                     .best_difficulty
                     .map(to_campaign_difficulty)
             })
-            .with_medal_art(self.medal_art.clone());
+            .with_medal_art(self.medal_art.clone())
+        .with_tiers(self.tiers.clone());
             match &self.custom {
-                Some(custom) => model.with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of)),
+                Some(custom) => model
+                    .with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of))
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
                 None => model,
             }
         };
@@ -985,7 +1016,13 @@ impl CampaignStage {
         Some((
             which.saturating_sub(self.grid_range.start),
             self.grid_range.len(),
-            Self::grid_summary(grid, &self.campaign_title, &self.records),
+            Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ),
             self.cell_art(next),
         ))
     }
@@ -1042,10 +1079,17 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
+                .map(|grid| Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    ))
                 .collect(),
         )
-        .with_medal_art(self.medal_art.clone());
+        .with_medal_art(self.medal_art.clone())
+        .with_tiers(self.tiers.clone());
         if self.has_selection() {
             model = model.with_per_page(1);
         }

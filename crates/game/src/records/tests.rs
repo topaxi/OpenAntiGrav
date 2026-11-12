@@ -1001,3 +1001,69 @@ fn background_saves_land_in_order_and_none_is_lost() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+const PLATINUM_ORDER: [&str; 4] = ["platinum", "gold", "silver", "bronze"];
+
+fn earn<'a>(name: &'a str, class: Medal, points: u32) -> Option<TierEarned<'a>> {
+    Some(TierEarned {
+        name,
+        class,
+        points,
+        order: &PLATINUM_ORDER,
+    })
+}
+
+/// A mod campaign's own tier is kept by name beside the class it stands in for, the better of
+/// two results is decided by the campaign's order, and a disc campaign's row has no new key.
+#[test]
+fn a_campaign_tier_is_stored_by_name_and_never_downgraded() {
+    let mut store = Store::default();
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    store.record_campaign_tier("m", "grid0_1_1", earn("platinum", Medal::Gold, 4), None);
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    let row = store.campaign_medal("m", "grid0_1_1").unwrap();
+    assert_eq!(row.best_tier.as_deref(), Some("platinum"));
+    assert_eq!(
+        row.best_medal,
+        Some(Medal::Gold),
+        "the class a trophy and a jingle use"
+    );
+    assert_eq!(row.best_points, Some(4));
+    assert_eq!(row.last_tier, None, "the last race was a plain gold");
+    assert_eq!(row.best_tier_name(), Some("platinum"));
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    assert!(text.contains("best_tier = \"platinum\""), "{text}");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.campaign_rows(), store.campaign_rows());
+
+    let mut disc = Store::default();
+    disc.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Gold), None);
+    let text = toml::to_string_pretty(&disc).expect("serialises");
+    assert!(
+        !text.contains("_tier"),
+        "a disc row is the file it always was: {text}"
+    );
+}
+
+/// A row written before tiers had names reads as the tier its medal word names.
+#[test]
+fn an_old_campaign_row_reads_as_its_medal_word() {
+    let text = "[[campaign]]\ntitle = \"m\"\ncell = \"grid0_1_1\"\nbest_medal = \"silver\"\nbest_points = 2\n";
+    let (store, notes) = parse(text).expect("parses");
+    assert!(notes.is_empty(), "{notes:?}");
+    let row = store.campaign_medal("m", "grid0_1_1").unwrap();
+    assert_eq!(row.best_tier, None);
+    assert_eq!(row.best_tier_name(), Some("silver"));
+    let mut store = store;
+    store.record_campaign_tier("m", "grid0_1_1", earn("gold", Medal::Gold, 3), None);
+    assert_eq!(
+        store
+            .campaign_medal("m", "grid0_1_1")
+            .unwrap()
+            .best_tier_name(),
+        Some("gold"),
+        "a better result replaces it"
+    );
+}

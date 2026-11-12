@@ -44,6 +44,17 @@ pub fn to_campaign_medal(medal: records::Medal) -> Medal {
     }
 }
 
+/// The gold, silver or bronze a stored row keeps for a medal: `medal` is a class
+/// (`MedalTiers::class`), so any position past silver is bronze.
+#[must_use]
+pub fn to_records_medal(medal: Medal) -> records::Medal {
+    match medal {
+        Medal::Gold => records::Medal::Gold,
+        Medal::Silver => records::Medal::Silver,
+        _ => records::Medal::Bronze,
+    }
+}
+
 /// The campaign tables' name for a stored difficulty rung.
 #[must_use]
 pub fn to_campaign_difficulty(difficulty: records::Difficulty) -> race_campaign::Difficulty {
@@ -54,18 +65,27 @@ pub fn to_campaign_difficulty(difficulty: records::Difficulty) -> race_campaign:
     }
 }
 
+/// The tier of `tiers` a stored campaign row stands for: the name it was earned under
+/// ([`records::CampaignRecord::best_tier_name`]; a row written before tiers had names carries
+/// the word of its medal, which every disc campaign's list names). `None` for a name the
+/// list no longer has.
+#[must_use]
+pub fn campaign_tier(
+    row: &records::CampaignRecord,
+    tiers: &race_campaign::MedalTiers,
+) -> Option<Medal> {
+    tiers.find(row.best_tier_name()?)
+}
+
 /// The best medal `records` holds for a campaign cell of `title`, in the
-/// shape [`race_campaign::grid_points_met`] and `Grid::points_earned` take.
+/// shape [`race_campaign::grid_points_met`] and `Grid::points_earned` take,
+/// as a position in `tiers` (the standard list for a disc campaign).
 pub fn campaign_medal_of<'a>(
     records: &'a Store,
     title: &'a str,
+    tiers: &'a race_campaign::MedalTiers,
 ) -> impl Fn(&str) -> Option<Medal> + 'a {
-    move |cell| {
-        records
-            .campaign_medal(title, cell)?
-            .best_medal
-            .map(to_campaign_medal)
-    }
+    move |cell| campaign_tier(records.campaign_medal(title, cell)?, tiers)
 }
 
 static UNLOCK_ALL: AtomicBool = AtomicBool::new(false);
@@ -116,9 +136,12 @@ impl Gate {
         }
         match track.unlock_grid.as_deref() {
             None => true,
-            Some(name) => {
-                race_campaign::grid_points_met(grids, name, &campaign_medal_of(records, title))
-            }
+            Some(name) => race_campaign::grid_points_met(
+                grids,
+                race_campaign::MedalTiers::standard(),
+                name,
+                &campaign_medal_of(records, title, race_campaign::MedalTiers::standard()),
+            ),
         }
     }
 }
