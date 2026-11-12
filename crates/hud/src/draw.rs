@@ -1398,16 +1398,30 @@ pub(super) fn sprite_draw_from(
 }
 
 /// The lit incoming-weapon warning groups: each one's background and the icon of the weapon that
-/// raised it, drawn as the layout authors them (`crate::incoming`).
+/// raised it, drawn as the layout authors them (`crate::incoming`), or a mod's own art fitted to
+/// the same slot ([`super::pickup::warning_icon_draw`]). A mod's art the sheet lacks lights no
+/// group at all, as a pickup's missing icon draws nothing.
 fn incoming_warning_sprites(cx: &Context, readout: &Readout) -> Vec<Draw> {
-    let lit = [
-        (super::incoming::Side::Forward, readout.incoming.forward),
-        (super::incoming::Side::Rear, readout.incoming.rear),
-    ];
-    lit.into_iter()
-        .filter_map(|(side, icon)| icon.map(|icon| (side, icon)))
-        .flat_map(|(side, icon)| [side.background(), icon.widget()])
-        .filter_map(|name| cx.layout.sprite(name))
-        .filter_map(|sprite| sprite_draw(sprite, cx.sheet))
-        .collect()
+    use super::incoming::Look;
+    let shown = &readout.incoming;
+    let mut draws = Vec::new();
+    for look in [&shown.forward, &shown.rear].into_iter().flatten() {
+        let icon = match look {
+            Look::Title(icon) => cx
+                .layout
+                .sprite(icon.widget())
+                .and_then(|sprite| sprite_draw(sprite, cx.sheet)),
+            Look::Mod { side, src } => super::pickup::warning_icon_draw(cx, src, *side),
+        };
+        if icon.is_none() && matches!(look, Look::Mod { .. }) {
+            continue;
+        }
+        let background = cx
+            .layout
+            .sprite(look.side().background())
+            .and_then(|sprite| sprite_draw(sprite, cx.sheet));
+        draws.extend(background);
+        draws.extend(icon);
+    }
+    draws
 }

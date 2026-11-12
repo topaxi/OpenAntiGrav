@@ -42,6 +42,26 @@ pub(super) fn upload_face(
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
+/// `atlas` reduced to the textures `device` can make, when it is larger: the glyph atlas is read
+/// from a disc or a texture pack before any device exists, and a device whose limit is below the
+/// loader's (the web's 2,048, an older phone's 4,096) must draw the face smaller rather than
+/// panic in `create_texture`. A face that fits is returned as it is.
+pub(super) fn fit_to_device(device: &wgpu::Device, label: &str, atlas: Atlas) -> Atlas {
+    let limit = device.limits().max_texture_dimension_2d;
+    if atlas.width.max(atlas.height) <= limit {
+        return atlas;
+    }
+    let fitted = atlas.clone().fitting(limit);
+    log::warn!(
+        "{label}: {}x{} is more than this device's {limit}-texel textures; drawn at {}x{}",
+        atlas.width,
+        atlas.height,
+        fitted.width,
+        fitted.height
+    );
+    fitted
+}
+
 /// A sampler for the face texture. Always linear: every role this build
 /// has ever loaded through it - HD's `helvb.fnt`, Pulse's own
 /// `pulse_text.fnt` - is a real antialiased font like every other menu
@@ -92,6 +112,7 @@ impl super::Renderer {
         atlas: Option<Atlas>,
         role: Option<&'static str>,
     ) {
+        let atlas = atlas.map(|atlas| fit_to_device(device, "face atlas", atlas));
         self.face_view = upload_face(device, queue, atlas.as_ref());
         self.ui_bind_group = super::resources::ui_bind_group(
             device,
@@ -134,6 +155,7 @@ impl super::Renderer {
         atlas: Option<Atlas>,
         role: &'static str,
     ) {
+        let atlas = atlas.map(|atlas| fit_to_device(device, "buttons atlas", atlas));
         self.buttons_view = upload_face(device, queue, atlas.as_ref());
         self.ui_bind_group = super::resources::ui_bind_group(
             device,

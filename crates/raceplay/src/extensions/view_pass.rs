@@ -26,6 +26,7 @@ pub(super) fn is_output(command: &Command) -> bool {
         | Command::HudBarExtra { .. }
         | Command::HudText { .. }
         | Command::HudIcon { .. }
+        | Command::RaiseWarning { .. }
         | Command::PickupLook { .. } => true,
         Command::ScaleThrust { .. }
         | Command::ShieldDelta { .. }

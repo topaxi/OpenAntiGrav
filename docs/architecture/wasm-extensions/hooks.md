@@ -222,6 +222,7 @@ returns `Err(Refused)` where the host would fault:
 | `set-shader-param{slot, shader, index, value}` (35) | `SetShaderParam` | `set_shader_param(&craft, shader, index, value)` | an `index` from 4 up, a value that is not finite |
 | `portal-view{slot, entrance, exit, radius, update, generation}` (36) | `PortalView` | `portal_view(&craft, (entrance, exit), radius, update, generation)` | a progress not a number or below zero (`portal_view_to_trigger` names the exit by a trigger index instead), a `radius` of 0, an unknown `update` |
 | `play-mod-sound{slot, index, mode}` (33) | `PlayModSound` | `play_mod_sound(&craft, index, mode)` | |
+| `raise-warning{slot, icon \| (side, own icon)}` (37) | `RaiseWarning` | `raise_warning(&craft, icon)`, `raise_mod_warning(&craft, side, name)` | an icon code past the ten or a group past the two (the host decodes one as malformed); a name the mod's `[icons]` lacks (faults, naming it); send it once, not every tick |
 | `hud-tint{slot, element, rgba}` | `HudTint` | `hud_tint(&craft, element, rgba)` | the `Pickup` element (`Refused::PickupTint`; use `pickup_look`); the host decodes one as malformed |
 | `pickup-look{slot, icon, colour}` (22) | `PickupLook` | `pickup_look(&craft, icon, colour)` | |
 | `hud-shake{slot, element, amplitude}` | `HudShake` | `hud_shake(&craft, element, amplitude)` | `amplitude` outside `[0, 16]` or not finite |
@@ -497,7 +498,7 @@ How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pas
 - When a device's view picks differ from the defaults (`Picks::differs`) the host makes a **second
   call** with the real picks, on a copy of the blob the first call started from, and keeps only its
   **outputs** (`view_pass::is_output`: `fire-effect`, `fire-mod-effect`, `screen-fill`, `fov-offset`,
-  `draw-beam`, `set-shader-param`, `portal-view` and the `hud-*` and `pickup-look` commands). Its blob,
+  `draw-beam`, `set-shader-param`, `portal-view`, `raise-warning` and the `hud-*` and `pickup-look` commands). Its blob,
   its other commands, its fuel and its faults are dropped: a trap in the view call draws nothing and
   never faults the module. The first call's own outputs are replaced by the view call's.
 - `is_output` is an exhaustive `match`: a new command cannot compile until it is classed. A command is

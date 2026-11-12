@@ -540,6 +540,70 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
     assert_eq!(reply.len(), 2);
 }
 
+#[test]
+fn a_raised_warning_is_one_record_for_the_craft_and_the_icon() {
+    let mut buffer = [0_u8; 4 + oag_ext_abi::COMMAND_LEN * oag_ext_abi::MAX_COMMANDS];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let record = racer(50.0).encode();
+    let held = Craft {
+        slot: slot(0),
+        record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
+    };
+    assert_eq!(reply.raise_warning(&held, WarningIcon::Mine), Ok(()));
+    reply.finish();
+    let record: [u8; oag_ext_abi::COMMAND_LEN] =
+        buffer[4..4 + oag_ext_abi::COMMAND_LEN].try_into().unwrap();
+    assert_eq!(
+        Command::decode(&record),
+        Ok(Command::RaiseWarning {
+            slot: slot(0),
+            warning: Warning::Title(WarningIcon::Mine)
+        })
+    );
+}
+
+#[test]
+fn a_raised_mod_warning_rides_the_pool_with_its_group() {
+    let pool_at = oag_ext_abi::POOL_AT - oag_ext_abi::REPLY_AT;
+    let mut buffer = [0_u8; oag_ext_abi::POOL_AT - oag_ext_abi::REPLY_AT + oag_ext_abi::POOL_LEN];
+    let mut reply = Reply::new(&mut buffer, 0, 0);
+    let record = racer(50.0).encode();
+    let held = Craft {
+        slot: slot(0),
+        record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
+    };
+    assert_eq!(
+        reply.raise_mod_warning(&held, WarningSide::Rear, "portal"),
+        Ok(())
+    );
+    assert_eq!(
+        reply.raise_mod_warning(
+            &held,
+            WarningSide::Rear,
+            &"x".repeat(oag_ext_abi::MAX_HUD_TEXT + 1)
+        ),
+        Err(Refused::Range)
+    );
+    reply.finish();
+    let record: [u8; oag_ext_abi::COMMAND_LEN] =
+        buffer[4..4 + oag_ext_abi::COMMAND_LEN].try_into().unwrap();
+    let pool = &buffer[pool_at..];
+    assert_eq!(
+        Command::decode_in(&record, pool),
+        Ok(Command::RaiseWarning {
+            slot: slot(0),
+            warning: Warning::Mod {
+                side: WarningSide::Rear,
+                icon: ModIcon::new("portal").unwrap(),
+            }
+        })
+    );
+}
+
 crate::blob! {
     #[derive(Debug, Clone, Copy, PartialEq, Default)]
     struct Heard {
