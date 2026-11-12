@@ -4,9 +4,8 @@
 //! Both bind `alpha_emissive` and `SpecularTexture`, and the instance lists `SpecularTexture`
 //! **first**, so "the first sampler listed" ([`Material::diffuse_texture`]) draws the specular
 //! map as the picture. The programs say otherwise. Omega's lit pixel programs (`gcn_dump` on
-//! `02_metropia/Materials/dn_diffuse_specular_emiss`, `@0x3fc4` and its 8 siblings; the `_glow`
-//! file's, `@0x4504`) declare `alpha_emissive` as texture slot 0 and `SpecularTexture` as slot 1,
-//! and combine
+//! `02_metropia/Materials/dn_diffuse_specular_emiss`, `@0x3fc4` and its 8 siblings) declare
+//! `alpha_emissive` as texture slot 0 and `SpecularTexture` as slot 1, and combine
 //!
 //! ```text
 //! rgb = fog(light * T.rgb + T.a * glowtinrt + specular * liveLighting0specular * S.rgb)
@@ -16,8 +15,14 @@
 //! the weight of the specular term, and no alpha of either gates it. 2048's GXP copies declare
 //! the same pair at resources 0 and 1, and their lit permutations end
 //! `mul r0.xyz, spec, S.rgb; mad pa2, r0, S, pa2` (`S` squared, 2048's texel domain)
-//! (`scripts/vita-usse.py disasm` on `dlc1.psarc`'s Metropia and Sol 2 files). See
-//! `docs/formats/rcsmaterial.md`, "The specular map of `dn_diffuse_specular_emiss`".
+//! (`scripts/vita-usse.py disasm` on `dlc1.psarc`'s Metropia file).
+//!
+//! **The `_glow` twin** has the same two samplers and the same specular weighting (Sol 2's lit
+//! permutations: `mul pa2, spec, S; mad pa4, pa2, S, pa4`; Omega's `@0x4504` multiplies the second
+//! sample by `liveLighting0specular`). Its emissive term differs: no `glowtinrt`, and the 2048
+//! program adds `T^2 * T.a` (`mad pa4, r4, pa2.wwww, lit`), which is not wired. The picture and the
+//! specular weight are what this module gives it. See `docs/formats/rcsmaterial.md`, "Omega's
+//! `dn_diffuse_specular_emiss` and 2048's".
 //!
 //! Keyed by the file's stem and the instance's two samplers, not by sampler order: a family not
 //! read here keeps drawing what it drew.

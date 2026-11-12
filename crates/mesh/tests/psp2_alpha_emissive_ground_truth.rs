@@ -119,8 +119,8 @@ fn a_lightmapped_alpha_emissive_submesh_carries_the_entry() {
 }
 
 /// Sol 2's `dn_diffuse_specular_emiss_glow` binds `alpha_emissive` and authors no `glowtinrt`:
-/// its program does not declare the uniform, so its entry adds no colour (a zero tint). Its
-/// entries exist for the specular map alone.
+/// its program does not declare the uniform (it adds `T^2 * T.a` instead, unwired), so its entry
+/// adds no colour (a zero tint). Its entries exist for the specular map alone.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
 fn a_material_that_authors_no_glowtinrt_adds_no_colour() {

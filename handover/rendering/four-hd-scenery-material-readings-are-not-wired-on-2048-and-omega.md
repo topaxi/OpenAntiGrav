@@ -23,7 +23,7 @@ title's program was read):**
    `psp2::alpha_emissive`). **Wired 2026-11-12, `omega-metropia-specular`:** (a) the 14 Metropia `dn_diffuse_specular_emiss`
    materials (17 with the three whose maps share a file) draw `alpha_emissive` as the picture and weight the specular by their
    `SpecularTexture` on the third binding, on Omega and 2048 (`oag_rcs::rcsmodel::psp2::specular_picture`, `docs/formats/rcsmaterial.md`,
-   "Omega's `dn_diffuse_specular_emiss` and 2048's"). **Left:** (b) none of the three 2048 grid pairs has these surfaces in frame
+   "Omega's `dn_diffuse_specular_emiss` and 2048's"). **Left:** (a2) the `_glow` twin's own emissive term (2048: `T^2 * T.a`, no `glowtinrt`; Omega's unread) is not drawn, and no `_glow` surface is on a measured frame; (b) none of the three 2048 grid pairs has these surfaces in frame
    (on/off pixel-identical), so the 2048 effect has no original to measure against: a 2048 Anulpha Pass or Metropia pair would
    (ours at the Anulpha grid shows an amber strip light on the stand); (c) Omega Anulpha Pass pair, box `1065,268 100x35`: G 73 to
    80 against the original's 80.

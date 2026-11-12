@@ -3773,7 +3773,13 @@ rgb = fog(light * T.rgb + T.a * glowtinrt + specular * liveLighting0specular * S
 `S` is only the specular's weight (no alpha of either gates it). 2048's lit permutations (`scripts/vita-usse.py disasm`, `dlc1.psarc`
 Metropia `dn_diffuse_specular_emiss` and Sol 2 `dn_diffuse_specular_emiss_glow`; `alpha_emissive` is resource 0 and `SpecularTexture`
 resource 1 in all of them) are the same shape in the Vita's squared texel domain: `mul r0.xyz, spec, S.rgb`, then
-`mad pa2, r0, S, pa2`. The `_glow` twin declares no `glowtinrt` and has the same pair.
+`mad pa2, r0, S, pa2`.
+
+**The `_glow` twin** (Sol 2 on 2048, 16 materials in Omega's `data02`; none on Metropia) binds the same pair and weights the specular the
+same way (2048: `mul pa2, spec, S; mad pa4, pa2, S, pa4` in both lit permutations; Omega `@0x4504`: `v_mul_f32 v10, s5, v10` scales the
+second sample by `liveLighting0specular`), but its emissive term is not the plain family's: it declares no `glowtinrt`, and the 2048
+program adds the picture times its own alpha (`mad pa4, T^2, T.a, lit`), which is **not wired** (Omega's `_glow` emissive term is
+unread). It takes the picture and the specular weight here, with a zero-tint entry; no `_glow` surface is on a measured frame.
 
 **Wired** (`oag_rcs::rcsmodel::psp2::specular_picture`, keyed by the file stem and an instance that binds both samplers, so a family
 not read keeps the sampler order): the picture is `alpha_emissive`; the specular map rides the third binding
