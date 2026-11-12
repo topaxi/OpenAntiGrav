@@ -417,6 +417,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_hull: None,
     ship_preview_pose: None,
     ship_preview_fit: None,
+    ship_preview_settle: None,
     circuit_models: &[],
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.

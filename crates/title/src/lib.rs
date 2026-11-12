@@ -602,6 +602,11 @@ pub struct FrontEnd {
     /// depth to the selected model's authored length. `None` where the title's
     /// screen has no such code or it is unread. See [`ShipFit`].
     pub ship_preview_fit: Option<ShipFit>,
+    /// The fit whose per-frame depth state plays the craft's swap on a title that poses it
+    /// from [`Self::ship_preview_pose`] and has no [`Self::ship_preview_fit`]: the new craft
+    /// starts at the last model's rest depth and eases to its own, drawn as a scale of the
+    /// borrowed pose. `None` where the craft is not swapped by it.
+    pub ship_preview_settle: Option<ShipFit>,
     /// The model each circuit's selection screen draws in its circuit-model frame,
     /// found by the circuit's environment folder: HD's track-select record names
     /// `<environment>\FE\track0N.vex` per circuit, and the number is not the
@@ -687,8 +692,13 @@ pub struct ShipFit {
     pub window: [f32; 2],
     /// How far the depth moves in one frame, model units.
     pub step: f32,
-    /// The depth the screen opens at.
+    /// The depth target the screen opens at.
     pub start: f32,
+    /// The fraction of the way to the depth target the drawn depth moves each
+    /// frame.
+    pub depth_ease: f32,
+    /// The same for the origin slide's target.
+    pub slide_ease: f32,
     /// The nearest the fit brings the craft.
     pub floor: f32,
     /// The box's fore and aft extent in a Zone race, in place of the model's

@@ -180,3 +180,17 @@ fn only_the_2048_era_circuits_are_in_the_2048_lineage() {
         assert!(race.circuit_lineage(hd).is_none(), "{hd}");
     }
 }
+
+/// Omega's craft is posed from a borrowed pose, not framed by a fit, and a step plays HD's
+/// depth law on it: the settle's data is HD's own, one definition. Dropping the field leaves the
+/// craft cutting in at rest size with no settle.
+#[test]
+fn omega_plays_hds_ship_select_settle_on_its_borrowed_pose() {
+    let front_end = TITLE.front_end.expect("Omega's front end");
+    assert!(front_end.ship_preview_pose.is_some());
+    assert!(front_end.ship_preview_fit.is_none());
+    assert_eq!(
+        front_end.ship_preview_settle,
+        Some(oag_hd::frontend::SHIP_FIT)
+    );
+}

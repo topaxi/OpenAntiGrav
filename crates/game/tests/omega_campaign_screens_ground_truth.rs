@@ -163,6 +163,64 @@ fn omegas_campaign_carries_fury_s_layout_and_every_card() {
             show.flyer
         );
     }
+    // The 2048 card's art is moved by the UV keys its `.vex` authors per mesh, not by a material
+    // curve: with them unplayed the navy banner samples the transparent half of its scrolled
+    // alpha texture and the card draws its hatching and bare lettering boxes alone.
+    let (card, _) = oag_game::preview::psp2_scene::model_named(
+        &mut archives,
+        "Data/FE/Flyers/2048_campaign/flyer.vex",
+        true,
+    )
+    .expect("the 2048 card builds");
+    let opaque_share = |archives: &mut oag_assets::Archives, texture: &str| -> f32 {
+        let blob = archives.read_name(texture).expect("the card's texture");
+        let parsed = oag_texture::gnf::Texture::parse(&blob).expect("a .gnf");
+        let texels = parsed.decode(&blob).expect("it decodes");
+        let slot = card
+            .textures
+            .iter()
+            .position(|t| {
+                t.as_ref()
+                    .is_some_and(|t| t.label.eq_ignore_ascii_case(texture))
+            })
+            .unwrap_or_else(|| panic!("{texture} is a texture of the card"));
+        let (mut seen, mut opaque) = (0_u32, 0_u32);
+        for draw in card
+            .draws
+            .iter()
+            .chain(&card.alpha_tested_draws)
+            .chain(&card.transparent_draws)
+            .filter(|draw| draw.texture == Some(slot))
+        {
+            for &i in &card.indices[draw.range.start as usize..draw.range.end as usize] {
+                let vertex = &card.vertices[i as usize];
+                let (scale, offset) = match vertex.anim.checked_sub(1) {
+                    Some(track) => {
+                        card.anim_tracks[track as usize].sample(oag_game::flyer::SETTLED_SECONDS)
+                    }
+                    None => ([1.0; 2], [0.0; 2]),
+                };
+                let u = (vertex.texcoord[0] * scale[0] + offset[0]).rem_euclid(1.0);
+                let v = (vertex.texcoord[1] * scale[1] + offset[1]).rem_euclid(1.0);
+                let x = ((u * parsed.width as f32) as usize).min(parsed.width as usize - 1);
+                let y = ((v * parsed.height as f32) as usize).min(parsed.height as usize - 1);
+                seen += 1;
+                opaque += u32::from(texels[y * parsed.width as usize + x][3] > 128);
+            }
+        }
+        assert!(seen > 0, "{texture} is drawn");
+        opaque as f32 / seen as f32
+    };
+    // The banner (`2048_backing_scroll`, blended on its alpha) lands on opaque texels.
+    let banner = opaque_share(
+        &mut archives,
+        "data/fe/flyers/2048_campaign/textures/2048_backing_scroll.gnf",
+    );
+    println!("banner opaque share {banner}");
+    assert!(
+        banner > 0.9,
+        "the banner's UVs land on opaque texels: {banner}"
+    );
     // The card stands where the shadPS4 frame has it (x 816-1628, y 151-702 of 1920 by 1080,
     // measured off `omega/menu-grid-select`), not at HD's `GRID_POSE` (x 747-1688).
     let show = flyers.grid_show("09_Blitzed");
@@ -255,7 +313,7 @@ fn omega_card_materials_read_their_coverage_channels() {
     let mut atlas_draws = 0;
     for flyer in flyers {
         let front = format!("Data/FE/Flyers/{flyer}/flyer.vex");
-        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &front)
+        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &front, false)
             .unwrap_or_else(|e| panic!("{front}: {e:#}"));
         assert!(
             model
@@ -265,7 +323,7 @@ fn omega_card_materials_read_their_coverage_channels() {
             "{front}: every vertex reads the picture's alpha or an atlas"
         );
         let back = format!("Data/FE/Flyers/{flyer}/flyer_Back.vex");
-        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &back)
+        let (model, _) = oag_game::preview::psp2_scene::model_named(&mut archives, &back, false)
             .unwrap_or_else(|e| panic!("{back}: {e:#}"));
         let atlas_slots: std::collections::BTreeSet<usize> = model
             .draws
@@ -501,4 +559,52 @@ fn omega_medal_crops_read_gold_silver_bronze_in_every_difficulty_block() {
             "{difficulty:?}: gold is yellower than bronze: green/red {gold:.3} against {bronze:.3}"
         );
     }
+}
+
+/// The player's view of the 2048 card: `--menu-page campaign-select` through the real binary, and
+/// the navy banner is on the frame. The card's own wiring (`oag_game::campaign`'s `CardSpec`)
+/// is what plays the UV keys; with them unplayed the banner's box is white hatching.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and a GPU adapter"]
+fn the_campaign_select_frame_shows_the_2048_banner() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let dir = std::env::temp_dir().join("oag-omega-campaign-card-art-ground-truth");
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let out = dir.join("campaign-select.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&omega)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "campaign-select",
+            "--screenshot",
+        ])
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page campaign-select");
+    let (width, height, rgba) = crate::omega_menu_backdrop_ground_truth::decode_stored_png(
+        &std::fs::read(&out).expect("the screenshot"),
+    );
+    assert_eq!((width, height), (1920, 1080));
+    // The banner's box on the frame (the original's navy plate spans x 200-990, y 270-480).
+    let (mut navy, mut total) = (0_u32, 0_u32);
+    for y in 290..460 {
+        for x in 240..940 {
+            let at = (y * width + x) * 4;
+            let [r, g, b] = [rgba[at], rgba[at + 1], rgba[at + 2]];
+            total += 1;
+            navy += u32::from(r < 70 && g < 70 && (60..140).contains(&b));
+        }
+    }
+    let share = navy as f32 / total as f32;
+    println!("banner navy share {share}");
+    assert!(share > 0.5, "the banner box is {share} navy");
 }

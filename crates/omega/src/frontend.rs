@@ -266,6 +266,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega"), so
     // HD's camera is not borrowed and the pose above stays.
     ship_preview_fit: None,
+    // **Inherited from HD.** Omega's update eases the same depth targets without resetting
+    // them on a step (`FUN_015a3b80`), so a step plays HD's law on the borrowed pose; its own
+    // rates and the fit's constants are not read there, and are HD's
+    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega").
+    ship_preview_settle: Some(oag_hd::frontend::SHIP_FIT),
     circuit_models: &CIRCUIT_MODELS,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)

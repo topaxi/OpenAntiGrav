@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega, 2048]
 updated: 2026-11-12
-summary: "Omega front end: load order unresolved, campaign pages open, 2048 emblem and Team Select undrawn; 2048 Vita circuits: 10 named, 16 have no key link"
+summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 Vita DLC circuits read VINETA K in the original, ours the id"
 ---
 
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
@@ -53,16 +53,16 @@ content against `hd-frontend.md`.
   are **chosen, not measured**, the page's white backdrop hides the rim, and
   Team Select (`team_select: None`) is still undrawn.
 
-- **2048's circuits: ten named, sixteen show ids (2026-11-12, `vita-2048-circuit-names`)**: no copy of `entries.xml` names any of the 26 by id and no `PI_Track` authors a key, so a per-circuit fallback names none; the ten of 2048's own are named off `SP.xml`'s `TrackDefinition` (`M_DISPLAYNAME`, `vita_2048_dlc_menus_ground_truth::the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids`). The sixteen HD-lineage circuits (`Vineta_K` ... `Sol_2_R`): ~~read which value feeds `%02d_Track`~~ **read 2026-11-12 (`vita-2048-track-key`, `docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`):**
+- **2048's circuits: ten named, sixteen show ids (2026-11-12, `vita-2048-circuit-names`; the original shows the names, see below)**: no copy of `entries.xml` names any of the 26 by id and no `PI_Track` authors a key, so a per-circuit fallback names none; the ten of 2048's own are named off `SP.xml`'s `TrackDefinition` (`M_DISPLAYNAME`, `vita_2048_dlc_menus_ground_truth::the_ten_circuits_of_2048_show_their_names_and_the_rest_keep_their_ids`). The sixteen HD-lineage circuits (`Vineta_K` ... `Sol_2_R`): ~~read which value feeds `%02d_Track`~~ **read 2026-11-12 (`vita-2048-track-key`, `docs/ghidra/functions/vita-2048-eu-v104/circuit-name-key.md`):**
   - **Nothing feeds it as a name.** `%02d_Track` only builds HD track ids.
   - **The original's rule** is a string-table lookup of the case-folded `PI_Track` `name`, falling back to the name. Eleven track sites agree; confidence 80; v1.04 and v1.00 agree.
   - `soundregister` and `FEModelLocation` are never read for a name.
   - No `stringtable.xml`, `<StringTable>` or `VINETA_K`-style key ships, so those sites would print `Vineta_K`, and `square` for the ten too.
-  - What a player *sees* is **open** (about 50, not claimed): the ten's visible names come from `TrackDefinition` `m_displayName` (consumer unread), and the DLC grid draws photos.
-  - **Ready, nothing to wire:** our `CircuitNames` already folds case and falls back to the id.
+  - **What a player sees, measured 2026-11-12 (`vita-2048-trackname-still`, Vita3K, EU patch 1.04 + DLC1): `VINETA K` and `ANULPHA PASS` as text** on the HD Campaign event card, the mode card over the load and the pause card (never the id; the ten read `METRO PARK`, `UNITY SQUARE` in the same font). So the sixteen are named through a path the `PI_Track` sites do not describe: **re-first**, and ours (which draws `Vineta_K`) does **not** match. Stills `data/reference/2048-circuit-names/`; `docs/formats/omega-status.md`, "2048 Vita's circuit names".
+  - **Not ready:** our `CircuitNames` folds case and falls back to the id, which is the rule the executable's `PI_Track` sites follow but not what the cards draw.
   - **What remains is a decision, not RE:**
-    - Keying the sixteen to `01_TRACK`..`08_TRACK` would be a **chosen stand-in**, because the executable never makes that link. It is the maintainer's call.
-    - A Vita3K still of a DLC-circuit label (Track Select details, or the tournament header `"%s %d/%d"`, `FUN_81093baa`) would settle what a player sees.
+    - Keying the sixteen to `01_TRACK`..`08_TRACK` would reproduce the photographed HD names (`VINETA K`, `ANULPHA PASS`; `THE AMPHISEUM` is `19_TRACK`) but is a **chosen stand-in** until the title setter is read.
+    - Next RE: read the event card's title setter (the `grid0_3_1` card back to its label string). It is a lookup, not the id re-spelled (`Amphiseum` reads `THE AMPHISEUM`, entries `19_TRACK`). A Vita3K still of a `_R` cell's card (Fury `grid_09`/`grid_10`) says whether the key is per circuit or per direction.
   - Omega: **checked, differs**. It applies the same rule with an authored `StringTableId` override (`FUN_014b1330` stores it at `+0x278`).
   - Evidence: `docs/formats/omega-status.md`, "2048 Vita's circuit names".
 

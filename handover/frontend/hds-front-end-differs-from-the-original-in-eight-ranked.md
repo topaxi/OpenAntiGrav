@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-11
-summary: "HD front end: Ship Select camera read and wired; open: hull lighting, the swap settle (ready), craft turn and zoom, Omega's own pose"
+updated: 2026-11-12
+summary: "HD front end: Ship Select camera and swap settle wired; open: hull lighting, the first six frames of the settle, craft turn and zoom, Omega's own pose"
 difficulty: medium (30)
 ---
 
@@ -23,8 +23,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   a variant rated below the base draws no marker (no frame shows one)
 - Ship Select swap (LANDED 2026-10-10, `hd-ship-select-anim`): no turntable
   (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
-  step (`oag_game::preview::hull_swap`). Open: the settle's start size is per
-  team (chosen 1.06), the step's burst (not a `.pob`: it is the Fury backdrop
+  step (`oag_game::preview::hull_swap`; the settle's start per team LANDED
+  2026-11-12, item 2 below). Open: the step's burst (not a `.pob`: it is the Fury backdrop
   point cloud, `BackgroundAnimFury_Item`). Backdrop (LANDED 2026-10-10,
   `fury-backdrop-ship-select`): Ship Select and Track Select draw it under the
   `default` tint, applied in linear light (`fs_composite` lifts a dim tint); the
@@ -47,13 +47,19 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   1. **The hull is darker than the original** in that box (mean bias R -7.6,
      G -11.7, B -11.1): the front end's hull lighting, not placement. Not
      read. Medium (40).
-  2. **The swap's settle is recovered and not played**: the depth target is not
-     reset on a step, so the new model starts at the last one's rest depth and
-     eases to its own at 0.125 a frame (the slide at 0.0625).
-     `preview::hull_swap` still plays the measured curve from a chosen 1.06
-     start. Ready to wire: per-frame state on the picker stage (`ship_model::rest`
-     has the per-frame step), and the capture's `hull_clock` needs the previous
-     model's length. Small (60).
+  2. ~~**The swap's settle is recovered and not played**~~ (LANDED 2026-11-12,
+     `hd-ship-swap-settle`): `ship_model::FitMotion` on the picker stage starts
+     the new craft at the last model's rest depth and eases it at 0.125 a frame
+     (the slide at 0.0625); the chosen 1.06 and the measured curve are gone, and
+     `--menu-picker-step-seconds` steps from the entry above (chosen). Open: the
+     60 fps film holds its first size about six frames longer than the law and
+     the team it stepped to is unidentified (`docs/ghidra/functions/ps3-hdfury-eu/
+     team-selection-model.md`, "The swap against the 60 fps film"); Omega plays HD's law
+     as a scale of its borrowed pose (`ship_preview_settle`, inherited; its own rates
+     and pose are item 5). Found on the live screen
+     (`--drive`): after a press the previous team's hull stays on screen until
+     the new mesh's worker read lands (Assegai's hull under the MIRAGE label at
+     tick 4), drawn at the new team's fit; the gap is not tied to the read.
   3. **The player's own turn, pan and zoom of the craft** (right stick, the
      idle return after 181 frames): read at confidence 65, not exercised, not
      wired; a new input on a screen needs pointer support in the same change.

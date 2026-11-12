@@ -221,10 +221,51 @@ honeycomb.
   `oag_title::ShipFit` (`oag_hd::frontend::SHIP_FIT`), drawn by
   `oag_game::preview::ship_model::fitted`. The Zone box is used where the screen draws the Zone
   hull.
-- **Not wired**: the easing between two models' depths (the swap still plays
-  `oag_game::preview::hull_swap`'s measured settle and its chosen start size, which this law
-  replaces: the start is the previous model's rest depth); the player's own turn, pan and zoom;
-  the Detonator box (the preview does not draw the Detonator hull).
+- **Wired 2026-11-12** (`hd-ship-swap-settle`): the easing between two models' depths, as
+  `oag_game::preview::ship_model::FitMotion` (target, drawn depth, target slide, drawn slide; the
+  fit measured at the target and stepped, then both eased at `ShipFit::depth_ease` 0.125 and
+  `slide_ease` 0.0625). `PickerStage` holds it as a `FitPlayer`, ticked at 60 Hz beside the
+  picker's clock with whichever model is selected, so a step (a press, a pointer pick) resets
+  nothing and the new craft is drawn from the last one's depth. It runs while the craft is hidden
+  (the entry's 0.9 s, the step's 60 ms gap), as the original's update does; the drawn depth's
+  value at open is unread and placed on the target, 54 frames before the craft is shown. The
+  order inside a frame (fit, then ease) is chosen. The old measured curve
+  (`hull_swap::SETTLE`) and its chosen 1.06 start are removed; `hull_swap` keeps the two timings.
+  Captures: `--menu-picker-step-seconds T` plays `round(T * 60)` frames of a step from the entry
+  above the selected one (chosen).
+- **Not wired**: the player's own turn, pan and zoom; the Detonator box (the preview does not
+  draw the Detonator hull).
+
+### The swap against the 60 fps film
+
+`data/reference/hd-capture/ship-select-anim/steps60-hull-series.json` (RPCS3, 60 fps; right,
+left, right presses at 3, 8 and 13 s; columns `frame, pixels, x at 1 %, x at 99 %`). The hull's
+width over its settled width, by frames since the press (the first visible frame is the fourth to
+fifth):
+
+| Frames | 4-5 | 10 | 20 | 30 |
+| --- | --- | --- | --- | --- |
+| Film, Feisar to the next team | 1.084 | 1.081 | 1.027 | 1.007 |
+| Film, back to Feisar | 0.952 | 0.964 | 0.988 | 0.996 |
+| Law, Feisar to Auricom (4.2) | 1.078 | 1.041 | 1.011 | 1.003 |
+| Law, Auricom to Feisar | 0.920 | 0.951 | 0.987 | 0.997 |
+| Law, Feisar to Qirex (4.5, the roster's next team) | 1.168 | 1.121 | 1.038 | 1.010 |
+| Law, Qirex to Feisar | 0.858 | 0.892 | 0.964 | 0.990 |
+
+(Law rows: hull vertices of the destination team projected through `fitted` at
+`FitMotion::framing` after `stepped` frames, the 1st to 99th percentile of x.) The film does not
+say which team Feisar steps to, and the roster's own neighbour (Qirex) overshoots by twice over;
+a team of about 4.2 fits the tails (frames 20 and 30 agree to 0.004 both ways) and the first
+frame to a few per cent. **The film holds its first size for about six frames longer than the
+law**, and then decays by 0.875 a frame, the ease's own rate. One candidate, not adopted because
+it fits one direction and worsens the other: the fit's model pointer (`st + 0x194`) changes when
+the new craft cuts in, so the fit keeps the old box through the 4-frame gap (Feisar to Auricom
+1.087, 1.068, 1.018, 1.005; back 0.908, 0.925, 0.978, 0.994). Open: **the live screen keeps the previous team's hull until the new mesh's worker read lands**
+(a `--drive` frame 4 ticks after a press shows Assegai's hull under the MIRAGE label), where the
+film cuts the craft for 3-4 frames and shows the new one; the same read would be the moment the
+fit's box should change if the candidate above is right. Open: which team the film stepped
+to, and a second film of a pair whose lengths are known. Confidence 60 (tails and shape), 40 (the
+first six frames).
 
 ## Omega and 2048
 
@@ -239,6 +280,15 @@ honeycomb.
   frame of the screen shows a smaller, steeper craft than HD's. Omega's teams definition authors
   the same `<FE length>` (Feisar `3.8`), which the reader now carries. Not followed further:
   Omega keeps the pose it borrows (`oag_omega`'s `ship_preview_pose`).
+- **Omega, the swap's settle: checked, applies, ported by inheritance.** `FUN_015a3b80` eases
+  targets `st[0x7b4..0x7b6]` into `st[0x7bb..0x7bd]` and does not reset them on a step, which is
+  the same state, so a step plays HD's law on Omega's craft: `oag_omega`'s
+  `ship_preview_settle` is `oag_hd::frontend::SHIP_FIT` (**inherited from HD**; no Omega
+  capture of a step exists), and the craft, posed from the borrowed pose, is drawn at the rest
+  depth over the drawn depth as a scale (`ship_model::settle_scale`). Test:
+  `hd_ship_preview_ground_truth::omega_plays_the_settle_on_its_borrowed_pose` (Piranha's first
+  frame 0.93 of settled, settled by 1.5 s). Still open: Omega's own ease rates and fit
+  constants (HD's are assumed), and its pose, which `ship_preview_fit` is `None` for.
 - **2048: checked, differs.** The window's `535.0` occurs nowhere in the v1.04 `eboot.elf` as a
   literal (a byte search for `00 c0 05 44`; an ARM `movw`/`movt` pair would not show, so this is
   absence of the HD constant run, not proof of no fit), its `<FE>` authors `length` beside

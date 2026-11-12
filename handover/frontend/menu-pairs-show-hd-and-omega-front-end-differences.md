@@ -1,9 +1,9 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-11-05
+updated: 2026-11-12
 categories: [frontend, rendering]
-summary: "Menu pairs on the compare page, ranked differences; Omega chooser drawn (2048 card art, pose, grid open), XML main/racebox/options gaps"
+summary: "Menu pairs on the compare page, ranked differences; Omega chooser drawn (2048 card art done; pose, grid open), XML main/racebox/options gaps"
 difficulty: medium (30)
 ---
 
@@ -27,7 +27,7 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    right but sits in the wrong place: it is 83 per cent of the grid's grey error). **Open**: (a) ~~the grid card's pose and size on Omega~~ (done 2026-10-27, `omega-grid-card-pose`: grid 42.9 to 16.4; the pose is
    measured off the frame and chosen, `Title.campaign.grid_card_pose`; Omega's own `<Flyer>` widget numbers still uncompared with HD's); (b) the backdrop (ghost tower against blurred streaks); (c) cell: `CHOOSE RACE` and the unlock line dark
    where the original is grey, the selected hex's white outline, the missing `RECORDS` prompt; (d) ~~the Omega `Campaign Selection`
-   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses)~~ (done 2026-11-05, `omega-chooser`: drawn off the screen's own XML by the reader HD uses, pair `omega/menu-campaign-select` 52.7 whole frame, 78.4 over the bracket; **left open**: the `2048_campaign` card's art draws wrong (banner and wordmark), the unselected cards stand 45 and ~190 px left of the original's and turn by `RotY` as radians where the frame fits ~0.75 rad, and choosing 2048 opens no grid: `grid_16`..`grid_18` are cell-less stubs the grid reader skips and its events are `Campaign2048_Definition.xml`'s `FE3DCanvas` map, so it shows `OAG_CAMPAIGN_NOT_PLAYABLE`; only the 2048-selected state has an original frame, HD and Fury selected are not captured); (e) **a PS4-wide lead found on the way**: the PS4 build
+   chooser (three-way: 2048, HD, Fury; `campaign-select` still refuses)~~ (done 2026-11-05, `omega-chooser`: drawn off the screen's own XML by the reader HD uses, pair `omega/menu-campaign-select` 52.7 whole frame, 78.4 over the bracket; the `2048_campaign` card's art done 2026-11-12 (`omega-campaign-card-art`: the card's UV keys from the `.vex` were unplayed, `CardSpec::keyed`; card box mean grey 69.3 to 32.3, whole frame 56.3 to 46.2; the HD and Fury cards' ring logos draw too; the grid cards stay unkeyed until a frame of one is captured, `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`"); **left open**: the unselected cards stand 45 and ~190 px left of the original's and turn by `RotY` as radians where the frame fits ~0.75 rad, and choosing 2048 opens no grid: `grid_16`..`grid_18` are cell-less stubs the grid reader skips and its events are `Campaign2048_Definition.xml`'s `FE3DCanvas` map, so it shows `OAG_CAMPAIGN_NOT_PLAYABLE`; only the 2048-selected state has an original frame, HD and Fury selected are not captured); (e) **a PS4-wide lead found on the way**: the PS4 build
    leaves every vertex's coverage channel at 0 (red), so any blended or alpha-tested PS4 draw whose coverage is a texture's alpha
    reads red instead (`mesh::rcs::psp2` `slots`; fixed for the flyer cards only in `psp2_scene::alpha_from_the_picture`): census
    Omega's circuits and hulls (and 2048's Vita models, which share the builder: checked, applies, not wired) for draws it changes before
@@ -115,7 +115,7 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
 
 ## Next Steps
 
-1. ~~Omega's campaign selector (2048, HD, Fury cards)~~ (drawn 2026-11-05). What is left of it: the `2048_campaign` card's materials (banner, wordmark), the turned cards' pose (needs the executable's `Campaign Selection` update, `ghidra-mcp` was down that session, and an original frame per selection), and 2048's grids (`grid_16`..`grid_18` stubs, `Campaign2048_Definition.xml`'s map): `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
+1. ~~Omega's campaign selector (2048, HD, Fury cards)~~ (drawn 2026-11-05). What is left of it (the `2048_campaign` card's art landed 2026-11-12): the turned cards' pose (needs the executable's `Campaign Selection` update, `ghidra-mcp` was down that session, and an original frame per selection), and 2048's grids (`grid_16`..`grid_18` stubs, `Campaign2048_Definition.xml`'s map): `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
 2. A `--menu-page` still for the HD pause menu and Racebox setup read from `racebox_definition.xml` / `ingame_definition.xml`
    if the maintainer wants those XML-driven; then pair them with `scripts/rpcs3-hd-menu-pair.py` (add a `WALK` step, change
    `drawn_from` to `xml`).
