@@ -243,6 +243,12 @@ pub struct Report {
     /// material authors no colour, the slot holds another family's reading, or
     /// the glow table is full.
     pub alpha_emissive_unread: usize,
+    /// Of [`Self::alpha_emissive_bound`], the materials whose `SpecularTexture` is bound third and
+    /// weights the specular.
+    pub alpha_emissive_specular_maps: usize,
+    /// Lightmapped materials whose program multiplies the sun by an unsaturated `N.L`
+    /// (`slots::UNSATURATED_SUN`).
+    pub unsaturated_sun: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -489,6 +495,12 @@ impl Report {
             n => format!(
                 ", {n} material(s) glowing by their picture's alpha times their emissive colour"
             ),
+        } + &match self.alpha_emissive_specular_maps {
+            0 => String::new(),
+            n => format!(", {n} of them weighting their specular by a bound specular map"),
+        } + &match self.unsaturated_sun {
+            0 => String::new(),
+            n => format!(", {n} lightmapped material(s) with the sun's N.L unsaturated"),
         } + &match self.alpha_emissive_unread {
             0 => String::new(),
             n => format!(

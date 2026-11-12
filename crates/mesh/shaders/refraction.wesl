@@ -26,7 +26,7 @@ fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
         return fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth);
     }
     let lit = shadowed(shaded.rgb, in.world);
-    let slot = in.slots >> MATERIAL_SHIFT;
+    let slot = (in.slots >> MATERIAL_SHIFT) & 63u;
     let tint = emissive_tint(slot);
     let weight = emissive_scale(slot);
     // `mt_tunnelrefraction` weights the grab by its picture's alpha (rate 1),

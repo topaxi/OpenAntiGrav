@@ -109,7 +109,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the entry's scale and `offset` the animation-table row its offset names, which plays
     // the material's own curve. Laid here into the chunk's unused second pair because the
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
-    let chevron_entry = (in.slots >> 24u) & 127u;
+    let chevron_entry = (in.slots >> 24u) & 63u;
     if (in.slots & 2147483648u) != 0u && chevron_entry != 0u
         && emissive_scale(chevron_entry).z > 2.5 && emissive_scale(chevron_entry).z < 3.5 {
         let row = u32(emissive_tint(chevron_entry).w + 0.5);

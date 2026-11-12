@@ -115,7 +115,7 @@ pub(super) fn is_pictureless(material: &Material) -> bool {
 /// from every vertex. A circuit without a target (Zone mode, where nothing is left out of the
 /// main view) has nothing for the glass to sample.
 pub fn clear(model: &mut crate::mesh::Model) {
-    let bits = slots::REFRACTION | (0x7f << slots::MATERIAL_SHIFT);
+    let bits = slots::REFRACTION | (slots::MATERIAL_INDEX_MASK << slots::MATERIAL_SHIFT);
     for vertex in &mut model.vertices {
         if vertex.slots & slots::REFRACTION != 0 {
             vertex.slots &= !bits;

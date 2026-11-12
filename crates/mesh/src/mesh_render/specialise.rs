@@ -5,7 +5,7 @@
 use crate::mesh::{Model, slots};
 
 /// The `slots` bits of a vertex's index into [`Model::emissive`].
-const MATERIAL_BITS: u32 = 0x7f << slots::MATERIAL_SHIFT;
+const MATERIAL_BITS: u32 = slots::MATERIAL_INDEX_MASK << slots::MATERIAL_SHIFT;
 
 /// The bits every pipeline keeps whatever its vertices carry: the alpha channel,
 /// `NO_AMBIENT`/`NO_SUN` and `LIT_ALPHA`. They tell apart HD's sky, hulls and engine flares, which
