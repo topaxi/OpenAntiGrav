@@ -75,11 +75,7 @@ fn is_overlay(declared: &rcsmaterial::Declared, program: &Program) -> bool {
     hashes.sort_unstable();
     let mut want = [CLOUDS, SCREENS, LOGO];
     want.sort_unstable();
-    hashes == want
-        && program
-            .instructions
-            .iter()
-            .any(|i| i.name() == Some("SLT"))
+    hashes == want && program.instructions.iter().any(|i| i.name() == Some("SLT"))
 }
 
 /// Binds each banner slot's three pictures and writes its two glow-table entries
