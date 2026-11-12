@@ -37,6 +37,9 @@ material. Subway's road changes visibly with the probe, Mall's barely.
    and no `Uv1`, read the diffuse coordinate from its offset, first two components. Put the
    decision on `VertexDecl` (next to `own_diffuse_texcoord`), with a unit test on a declaration
    shaped like arena's (offsets 20, 24, 28, 32). Do not change a title that names `Uv1`.
+   **Read offset 28 (`uv1_uvDirt`), not the declaration's `uv1` entry**: that entry is at offset 32
+   with `uvDirt` and aliases the dirt pair; reading it draws a smeared surface with no lane dashes
+   (tested, RMSE 0.077 from the offset-28 frame; offset 28 matches the original's dashes).
 2. Decide the markings (`uvMarkings`, offset 20) and dirt (`uv1_uvDirt.zw`, offset 32) sets: the
    pixel programs sample `MarkingsSampler` and `DirtSampler` with them. Wiring them draws the
    road decals and dirt splat; the road is correct without them, so this is a second change.
@@ -56,7 +59,8 @@ material. Subway's road changes visibly with the probe, Mall's barely.
   cyan panel-edge lines (also on Queens Mall) and the panel displacement
   (`Cg_PanelDisplacement_1In1Depth/SlopeWidth/Aspect`, uniforms `185b0018` 4.0, `95de1208` 3.5,
   `4e231706` 1.8 on the lit variant). The lines are probably the family's `EmissiveMap`
-  (`track_a_floor_e`), not admitted by `emissive_add.rs` for it (confidence 55, not isolated).
+  (`track_a_floor_e`); which path would draw it is unread (`glow.rs` lists `EmissiveMap`), so
+  first run the square pair with only the family drawn and read its glow counts (confidence 55).
 - The black wedge and the road's lightmap on arena are fine once the coordinates are right: no
   lighting change is needed for the patch.
 - 2048 cross-check: **checked, differs** (no `tarmac_*` material in 2048's arena, square, altima or

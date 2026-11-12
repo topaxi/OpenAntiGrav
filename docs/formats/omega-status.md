@@ -1464,6 +1464,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `uv1_uvDirt` at offset 28 as the diffuse coordinate): the road draws grey asphalt with the yellow
   kerb line, lane dashes and the cyan edge line, as the original's frame does (whole-frame RMSE
   to the original 0.272 to 0.229 on the compare pair, the HUDs excluded from neither).
+  **The declaration's own `uv1` entry is not the answer:** it sits at offset 32 with `uvDirt`, the
+  `.zw` pair of `uv1_uvDirt`; reading it as the diffuse coordinate draws a smeared, dash-less
+  surface (RMSE 0.077 from the offset-28 frame, read by eye against the original), so the
+  coordinate is `uv1_uvDirt`'s first pair at offset 28, not "the file's `uv1`" by name.
   **Reach:** 661 submeshes over 8 of the 10 `environments2048` circuits (mall, tower, square,
   park, cathedral, subway, arena, bridge; not altima, not sol) name `uv1_uvDirt` and no `Uv1`
   (`crates/rcs/examples/psp2_uv_census.rs`); Omega's HD-era circuits do not. Subway's frame moves
@@ -1481,9 +1485,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   baked sun shadow wedge (the original has the same wedge); the original also draws long cyan
   glowing lines along the panel edges on Square and on Queens Mall, which ours does not. The
   family's emissive texture (`track_a_floor_e.gnf`, 512 x 128) is one thin cyan-grey line, which
-  the panel displacement would stretch along the grooves: the lines are probably that layer, which
-  the emissive-add families ([`emissive_add.rs`](../../crates/mesh/src/mesh/rcs/psp2/emissive_add.rs))
-  do not admit for this family. Not isolated (no run draws the family's emissive alone).
+  the panel displacement would stretch along the grooves: the lines are probably that layer. Ours
+  draws no such lines; which code path would draw this family's `EmissiveMap` (the
+  `glow.rs` sampler list names `EmissiveMap`, so the family may be admitted and drawn
+  without the displacement) was not read. Not isolated (no run draws the family's emissive alone).
 - **Omega's diffuse sun is its colour times `Lighting.Sun diffuse intensity`**
   ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md),
   2026-10-19, confidence 80): authored 0.3 to 20, ignored until then. The
