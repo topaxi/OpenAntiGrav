@@ -70,6 +70,11 @@ the register bank and Pure's body being `0x40` longer before the velocity), the 
 (`ride_height - min(slowdown, 4)` times `0.75`, with no mag-lock term because Pure has no mag
 strips), the gravity shape, the brake law and the lateral grip.
 
+The body damping pair (`0.01`, `0.01`) is flown on Pure (`CraftLaws::body_linear_damping` and
+`body_angular_damping`): read here, not measured live; the law is measured per frame on Pulse
+([body-damping.md](body-damping.md)). Pure has no magstrip, so the jump that keeps Pulse's off
+does not apply.
+
 ### The handling block
 
 `stats + 0x88 + class * 0x6c` (Pulse `+0x94 + class * 0x80`). Block-relative, every field from

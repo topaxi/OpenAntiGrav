@@ -65,13 +65,13 @@ const CLEAN_LAP: &str = "data/traces/talons-junction-clean-lap.csv";
 /// (`0.02`-`0.04` rad/s on the lap captures).
 const SIGNIFICANT: f32 = 0.05;
 
-fn workspace(relative: &str) -> std::path::PathBuf {
+pub(crate) fn workspace(relative: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join(relative)
 }
 
-fn load() -> (CollisionWorld, Handling) {
+pub(crate) fn load() -> (CollisionWorld, Handling) {
     let image = workspace(IMAGE);
     let mut archives = pulse::open(image.to_str().expect("utf-8")).expect("opening the disc image");
     let track_blob = archives.read_name(TRACK).expect("reading the track");
@@ -91,7 +91,7 @@ fn load() -> (CollisionWorld, Handling) {
     (collision_world(&nodes), handling)
 }
 
-fn controls_of(frame: &oag_trace::Frame) -> ShipControls {
+pub(crate) fn controls_of(frame: &oag_trace::Frame) -> ShipControls {
     ShipControls {
         steer_x: frame.steer / CONTROL_RANGE,
         thrust: frame.throttle / CONTROL_RANGE,

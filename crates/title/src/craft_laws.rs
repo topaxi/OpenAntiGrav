@@ -68,9 +68,9 @@ pub struct CraftLaws {
     /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
     pub wall_point_rate_body_local: Sourced<bool>,
     /// The rigid body's linear velocity damping per second, `velocity -= velocity * h * c` in
-    /// `Body_Integrate` (`oag_physics::laws::BodyDamping`): Wipeout HD's body carries `0.01`.
+    /// `Body_Integrate` (`oag_physics::laws::BodyDamping`): `0.01` on every title read.
     pub body_linear_damping: Sourced<f32>,
-    /// The angular twin of [`Self::body_linear_damping`], the same `0.01` on Wipeout HD.
+    /// The angular twin of [`Self::body_linear_damping`], the same `0.01`.
     pub body_angular_damping: Sourced<f32>,
     /// The track header's flag turns on the collision cage, Pulse's `AiTrack_CageEnabled`
     /// (`*(track + 4) + 0x18 & 1`, `oag_gameplay::cage`). Wipeout HD runs no cage off it
