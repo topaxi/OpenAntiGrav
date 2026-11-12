@@ -412,7 +412,7 @@ pub mod prop {
     pub const FADE_MS: u8 = 16;
     /// A sound's loop count (`i32`): `0` plays forever, `n` plays `n` times,
     /// absent plays once. Fitted on Omega's held cues, whose looping layers carry
-    /// it and whose one-shot layers do not; 428 of the 433 `data08` sounds whose
+    /// it and whose one-shot layers do not; 428 of the 435 `data08` sounds whose
     /// media carries a `smpl` (loop point) chunk have it at `0`
     /// (`docs/formats/wwise.md`, "Loops").
     pub const LOOP: u8 = 58;

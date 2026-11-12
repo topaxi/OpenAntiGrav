@@ -502,7 +502,8 @@ Evidence, two independent sources:
    | `data08` (patch) | 428 / 648 | 5 / 5,473 | 2 / 8 |
    | `data00` (base) | 214 / 512 | 5 / 5,173 | 2 / 6 |
 
-   433 of `data08`'s embedded sounds carry `smpl`; 428 of them loop forever.
+   435 of `data08`'s sounds play media carrying `smpl`; 428 of them loop forever
+   (`data00`: 214 of 221).
 
 Confidence: **property 58 is the loop count, 85** (fitted, two sources above;
 the id is recalled from public Wwise documentation as `Loop`, beside 59
@@ -549,7 +550,7 @@ the `SBlk` reader's. **HD:** `SBlk` too, untouched.
 | --- | ---: | --- |
 | Chunk walk, `BKHD`, `DIDX`, `HIRC` framing | 94 | tile the file / the chunk exactly on 107 of 107 banks; padding is zero |
 | Event, `Play`, sound and music-track layouts | 90 | exact-end on 2,183 of 2,183 Play; embedded size = `DIDX` size on every embedded sound; 0 unresolved media over two archives |
-| Property 58 is a sound's loop count, `0` forever | 85 | "Loops": every sustaining held-cue layer carries it or a continuous container, no one-shot does; 428 of 433 `smpl` media in `data08` have it at `0` |
+| Property 58 is a sound's loop count, `0` forever | 85 | "Loops": every sustaining held-cue layer carries it or a continuous container, no one-shot does; 428 of the 435 `data08` sounds whose media carries `smpl` have it at `0` |
 | Container flag bit 3 is *continuous*, its loop count read only then | 75 | "Loops": `0x1a` on every held-cue looping container, `0x12` on every one-shot pick; bit name recalled |
 | Parent id at the head of the base parameters | 85 | fitted: resolves to an object or root on every node, 110 roots; the rest of the structure unread |
 | `.wem` is ATRAC9 | 93 | four independent statements above |

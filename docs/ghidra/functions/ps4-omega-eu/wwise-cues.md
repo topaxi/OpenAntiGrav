@@ -126,7 +126,7 @@ and `0, 4` are its default arguments (no transition, the linear curve). Two inde
 
 | Site | What it releases |
 | --- | --- |
-| `FUN_01339e90` | the magstrip hum: the request at ship `+0x5f30`, then every request on the group at `+0x5f38`, then the group (the 1.07 twin of the base's `Ship_StopMagstripSound`, `0x01312770`) |
+| `FUN_01339e90` | the magstrip hum: the request at ship `+0x5f30`, then every request on the group at `+0x5f38`, then the group (the same role as the base's `Ship_StopMagstripSound`, `0x01312770`, whose patch address `patch-v107-addresses.md` leaves unresolved: a hypothesis) |
 | `FUN_0130b8c0` (the ship's sound update) | the engine's four held requests at `param_2[0xc95]`, `[0xc97]`, `[0xc98]`, ... before posting a new band |
 | `SoundManager_Update` (patch `0x01780190`), a group being torn down | every request on the group |
 

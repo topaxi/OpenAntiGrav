@@ -77,14 +77,17 @@ fn sounding(audio: &oag_sound::Audio) -> usize {
 }
 
 /// Opens a held cue with `open`, holds it for [`HOLD_TICKS`] and releases it
-/// with `close`. `loops` says whether the event authors a loop: one that does
-/// still sounds at the end of the hold, one that does not has played once and
-/// is not started again.
+/// with `close`, then opens it again and releases it while it still sounds.
+///
+/// `loops` is how many voices still sound at the end of the hold: the event's
+/// looping layers (a sound's loop count `0`, or the pick of a continuous
+/// container looping forever), measured, so dropping either law moves it. `0`
+/// for an event that authors no loop: it played once and was not started again.
 fn holds(
     name: &str,
-    loops: bool,
-    open: impl FnOnce(&mut race::Race),
-    close: impl FnOnce(&mut race::Race),
+    loops: usize,
+    open: impl Fn(&mut race::Race),
+    close: impl Fn(&mut race::Race),
 ) {
     let Some((mut race, mut audio, idle)) = omega() else {
         return;
@@ -105,18 +108,12 @@ fn holds(
         );
     }
     let held = sounding(&audio);
-    if loops {
-        assert!(
-            held > idle,
-            "{name}: its loops stopped while still held ({held}, {idle} idle)"
-        );
-    } else {
-        assert_eq!(
-            held, idle,
-            "{name}: authors no loop, so it plays once while held"
-        );
-    }
     println!("{name}: {started} voices at the start, {held} after {HOLD_TICKS} ticks, {idle} idle");
+    assert_eq!(
+        held - idle,
+        loops,
+        "{name}: the voices still sounding after {HOLD_TICKS} ticks held"
+    );
     // The original stops the held post with no fade (`StopPlayingID(id, 0,
     // linear)`): gone the tick it is released.
     close(&mut race);
@@ -126,6 +123,22 @@ fn holds(
         idle,
         "{name}: released and still sounding"
     );
+    // Again, released a second in: what still sounds is cut, one-shots included.
+    open(&mut race);
+    for _ in 0..60 {
+        step(&mut audio, &mut race);
+    }
+    assert!(
+        sounding(&audio) > idle,
+        "{name}: held a second time, and no voice opened"
+    );
+    close(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
+    assert_eq!(
+        sounding(&audio),
+        idle,
+        "{name}: released while sounding, and still sounding"
+    );
 }
 
 #[test]
@@ -133,7 +146,7 @@ fn holds(
 fn the_shield_holds_its_loops_until_it_drops() {
     holds(
         "_SHIELD_PC",
-        true,
+        5,
         |race| race.sim.world.ships[0].physics.shield_pickup_timer = 1_000.0,
         |race| race.sim.world.ships[0].physics.shield_pickup_timer = 0.0,
     );
@@ -144,7 +157,7 @@ fn the_shield_holds_its_loops_until_it_drops() {
 fn the_autopilot_holds_its_loops_until_it_expires() {
     holds(
         "_AUTOPILOT_PC",
-        true,
+        5,
         |race| race.sim.world.ships[0].autopilot_timer = 1_000.0,
         |race| race.sim.world.ships[0].autopilot_timer = 0.0,
     );
@@ -155,7 +168,7 @@ fn the_autopilot_holds_its_loops_until_it_expires() {
 fn the_magstrip_holds_its_hum_until_the_craft_leaves_it() {
     holds(
         "_magstrip01",
-        true,
+        5,
         |race| race.raise_cue(Cue::Magstrip),
         |race| race.raise_cue(Cue::MagstripStop),
     );
@@ -166,7 +179,7 @@ fn the_magstrip_holds_its_hum_until_the_craft_leaves_it() {
 fn a_shuriken_holds_its_travel_loop_while_it_flies() {
     holds(
         "_SHURIKENTRAVEL",
-        true,
+        3,
         |race| {
             let position = race.sim.world.ships[0].physics.body.position;
             race.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile {
@@ -188,7 +201,7 @@ fn a_shuriken_holds_its_travel_loop_while_it_flies() {
 fn the_leach_attach_plays_once_while_the_beam_holds() {
     holds(
         "_NGP_LEACHATTACH",
-        false,
+        0,
         |race| {
             assert!(race.ship_count() > 1, "the beam needs a second craft");
             race.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {

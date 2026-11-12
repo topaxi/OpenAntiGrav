@@ -189,9 +189,9 @@ fn the_missile_launch_plays_one_child_of_each_random_layer() {
 
 /// The race cues Omega posts as Wwise events, out of [`oag_gameplay::cue::Cue::ALL`]'s 43: each
 /// launcher, impact and pickup's cue string and bank slot, read in the 1.07 executable
-/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`). The other 17 are held loops (loop flags
-/// unread), legacy events the executable never posts, or the collision and missile ship-hit
-/// choices that are unread.
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`). The other 17 are the 12 held cues
+/// ([`HELD_WIRED`], [`HELD_REFUSED`] and the engine), legacy events the executable never posts, or
+/// the collision and missile ship-hit choices that are unread.
 const POSTED: [oag_gameplay::cue::Cue; 26] = {
     use oag_gameplay::cue::Cue;
     [
