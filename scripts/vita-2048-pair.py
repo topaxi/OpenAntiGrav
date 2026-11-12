@@ -129,7 +129,7 @@ def scan_base(mem, pid, probe_site, probe_bytes):
     return found[0]
 
 
-def patch_hull_shake(pid, timeout=30.0):
+def patch_hull_shake(pid, timeout=120.0):
     """Overwrite the drawn hull's `bl HullShake_Apply` calls with `nop`s in the running Vita3K `pid` (a child of this process: Yama's
     `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else), before the guest has run the code. Returns what was read back.
 

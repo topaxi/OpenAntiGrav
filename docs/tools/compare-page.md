@@ -582,34 +582,38 @@ Amphiseum, Modesto Heights and Tech De Ra), which with Empire Climb, Queens Mall
 - **Retry now shows the mode card again** on the HD Campaign and holds the countdown until the check mark is tapped (7 s of card on every grab otherwise, the
   burst's HUD never came up); the burst taps `(882, 480)` every 2 s until the HUD is up. The first HUD frame is still tick 0.
 - **Same recipe as the Vineta K pair**: Retry and a 44-frame burst, the frame 3 s after the first HUD frame (2.9 to 3.1 s measured) against ours' tick
-  179 to 182, hull shake patched out, `--skip-craft-offset` (no yellow livery to find, no nose read), Pilot Assist on, exposure held at 1.15,
-  `--pilot-assist on`.
+  174 to 187, hull shake patched out, `--skip-craft-offset` (no yellow livery to find, no nose read), exposure held at 1.15, Pilot Assist on in both (below).
 
 | Circuit | Pack | RMSE | Edge correlation | Mean grey difference |
 | --- | --- | --- | --- | --- |
-| Metropia | HD | 0.139 | 0.16 | 18.6 |
-| Anulpha Pass | HD | 0.126 | 0.15 | 15.0 |
-| Moa Therma | HD | 0.206 | 0.12 | 35.2 |
-| Chenghou Project | HD | 0.139 | 0.13 | 16.1 |
-| Ubermall | HD | 0.190 | 0.24 | 25.4 |
-| Sebenco Climb | HD | 0.140 | 0.17 | 20.9 |
-| Sol 2 | HD | 0.167 | 0.13 | 24.0 |
-| Talons Junction | Fury | 0.188 | 0.12 | 23.6 |
-| Amphiseum | Fury | 0.169 | 0.14 | 28.5 |
-| Modesto Heights | Fury | 0.174 | 0.11 | 30.7 |
-| Tech De Ra | Fury | 0.194 | 0.16 | 27.7 |
+| Metropia | HD | 0.138 | 0.17 | 17.8 |
+| Anulpha Pass | HD | 0.129 | 0.15 | 14.8 |
+| Moa Therma | HD | 0.196 | 0.17 | 33.7 |
+| Chenghou Project | HD | 0.139 | 0.13 | 16.5 |
+| Ubermall | HD | 0.188 | 0.25 | 24.6 |
+| Sebenco Climb | HD | 0.140 | 0.15 | 21.3 |
+| Sol 2 | HD | 0.163 | 0.14 | 23.6 |
+| Talons Junction | Fury | 0.182 | 0.13 | 23.2 |
+| Amphiseum | Fury | 0.167 | 0.12 | 28.0 |
+| Modesto Heights | Fury | 0.176 | 0.09 | 30.8 |
+| Tech De Ra | Fury | 0.187 | 0.18 | 26.8 |
 
-- **Seen once or twice.** A second cold boot of Anulpha Pass, Metropia and Tech De Ra gave RMSE 0.144, 0.139 and 0.189 (first boots 0.126, 0.139, 0.194):
-  the two boots' originals differ by 0.079, 0.037 and 0.055 RMSE from each other (the animated sign boards, the rivals' craft), so the RMSE column is good
-  to about 0.02. The other eight are seen once. Circuit, craft and the HUD place (8/8) were read off both frames of every pair; the **mode** is Race on
-  both sides, so no Speed Lap or Elimination (no place to read) is in this set.
+- **Seen once or twice.** A second cold boot of Anulpha Pass gave RMSE 0.127 against 0.129 and its original differs from the first boot's by 0.047 RMSE
+  (the animated sign boards, the rivals' craft), so the RMSE column is good to about 0.02. A first set of the same eleven pairs, taken before the Pilot Assist
+  setting below was fixed, had second boots of Anulpha Pass, Metropia and Tech De Ra at 0.144, 0.139 and 0.189 (first boots 0.126, 0.139, 0.194; the
+  originals 0.079, 0.037 and 0.055 apart): the same agreement. The other ten pairs are seen once (four second boots hung out of their four attempts).
+  Circuit, craft and the HUD place (8/8) were read off both frames of every pair; the **mode** is Race on both sides, so no Speed Lap or Elimination is in this set.
+- **Pilot Assist had to be set in the original.** The compare profile pins `pilot_assist = "on"` and ours draws the indicator; this profile's original
+  started on **Normal**, which draws none, so the first eleven pairs showed the icon on one side only (no parity check reads the original's options). Home,
+  Options, Pilot Assist `(297, 325)`, the right arrow `(910, 243)` once to **Extreme**, the check mark (saved to `DATA.BIN`) puts it up; the pairs here were
+  recaptured after that and the icon is drawn on both sides in all eleven (crops of the box `575,494,130x44`, read side by side).
 - **What the frames show.** Same circuit and slot everywhere; ours is darker on the hull (black where the original is lit blue and green) and brighter on
   some floors, the sign boards sit at another phase, the rivals are other craft. Anulpha Pass shows a defect of ours: wide cyan glow quads on the floor and
-  a flat blue block of sky where the original is dark (box `0,280,300,60`, mean grey 74.1 ours against 40.3 original). **It is not the `alpha_emissive` family**
+  a flat blue block of sky where the original is dark (box `0,280,300,60`, mean grey 74.1 ours against 40.1 original). **It is not the `alpha_emissive` family**
   (a render with `OAG_ALPHA_EMISSIVE_OFF=1` is pixel-identical in that box), so it is another material and open.
-- **`alpha_emissive` glow, one box per pair** (the pixels that change with `OAG_ALPHA_EMISSIVE_OFF=1`; 23 on Anulpha Pass, 208 on Metropia): Anulpha Pass
-  box `172x73+535+77` mean grey 25.9 original, 20.8 ours, 20.0 ours with the family off; Metropia box `409x102+254+57` 73.1 original, 80.5 ours, 78.5 ours
-  with it off. The family adds 0.8 and 2.1 grey in those boxes and is not what separates the frames; ours' lit pixels there are a speckle (isolated cyan or
+- **`alpha_emissive` glow, one box per pair** (the pixels that change with `OAG_ALPHA_EMISSIVE_OFF=1`; 23 on Anulpha Pass, 206 on Metropia): Anulpha Pass
+  box `172x73+535+77` mean grey 25.8 original, 20.8 ours, 19.9 ours with the family off; Metropia box `409x102+254+57` 73.4 original, 80.3 ours, 78.2 ours
+  with it off. The family adds 0.8 and 2.0 grey in those boxes and is not what separates the frames; ours' lit pixels there are a speckle (isolated cyan or
   yellow pixels on the sign boards) where the original is smooth.
 - **The chase camera:** the options screen (Home, Options, Camera) reads **CLOSE** on this profile (the pairs above were taken on it; the earlier three
   were not, "The chase camera and the craft's size" below).
@@ -618,9 +622,16 @@ Amphiseum, Modesto Heights and Tech De Ra), which with Empire Climb, Queens Mall
   left Event 1 on Empire Climb (card and race), so the field that picks the circuit is another one (open). The Zone circuits and the reversed circuits
   (`track_reversed.vex`, 11 of them in `dlc1.psarc` and `dlc2.psarc`) have cell records (`Zone_1` to `Zone_4`, `Talons_Junction_R` ...) that the same rename
   reaches, but no pair was made of them (not attempted, the Zone circuits race in the Zone mode and a Race cell would not be that mode); open.
-- **Omega:** not checkable (no PS4 emulator, as for the DLC pair above). **Adopting it:** the pair directories are in the lane's scratch `adopt/2048-vita/`;
-  copy them to `data/reference/compare-page/2048-vita/` and regenerate with `python3 scripts/compare_env.py manifest data/reference/compare-page/2048.toml
-  data/reference/compare-page/2048-vita/{empire-climb,mall,dlc-vineta-k,metropia,anulpha-pass,moa-therma,chenghou-project,ubermall,sebenco-climb,sol-2,talons-junction,amphiseum,modesto-heights,tech-de-ra}`.
+- **Omega:** the rename route is **checked, differs**: Omega's front end is HD's `PI001` (`omega-status.md`), not 2048's grid map, so there is no 2048 cell
+  record to rewrite, and Omega's original runs on shadPS4 with its own pair script. Anulpha Pass's floor is **checked, applies, not isolated**: Omega's
+  Anulpha pair has the original flat grey-teal where ours draws the chevron family (`omega-status.md`, "Anulpha Pass's chevron floor", 2026-10-27), and
+  that page's "2048: checked, applies, not wired visually; no 2048 pair shows them" is now answered by this pair, which shows ours' bright cyan bars against
+  the original's flat dark floor on 2048 as well. That the bars are the `cf_chevron_pulse` materials was not isolated here (no render with them off); no Omega
+  frame was rendered in this lane.
+- **Adopting it:** copy the eleven pair directories (`theirs.png`, `ours.png`, `side.png`, `pair.json` each) to
+  `data/reference/compare-page/2048-vita/<id>/` (ids as in the table, lower case with hyphens) and regenerate with `python3 scripts/compare_env.py manifest
+  data/reference/compare-page/2048.toml data/reference/compare-page/2048-vita/{empire-climb,mall,dlc-vineta-k,metropia,anulpha-pass,moa-therma,chenghou-project,ubermall,sebenco-climb,sol-2,talons-junction,amphiseum,modesto-heights,tech-de-ra}`,
+  then `just compare-page`.
 
 ### The chase camera and the craft's size (2026-11-11, `c2048-chase-camera`)
 
