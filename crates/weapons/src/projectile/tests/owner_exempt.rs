@@ -30,6 +30,7 @@ fn ticks_to_trip(kind: Weapon, owner_at_slot: u8, limit: usize) -> Option<(usize
             radii,
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
         );
         if let Some(impact) = impacts.iter().flatten().next() {
             return Some((tick, *impact));

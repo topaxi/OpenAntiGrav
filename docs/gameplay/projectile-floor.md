@@ -392,8 +392,9 @@ query and before the surface class, with no craft limits (`MAX_POINT_DISTANCE`, 
 
 The point tested is the mesh hit's point when there is one (any surface class: a floor past the tube
 is a wall to a projectile), else the segment's end (probe: `to - surface * probe_length`). A hull hit
-stays what it is. The Plasma's first 0.04 s (no probe, `plasma::UNPINNED_SECONDS`) still asks the
-cage about the probe's end. Acceptance
+stays what it is. A probe the firing craft's own box hides (Pulse, see "Own-craft box" below) or a Plasma
+within the chosen window of a title without the box law still asks the cage about the probe's
+end. Acceptance
 (`crates/raceplay/tests/projectile_cage_ground_truth.rs`, each red without the cage): Plasma from
 update 45 ends on update 49 within 0.5 unit of the original's boundary point, Shuriken (re-seeded each
 update until the floor arms were wired, 2026-11-12; chained since) on
@@ -402,12 +403,8 @@ code-4 queries are outside at the original's boundary point and normal. `rocket_
 Pulse `07` and `10`: rockets that "expired" at their five seconds went from 14 and 7 to 0, and the
 longest flight from 299 ticks to 107 and 156.
 
-**Still different, not wired here:** the own-craft box (measured 2026-11-12, ready to wire: the box
-is on the craft, and the original tests the probe against it through the transposed rotation, so the
-first probes miss for a distance that depends on the craft's heading off the world axes, 4.875 ahead
-at best and 2.06 at 45 degrees, and not at all on the mag strip's roll;
-[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#the-own-craft-box-is-a-rotated-frame-2026-11-12-pulse-own-craft-box))
-and the Missile's MAX_BOUNCES wall end (`blast: true`, while its cage end spends none).
+**Still different, not wired here:** the Missile's MAX_BOUNCES wall end (`blast: true`, while its
+cage end spends none), an opponent's box, and the travel sweep's own box meeting.
 
 ### Wired: the floor arms (2026-11-12, lane `pulse-floor-arms`)
 
@@ -429,3 +426,26 @@ next update (278 against 299 units/s at update 52 without the law) and ends it o
 `crates/weapons/src/projectile/tests/floor_arms.rs` pins each arm's formula on a flat floor, both
 ways. The Missile's per-update errors and the Rocket's ramp-face exit (`(-65.0, 155.6, -7.1)`) were not
 kept as recorded states, so those two arms are unit-tested only, not disc-backed.
+
+### Wired: the own-craft box (2026-11-13, lane `pulse-own-craft-box`)
+
+`Weapons::own_craft_box_hides_track` (Pulse measured `true`; Pure, HD, 2048 and Omega chosen `false`)
+selects `projectile::OwnCraftProbe` for `Projectiles::advance`. On Pulse every flyer that probes
+(Rocket, Missile, Plasma, Shuriken; not the Cannon, which has no probe) asks the firing craft's box
+before the mesh: centre on the body, rows `(-right, up, forward)`, half dimensions `(width, height,
+length) * 0.75 * 0.5` from `<Misc>`, the segment gated through the transposed rotation
+(`Collision_RaycastBox`) and then the nearest face of the true box. A box face nearer than the mesh
+hit makes the probe code `0x7f`: the bolt falls this update, and the cage is still asked about the
+full segment's end. The reach ahead of a Venom is 4.875 axis-aligned and 2.06 at 45 degrees of yaw; on
+the mag strip's 85 degree roll the gate rejects the start and the bolt rides at once. The Plasma's
+chosen 0.04 s window is gone on Pulse; a title without the law keeps it (chosen,
+`UNMEASURED_PLASMA_PROBE_WINDOW` in `oag_raceplay`'s `access.rs`).
+
+Acceptance: `crates/weapons/src/projectile/tests/craft_box.rs` (the seven records the page prints:
+red on the rows' own frame; reach 4.875 and 2.06; a Rocket falling inside the reach and riding
+outside it; the mag-strip roll) and `projectile_cage_ground_truth::
+the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse` (the grid craft's row 0 is
+`(-1, 0, 0)`, a Rocket 3 ahead falls, 6 ahead rides). **Not ported:** the 2,302-probe replay of 56
+captures (`scripts/psp-craft-box-replay.py`): the capture files were scratch and are gone, so only
+the page's records are a Rust test. Open: an opponent's box (75), the travel sweep's own box meeting
+(65), Pure by inheritance.

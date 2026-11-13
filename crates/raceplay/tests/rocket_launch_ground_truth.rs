@@ -112,6 +112,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             None,
             &class,
             race.floor_arms(),
+            race.own_craft_probe(),
             oag_weapons::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],

@@ -284,6 +284,7 @@ fn update(
         race.weapon_stats(),
         "VENOM",
         race.floor_arms(),
+        race.own_craft_probe(),
         BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut hits,
@@ -615,4 +616,56 @@ fn plasma_rides_the_located_up(
         "the bolt must not be riding the craft's own up"
     );
     track_up
+}
+
+/// A Rocket put `ahead` units in front of the grid craft at its own ride height above the floor,
+/// one update: its velocity afterwards. A rocket that rode has the zero velocity it was seeded
+/// with (the step to its ride point is nil); one whose probe fell has `-50 * dt` in y.
+fn rocket_velocity_after_one_update(race: &race::Race, ahead: f32) -> Vec3 {
+    let mut world = race.sim.world.clone();
+    world.projectiles.clear();
+    let craft = world.ships[0].physics.body;
+    let above = craft.position + craft.forward() * ahead;
+    let floor = oag_physics::Raycaster::raycast(
+        race.collision(),
+        oag_physics::Ray::new(above, -craft.up(), 20.0),
+        None,
+        false,
+    )
+    .expect("the grid has a floor under the craft");
+    world.projectiles.slots[0] = Projectile {
+        kind: Some(Weapon::Rocket),
+        owner: 0,
+        position: floor.point + floor.normal * 3.0,
+        velocity: Vec3::ZERO,
+        surface: floor.normal,
+        lifetime: MAX_FLIGHT_SECONDS - 0.1,
+        ..Projectile::default()
+    };
+    update(race, &mut world, None, 1.0 / 60.0);
+    world.projectiles.slots[0].velocity
+}
+
+/// The firing craft's box hides the floor from a projectile that starts inside its reach, and the
+/// mapping from our body to the original's rows is the measured one: the grid craft's row 0
+/// (`-right`) is `(-1, 0, 0)` on Moa Therma White (`rocket-visuals.md`, "The own-craft box is a
+/// rotated frame"). Drops with `Weapons::own_craft_box_hides_track`.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse() {
+    let Some(race) = start("03") else { return };
+    let body = race.sim.world.ships[0].physics.body;
+    assert!(
+        (-body.right()).distance(-Vec3::X) < 0.1,
+        "row 0 is {:?}, not the original's (-1, 0, 0)",
+        -body.right()
+    );
+    assert_eq!(
+        race.own_craft_probe(),
+        oag_weapons::projectile::OwnCraftProbe::CraftBox
+    );
+    let inside = rocket_velocity_after_one_update(&race, 3.0);
+    assert!(inside.y < -0.5, "3 ahead is inside the box: {inside:?}");
+    let clear = rocket_velocity_after_one_update(&race, 6.0);
+    assert!(clear.length() < 0.5, "6 ahead is clear of it: {clear:?}");
 }

@@ -1503,10 +1503,10 @@ to the unit, and the Autopilot rows are covered by their own fresh captures abov
 - One title build (Pulse PSP USA) and one box size; the dimensions of other classes are the
   Misc times 0.75, read from the collider, not assumed.
 
-**Ready to wire** (not wired here; thread `projectiles-leave-the-track-the-original-cages-them`, item 3).
+**Wired 2026-11-13** (lane `pulse-own-craft-box`: `projectile::own_box_blocks`, `OwnCraftProbe`, `Weapons::own_craft_box_hides_track`; tests in `docs/gameplay/projectile-floor.md`, "Wired: the own-craft box"). The recipe it followed:
 The probe in `projectile::flight` asks `Raycaster::raycast(Ray::new(to, -surface, length))` and falls on
-`None`. Replace the Plasma's `age < plasma::UNPINNED_SECONDS` gate (chosen, 0.04 s; wrong on the mag
-strip, right by luck on an aligned floor) by one function every flyer shares, so the Rocket, whose
+`None`. The Plasma's `age < UNPINNED_SECONDS` gate (chosen, 0.04 s; wrong on the mag
+strip, right by luck on an aligned floor) was replaced by one function every flyer shares, so the Rocket, whose
 first two to four probes fall in the original and ride in ours, gets it too:
 
 1. For each craft in the race (the firer's included; the Cannon has no probe), the box is centre =

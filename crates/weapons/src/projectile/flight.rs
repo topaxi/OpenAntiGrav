@@ -6,8 +6,9 @@
 
 use super::{
     FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
-    MAX_PROJECTILES, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit,
-    TriggerRadii, cannon, disruptor, mine, missile, nearest_hit, plasma, rocket, shuriken,
+    MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
+    SweepHit, TriggerRadii, cannon, disruptor, mine, missile, nearest_hit, own_box_blocks, plasma,
+    rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -31,7 +32,8 @@ impl Projectiles {
     /// original's collision code `4`, taken before the surface class.
     ///
     /// `floor_arms` is how the title's weapons write their velocity on a floor
-    /// ([`FloorArms`]).
+    /// ([`FloorArms`]). `own_craft` is how the first probes treat the firing craft
+    /// ([`OwnCraftProbe`]).
     // One table block per weapon that flies at an authored speed, plus the cage and
     // the title's floor arms; a parameter struct is deferred until another asks.
     #[allow(clippy::too_many_arguments)]
@@ -47,6 +49,7 @@ impl Projectiles {
         trigger_radii: TriggerRadii,
         class: &str,
         floor_arms: FloorArms,
+        own_craft: OwnCraftProbe,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -205,16 +208,34 @@ impl Projectiles {
             // surface probe, no ride height and no fall. A probe along a seeded
             // world up snapped a round off the muzzle on any banked track.
             let probe = if kind == Weapon::Cannon
-                || (kind == Weapon::Plasma && age < plasma::UNPINNED_SECONDS)
-            {
+                || matches!(
+                    (kind, own_craft),
+                    (Weapon::Plasma, OwnCraftProbe::PlasmaWindow(window)) if age < window
+                ) {
                 None
             } else {
-                Raycaster::raycast(
+                let segment_end = to - projectile.surface * probe_length;
+                let mesh = Raycaster::raycast(
                     raycaster,
                     Ray::new(to, -projectile.surface, probe_length),
                     None,
                     false,
-                )
+                );
+                // The firing craft's own box hides the track from a probe that crosses it
+                // first: the original's code `0x7f`, a fall. The cage below still asks about
+                // the full segment's end, as the original does.
+                let blocked = own_craft == OwnCraftProbe::CraftBox
+                    && ships.get(projectile.owner as usize).is_some_and(|ship| {
+                        ship.active()
+                            && own_box_blocks(
+                                &ship.physics().body,
+                                &ship.dimensions(),
+                                to,
+                                segment_end,
+                                mesh.map(|hit| hit.distance),
+                            )
+                    });
+                if blocked { None } else { mesh }
             };
             // `Collision_SweepSegment` (`0x0883198c`) asks the cage about the
             // probe's end after the mesh: the mesh hit's point when there is one,

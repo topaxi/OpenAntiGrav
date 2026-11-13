@@ -21,7 +21,7 @@ fn once(
         position,
         velocity,
         surface,
-        // Past `plasma::UNPINNED_SECONDS`, so a Plasma probes.
+        // Past the Plasma probe window, so a Plasma probes.
         lifetime: MAX_FLIGHT_SECONDS - 0.1,
         ..Projectile::default()
     };
@@ -36,6 +36,7 @@ fn once(
         TriggerRadii::default(),
         "VENOM",
         floor_arms,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
     );
     assert!(impacts[0].is_none(), "{kind:?} rode the floor");
     projectiles.slots[0]

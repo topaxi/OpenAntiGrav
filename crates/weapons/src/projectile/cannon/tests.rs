@@ -58,6 +58,7 @@ fn advance(projectiles: &mut Projectiles, world: &CollisionWorld) {
         TriggerRadii::default(),
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
     );
 }
 

@@ -96,6 +96,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.pads_stamp_in_eliminator` | `set` - measured | `set` - inherited | `none` - measured | `none` - measured | `none` - measured |
 | `weapons.launch_normal_is_track_up` | `set` - measured | `set` - inherited | `set` - measured | `set` - measured | `set` - measured |
 | `weapons.floor_arms_steer_to_ride_point` | `set` - measured | `set` - inherited | `none` - chosen | `none` - chosen | `none` - chosen |
+| `weapons.own_craft_box_hides_track` | `set` - measured | `none` - chosen | `none` - chosen | `none` - chosen | `none` - chosen |
 | `weapons.opponent_fire` | `PULSE` - measured | `PULSE` - measured | `HD` - measured | `OMEGA` - measured | `OMEGA` - measured |
 | `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |

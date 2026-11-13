@@ -1303,6 +1303,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             launch_normal_is_track_up: title.weapons.launch_normal_is_track_up.value,
             floor_arms_steer_to_ride_point: title.weapons.floor_arms_steer_to_ride_point.value,
+            own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
             score_law: rule.law,
