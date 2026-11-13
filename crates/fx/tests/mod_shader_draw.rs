@@ -394,6 +394,11 @@ const OVER_RANGE: &str = "fn mod_fragment(input: ModInput) -> vec4<f32> {
     return vec4<f32>(0.5, 2.0, -1.0, 1.0);
 }\n";
 
+/// The two linear float scenes that keep a value above 1, with the power each decodes a
+/// gamma-authored colour by: Omega's computed one (2.2) and 2048's gamma-2 one.
+const FLOAT_SCENES: [(SceneStore, f32); 2] =
+    [(SceneStore::Computed, 2.2), (SceneStore::Squared, 2.0)];
+
 /// A float scene target that computes in linear light keeps a shader's value above 1 (the
 /// bloom and the tonemap read it there), and still holds a negative one at 0.
 #[test]
@@ -403,17 +408,25 @@ fn a_float_target_keeps_a_value_above_one() {
         shader: 0,
         colour: [0.0, 0.0, 0.0, 1.0],
     });
-    let mut float = stage_in(
-        &gpu,
-        oag_gpu::formats::SCENE_FORMAT,
-        SceneStore::Computed,
-        &[shader(OVER_RANGE)],
-    );
-    let kept = render_scene(&gpu, &mut float, &frame(fill, &[], &[]))[(32 * SIZE + 32) as usize];
-    // Half 0.5 decodes through the 2.2 power to 0.2176; the 2.0 passes the power to 4.595.
-    assert!((kept[0] - 0.5f32.powf(2.2)).abs() < 0.001, "{kept:?}");
-    assert!(kept[1] > 4.0, "a value above 1 is kept: {kept:?}");
-    assert_eq!(kept[2], 0.0, "a negative value is not: {kept:?}");
+    for (store, power) in FLOAT_SCENES {
+        let mut float = stage_in(
+            &gpu,
+            oag_gpu::formats::SCENE_FORMAT,
+            store,
+            &[shader(OVER_RANGE)],
+        );
+        let kept =
+            render_scene(&gpu, &mut float, &frame(fill, &[], &[]))[(32 * SIZE + 32) as usize];
+        assert!(
+            (kept[0] - 0.5f32.powf(power)).abs() < 0.001,
+            "{store:?} {kept:?}"
+        );
+        assert!(
+            (kept[1] - 2.0f32.powf(power)).abs() < 0.02 * 2.0f32.powf(power),
+            "a value above 1 is kept: {store:?} {kept:?}"
+        );
+        assert_eq!(kept[2], 0.0, "a negative value is not: {store:?} {kept:?}");
+    }
 }
 
 /// An 8-bit target is the clamp it always was, byte for byte.
@@ -460,12 +473,13 @@ fn a_highlight_in_the_engine_texture_survives_a_pass_through() {
     let seen = engine_texture(engine_uv(input.world));
     return vec4<f32>(seen.rgb, 1.0) + vec4<f32>(0.0, 0.0, 1000.0 * input.uv.x, 0.0);
 }\n";
-    let mut stage = stage_in(
-        &gpu,
-        oag_gpu::formats::SCENE_FORMAT,
-        SceneStore::Computed,
-        &[shader(text)],
-    );
+    for (store, _) in FLOAT_SCENES {
+        pass_through(&gpu, store, text);
+    }
+}
+
+fn pass_through(gpu: &Gpu, store: SceneStore, text: &str) {
+    let mut stage = stage_in(gpu, oag_gpu::formats::SCENE_FORMAT, store, &[shader(text)]);
     let surfaces = [(0, quad([1.0; 4]))];
     let picture = gpu.device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -501,13 +515,19 @@ fn a_highlight_in_the_engine_texture_survives_a_pass_through() {
         engine_view_projection: Some(IDENTITY),
         ..frame(None, &surfaces, &[])
     };
-    let texels = render_scene(&gpu, &mut stage, &viewed);
+    let texels = render_scene(gpu, &mut stage, &viewed);
     let kept = texels[(32 * SIZE + 18) as usize];
-    assert!((kept[0] - 4.0).abs() < 0.02, "the highlight: {kept:?}");
-    assert!((kept[1] - 0.25).abs() < 0.002, "the rest: {kept:?}");
+    assert!(
+        (kept[0] - 4.0).abs() < 0.02,
+        "the highlight: {store:?} {kept:?}"
+    );
+    assert!(
+        (kept[1] - 0.25).abs() < 0.002,
+        "the rest: {store:?} {kept:?}"
+    );
     let runaway = texels[(32 * SIZE + 45) as usize];
     assert!(
         runaway[2].is_finite() && runaway[2] > 10_000.0,
-        "capped, not infinite: {runaway:?}"
+        "capped, not infinite: {store:?} {runaway:?}"
     );
 }
