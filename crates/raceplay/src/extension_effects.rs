@@ -248,10 +248,12 @@ mod view {
             let body = &ship.physics.body;
             let back = -body.forward();
             let at = body.position + back * (ship.handling.dimensions.length * 0.5);
-            let playing = self.view.stage.play(&effect, at, 1.0);
-            if let (Some(playing), Fired::Own { .. }) = (playing, fired) {
-                let up = if axis == Axis::Rear { back } else { body.up() };
-                self.view.stage.orient(playing, up);
+            if matches!(fired, Fired::Own { .. }) {
+                self.view
+                    .stage
+                    .play_aimed(&effect, at, axis, back, body.up());
+            } else {
+                self.view.stage.play(&effect, at, 1.0);
             }
         }
     }
