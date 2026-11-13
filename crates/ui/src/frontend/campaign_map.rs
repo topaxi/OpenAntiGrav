@@ -261,6 +261,9 @@ pub struct CampaignMap {
     pub(super) cursor: super::map_cursor::MapCursor,
     /// The d-pad's focus. See [`super::map_focus`].
     pub(super) focus: super::map_focus::PadFocus,
+    /// The one season the map shows, `0` to `2` for 2048, 2049, 2050; `None`
+    /// shows all three. See [`Frontend::set_map_season`].
+    pub(super) season: Option<u8>,
     /// The music wave round the current event. See [`super::campaign_wave`].
     pub(super) wave: super::canvas_wave::Wave,
     /// Seconds the wave has not stepped yet.
@@ -466,6 +469,12 @@ impl CampaignMap {
         if self.closed.get(index).copied().unwrap_or(false) {
             return ProgressState::Locked;
         }
+        // Another season's events read as status 1 (`TouchCampaign_UpdateEvent`).
+        if let (Some(shown), Some(own)) = (self.season, season_of(&event.name))
+            && shown != own
+        {
+            return ProgressState::Locked;
+        }
         let open = event.requires.as_deref().is_none_or(|gate| {
             self.events
                 .iter()
@@ -485,7 +494,32 @@ impl CampaignMap {
     }
 }
 
+/// The season an event's instance name puts it in: `"2049 - Event 3"` is
+/// season 1. Events whose name carries no year (speed laps, ship challenges)
+/// belong to no season of their own and show in every one. The original reads
+/// the season off the event (`event+0x308`, `CanvasButton_GetSeason`); where
+/// that field is authored is unread, the year in the name is the stand-in.
+fn season_of(name: &str) -> Option<u8> {
+    let year: u16 = name.get(..4)?.parse().ok()?;
+    name.get(4..)?
+        .starts_with(" - ")
+        .then(|| {
+            year.checked_sub(2048)
+                .and_then(|season| u8::try_from(season).ok())
+        })
+        .flatten()
+        .filter(|season| *season < 3)
+}
+
 impl Frontend {
+    /// Shows one season of the map (`0` to `2`), or all three with `None`.
+    /// Omega's map has a current season picked ahead of it; focus never leaves
+    /// it, the other seasons' events read as not reached. Vita 2048's map
+    /// shows all three.
+    pub fn set_map_season(&mut self, season: Option<u8>) {
+        self.campaign.season = season;
+    }
+
     /// Gives the map its events, in the order the file lists them. The
     /// cursor starts on the unlock graph's root: the first event with no
     /// [`MapEvent::requires`] that another event requires (2048's side

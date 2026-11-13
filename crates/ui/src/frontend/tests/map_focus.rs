@@ -221,3 +221,23 @@ fn a_locked_event_never_takes_focus() {
     tap(&mut frontend, &mut input, Button::Right);
     assert_eq!(selected(&frontend), "here");
 }
+
+#[test]
+fn a_map_showing_one_season_keeps_the_pad_inside_it() {
+    let events = [
+        ("2048 - Event 1", 60.0, 30.0),
+        ("2049 - Event 1", 64.0, 30.0),
+        ("2048 - Event 2", 68.0, 30.0),
+    ];
+    let (mut frontend, mut input) = on_the_map(&events);
+    frontend.set_map_season(Some(0));
+    tap(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        selected(&frontend),
+        "2048 - Event 2",
+        "2049 is stepped over"
+    );
+    let (mut all, mut input) = on_the_map(&events);
+    tap(&mut all, &mut input, Button::Right);
+    assert_eq!(selected(&all), "2049 - Event 1", "no season, no filter");
+}
