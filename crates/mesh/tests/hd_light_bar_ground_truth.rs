@@ -32,9 +32,13 @@ fn build(path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
         archive_cache::read(&spec, path).map(|d| (spec, d))
     })?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
-    mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        (0..4).find_map(|n| archive_cache::read(&archive(&image, n), name))
-    })
+    mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| (0..4).find_map(|n| archive_cache::read(&archive(&image, n), name)),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .ok()
 }
 

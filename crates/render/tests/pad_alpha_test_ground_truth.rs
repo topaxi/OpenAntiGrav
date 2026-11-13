@@ -203,9 +203,13 @@ fn an_hd_speedup_pad_draws_visible_pixels() {
     let data = archive_cache::read(&spec, name).expect("reading 12_sol_2's track.vex");
     let geometry = mesh::rcs::sibling_geometry(&spec, name, &data)
         .expect("12_sol_2 ships a .rcsmodel beside its .vex");
-    let (model, report) = mesh::rcs::build_pads(name, &data, &geometry, &mut |path| {
-        archive_cache::read(&spec, path)
-    })
+    let (model, report) = mesh::rcs::build_pads(
+        name,
+        &data,
+        &geometry,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("building 12_sol_2's Speedup Pad geometry");
     println!("{}", report.describe());
     assert!(

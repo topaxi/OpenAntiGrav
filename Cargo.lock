@@ -3299,6 +3299,7 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-fx",
+ "oag-gpu",
  "oag-mesh",
  "oag-pulse",
  "oag-race",

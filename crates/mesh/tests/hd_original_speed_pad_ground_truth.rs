@@ -50,9 +50,15 @@ fn scene(archive: &str, track: &str) -> Option<mesh::Model> {
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data).expect("a .rcsmodel beside it");
     let mut read = |p: &str| archive_cache::read(&spec, p);
     Some(
-        mesh::rcs::build_scene(&name, &data, &geometry, &mut read)
-            .expect("the scene builds")
-            .0,
+        mesh::rcs::build_scene(
+            &name,
+            &data,
+            &geometry,
+            &mut read,
+            oag_gpu::formats::SceneStore::default(),
+        )
+        .expect("the scene builds")
+        .0,
     )
 }
 

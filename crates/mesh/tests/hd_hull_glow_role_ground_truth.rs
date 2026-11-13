@@ -64,6 +64,7 @@ fn build_ship(image: &Path, archive: &str, path: &str) -> Option<(mesh::Model, m
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .ok()
@@ -78,9 +79,13 @@ fn build_circuit(
     let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     let geometry_model = oag_rcs::rcsmodel::Model::parse(&geometry).ok()?;
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .ok()?;
     Some((model, geometry_model, report))
 }

@@ -160,6 +160,7 @@ pub(super) fn shell(
     team: &str,
     ship_dir: &str,
     wanted: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<oag_mesh::mesh::Model> {
     if !wanted {
@@ -179,6 +180,7 @@ pub(super) fn shell(
         &blob,
         &geometry,
         &mut |path| archives.read_name(path).ok(),
+        store,
         |c| c.mesh,
     );
     let (mut model, built) = match built {

@@ -31,9 +31,13 @@ fn build(image: &Path, archive: &str, circuit: &str) -> Option<(mesh::Model, usi
             continue;
         };
         let geometry = mesh::rcs::sibling_geometry(&spec, &path, &data)?;
-        let (model, report) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            archive_cache::read(&spec, name)
-        })
+        let (model, report) = mesh::rcs::build_scene(
+            &path,
+            &data,
+            &geometry,
+            &mut |name| archive_cache::read(&spec, name),
+            oag_gpu::formats::SceneStore::default(),
+        )
         .expect("the scene builds");
         return Some((model, report.vertex_scrolls));
     }

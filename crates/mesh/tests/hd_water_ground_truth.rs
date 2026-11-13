@@ -36,9 +36,13 @@ fn build(
     let specs: Vec<String> = (0..4).map(|n| archive(image, n)).collect();
     let (spec, data) = reads.read_any(&specs, path)?;
     let geometry = mesh::rcs::sibling_geometry(spec, path, &data)?;
-    mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        reads.read_any(&specs, name).map(|(_, bytes)| bytes)
-    })
+    mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| reads.read_any(&specs, name).map(|(_, bytes)| bytes),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .ok()
 }
 

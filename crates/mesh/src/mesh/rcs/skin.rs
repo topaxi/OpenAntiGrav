@@ -9,6 +9,8 @@ mod lightmapped;
 
 use std::sync::Arc;
 
+use oag_gpu::formats::SceneStore;
+
 use oag_rcs::{rcsmaterial, rcsmodel};
 
 use super::super::{ModelTexture, TextureSlots};
@@ -43,6 +45,7 @@ pub(super) fn skin(
     model: &rcsmodel::Model,
     picks: &[Pick],
     textures: Textures<'_>,
+    store: SceneStore,
     report: &mut Report,
 ) -> (TextureSlots, TextureSlots) {
     let mut cache: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
@@ -114,11 +117,11 @@ pub(super) fn skin(
                                         .and_then(|blob| ModelTexture::from_gtf(path, &blob))
                                 })
                                 .as_ref()?;
-                            scale_alpha(map, colour, usage).map(Arc::new)
+                            scale_alpha(map, colour, usage, store).map(Arc::new)
                         })
                         .clone()
                 });
-                match alpha.or_else(|| constant_diffuse(material, false).map(Arc::new)) {
+                match alpha.or_else(|| constant_diffuse(material, false, store).map(Arc::new)) {
                     Some(colour) => {
                         report.constant_diffuse += 1;
                         skins.push(Some(colour));
@@ -126,7 +129,7 @@ pub(super) fn skin(
                     None => skins.push(None),
                 }
             }
-            None => match constant_diffuse(material, true) {
+            None => match constant_diffuse(material, true, store) {
                 Some(colour) => {
                     report.constant_diffuse += 1;
                     skins.push(Some(Arc::new(colour)));
@@ -147,7 +150,7 @@ pub(super) fn skin(
                         .or_insert_with(|| {
                             let map = textures(path)
                                 .and_then(|blob| ModelTexture::from_gtf(path, &blob))?;
-                            picture_tint::tinted(&map, tint).map(Arc::new)
+                            picture_tint::tinted(&map, tint, store).map(Arc::new)
                         })
                         .clone();
                     if baked.is_some() {
@@ -226,7 +229,11 @@ const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
 /// `listed_only` drops the `diffuse` fallback: a slot that names a picture its
 /// program does not sample (the engine-bound lightmap entry of a family whose
 /// variant has no lightmap) takes its constant only if its family is traced.
-fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<ModelTexture> {
+fn constant_diffuse(
+    material: &rcsmodel::Material,
+    listed_only: bool,
+    store: SceneStore,
+) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
     let listed = DIFFUSE_PARAMETER
         .iter()
@@ -237,7 +244,7 @@ fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<
         listed.unwrap_or(DIFFUSE)
     };
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
-    let byte = raw_to_texel;
+    let byte = |c| raw_to_texel(c, store);
     Some(crate::mesh_render::offer_to_texture_sink(
         ModelTexture::rgba8(
             format!("constant diffuse {hash:08x}"),
@@ -253,8 +260,8 @@ fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<
 /// program-computed diffuse (a constant, or a constant times a map's alpha)
 /// has to be bound as, because the albedo binding decodes sRGB and the RSX
 /// multiplies raw 8-bit values.
-fn raw_to_texel(c: f32) -> u8 {
-    (c.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8
+fn raw_to_texel(c: f32, store: SceneStore) -> u8 {
+    (store.texel_encode(c) * 255.0).round() as u8
 }
 
 /// `Texture1`'s sampler name hash, the one unit 0 of the lightmapped blocks.
@@ -335,7 +342,12 @@ fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4], Alpha
 /// `map`'s alpha times `colour`, as the grey-to-colour picture the program
 /// computes per texel (unorm bytes, opaque); or, for [`AlphaUse::Gate`],
 /// `colour` with the map's alpha kept as the texel's own.
-fn scale_alpha(map: &ModelTexture, colour: [f32; 4], usage: AlphaUse) -> Option<ModelTexture> {
+fn scale_alpha(
+    map: &ModelTexture,
+    colour: [f32; 4],
+    usage: AlphaUse,
+    store: SceneStore,
+) -> Option<ModelTexture> {
     let texels = map.to_rgba()?;
     let mut out = Vec::with_capacity(texels.len());
     for texel in texels.as_chunks::<4>().0 {
@@ -343,13 +355,13 @@ fn scale_alpha(map: &ModelTexture, colour: [f32; 4], usage: AlphaUse) -> Option<
         match usage {
             AlphaUse::Product => {
                 for c in &colour[..3] {
-                    out.push(raw_to_texel(alpha * c));
+                    out.push(raw_to_texel(alpha * c, store));
                 }
                 out.push(255);
             }
             AlphaUse::Gate => {
                 for c in &colour[..3] {
-                    out.push(raw_to_texel(*c));
+                    out.push(raw_to_texel(*c, store));
                 }
                 out.push(texel[3]);
             }
@@ -1145,6 +1157,36 @@ mod tests {
     // to `ModelTexture::from_gtf`, which this module now delegates to.
     use super::super::super::{BlockFormat, Texels};
 
+    /// A program-computed constant is baked with the title's own curve, so the
+    /// shader's decode reads it back. Half grey: HD's sRGB gives 188, the `2.2`
+    /// power 186 and 2048's square root 180. Fails with the fixed power on HD.
+    #[test]
+    fn a_raw_value_is_encoded_with_the_titles_curve() {
+        assert_eq!(raw_to_texel(0.5, SceneStore::Encoded), 188);
+        assert_eq!(raw_to_texel(0.5, SceneStore::Computed), 186);
+        assert_eq!(raw_to_texel(0.5, SceneStore::Squared), 180);
+    }
+
+    /// Byte, decode, raw value, encode: the byte comes back within one level on
+    /// every title.
+    #[test]
+    fn a_raw_value_round_trips_through_the_shaders_decode() {
+        for store in [
+            SceneStore::Encoded,
+            SceneStore::Computed,
+            SceneStore::Squared,
+        ] {
+            for byte in (0..=255u32).step_by(5) {
+                let raw = store.texel_decode(byte as f32 / 255.0);
+                let back = i32::from(raw_to_texel(raw, store));
+                assert!(
+                    (back - byte as i32).abs() <= 1,
+                    "{store:?}: {byte} -> {back}"
+                );
+            }
+        }
+    }
+
     fn declared(samplers: &[(u32, u32)]) -> rcsmaterial::Declared {
         rcsmaterial::Declared {
             parameters: Vec::new(),
@@ -1255,7 +1297,13 @@ mod tests {
             (path == "a.gtf").then(|| blob.clone())
         };
         let mut report = Report::default();
-        let (skins, _) = skin(&model, &picks, &mut load, &mut report);
+        let (skins, _) = skin(
+            &model,
+            &picks,
+            &mut load,
+            SceneStore::default(),
+            &mut report,
+        );
 
         assert_eq!(loads, 1, "one read of the archive, not one per slot");
         let first = skins[0].as_ref().expect("slot 0 is textured");

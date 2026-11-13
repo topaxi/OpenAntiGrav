@@ -42,6 +42,7 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
             &mut archives,
             std::slice::from_ref(&(*team).to_string()),
             &oag_livery::LoadContext {
+                store: Default::default(),
                 race: oag_hd::TITLE.race,
                 mode: oag_race::Mode::SingleRace,
                 flare: oag_hd::TITLE.flare,

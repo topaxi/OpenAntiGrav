@@ -30,6 +30,7 @@ fn the_zone_hulls_light_cells_bind_their_flash_and_read_a_second_uv_set() {
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .expect("the Zone hull builds");
@@ -104,6 +105,7 @@ fn the_zone_hulls_paint_binds_its_normal_map_and_its_chunks_carry_the_tangent() 
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .expect("the Zone hull builds");

@@ -13,13 +13,15 @@
 //!
 //! Applied the way [`super::skin`] already applies a program constant to a
 //! picture (`scale_alpha`): the product is baked into a picture of the same
-//! size, with the constant encoded by `skin::raw_to_texel`'s rule so the
-//! renderer's multiply by the light sees the value the program does. A value
+//! size: each texel is decoded with the title's curve, multiplied by the
+//! constant, and encoded again, which is what the program does (`TEX` then
+//! `MUL`) and what the renderer's decode then reads back. A value
 //! above 1 clips at a texel of 255, which the original's half-float register
 //! does not; the `1.8` instances bind `startdarkouter01` and
 //! `startdarkline01`, whose brightest texel is `(132, 125, 132)`, so nothing clips.
 //! Of the 16 HD circuits only Tech de Ra carries the family.
 
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 
 use super::super::ModelTexture;
@@ -42,13 +44,17 @@ pub(super) fn tint_of(material: &rcsmodel::Material) -> Option<[f32; 3]> {
 }
 
 /// `map` times `tint`, as a picture the renderer binds like any other.
-pub(super) fn tinted(map: &ModelTexture, tint: [f32; 3]) -> Option<ModelTexture> {
+pub(super) fn tinted(
+    map: &ModelTexture,
+    tint: [f32; 3],
+    store: SceneStore,
+) -> Option<ModelTexture> {
     let texels = map.to_rgba()?;
-    let gain = tint.map(|c| c.max(0.0).powf(1.0 / 2.2));
     let mut out = Vec::with_capacity(texels.len());
     for texel in texels.as_chunks::<4>().0 {
-        for (byte, g) in texel[..3].iter().zip(gain) {
-            out.push((f32::from(*byte) * g).round().min(255.0) as u8);
+        for (byte, t) in texel[..3].iter().zip(tint) {
+            let light = store.texel_decode(f32::from(*byte) / 255.0) * t.max(0.0);
+            out.push((store.texel_encode(light) * 255.0).round() as u8);
         }
         out.push(texel[3]);
     }
@@ -61,4 +67,69 @@ pub(super) fn tinted(map: &ModelTexture, tint: [f32; 3]) -> Option<ModelTexture>
             None,
         ),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn srgb_to_light(v: f32) -> f32 {
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    fn light_to_srgb(c: f32) -> f32 {
+        if c <= 0.003_130_8 {
+            c * 12.92
+        } else {
+            1.055 * c.powf(1.0 / 2.4) - 0.055
+        }
+    }
+
+    fn baked(byte: u8, tint: f32, store: SceneStore) -> u8 {
+        let map = ModelTexture::rgba8("t".into(), 1, 1, vec![byte, byte, byte, 255], None);
+        let out = tinted(&map, [tint; 3], store).expect("an RGBA picture tints");
+        out.to_rgba().expect("RGBA out")[0]
+    }
+
+    /// On HD the renderer decodes the picture with the sRGB curve, so the bake is
+    /// `encode(decode(texel) * tint)` with that curve. Fails with the old `byte *
+    /// tint^(1/2.2)` gain, which lands a dark texel several levels off.
+    #[test]
+    fn hd_bakes_the_product_in_srgb_light() {
+        for (byte, tint) in [(30u8, 0.25f32), (100, 0.2), (200, 0.5), (255, 1.0)] {
+            let want =
+                (light_to_srgb(srgb_to_light(f32::from(byte) / 255.0) * tint) * 255.0).round();
+            let got = f32::from(baked(byte, tint, SceneStore::Encoded));
+            assert!(
+                (got - want).abs() <= 1.0,
+                "{byte} x {tint}: {got} against {want}"
+            );
+        }
+    }
+
+    /// Whatever the title's curve, the shader's decode of the baked byte is the
+    /// decoded texel times the tint, to within a level.
+    #[test]
+    fn the_baked_picture_decodes_to_texel_times_tint_on_every_title() {
+        for store in [
+            SceneStore::Encoded,
+            SceneStore::Computed,
+            SceneStore::Squared,
+        ] {
+            for (byte, tint) in [(60u8, 0.3f32), (128, 0.5), (220, 0.8)] {
+                let out = baked(byte, tint, store);
+                let want = store.texel_decode(f32::from(byte) / 255.0) * tint;
+                let lo = store.texel_decode((f32::from(out) - 1.0) / 255.0);
+                let hi = store.texel_decode((f32::from(out) + 1.0) / 255.0);
+                assert!(
+                    (lo..=hi).contains(&want),
+                    "{store:?} {byte} x {tint}: {out}"
+                );
+            }
+        }
+    }
 }

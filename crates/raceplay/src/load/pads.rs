@@ -18,7 +18,7 @@ pub(super) fn ps3_pad_models(
     archives: &mut oag_assets::Archives,
     track: &str,
     track_blob: &[u8],
-    geometry: &[u8],
+    (geometry, store): (&[u8], oag_gpu::formats::SceneStore),
     report: &mut Vec<String>,
 ) -> Result<(Option<mesh::Model>, Option<mesh::Model>)> {
     let (pads, built) = mesh::rcs::build_pads(
@@ -26,6 +26,7 @@ pub(super) fn ps3_pad_models(
         track_blob,
         geometry,
         &mut crate::stages::reader(archives),
+        store,
     )?;
     report.push(format!("speedup pads: {}", built.describe()));
     let pad_model = (!pads.indices.is_empty()).then_some(pads);
@@ -35,6 +36,7 @@ pub(super) fn ps3_pad_models(
         track_blob,
         geometry,
         &mut crate::stages::reader(archives),
+        store,
     )?;
     report.push(format!("weapon pads: {}", built.describe()));
     let weapon_pad_model = (!pads.indices.is_empty()).then_some(pads);

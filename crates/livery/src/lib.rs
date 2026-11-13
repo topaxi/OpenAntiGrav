@@ -232,6 +232,8 @@ pub struct LoadContext<'a> {
     /// [`oag_title::RaceDefaults::eliminator_skin`], resolved per team. Empty outside an
     /// Eliminator race and for a title that forces none. See [`forced_paint`].
     pub forced_skins: &'a [(String, String)],
+    /// What the race's scene target stores, which the hull's baked colours are encoded for.
+    pub store: oag_gpu::formats::SceneStore,
 }
 
 /// A hull file and a paint job picked for one craft.
@@ -484,6 +486,7 @@ fn one(
                 &blob,
                 &geometry,
                 &mut |path| archives.read_name(path).ok(),
+                ctx.store,
                 |c| c.mesh,
             )
             .map(|(model, built)| (model, built.describe()))
@@ -564,7 +567,7 @@ fn one(
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
-        let lit = authored_flare(archives, team, ships, ctx.mode, ctx.flare, nozzle, report);
+        let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
         let shield = {
             // Authored about its hull like the flare: the Zone directory's
             // own shell where it ships one.
@@ -576,7 +579,9 @@ fn one(
                 |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
                 report,
             );
-            shell(archives, shell_team, shell_dir, team_model, report)
+            shell(
+                archives, shell_team, shell_dir, team_model, ctx.store, report,
+            )
         };
         return Ok(Livery {
             team: team.to_string(),
@@ -597,7 +602,14 @@ fn one(
                     |dir, team| entry::stem_entry_name(dir, team, absorb::SHELL_STEM),
                     report,
                 );
-                absorb::shell(archives, absorb_team, absorb_dir, ctx.absorb_shell, report)
+                absorb::shell(
+                    archives,
+                    absorb_team,
+                    absorb_dir,
+                    ctx.absorb_shell,
+                    ctx.store,
+                    report,
+                )
             },
             hull,
             boost: lit.boost,
@@ -654,7 +666,7 @@ fn one(
     let (shield, shield_colour) = if ctx.own_shield {
         (own_shield::shell(&hull, &blob, report), None)
     } else {
-        match shell(archives, team, ships.dir, team_model, report) {
+        match shell(archives, team, ships.dir, team_model, ctx.store, report) {
             Some((model, colour)) => (Some(model), colour),
             None => (None, None),
         }
@@ -663,7 +675,7 @@ fn one(
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
-    let lit = authored_flare(archives, team, ships, ctx.mode, ctx.flare, nozzle, report);
+    let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
     let wreck = if ctx.hull_wreck {
         wreck::load(archives, team, ships.dir, ctx.mode, report)
     } else {
@@ -734,17 +746,18 @@ fn authored_flare(
     archives: &mut oag_assets::Archives,
     team: &str,
     ships: oag_title::race::ShipPaths,
-    mode: Mode,
-    flare: &oag_title::flare::Flare,
+    ctx: &LoadContext,
     nozzle: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> flare::Flare {
-    match flare {
+    match ctx.flare {
         oag_title::flare::Flare::PerTeam(authored) => {
             // The flare file is authored about its hull, so it comes from the
             // directory the hull did: Zone's own on HD, not the player's team.
-            let (ship_dir, team) = entry::model_directory(ships, team, mode);
-            flare::per_team(archives, team, ship_dir, authored, nozzle, report)
+            let (ship_dir, team) = entry::model_directory(ships, team, ctx.mode);
+            flare::per_team(
+                archives, team, ship_dir, authored, nozzle, ctx.store, report,
+            )
         }
         oag_title::flare::Flare::Sprite(_) | oag_title::flare::Flare::Unread => {
             flare::Flare::default()

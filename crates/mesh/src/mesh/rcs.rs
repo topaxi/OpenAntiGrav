@@ -30,6 +30,7 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
@@ -98,7 +99,12 @@ pub fn sibling_geometry(spec: &str, name: &str, data: &[u8]) -> Option<Vec<u8>> 
 /// # Errors
 ///
 /// As [`build_scene`].
-pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, Report)>> {
+pub fn scene_from(
+    spec: &str,
+    name: &str,
+    data: &[u8],
+    store: SceneStore,
+) -> Result<Option<(Model, Report)>> {
     if !oag_vex::vex::geometry_is_external(data) {
         return Ok(None);
     }
@@ -111,9 +117,13 @@ pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, 
     let Ok(geometry) = archive.read_entry(&sibling) else {
         return Ok(None);
     };
-    let (model, report) = build_scene(name, data, &geometry, &mut |path| {
-        archive.read_entry(path).ok()
-    })?;
+    let (model, report) = build_scene(
+        name,
+        data,
+        &geometry,
+        &mut |path| archive.read_entry(path).ok(),
+        store,
+    )?;
     Ok(Some((model, report)))
 }
 
@@ -676,13 +686,14 @@ pub fn build(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<(Model, Report)> {
     build_with_options(
         label,
         data,
         model_blob,
-        Setup::Decode(textures),
+        Setup::Decode(textures, store),
         pick,
         false,
         View::Main,
@@ -764,7 +775,9 @@ fn build_with_options(
         material_anim,
         anim_tracks,
     } = match setup {
-        Setup::Decode(textures) => material_setup(&model, model_blob, textures, &mut report),
+        Setup::Decode(textures, store) => {
+            material_setup(&model, model_blob, textures, store, &mut report)
+        }
         Setup::Copy(from) => MaterialSetup::of(from),
     };
     out.pad_masks = mag_emissive;

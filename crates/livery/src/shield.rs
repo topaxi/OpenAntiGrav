@@ -21,6 +21,7 @@ use super::*;
 fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
+    store: oag_gpu::formats::SceneStore,
 ) -> Result<(Model, String, Option<[f32; 4]>), String> {
     let blob = archives
         .read_name(name)
@@ -65,6 +66,7 @@ fn shield_model(
             &blob,
             &geometry,
             &mut |path| archives.read_name(path).ok(),
+            store,
             |c| c.mesh,
         )
         .map_err(|error| format!("{name}: its .rcsmodel does not build ({error})"))?;
@@ -196,6 +198,7 @@ pub(super) fn shell(
     team: &str,
     ship_dir: &str,
     team_model: Option<&str>,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<(Model, Option<[f32; 4]>)> {
     let names =
@@ -206,7 +209,7 @@ pub(super) fn shell(
         } else {
             "shared - this source carries no per-team shell"
         };
-        match shield_model(archives, name) {
+        match shield_model(archives, name, store) {
             Ok((model, note, colour)) => {
                 report.push(format!("{name}: {note} - the shield shell, {provenance}"));
                 return Some((model, colour));
@@ -238,10 +241,11 @@ pub(super) fn shell(
 /// is missing or authors no such parameter (the object's white default).
 pub fn cockpit_shield(
     archives: &mut oag_assets::Archives,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> (Option<Model>, f32) {
     let name = oag_pulse::race::COCKPIT_SHIELD;
-    match shield_model(archives, name) {
+    match shield_model(archives, name, store) {
         Ok((model, note, colour)) => {
             report.push(format!(
                 "{name}: {note} - the shield seen from inside the cockpit"

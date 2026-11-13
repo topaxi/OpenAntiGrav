@@ -434,14 +434,17 @@ pub(super) fn export(
 pub(super) fn host_zone_sky(
     archives: &mut Archives,
     track: &str,
-    title: &'static oag_title::Title,
-    mode: Mode,
+    (title, mode, store): (
+        &'static oag_title::Title,
+        Mode,
+        oag_gpu::formats::SceneStore,
+    ),
     report: &mut Vec<String>,
 ) -> Option<Model> {
     if !track.starts_with("foreign:") || title.race.zone_sky.is_none() {
         return None;
     }
-    super::environment::hd_sky_model(archives, track, title.race, mode, report)
+    super::environment::hd_sky_model(archives, track, title.race, mode, store, report)
 }
 
 /// A track file's sky: the `Skycube` of the host circuit its art names, built

@@ -99,6 +99,7 @@ pub(super) fn per_team(
     ship_dir: &str,
     authored: &oag_title::flare::Authored,
     nozzle: Option<Vec3>,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Flare {
     let name = ship_entry_name_for(ship_dir, team, authored.stem);
@@ -137,6 +138,7 @@ pub(super) fn per_team(
             &blob,
             &geometry,
             &mut |path| archives.read_name(path).ok(),
+            store,
             |c| c.mesh,
         )
         .map(|(model, built)| (model, built.describe()))

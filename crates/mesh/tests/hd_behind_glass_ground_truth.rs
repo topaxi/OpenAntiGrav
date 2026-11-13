@@ -65,11 +65,14 @@ fn vineta_k_leaves_its_behind_the_glass_chunks_out_of_the_main_view() {
         assert!(!behind.contains(&chunk), "chunk {chunk} does not");
     }
 
-    let (built, target, report) =
-        mesh::rcs::build_scene_views(VINETA_K, &vex, &geometry, &mut |name| {
-            read(&image, name).map(|(_, d)| d)
-        })
-        .expect("the circuit builds");
+    let (built, target, report) = mesh::rcs::build_scene_views(
+        VINETA_K,
+        &vex,
+        &geometry,
+        &mut |name| read(&image, name).map(|(_, d)| d),
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("the circuit builds");
     let drawn = chunks_of(&built);
     let leaked: Vec<_> = behind.iter().filter(|c| drawn.contains(c)).collect();
     assert!(

@@ -336,6 +336,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
         &mut archives,
         &teams,
         &oag_livery::LoadContext {
+            store: Default::default(),
             race: oag_hd::TITLE.race,
             mode: oag_race::Mode::SingleRace,
             flare: oag_hd::TITLE.flare,

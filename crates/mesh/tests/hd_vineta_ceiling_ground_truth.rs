@@ -25,9 +25,13 @@ fn vineta() -> (mesh::Model, mesh::rcs::Report, oag_rcs::rcsmodel::Model) {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Vineta K builds");
     (model, report, rcs)
 }

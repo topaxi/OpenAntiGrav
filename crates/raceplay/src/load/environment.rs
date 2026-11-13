@@ -18,6 +18,30 @@ fn sky_gtf_name(vex_name: &str) -> Option<String> {
     Some(format!("{}{}sky.gtf", &vex_name[..at], &vex_name[at..=at]))
 }
 
+/// The sky of a PS3-path circuit. Two containers wear the `.rcsmodel` extension, and their skies are
+/// unrelated formats (see `geometry::track_model`'s dispatch on the same check). Wipeout HD authors
+/// no `Skycube` node: its sky is the `sky.gtf` cubemap beside the track, drawn through the same
+/// camera-centred sky path, and a Zone race swaps that file out (see `mesh::sky_cube` and
+/// `oag_hd::race::ZONE_SKY`). Wipeout 2048's is `skycube.rcsmodel`, an authored dome in the
+/// container the track and craft already read ([`psp2_sky_model`]).
+pub(super) fn ps3_sky_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    geometry: &[u8],
+    (title, mode, store): (
+        &'static oag_title::Title,
+        oag_race::Mode,
+        oag_gpu::formats::SceneStore,
+    ),
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    if mesh::rcs::psp2::is_psp2(geometry) {
+        psp2_sky_model(archives, track, report)
+    } else {
+        hd_sky_model(archives, track, title.race, mode, store, report)
+    }
+}
+
 /// Wipeout HD's sky, or `None` with the reason in the report.
 ///
 /// The rotation applied is the circuit's own `Lighting.Sky rotation`, read as
@@ -39,6 +63,7 @@ pub(super) fn hd_sky_model(
     track: &str,
     race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     let zone_sky = (mode == oag_race::Mode::Zone)
@@ -80,7 +105,7 @@ pub(super) fn hd_sky_model(
             .map_or(0.0, |c| f32::from(c[3]) / mesh::sky_cube::SKY_COLOUR_FULL),
         _ => 0.0,
     };
-    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask) {
+    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask, store) {
         Ok(sky) => {
             let (width, height) = sky
                 .textures
@@ -573,8 +598,8 @@ mod bloom;
 mod exposure;
 mod light;
 mod probes;
-pub(super) use bloom::envsettings_bloom;
 pub use bloom::hd_bloom_params;
+pub(super) use bloom::{envsettings_bloom, scene_store};
 use exposure::envsettings_exposure;
 pub use light::authored_light;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
