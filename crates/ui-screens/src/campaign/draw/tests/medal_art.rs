@@ -1,6 +1,7 @@
 //! `[campaign-medals]`: a medal hex drawn from an atlas frame in place of the tinted swatch,
 //! the frame chosen by the tier and the difficulty the medal was earned on.
 
+use super::tiers::platinum_tiers;
 use super::*;
 use crate::campaign::MedalArt;
 use crate::campaign::medal_art::Atlas;
@@ -21,11 +22,11 @@ fn atlas_placed() -> oag_ui::frontend::Placed {
 }
 
 fn atlas(per_difficulty: bool) -> MedalArt {
-    MedalArt::Atlas(Atlas {
-        image: ATLAS.to_string(),
+    MedalArt::Atlas(Atlas::of_title(
+        ATLAS.to_string(),
         per_difficulty,
-        tier_rows: [0, 1, 2],
-    })
+        [0, 1, 2],
+    ))
 }
 
 /// The sprite sheet: the atlas where `has_atlas`, `placed32` for every other image.
@@ -156,4 +157,113 @@ fn a_tier_hex_keeps_the_titles_swatch_whatever_the_art() {
     assert!(atlas_crops(&grid_draws(&model, true)).is_empty());
     let plain = GridSelection::new(model.grids().to_vec());
     assert_eq!(grid_draws(&model, true), grid_draws(&plain, true));
+}
+
+/// A mod's atlas of four 64 px rows (platinum, gold, silver, bronze), three difficulty blocks.
+fn mod_atlas(per_difficulty: bool) -> MedalArt {
+    let blocks = if per_difficulty { 3 } else { 1 };
+    MedalArt::Atlas(
+        Atlas::of_mod(
+            ATLAS.to_string(),
+            per_difficulty,
+            ["platinum", "gold", "silver", "bronze"]
+                .map(String::from)
+                .to_vec(),
+            (64, 4 * 64 * blocks),
+        )
+        .expect("an atlas of whole rows"),
+    )
+}
+
+fn platinum_cell(medal: &str, difficulty: Difficulty, art: MedalArt) -> CellSelection {
+    let tiers = platinum_tiers();
+    let earned = tiers.find(medal).expect("a tier of the campaign");
+    CellSelection::with_medals(vec![race_cell("grid0_0_0", "16_Track")], &|_| Some(earned))
+        .with_difficulty(&|_| Some(difficulty))
+        .with_tiers(tiers)
+        .with_medal_art(art)
+}
+
+/// A mod's own atlas gives a tier the disc never had (platinum) its row, by the tier's name and
+/// not its position, and the difficulty selects the block.
+#[test]
+fn a_mod_atlas_draws_the_row_its_tier_names_in_the_block_of_the_difficulty() {
+    let at = atlas_placed();
+    for (medal, difficulty, v) in [
+        ("platinum", Difficulty::Easy, 0.0),
+        ("gold", Difficulty::Easy, 64.0),
+        ("bronze", Difficulty::Easy, 192.0),
+        ("platinum", Difficulty::Hard, 2.0 * 256.0),
+        ("silver", Difficulty::Medium, 256.0 + 128.0),
+    ] {
+        let draws = cell_draws(&platinum_cell(medal, difficulty, mod_atlas(true)), true);
+        let wanted = at.sheet_rect([0.0, v, 64.0, 64.0]);
+        assert!(
+            atlas_crops(&draws).contains(&wanted),
+            "{medal} on {difficulty:?}: no draw samples {wanted:?}, got {:?}",
+            atlas_crops(&draws)
+        );
+    }
+}
+
+/// A campaign tier the mod's rows do not name keeps its colour swatch, and a disc atlas has no
+/// row for a tier of a campaign's own.
+#[test]
+fn a_tier_no_row_names_draws_its_swatch() {
+    let tiers = platinum_tiers();
+    let gold_only = MedalArt::Atlas(
+        Atlas::of_mod(ATLAS.to_string(), false, vec!["gold".to_string()], (64, 64)).unwrap(),
+    );
+    let platinum = tiers.find("platinum").unwrap();
+    assert_eq!(gold_only.frame(&tiers, platinum, Difficulty::Easy), None);
+    assert_eq!(
+        mod_atlas(false).frame(&tiers, platinum, Difficulty::Hard),
+        Some([0.0, 0.0, 64.0, 64.0]),
+        "a single-block atlas ignores the difficulty"
+    );
+    assert_eq!(
+        cell_draws(
+            &platinum_cell("platinum", Difficulty::Easy, gold_only),
+            true
+        ),
+        cell_draws(
+            &platinum_cell("platinum", Difficulty::Easy, MedalArt::Swatch),
+            true
+        )
+    );
+    assert_eq!(
+        atlas(true).frame(&tiers, platinum, Difficulty::Easy),
+        None,
+        "the disc's rows are gold, silver and bronze"
+    );
+}
+
+#[test]
+fn an_atlas_that_is_not_whole_rows_is_refused_by_name() {
+    let rows = || vec!["gold".to_string(), "silver".to_string()];
+    let error = Atlas::of_mod("a".into(), true, rows(), (64, 100)).unwrap_err();
+    assert!(error.contains("6 equal rows"), "{error}");
+    assert!(Atlas::of_mod("a".into(), false, Vec::new(), (64, 64)).is_err());
+    assert!(Atlas::of_mod("a".into(), true, rows(), (64, 384)).is_ok());
+}
+
+/// The disc's atlas through the shared row logic is `hd_medal_frame`'s crop, for the title's own
+/// row order (HD's, and Omega's bottom-up one) and every tier and difficulty.
+#[test]
+fn a_title_atlas_frames_are_hd_medal_frames_for_every_tier_and_difficulty() {
+    let tiers = MedalTiers::standard();
+    for tier_rows in [[0, 1, 2], [2, 1, 0]] {
+        let art = MedalArt::Atlas(Atlas::of_title(ATLAS.to_string(), true, tier_rows));
+        for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
+            for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+                assert_eq!(
+                    art.frame(tiers, medal, difficulty),
+                    Some(crate::campaign::hd::medal::hd_medal_frame(
+                        medal, difficulty, tier_rows
+                    )),
+                    "{tier_rows:?} {medal:?} {difficulty:?}"
+                );
+            }
+        }
+    }
 }

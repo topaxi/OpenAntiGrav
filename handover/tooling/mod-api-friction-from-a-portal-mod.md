@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-10
-summary: "Mod API friction met building oag.slipstream's tunnel: stale example modules, places by name order, shader scalars, effects that cannot be stopped."
+updated: 2026-11-13
+summary: "Mod API friction met building oag.slipstream's tunnel: places by name order, shader scalars, effects that cannot be stopped."
 kind: debt
 size: M (40)
 difficulty: easy (50)
@@ -24,23 +24,17 @@ Landed with this thread, small and not in doubt:
   line. The guest had written both by hand.
 - `oag_ext::test::Race::set_progress`: the guest's tests rebuilt the whole race to move a craft.
 - `just check-guests` (`scripts/check-mod-guests.py`): every guest's own tests, and each
-  committed `ext/*.wasm` against a fresh build. Not in the gate (item 1).
+  committed `ext/*.wasm` against a fresh build. Now in the gate.
 
 ## Open
 
-1. **Six of the seven committed modules are not what their guests build**, and nothing in the
-   gate compiles a guest. Found twice in one day: `oag.slipstream`'s guest tests did not compile
-   (a `PortalView` exit had become a `Distance`; the module committed before that still loaded),
-   and `just check-guests` on 2026-11-10 reports every example stale (`checkpoint_circuit.wasm`
-   9,301 bytes committed against 10,264 built, `energy_turbo` 3,649 against 4,482, `hillside_rain`
-   1,696 against 2,464, `tether` 3,828 against 3,972, `wall_penalty` 1,662 against 2,392, `window`
-   4,045 against 4,114; all seven guests' tests pass). The cause was not looked for: an SDK
-   that grew, or a toolchain bump, since the bytes are a function of both. They load, so the ABI
-   revision they were built at still matches. To do: rebuild the six (`guest/build.sh`), look at
-   one diff to say which cause it was, then put `check-guests --strict` in the gate or in CI's
-   job list; it needs the wasm target, builds seven small crates twice cold and takes half a
-   second once they are built.
-   A toolchain bump will then stale all of them at once, which is the honest answer. Size S (70).
+1. ~~Six of the seven committed modules are not what their guests build~~ Closed: all seven
+   were rebuilt by 2026-11-13 (the examples submodule's "Rebuild the modules against the merged
+   SDK source" commits), `just rebuild-guests` regenerates them in one command and
+   `check-guests --strict` is in `just`, `gate-affected` and CI (`docs/architecture/wasm-extensions/README.md`,
+   "A committed module is its guest's build"). Cause of the staleness: SDK growth, not a
+   toolchain bump (the pinned toolchain has been 1.99.0 since 2026-10-02, before the oldest stale
+   module was built).
 2. **A guest names its shaders, effects, sounds and icons by their place in name order**
    (`SHADER_WORMHOLE: u16 = 1`, effect indices 0 to 4 in `Look::of`, `SOUND_*`). Adding a file
    whose name sorts earlier renumbers the rest and nothing fails: the wrong shader draws. Each
@@ -91,8 +85,6 @@ Landed with this thread, small and not in doubt:
 
 ## Next Steps
 
-1. Item 1 first: it is the only one where what ships can differ from what the source says.
-   `just check-guests`, rebuild, read one diff, decide gate or CI.
-2. Items 2, 3 and 7 are ABI edits, so do them together and rebuild every guest once
-   (`check-guests` then says they are fresh). `oag-mod-author`'s skill changes with each.
-3. Items 4 to 6 are what the next visual mod will ask for; take them when one does.
+1. Items 2, 3 and 7 are ABI edits, so do them together and rebuild every guest once
+   (`just rebuild-guests`; the gate's `check-guests --strict` then says they are fresh). `oag-mod-author`'s skill changes with each.
+2. Items 4 to 6 are what the next visual mod will ask for; take them when one does.

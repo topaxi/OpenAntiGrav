@@ -9,7 +9,7 @@ use crate::campaign::medal_art::Atlas;
 
 const PLATINUM: u32 = 0xffe5_e4e2;
 
-fn platinum_tiers() -> MedalTiers {
+pub(super) fn platinum_tiers() -> MedalTiers {
     let tier = |name: &str, points, argb: u32, id: Option<&str>| MedalTier {
         name: name.to_string(),
         points,
@@ -138,11 +138,7 @@ fn a_grid_counts_gold_or_better_as_a_gold_medal() {
 
 #[test]
 fn a_tier_the_atlas_has_no_row_for_draws_its_colour_and_the_others_their_frame() {
-    let art = MedalArt::Atlas(Atlas {
-        image: "atlas.gtf".to_string(),
-        per_difficulty: false,
-        tier_rows: [0, 1, 2],
-    });
+    let art = MedalArt::Atlas(Atlas::of_title("atlas.gtf".to_string(), false, [0, 1, 2]));
     let tiers = platinum_tiers();
     assert!(
         art.frame(&tiers, tiers.find("platinum").unwrap(), Difficulty::Easy)

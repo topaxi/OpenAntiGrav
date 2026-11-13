@@ -151,9 +151,18 @@ fn a_mod_lists_its_campaigns_and_reports_a_broken_one() {
     ) else {
         return;
     };
+    let medals: &'static Vec<u8> = Box::leak(Box::new(
+        std::fs::read(
+            example_dir("example-campaign/ui")
+                .expect("the manifest's icon is there")
+                .join("medals.png"),
+        )
+        .expect("the example's medal atlas reads"),
+    ));
     let files: &'static [(&'static str, &'static [u8])] = Box::leak(Box::new([
         ("oag-mod.toml", manifest.as_bytes()),
         ("campaigns/night-run.toml", campaign.as_bytes()),
+        ("ui/medals.png", medals.as_slice()),
         ("campaigns/broken.toml", b"[campaign]\nid = 3\n"),
         ("campaigns/notes.txt", b"not a campaign"),
         ("campaigns/deeper/skip.toml", b""),

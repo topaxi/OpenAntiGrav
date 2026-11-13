@@ -37,7 +37,7 @@ just check-handover          # HANDOVER.md under 256 KiB (the Read tool's ceilin
 just check-weapon-lineage    # docs/gameplay/weapon-lineage.md's checked axes match the title crates
 just check-test-groups       # every test module that spawns the game or captures a frame is in nextest's gpu-vram group
 just check-schemas           # shipped TOML validates against schemas/v1/ (ADR-0064)
-just check-guests            # every mod guest's tests, and each committed ext/*.wasm against a fresh build (--strict fails a stale one); needs the wasm32 target, not in the gate
+just check-guests            # every mod guest's tests, and each committed ext/*.wasm against a fresh build; `--strict` (what `just`, gate-affected and CI run) fails a stale one or a missing wasm32 target; `just rebuild-guests` regenerates them
 just check-status # status.md's RE-coverage table matches names.tsv; `just gen-status` regenerates it
 just check-strings           # menu.toml rows have string_id + english.toml text (ratchet)
 just check-test-budget       # test-data ceilings, see "The test-data suite"
