@@ -531,3 +531,116 @@ fn pass_through(gpu: &Gpu, store: SceneStore, text: &str) {
         "capped, not infinite: {store:?} {runaway:?}"
     );
 }
+
+/// The half float bits nearest `value`, for a finite value of 0 or more (the half's ordering follows the
+/// bits' on that range).
+fn half_bits(value: f32) -> u16 {
+    (0..=0x7bffu16)
+        .min_by(|a, b| {
+            (half(*a) - value)
+                .abs()
+                .total_cmp(&(half(*b) - value).abs())
+        })
+        .unwrap()
+}
+
+/// What a shader that returns `engine_texture` unchanged writes to a scene of `store`, for a
+/// picture holding each of `stored` (the scene's own values), one texel apiece.
+fn engine_round_trip(gpu: &Gpu, store: SceneStore, stored: &[[f32; 3]]) -> Vec<[f32; 3]> {
+    let text = "fn mod_fragment(input: ModInput) -> vec4<f32> {
+    return engine_texture(engine_uv(input.world));
+}\n";
+    let mut stage = stage_in(gpu, oag_gpu::formats::SCENE_FORMAT, store, &[shader(text)]);
+    let surfaces = [(0, quad([1.0; 4]))];
+    stored
+        .iter()
+        .map(|value| {
+            let picture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: oag_gpu::formats::SCENE_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let texel: Vec<u8> = [value[0], value[1], value[2], 1.0]
+                .iter()
+                .flat_map(|v| half_bits(*v).to_le_bytes())
+                .collect();
+            gpu.queue.write_texture(
+                picture.as_image_copy(),
+                &texel,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(8),
+                    rows_per_image: None,
+                },
+                picture.size(),
+            );
+            stage.set_engine_texture(&gpu.device, Some(&picture.create_view(&Default::default())));
+            let viewed = Frame {
+                engine_view_projection: Some(IDENTITY),
+                ..frame(None, &surfaces, &[])
+            };
+            let written = render_scene(gpu, &mut stage, &viewed)[(32 * SIZE + 32) as usize];
+            [written[0], written[1], written[2]]
+        })
+        .collect()
+}
+
+/// Grey from 0 to 255 in steps of 32 (and 255), and three saturated colours, as 8-bit levels.
+fn ramp() -> Vec<[f32; 3]> {
+    let mut levels: Vec<f32> = (0..8).map(|i| (i * 32) as f32).collect();
+    levels.push(255.0);
+    let mut ramp: Vec<[f32; 3]> = levels.iter().map(|l| [l / 255.0; 3]).collect();
+    ramp.push([1.0, 64.0 / 255.0, 13.0 / 255.0]);
+    ramp.push([8.0 / 255.0, 200.0 / 255.0, 24.0 / 255.0]);
+    ramp.push([20.0 / 255.0, 40.0 / 255.0, 230.0 / 255.0]);
+    ramp
+}
+
+/// A shader that returns `engine_texture` as it is writes back what Wipeout HD's scene held:
+/// the scene stores encoded values and the read decodes with the curve the write encodes with,
+/// within one level of 255 on every channel.
+#[test]
+fn an_encoded_scene_passes_the_engine_texture_through_within_one_level() {
+    let Some(gpu) = gpu() else { return };
+    let ramp = ramp();
+    let written = engine_round_trip(&gpu, SceneStore::Encoded, &ramp);
+    let mut worst = [0.0f32; 3];
+    for (was, now) in ramp.iter().zip(&written) {
+        for c in 0..3 {
+            worst[c] = worst[c].max((now[c] - was[c]).abs() * 255.0);
+        }
+    }
+    eprintln!("encoded scene pass-through, worst error in levels (r, g, b): {worst:?}");
+    assert!(
+        worst.iter().all(|e| *e <= 1.0),
+        "worst error in levels {worst:?}: {ramp:?} came back {written:?}"
+    );
+}
+
+/// The float scenes that compute in linear light round-trip a pass-through too, to a part in
+/// a hundred of the stored value.
+#[test]
+fn a_float_scene_passes_the_engine_texture_through() {
+    let Some(gpu) = gpu() else { return };
+    let ramp: Vec<[f32; 3]> = ramp().iter().map(|v| v.map(|c| c * c * 3.0)).collect();
+    for (store, _) in FLOAT_SCENES {
+        let written = engine_round_trip(&gpu, store, &ramp);
+        for (was, now) in ramp.iter().zip(&written) {
+            for c in 0..3 {
+                assert!(
+                    (now[c] - was[c]).abs() <= 0.01 * was[c] + 0.0005,
+                    "{store:?} {was:?} came back {now:?}"
+                );
+            }
+        }
+    }
+}
