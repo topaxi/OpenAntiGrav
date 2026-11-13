@@ -125,7 +125,7 @@ mod tests {
 
     fn a_blue_burst() -> std::sync::Arc<Effect> {
         let mut built = (*effect("blue", false, 1.0)).clone();
-        built.emitters[0].palette = Box::new([[0.1, 0.25, 1.0, 1.0]; 256]);
+        *built.emitters[0].palette = [[0.1, 0.25, 1.0, 1.0]; 256];
         std::sync::Arc::new(built)
     }
 
