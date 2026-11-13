@@ -138,7 +138,7 @@ pub fn plan_cell_for(
     // An HD cell's `gold` is the dummy `1` where its real target is the `NitroElim*` number per
     // rung, which `Session::launch_campaign_cell` resolves; this is the flat kill target alone.
     let eliminator_kill_target = (mode == oag_race::Mode::Eliminator
-        && !cell.medal_law_is_unmeasured())
+        && !cell.ends_on_nitro_score())
     .then(|| u32::try_from(cell.gold).ok())
     .flatten();
     Ok(CellPlan {

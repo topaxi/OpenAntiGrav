@@ -527,7 +527,11 @@ fn medals_earned_on_one_grid_open_the_next() {
         .map(|(_, _, cell)| *cell)
         .expect("a Time Trial cell");
     assert_eq!(
-        timed.evaluate_medal_for_difficulty(1, oag_tables::race_campaign::Difficulty::Medium),
+        timed.evaluate_medal_for_difficulty(
+            1,
+            oag_tables::race_campaign::Difficulty::Medium,
+            oag_2048::TITLE.campaign.counting_modes
+        ),
         Some(oag_tables::race_campaign::Medal::Gold),
         "{} authors its targets per rung and is judged at Medium",
         timed.name

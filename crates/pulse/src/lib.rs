@@ -177,6 +177,8 @@ pub const TITLE: &Title = &Title {
         grid_card_pose: None,
         selection_card_scale: None,
         medal_tier_rows: None,
+        // `Cell_EvaluateMedal` (`0x088bf620`) compares these modes with `>=`: a kill count is a target to reach.
+        counting_modes: &["Zone", "Elimination"],
         frontend_glow: Some(oag_title::Origin::Measured),
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,

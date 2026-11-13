@@ -55,6 +55,28 @@ pub fn live_value(mode: &Mode, race: &Race) -> Option<i64> {
     }
 }
 
+/// The value an `Elimination` campaign cell's medal is evaluated on.
+///
+/// A title that flips Elimination (`counting` names it; Pulse) or a mod campaign's own kill
+/// targets (`mod_targets`) read the kills so far, which only grow. Every other title (HD,
+/// Omega) reads the player's place on the end-of-race board, and only once the target ended the
+/// race (`finished`): the original records nothing for a quit Eliminator
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`, "End of race").
+#[must_use]
+pub fn elimination_value(
+    counting: &[&str],
+    mod_targets: bool,
+    finished: bool,
+    kills: u32,
+    place: u8,
+) -> Option<i64> {
+    if mod_targets || counting.contains(&Mode::Elimination.as_str()) {
+        Some(i64::from(kills))
+    } else {
+        finished.then(|| i64::from(place))
+    }
+}
+
 /// The language-table id of a tier's end-of-race phrase.
 #[must_use]
 pub fn phrase(medal: Medal) -> &'static str {
@@ -77,17 +99,22 @@ pub fn improvement(had: Option<Medal>, now: Option<Medal>) -> Option<Medal> {
 /// One tick of the watch, after `Race::tick`: if the race has just earned a
 /// better medal than `earned`, records it, raises the four-second line and
 /// updates the standing one. Returns the new tier.
+///
+/// `counting` is the title's [`oag_title::Campaign::counting_modes`]. Only a Zone or Speed Lap
+/// race is watched: an Eliminator cell's medal is its place on the end-of-race board, which
+/// does not exist mid-race (the original records only at the end).
 pub fn tick(
     cell: &Cell,
     difficulty: Difficulty,
+    counting: &[&str],
     earned: &mut Option<Medal>,
     race: &mut Race,
 ) -> Option<Medal> {
     if cell.mode == Mode::SpeedLap && race.speed_lap_medal_rule().is_some() {
-        return every_best_lap(cell, difficulty, earned, race);
+        return every_best_lap(cell, difficulty, counting, earned, race);
     }
     let value = live_value(&cell.mode, race)?;
-    let now = cell.evaluate_medal_for_difficulty(value, difficulty);
+    let now = cell.evaluate_medal_for_difficulty(value, difficulty, counting);
     let better = improvement(*earned, now)?;
     *earned = Some(better);
     race.raise_message(phrase(better), true);
@@ -102,12 +129,13 @@ pub fn tick(
 fn every_best_lap(
     cell: &Cell,
     difficulty: Difficulty,
+    counting: &[&str],
     earned: &mut Option<Medal>,
     race: &mut Race,
 ) -> Option<Medal> {
     let ticks = race.take_new_best_lap()?;
     let value = ticks_to_centiseconds(u64::from(ticks));
-    let now = cell.evaluate_medal_for_difficulty(value, difficulty)?;
+    let now = cell.evaluate_medal_for_difficulty(value, difficulty, counting)?;
     race.raise_message(phrase(now), true);
     race.raise_cue(voice(now));
     if improvement(*earned, Some(now)).is_some() {
@@ -158,5 +186,52 @@ mod tests {
     fn a_centisecond_is_one_sixtieth_scaled() {
         assert_eq!(ticks_to_centiseconds(60), 100);
         assert_eq!(ticks_to_centiseconds(0), 0);
+    }
+
+    const PULSE: &[&str] = &["Zone", "Elimination"];
+    const HD: &[&str] = &["Zone", "Detonator"];
+
+    /// HD reads the place, and only on a finished race; Pulse and a mod campaign read kills.
+    #[test]
+    fn an_elimination_cell_is_read_by_place_on_hd_and_by_kills_on_pulse() {
+        assert_eq!(elimination_value(HD, false, true, 6, 2), Some(2));
+        assert_eq!(elimination_value(HD, false, false, 6, 2), None);
+        assert_eq!(elimination_value(PULSE, false, false, 6, 2), Some(6));
+        assert_eq!(elimination_value(HD, true, true, 6, 2), Some(6));
+    }
+
+    /// End to end on the real cell law: place 1, 2, 3, 4 on an HD cell is gold, silver, bronze,
+    /// nothing, where the same cell read by kills (6) would be nothing at all.
+    #[test]
+    fn the_hd_value_through_the_cell_law_is_gold_silver_bronze_none() {
+        let grid = oag_tables::race_campaign::parse(
+            r#"<PI_Grid name="grid8"><Values RequiredPoints="0" Locked="false"></Values>
+<PI_Cell name="grid8_3_2"><Values track="88_Track" mode="Elimination" class="Flash" Weapons="on" damage="on" AICount="7" skillMedium="1.8" ship="None" ShipChoice="Yes"></Values>
+<EasyGold Target="1"></EasyGold><EasySilver Target="2"></EasySilver><EasyBronze Target="3"></EasyBronze>
+<MediumGold Target="1"></MediumGold><MediumSilver Target="2"></MediumSilver><MediumBronze Target="3"></MediumBronze>
+<HardGold Target="1"></HardGold><HardSilver Target="2"></HardSilver><HardBronze Target="3"></HardBronze>
+</PI_Cell></PI_Grid>"#,
+        )
+        .expect("parses");
+        let cell = &grid.cells[0];
+        let medals: Vec<_> = (1..=4u8)
+            .map(|place| {
+                elimination_value(HD, false, true, 6, place)
+                    .and_then(|v| cell.evaluate_medal(v, HD))
+            })
+            .collect();
+        assert_eq!(
+            medals,
+            [
+                Some(Medal::Gold),
+                Some(Medal::Silver),
+                Some(Medal::Bronze),
+                None
+            ]
+        );
+        assert_eq!(
+            elimination_value(HD, false, true, 6, 4).and_then(|v| cell.evaluate_medal(v, HD)),
+            None
+        );
     }
 }

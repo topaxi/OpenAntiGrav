@@ -180,6 +180,14 @@ pub struct Campaign {
     /// (`docs/formats/omega-status.md`, "The medal atlas"). `None` is HD's order; Pulse, Pure
     /// and 2048 draw no such atlas.
     pub medal_tier_rows: Option<[u8; 3]>,
+    /// The campaign cell modes (`mode=` spellings, `oag_tables::race_campaign::Mode::as_str`)
+    /// whose medal is a count to reach: the cell's `Gold`/`Silver`/`Bronze` are compared with
+    /// `>=` where every other mode's are `<=` (a place or a time). A mode listed here is also
+    /// measured as the player's count (an Eliminator's kills); one that is not is measured as
+    /// a place. Pulse: Zone and Elimination (`Cell_EvaluateMedal`). HD and Omega: Zone and
+    /// Detonator, so an Eliminator cell's `1`/`2`/`3` are place thresholds
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
+    pub counting_modes: &'static [&'static str],
     /// Whether the front end ends its frame with the race's bloom over a glow mask its widgets
     /// stamp, and how well that is known. Pulse PSP: its Grid and Cell Selection frames end with
     /// `Bloom_Draw` (a GE dump), reading the stencil references the `Selector`, the card title

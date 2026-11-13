@@ -271,7 +271,9 @@ fn free_play_picks_a_circuit_and_starts_no_event() {
     assert_eq!(event.name, "freeplay/Vineta K/Venom");
     assert_eq!(event.cell.mode, oag_tables::race_campaign::Mode::Race);
     assert_eq!(
-        [1, 2, 3, 8].map(|place| event.cell.evaluate_medal(place)),
+        [1, 2, 3, 8].map(|place| event
+            .cell
+            .evaluate_medal(place, oag_pure::TITLE.campaign.counting_modes)),
         [None; 4],
         "no place earns a medal"
     );

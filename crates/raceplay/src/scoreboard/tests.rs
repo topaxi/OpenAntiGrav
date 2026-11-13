@@ -38,12 +38,38 @@ fn a_scored_race_is_ordered_by_points_not_by_race_position() {
     assert_eq!(order, [(2, 1, 202), (0, 2, 177), (1, 3, 129)]);
 }
 
+fn with_kills(points: u32, kills: u32) -> Option<Points> {
+    Some(Points {
+        points,
+        kills,
+        deaths: 0,
+    })
+}
+
+/// Equal points and kills: the person (slot 0) is above the opponent, not the later slot as on
+/// the HUD's rows. `place` is the sort index, so two rows never share one.
 #[test]
-fn equal_points_stack_with_the_later_slot_on_top_as_the_hud_rows_do() {
-    let crafts = [craft(0, 1, points(40)), craft(1, 2, points(40))];
+fn equal_points_and_kills_put_the_person_above_an_opponent() {
+    let crafts = [
+        craft(0, 1, with_kills(40, 2)),
+        craft(1, 2, with_kills(40, 2)),
+    ];
     let board = build(&crafts, None, 0);
-    let slots: Vec<u8> = board.rows.iter().map(|row| row.slot).collect();
-    assert_eq!(slots, [1, 0]);
+    let order: Vec<(u8, u8)> = board.rows.iter().map(|row| (row.slot, row.place)).collect();
+    assert_eq!(order, [(0, 1), (1, 2)]);
+}
+
+/// The original's bubble sort puts the craft with fewer kills first on equal points
+/// (`oag_race::score::final_places`): the person who tied an opponent with more kills is 2nd.
+#[test]
+fn equal_points_put_fewer_kills_first() {
+    let crafts = [
+        craft(0, 1, with_kills(177, 4)),
+        craft(1, 2, with_kills(177, 1)),
+    ];
+    let board = build(&crafts, None, 0);
+    assert_eq!(board.player().map(|row| row.place), Some(2));
+    assert_eq!(board.rows[0].slot, 1);
 }
 
 #[test]

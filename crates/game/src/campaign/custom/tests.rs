@@ -1,6 +1,9 @@
 use super::*;
 use oag_mod::campaign::Reveal;
 
+/// A mod campaign counts Elimination like Pulse.
+const PULSE: &[&str] = &["Zone", "Elimination"];
+
 /// The example mods: the `mod-examples` submodule, absent from a checkout that
 /// never fetched it (`git submodule update --init`), where these tests return
 /// early and say so. CI checks it out.
@@ -121,7 +124,7 @@ fn times_are_seconds_in_the_file_and_centiseconds_in_the_cell() {
         (cell.gold, cell.silver, cell.bronze),
         (15_000, 16_500, 18_000)
     );
-    assert_eq!(cell.evaluate_medal(15_999), Some(Medal::Silver));
+    assert_eq!(cell.evaluate_medal(15_999, PULSE), Some(Medal::Silver));
     assert_eq!(cell.locked, Some(false));
 }
 
@@ -134,11 +137,11 @@ fn per_rung_targets_fill_difficulty_targets() {
     assert_eq!(rungs.hard.silver, 1);
     use oag_tables::race_campaign::Difficulty;
     assert_eq!(
-        cell.evaluate_medal_for_difficulty(4, Difficulty::Easy),
+        cell.evaluate_medal_for_difficulty(4, Difficulty::Easy, PULSE),
         Some(Medal::Bronze)
     );
     assert_eq!(
-        cell.evaluate_medal_for_difficulty(4, Difficulty::Hard),
+        cell.evaluate_medal_for_difficulty(4, Difficulty::Hard, PULSE),
         None
     );
 }
@@ -149,14 +152,14 @@ fn an_absent_tier_is_never_awarded_on_either_direction() {
     // The duel names gold and bronze but no silver.
     let duel = &example().grids[0].cells[3];
     assert_eq!(duel.silver, 0);
-    assert_eq!(duel.evaluate_medal(1), Some(Medal::Gold));
-    assert_eq!(duel.evaluate_medal(2), Some(Medal::Bronze));
+    assert_eq!(duel.evaluate_medal(1, PULSE), Some(Medal::Gold));
+    assert_eq!(duel.evaluate_medal(2, PULSE), Some(Medal::Bronze));
     // A counting mode with no silver: no kill count reaches it.
     let custom = edited("gold = 10, silver = 6, bronze = 3", "gold = 10, bronze = 3").unwrap();
     let elimination = &custom.grids[1].cells[1];
     assert_eq!(elimination.silver, i64::MAX);
-    assert_eq!(elimination.evaluate_medal(7), Some(Medal::Bronze));
-    assert_eq!(elimination.evaluate_medal(12), Some(Medal::Gold));
+    assert_eq!(elimination.evaluate_medal(7, PULSE), Some(Medal::Bronze));
+    assert_eq!(elimination.evaluate_medal(12, PULSE), Some(Medal::Gold));
     assert!(elimination.nitro_elimination_targets.is_none());
 }
 
@@ -169,7 +172,7 @@ fn an_event_with_no_medals_awards_none() {
     )
     .unwrap();
     let cell = &custom.grids[1].cells[1];
-    assert_eq!(cell.evaluate_medal(99), None);
+    assert_eq!(cell.evaluate_medal(99, PULSE), None);
 }
 
 #[test]

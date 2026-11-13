@@ -224,24 +224,41 @@ this title's own words for `Easy`/`Medium`/`Hard` - the same equivalence
 `docs/ui/campaign-screens.md`'s RPCS3 capture already showed on screen. See
 `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md` for the full evidence.
 
-**Still chosen, not measured**: whether `elite` is this triple's
-gold-equivalent (or whether the triple represents medal tiers at all - see
-below), and which mode's own medal-award consumer reads this triple instead
-of `gold`/`silver`/`bronze`. `PI_Cell`'s attribute binder is reflection-driven,
-so no function in the image references these three attributes' names at their
-point of use; finding the consumer needs the attribute table's own per-entry
-encoding decoded first - not reached this pass. `Cell::evaluate_medal` is
-unchanged, and its result is **not meaningful** for an `Elimination`/
-`NitroBattle` cell on Wipeout HD, since that cell's own flat
-`gold`/`silver`/`bronze` (and every rung of `difficulty_targets`) are the
-dummy `1`/`2`/`3` this section already describes.
-**Since 2026-10-08 `Cell::evaluate_medal_for_difficulty` returns `None` for such a cell**
-(`Cell::medal_law_is_unmeasured`: `Elimination` or `NitroBattle` with a `NitroElim*` triple
-other than `1/1/1`), and `plan_cell` leaves the race's own kill target alone: before, one
-kill scored gold on every rung and a launched cell ended on the first kill (its kill
-target was the dummy `1`). The unit of `200`..`300` (kills or score points) is the open
-question. Pulse's `Eliminator` is unaffected. Omega: ported, the guard is on the shared
-`Cell` (`omega_campaign_launch_ground_truth.rs`).
+**Settled 2026-11-13 (`elim-wire`, the law read by `elim-medal`):** an HD/Fury or Omega
+`Elimination` cell's medal is the player's **finishing place on the score board**. The
+`Gold`/`Silver`/`Bronze` of every rung (`1`/`2`/`3`) are place thresholds, compared `<=` with no
+flip: gold 1st, silver 2nd, bronze 3rd, nothing from 4th. `NitroElimNovice`/`Skilled`/`Elite` is
+not a medal threshold but the score the race ends on (`SPElimination_UpdateTarget`). A
+`NitroBattle` cell goes through the same compare with its race position. Evidence, addresses and
+confidence: [`cell-medal-award.md`](../ghidra/functions/ps3-hdfury-eu/cell-medal-award.md).
+
+What ours does (`Cell::evaluate_medal_for_difficulty(value, difficulty, counting)`):
+
+- **The flip is title data.** `oag_title::Campaign::counting_modes` names the modes whose
+  medal is a count to reach (`>=`): Pulse `Zone` and `Elimination` (`Cell_EvaluateMedal`), HD
+  and Omega `Zone` and `Detonator` (`PI_Cell_EvaluateMedalForValue`); Pure inherits Pulse's, 2048
+  HD's through Omega. A mode in the set is also valued by the player's count (Pulse's kills);
+  one outside it by the place.
+- **The value is the sort index** on the end-of-race board, `oag_race::score::final_places`:
+  higher score first, on equal score **fewer kills** first, then a person above an opponent
+  (confidence 72, the original's bubble sort); craft still equal keep grid order. It is not the
+  HUD rows' `oag_race::score::ranked` (the later slot on top) and not a shared displayed number.
+  The results board is ordered by it too, so the headline, the record and the medal read one
+  place. An Omega Eliminator has no score law in ours (unmeasured) and ranks on kills.
+- **Only a finished race records**, as in the original (a target reached sets the finished byte;
+  a quit Eliminator records nothing). A mod campaign's `elimination` cells keep their own kill
+  targets.
+- **The saved rung is the departure, chosen not measured.** The original overwrites the saved
+  `SkillLevel` with the rung of a *better* medal even when that rung is easier. Ours
+  (`CampaignRecord::best_difficulty`) never goes down and neither does the saved medal; the
+  maintainer kept it (2026-11-13).
+- `Cell::ends_on_nitro_score` is what is left of `medal_law_is_unmeasured`: it only stops the
+  cell's dummy `gold = 1` becoming a one-kill target (`plan_cell`).
+- `NitroBattle` cells are still refused by `race_mode_for_cell`, so no one launches one; the
+  evaluator already reads their `1`/`2`/`3` as places the day they race.
+
+Omega: ported (same evaluator and flip set, `omega_campaign_launch_ground_truth.rs`: 31 cells).
+
 `Cell::nitro_elimination_target_for_difficulty` reads the one measured number
 per rung instead - deliberately not a synthesized `MedalTargets` triple, since
 this executable spells medal tiers `Gold`/`Silver`/`Bronze` and difficulty
@@ -326,11 +343,9 @@ either bar against.
 
 ### What this section does not resolve
 
-- **The medal-award consumer for `Elimination`/`NitroBattle`** - which
-  function compares a kill count against `NitroElimNovice`/`Skilled`/`Elite`,
-  and by what rule one number per difficulty rung becomes a medal - see above
-  and `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "what is not
-  determined" section.
+- **The medal-award consumer for `Elimination`/`NitroBattle`** is resolved (above). Still
+  open: the tie order on equal score is read, never watched live (72), and a live finish
+  readout (the recipe is on the evidence page's "Live check").
 - **US and Fury-disc-only pressings were not checked.** Only the EU Fury
   pressing (`hdfury-ps3-eu-dec.iso`) was measured; a base-HD-only disc (no
   Fury update) was not available to this pass, so whether `DATA00`'s

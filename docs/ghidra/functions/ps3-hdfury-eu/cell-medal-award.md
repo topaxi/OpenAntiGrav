@@ -176,26 +176,35 @@ has an RPCS3 session on a Fury Eliminator cell (`grid8_3_2`):
 4. Expect `Achieved` = best place, `Time` = best points, `SkillLevel` = the rung, `Medal` =
    place - 1 when place is 3 or better, else `0xff`.
 
-## What this changes in ours
+## What this changes in ours (wired 2026-11-13, `elim-wire`)
 
-`oag_tables::race_campaign::Cell::medal_law_is_unmeasured` withholds every HD Eliminator and
-NitroBattle medal; `oag-game`'s `race_stage.rs` passes `kills` as an Elimination cell's value and
-nothing for `Other("NitroBattle")`; `Cell::evaluate_medal_for_difficulty` flips for
-`Zone | Elimination`, which is Pulse's set. HD's flip set is modes 6 and 14 (Zone, Detonator).
+- `oag_race::score::final_places` is the end-of-race sort above (higher score, fewer kills, the
+  person above an opponent; craft still equal keep grid order); the results board ranks by it,
+  and `Race::eliminator_place` is the player's index, the value `oag-game` hands the cell's
+  evaluator (`medal_watch::elimination_value`) once the race is finished. A quit Eliminator has
+  no finished flag and records nothing.
+- `oag_title::Campaign::counting_modes` is the flip set: HD and Omega `Zone` and `Detonator`
+  (this page), Pulse `Zone` and `Elimination`. `Cell::evaluate_medal_for_difficulty` takes it.
+  `Cell::medal_law_is_unmeasured` is gone.
+- Tests: `an_hd_elimination_cell_awards_its_medal_by_place` (`oag-tables`, and
+  `hd_campaign_ground_truth.rs` on `grid8_3_2`), 1st to 4th is gold, silver, bronze, nothing at
+  every rung, a kill count nothing; `final_places`' tie tests; `Race::eliminator_place`'s;
+  `the_campaign_tier_asks_for_the_elimination_value` for the wiring.
 
-The rung tail above also answers [race-campaign.md](race-campaign.md)'s reconciling question:
-the saved `SkillLevel` is written here and is the rung of the best medal, not a never-downgraded
-maximum. Ours (`oag_game::records::CampaignRecord::best_difficulty`) keeps the hardest rung
-instead; that stays a chosen difference until someone decides to follow the original.
+**Departure, chosen not measured:** the tail above overwrites the saved `SkillLevel` with the
+rung of a better medal even when that rung is easier (a gold on Easy replaces a silver on Hard).
+Ours (`oag_game::records::CampaignRecord::best_difficulty`) keeps the hardest rung and the best
+medal, and neither ever goes down. The maintainer chose this on 2026-11-13; the original's
+write is `PI_Cell`'s tail at `0x0001f60c`.
 
 ## Other titles
 
-- **Omega:** checked, applies, not wired; the note at the end of this page.
+- **Omega:** ported (2026-11-13): same evaluator, same flip set, `omega_campaign_launch_ground_truth.rs` (31 cells); the note at the end of this page.
 - **Pulse:** not this law. Pulse's `Eliminator` cells keep a kill target in the flat `Gold`
   ([`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`](../psp-pulse-usa/race-campaign.md)),
   and its flip set includes Elimination.
 
-## Omega: checked, applies, not wired (2026-11-13)
+## Omega: ported (2026-11-13)
 
 Read with headless Ghidra on `/omega/eboot-ps4-omega-eu-v107.bin` (x86-64, RIP-relative
 references, so string xrefs are reliable there). Not named in that binary's `names.tsv`; the
@@ -223,5 +232,6 @@ So Omega awards an Eliminator cell's medal by place too, against the rung's `1`/
 (Omega re-ships HD's per-difficulty grids,
 `crates/game/tests/omega_campaign_launch_ground_truth.rs`). Its Eliminator races on kills in ours
 (`oag_omega::TITLE`, score law unmeasured there, [eliminator-score.md](eliminator-score.md)), so
-the place on Omega comes off a kill board until that changes. No live readout: shadPS4 runs
+the place on Omega comes off a kill board (kills, then the same tie rule: chosen, not measured)
+until that changes. No live readout: shadPS4 runs
 the game without a memory readout.

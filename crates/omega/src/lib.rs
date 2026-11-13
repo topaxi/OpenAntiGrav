@@ -281,6 +281,8 @@ pub const TITLE: &Title = &Title {
         // Bronze, silver, gold from the top of each block of the `.gnf`, read off its texels and
         // the shadPS4 `cell-select` frame (`docs/formats/omega-status.md`, "The medal atlas").
         medal_tier_rows: Some([2, 1, 0]),
+        // HD's evaluator, same flip set (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`, "Omega").
+        counting_modes: &["Zone", "Detonator"],
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,
