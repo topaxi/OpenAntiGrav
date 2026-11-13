@@ -31,11 +31,24 @@ of every pipeline, and on a `Depth32Float` buffer its `constant` scales with eac
 not a constant shift. `texcoord2.y` was free on a `.vex` vertex, but HD authors a real second coordinate set there, so the
 lane would have misread it.
 
+**Cost.** The lane is four bytes on every vertex of every title (`GpuVertex` 100 to 104 bytes, 4 %); Omega's largest
+circuit grows from 295.9 to 307.7 MiB and `park` from 239.1 to 248.7 MiB, under the 256 MiB buffer ceiling
+([`vertex-buffers.md`](vertex-buffers.md)). Packing it into a field another title reads (`texcoord2`, `slots`, `xform`)
+would save that and was not done.
+
+**Which titles.** Pulse PSP is measured. **Pulse PS2 inherits PSP** (279 of its 5,753 non-VIF batches carry a byte, 1 to 9;
+a VIF batch reads `0`; the PS2 executable is unread) and **Pure inherits Pulse by lineage**: 4,134 of its 24,298 batches carry a
+byte of the same range and the same authoring (glows, cones), and its `Mesh_InitBatch` is unread, so nothing here shows
+the original honours it there. Not gated off, unlike the back-face cull (`batch-cull.md` keeps Pure off because it
+measurably worsened one circuit): six poses on Vineta's biased batches moved at most 81 pixels of 522,240 and five PS2
+`16_Track` race frames moved none, and nothing looked worse. A title that turns out to ignore the byte is one rule away:
+zero the lane in `build_class` for it. Wipeout HD, 2048 and Omega draw `.rcsmodel` chunks and have no such byte (**checked,
+differs**).
+
 **Not covered.** The shadow maps and the craft's own shadow passes use `oag_render`'s own vertex shaders and are not
 biased. A portal view's oblique near plane (`oag_render::camera::portal::oblique_near`) rewrites the projection's depth
 row, so `alpha` and `beta` read from that matrix are not the hyperbola's; the bias there is of the right sign and
-the wrong size. Wipeout HD, 2048 and Omega draw `.rcsmodel` chunks and have no such byte (**checked, differs**); Pure's
-`Mesh_InitBatch` is unread (**not checked**), and a Pure `.vex` reaches the same code with the byte its header holds.
+the wrong size.
 
 ## Evidence
 
@@ -48,9 +61,14 @@ the wrong size. Wipeout HD, 2048 and Omega draw `.rcsmodel` chunks and have no s
   after: 44 of 66 pairs differ in 30 pixels or fewer, and the rest in 31 to 1,166 (at most 0.22 % of a frame). The largest
   are `05` at tick 3,200 (1,166 pixels) and 1,800 (430), where a light shaft lies over a sign and its frame differently, and
   `12_Track` at ticks 4,200 and 1,200 (264 and 252, pillar and stand edges). Read at 2x, no pair shows a new hole, dash or
-  speckle; whether each changed edge matches the original was not compared against a capture.
+  speckle; whether each changed edge matches the original was not compared against a capture. Those race frames mostly
+  show the craft parked against a wall near the start (`12_Track` at tick 1,200 is at `(-470, 14, -280)`, the tunnel is
+  at `(-653, -154, 214)`), so the biased surfaces were also posed: nine `13_Track` poses on one batch of each bias 1 to 9
+  (`--pose=X,Y,Z`, 960x544): seven moved more than 30 pixels (up to 1,305), one none; the changed ones are lamp halos, signs and
+  bunting, which now sit over what they lie on, with no new hole, dash or speckle.
 - **Tests.** `depth_bias_coplanar` (oag-mesh, any GPU): two coplanar quads, the biased one wins the tie drawn first or
-  second, an unbiased tie goes to the first drawn; drop the `biased_clip` call and it fails.
+  second, an unbiased tie goes to the first drawn; a bias of 9 reaches 0.7 of the predicted pull behind a plane and not
+  1.3 of it (red with `LEVELS_PER_BIAS` 3 or 12, and with the `biased_clip` call dropped).
   `depth_bias_ground_truth` (disc): every vertex of `13_Track`'s model carries its batch's authored byte (155 of 1,823
   batches, 10,712 vertices).
 

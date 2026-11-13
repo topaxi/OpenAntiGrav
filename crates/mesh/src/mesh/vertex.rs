@@ -170,7 +170,8 @@ pub struct GpuVertex {
     ///
     /// `depth_bias.wesl` pulls the vertex toward the camera by `6 * bias` of the original's
     /// depth units, as `sceGuDepthRange(1001 + 6 * bias, 64946 + 6 * bias)` does. A float like
-    /// [`Self::quake`], so a draw that never sets it costs nothing. Last, for the reason
+    /// [`Self::quake`]: four bytes on every vertex of every title (100 to 104), the price of not
+    /// overloading a lane another title reads. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives. See `docs/rendering/depth-bias.md`.
     pub depth_bias: f32,
 }

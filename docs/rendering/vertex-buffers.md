@@ -42,7 +42,9 @@ stays exercised.
 
 `crates/mesh/tests/vertex_buffer_census_ground_truth.rs` builds every circuit it can find with
 no textures (a vertex count does not depend on them) and prints the table. Vertex stride is
-`size_of::<GpuVertex>()` = 100 bytes. MiB of vertex data in one buffer, then the largest
+`size_of::<GpuVertex>()` = 104 bytes (100 until the authored depth bias got its lane,
+[`depth-bias.md`](depth-bias.md); the MiB below were measured at 100, so scale them by 1.04: Omega `square` is
+307.7 MiB, `park` 248.7, `subway` 245.6, still under 256). MiB of vertex data in one buffer, then the largest
 index buffer a circuit needs (4 bytes an index; the prepass's reversed copy is the same size).
 
 | Title | Circuits measured | Largest vertex buffer | Which | Index buffer, largest |
@@ -71,7 +73,7 @@ them (a WAD names its entries by hash); both are PSP-sized, so the headroom is n
 
 **The other buffers a circuit allocates**, checked for the same limit: the index buffer (largest
 38.1 MiB, Omega `arena`) and its reversed copy, the streamed texture coordinates (8 of the
-vertex's 100 bytes, so a chunk of them is never larger than a chunk of vertices), the shine
+vertex's 104 bytes, so a chunk of them is never larger than a chunk of vertices), the shine
 pass's own sub-model (a subset of the track's draws, so never larger), the per-draw and
 per-view uniform blocks and the animation tables (tens of kilobytes) and the instance pools.
 None comes within a factor of 6 of 256 MiB. The load refuses an index buffer over the ceiling

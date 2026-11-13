@@ -15,11 +15,11 @@ const SIZE: u32 = 64;
 const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 const GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
 
-/// A quad in the X=0 plane, facing the capture camera on +X, in `colour` with `bias`.
-fn quad(colour: [f32; 4], bias: f32, first: u32) -> ([GpuVertex; 4], [u32; 12]) {
+/// A quad in the plane at `x`, facing the capture camera on +X, in `colour` with `bias`.
+fn quad(colour: [f32; 4], bias: f32, x: f32, first: u32) -> ([GpuVertex; 4], [u32; 12]) {
     let corner = |y: f32, z: f32| GpuVertex {
         quake: 0.0,
-        position: [0.0, y, z],
+        position: [x, y, z],
         normal: [1.0, 0.0, 0.0],
         colour,
         texcoord: [0.0, 0.0],
@@ -68,11 +68,11 @@ fn draw(range: std::ops::Range<u32>) -> DrawCall {
     }
 }
 
-/// `first` is drawn before `second`; each is `(colour, bias)`.
-fn model(first: ([f32; 4], f32), second: ([f32; 4], f32)) -> Model {
+/// `first` is drawn before `second`; each is `(colour, bias, x)`.
+fn model(first: ([f32; 4], f32, f32), second: ([f32; 4], f32, f32)) -> Model {
     let mut model = Model::none("depth bias");
-    let (a, ia) = quad(first.0, first.1, 0);
-    let (b, ib) = quad(second.0, second.1, 4);
+    let (a, ia) = quad(first.0, first.1, first.2, 0);
+    let (b, ib) = quad(second.0, second.1, second.2, 4);
     model.vertices = a.into_iter().chain(b).collect();
     model.indices = ia.into_iter().chain(ib).collect();
     model.draws = vec![draw(0..12), draw(12..24)];
@@ -96,22 +96,50 @@ fn winner(model: &Model) -> Option<bool> {
 
 #[test]
 fn without_a_bias_the_first_quad_drawn_wins_the_tie() {
-    let Some(green_first) = winner(&model((GREEN, 0.0), (RED, 0.0))) else {
+    let Some(green_first) = winner(&model((GREEN, 0.0, 0.0), (RED, 0.0, 0.0))) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    let red_first = winner(&model((RED, 0.0), (GREEN, 0.0))).expect("capture");
+    let red_first = winner(&model((RED, 0.0, 0.0), (GREEN, 0.0, 0.0))).expect("capture");
     assert!(green_first, "an unbiased tie goes to the first quad");
     assert!(!red_first, "an unbiased tie goes to the first quad");
 }
 
 #[test]
 fn a_vertex_depth_bias_wins_the_tie_from_either_place_in_the_draw_order() {
-    let Some(biased_second) = winner(&model((RED, 0.0), (GREEN, 3.0))) else {
+    let Some(biased_second) = winner(&model((RED, 0.0, 0.0), (GREEN, 3.0, 0.0))) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    let biased_first = winner(&model((GREEN, 3.0), (RED, 0.0))).expect("capture");
+    let biased_first = winner(&model((GREEN, 3.0, 0.0), (RED, 0.0, 0.0))).expect("capture");
     assert!(biased_second, "the biased quad drawn second wins");
     assert!(biased_first, "the biased quad drawn first still wins");
+}
+
+/// How far behind an unbiased plane a surface of bias `bias` still wins, `distance` from the eye:
+/// `1 / w' + 6 * bias / 76779 = 1 / w` solved for `w' - w`.
+fn pull(bias: f32, distance: f32) -> f32 {
+    let k = 6.0 * bias / 76_779.0;
+    distance * distance * k / (1.0 - distance * k)
+}
+
+#[test]
+fn the_pull_is_the_originals_six_levels_a_bias_not_just_a_sign() {
+    // The capture camera sits three bounding radii from the centre, so the planes at the
+    // centre are `3 * radius` away; its near is 0.01, the original's depth units still apply.
+    let distance = 3.0 * 2.0;
+    let reach = pull(9.0, distance);
+    // The biased quad is drawn second and lies behind the unbiased one, so only its pull
+    // can win; within 0.7 of the reach it does, past 1.3 of it, it does not.
+    let behind = |factor: f32| model((RED, 0.0, 0.0), (GREEN, 9.0, -reach * factor));
+    let Some(near) = winner(&behind(0.7)) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let far = winner(&behind(1.3)).expect("capture");
+    assert!(
+        near,
+        "a bias of 9 reaches {reach} behind the plane at {distance}"
+    );
+    assert!(!far, "and no further than {reach} (it won at 1.3 times)");
 }
