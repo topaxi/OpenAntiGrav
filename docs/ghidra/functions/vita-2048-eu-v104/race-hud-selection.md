@@ -125,8 +125,7 @@ is a cold boot, so the claim "the HD and Fury Campaigns draw neither" is 75, not
 `oag_hud::draw::text_for` draws `RaceXPTxt` (and `RaceXP`, `AwardXP`) only with it and never draws `ObjectiveTxt`.
 Tests: `crates/hud/src/campaign_event_tests.rs` (fixture), `crates/raceplay/src/tests/campaign_event.rs`
 (`Setup` to readout), `crates/raceplay/tests/vita_2048_hud_event_ground_truth.rs` (the disc's own
-`Arcade_HUD.xml`, an event against the DLC's Vineta K). The XP **value** is not drawn: ours keeps no per-race XP
-tally (`xp-award.md`, "Wired"), so a campaign event shows `XP` alone where the original shows `XP 0`.
+`Arcade_HUD.xml`, an event against the DLC's Vineta K). The XP **value** is the running `XpTally::total` as a plain integer (`"%d"`, `Readout::race_xp`, armed per event by `arm_event_xp`, also on the `--race --screenshot` path), so `2048 - Event 1` shows `XP 0` as the original's frame does and `XP 40` once the tally has paid (a `--autopilot` run holding first). Tests: `crates/hud/src/campaign_event_tests.rs` (`the_xp_value_is_the_running_tally`) and `crates/raceplay/src/tests/xp_feed.rs` (`a_kill_raises_the_readouts_xp_by_the_authored_amount`, the award read from the parsed XML). Outside an event (no tally armed) `RaceXP` draws nothing and the caption is gated as before. Zone events' layout (`Zone_HUD_HD.xml`) authors no `RaceXPTxt`, so none shows there. The `+N` `AwardXP` popup (`"%s +%d"`) is still not drawn.
 
 ### Omega: checked, differs
 

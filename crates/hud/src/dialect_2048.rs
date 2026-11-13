@@ -188,6 +188,66 @@ pub(super) fn pickup_sprites_uv_rewrite(
     sprites
 }
 
+/// `PickupBgFrame`'s runtime colour while a weapon is held: `FUN_8109cfae(frame, 0xffa7a5a7)`
+/// every frame of `Hud_UpdatePickupIcon`'s held branch (`pickup-backdrop.md`).
+const PICKUP_FRAME_TINT: [f32; 4] = [167.0 / 255.0, 165.0 / 255.0, 167.0 / 255.0, 1.0];
+
+/// What the frame blinks to after the icon arrives.
+const PICKUP_FRAME_BLINK: [f32; 4] = [1.0; 4];
+
+/// The blink: 8 Hz for the first second after the icon reaches the slot, white on the odd eighths
+/// (`(t + dt) * 8` truncated, `t` the time since arrival).
+const PICKUP_BLINK_SECONDS: f32 = 1.0;
+const PICKUP_BLINK_HZ: f32 = 8.0;
+
+/// The grant's look beyond its position, on the sprites [`pickup_sprites_uv_rewrite`] returned
+/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`, "The grant announcement"):
+/// the icon is `uv w x h` scaled by [`Readout::pickup_pop`] about its centre, and the frame wears
+/// [`PICKUP_FRAME_TINT`], blinking [`PICKUP_FRAME_BLINK`] after arrival. The arrival time is read
+/// off [`Readout::pickup_fly`] (the fly runs at 1800 px a second), so the blink phase is
+/// quantised to the frame the icon lands on, at most one tick off the original's counter.
+pub(super) fn grant_look(sprites: &mut [Sprite], layout: &Layout, readout: &Readout) {
+    for sprite in sprites.iter_mut() {
+        match sprite.name.as_str() {
+            PICKUP_ICON_2048 => {
+                if let Some([wide, high]) = readout.pickup_pop {
+                    let centre = [
+                        sprite.rect[0] + sprite.rect[2] * 0.5,
+                        sprite.rect[1] + sprite.rect[3] * 0.5,
+                    ];
+                    sprite.rect[2] = sprite.uv[2] * wide;
+                    sprite.rect[3] = sprite.uv[3] * high;
+                    sprite.rect[0] = centre[0] - sprite.rect[2] * 0.5;
+                    sprite.rect[1] = centre[1] - sprite.rect[3] * 0.5;
+                }
+            }
+            PICKUP_BG_FRAME_2048 if !readout.pickup_announcing => {
+                sprite.color = PICKUP_FRAME_TINT;
+                let (Some(icon), Some(frame), Some(flown)) = (
+                    layout.sprite(PICKUP_ICON_2048),
+                    layout.sprite(PICKUP_BG_FRAME_2048),
+                    readout.pickup_fly,
+                ) else {
+                    continue;
+                };
+                let distance =
+                    frame.rect[1] + frame.rect[3] * 0.5 - (icon.rect[1] + icon.rect[3] * 0.5);
+                let since = (flown - distance) / PICKUP_FLY_SPEED;
+                if distance > 0.0
+                    && (0.0..PICKUP_BLINK_SECONDS).contains(&since)
+                    && (since * PICKUP_BLINK_HZ) as u32 % 2 == 1
+                {
+                    sprite.color = PICKUP_FRAME_BLINK;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `Hud_UpdatePickupIcon`'s fly speed, pixels a second.
+const PICKUP_FLY_SPEED: f32 = 1800.0;
+
 /// How far right of `PickupBgFrame`'s centre the held icon settles: the `2.0` `Hud_BindWidgets`
 /// (`0x81192cd0`) adds to the slot's x.
 const PICKUP_SLOT_NUDGE_X: f32 = 2.0;

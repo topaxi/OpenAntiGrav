@@ -452,6 +452,7 @@ pub fn capture(
         ripples,
         track_stats,
         title,
+        campaign_2048_event,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -530,6 +531,9 @@ pub fn capture(
         campaign_skill: None,
         skill_level: None,
     });
+    if let Some(progress) = campaign_2048_event.as_ref() {
+        race.arm_event_xp(progress);
+    }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {

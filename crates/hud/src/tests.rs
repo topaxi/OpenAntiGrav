@@ -1223,3 +1223,57 @@ fn a_bar_cropped_without_its_strings_draws_the_same() {
         }
     }
 }
+
+/// The grant's look: the icon is its table size times the pop multipliers about its centre, and
+/// the frame wears `0xFFA7A5A7`, blinking white on the odd eighths of the first second after the
+/// icon lands. Fails if `grant_look` stops being applied or the blink phase moves.
+#[test]
+fn the_2048_grant_pops_in_and_the_frame_blinks_on_arrival() {
+    use super::dialect_2048::grant_look;
+    use oag_tables::weapons::Weapon;
+    let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
+    let look = |pop: Option<[f32; 2]>, fly: f32| {
+        let mut sprites = pickup_sprites(
+            &layout,
+            Weapon::Missile,
+            &super::ext_draws::Outputs::default(),
+            oag_2048::hud::ART,
+            false,
+            Some(fly),
+            None,
+        );
+        let readout = Readout {
+            pickup: Some(Weapon::Missile),
+            pickup_fly: Some(fly),
+            pickup_pop: pop,
+            ..Readout::blank()
+        };
+        grant_look(&mut sprites, &layout, &readout);
+        sprites
+    };
+    let settled = look(None, 10_000.0);
+    let [u, v, w, h] = settled[1].uv;
+    let _ = (u, v);
+
+    let fresh = look(Some([10.0, 0.0]), 10_000.0);
+    assert_eq!(fresh[1].rect[2], w * 10.0);
+    assert_eq!(fresh[1].rect[3], 0.0);
+    let centre = |rect: [f32; 4]| [rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5];
+    assert_eq!(
+        centre(fresh[1].rect),
+        centre(settled[1].rect),
+        "about its centre"
+    );
+    let half = look(Some([1.0, 0.5]), 10_000.0);
+    assert_eq!((half[1].rect[2], half[1].rect[3]), (w, h * 0.5));
+
+    // Slot centre y is 447.5, icon start 60: 387.5 px. 1800 px/s: the blink starts when it lands.
+    let tint = [167.0 / 255.0, 165.0 / 255.0, 167.0 / 255.0, 1.0];
+    assert_eq!(look(None, 100.0)[0].color, tint, "grey while flying");
+    let after = |seconds: f32| look(None, 387.5 + 1800.0 * seconds)[0].color;
+    assert_eq!(after(0.05), tint, "first eighth is grey");
+    assert_eq!(after(0.15), [1.0; 4], "second eighth is white");
+    assert_eq!(after(0.30), tint);
+    assert_eq!(after(0.45), [1.0; 4]);
+    assert_eq!(after(1.2), tint, "the blink lasts a second");
+}

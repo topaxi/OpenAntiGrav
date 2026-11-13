@@ -226,3 +226,64 @@ fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
     let after = readout.pickup_fade.look(None).unwrap();
     assert_eq!(after.weapon, Weapon::Missile, "the last weapon fades out");
 }
+
+/// The icon's pop-in (`Hud_UpdatePickupIcon`): width above rest falls `9 -> 0` at 70/s, height
+/// rises `0 -> 1` at 7/s from a fresh grant; swapping one held weapon for another does not
+/// restart it, and nothing held shrinks the height at 10/s until it runs out and re-arms.
+/// Fails if the multipliers stop advancing, are not read by the readout, or re-arm early.
+#[test]
+fn the_grant_icon_pops_in_and_re_arms_only_once_it_has_shrunk_away() {
+    use crate::slot_hud::SlotHud;
+    use oag_tables::weapons::Weapon;
+    let dt = 1.0 / 60.0;
+    let mut hud = SlotHud::default();
+    hud.advance(100.0, 1.0, 0.0, false, None, dt);
+    assert_eq!(hud.pickup_pop, [9.0, 0.0], "armed while nothing is held");
+
+    let held = Some(Weapon::Missile);
+    hud.advance(100.0, 1.0, 0.0, false, held, dt);
+    assert!((hud.pickup_pop[0] - (9.0 - 70.0 * dt)).abs() < 1e-4);
+    assert!((hud.pickup_pop[1] - 7.0 * dt).abs() < 1e-5);
+    for _ in 0..7 {
+        hud.advance(100.0, 1.0, 0.0, false, held, dt);
+    }
+    assert_eq!(hud.pickup_pop[0], 0.0, "9 / 70 s is 8 ticks");
+    for _ in 0..20 {
+        hud.advance(100.0, 1.0, 0.0, false, held, dt);
+    }
+    assert_eq!(hud.pickup_pop, [0.0, 1.0], "fully grown");
+
+    hud.advance(100.0, 1.0, 0.0, false, Some(Weapon::Rocket), dt);
+    assert_eq!(hud.pickup_pop, [0.0, 1.0], "a swap does not pop again");
+
+    hud.advance(100.0, 1.0, 0.0, false, None, dt);
+    assert!(
+        (hud.pickup_pop[1] - (1.0 - 10.0 * dt)).abs() < 1e-5,
+        "shrinking"
+    );
+    for _ in 0..6 {
+        hud.advance(100.0, 1.0, 0.0, false, None, dt);
+    }
+    assert_eq!(hud.pickup_pop[1], 0.0);
+    hud.advance(100.0, 1.0, 0.0, false, None, dt);
+    assert_eq!(
+        hud.pickup_pop,
+        [9.0, 0.0],
+        "re-armed once the height has run out"
+    );
+}
+
+/// A grant on a race reaches the readout as `1 + wide`, `high`. Fails if `Race::readout` drops
+/// `SlotHud::pickup_pop`.
+#[test]
+fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
+    use oag_tables::weapons::Weapon;
+    let mut race = race_with_a_grid();
+    let slot = race.player_slot();
+    race.tick(&PlayerInputs::none());
+    assert_eq!(race.readout().pickup_pop, Some([10.0, 0.0]));
+    race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
+    race.tick(&PlayerInputs::none());
+    let [wide, high] = race.readout().pickup_pop.expect("a race reads it");
+    assert!(wide < 10.0 && high > 0.0, "{wide} {high}");
+}

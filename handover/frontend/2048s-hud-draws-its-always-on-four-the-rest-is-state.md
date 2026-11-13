@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-11-08
-summary: "2048 HUD: _HD layouts, pickup grant announcement and fly wired; class name, icon pop-in, frame colour, Tournament file open"
+updated: 2026-11-13
+summary: "2048 HUD: _HD layouts, grant announcement, fly, pop-in, frame colour and the XP value wired; class name, Tournament file, alpha pulse open"
 difficulty: easy (30)
 ---
 
@@ -37,8 +37,7 @@ PSP's grid, twice the size, right-hand column off screen.
 - **Seen in both 2048 pair originals and drawn by no widget of ours:** the white ring round the hull at the grid and the
   key-shaped icon left of the speed bar. Neither has been matched to a widget of the `2048_hud` set; `TOTAL` ~~reads
   `0.00.00` in the original and `0.00.0` in ours~~ is hundredths since 2026-10-29 (`HudArt::total_time_hundredths`, formatter
-  `FUN_8106f784`, `2048-hud.md`). The `XP` caption draws without its value (`RaceXP`, a per-race tally
-  ours does not keep).
+  `FUN_8106f784`, `2048-hud.md`). The `XP` value is drawn since 2026-11-13 (`Readout::race_xp`, a plain integer, `race-hud-selection.md`); the `+N` `AwardXP` popup is not.
 - **2048's Cannon rounds line is written by the game and held back here (`cannon-ammo-hud`,
   2026-10-26).** `FUN_811b1ee2` prints the Cannon's rounds (`"%d"` of `pickup+0x154`) and a running
   Autopilot's seconds (`"%1.2f"`) into the `SubWeapon` text every frame, as Pulse, Pure, HD and
@@ -70,10 +69,7 @@ PSP's grid, twice the size, right-hand column off screen.
   layer) is still genuinely open.
 - **The pickup grant announcement is wired 2026-10-27** (one second, `Readout::pickup_announcing`) **and the fly to the
   slot 2026-11-08** (`hud-2048-fly`: `dt * 1800.0` px a frame, `PickupBgFrame` widening with `y / slot y`,
-  `Readout::pickup_fly`; the settled icon is `(101.5, 404.5)`, the decompiled slot, not the measured 99.5). Open, all
-  read in `pickup-icon-uv-table.md` ("The grant announcement") and drawn by nothing: the icon's pop-in scale (`10 -> 1`
-  wide at `70/s`, `0 -> 1` high at `7/s`), its alpha pulse, the frame's `0xFFA7A5A7` and 8 Hz blink after arrival,
-  `DenyPickup`'s blink. Which edge of the frame holds as it widens is unmeasured (ours keeps the left); a Vita3K frame
+  `Readout::pickup_fly`; the settled icon is `(101.5, 404.5)`, the decompiled slot, not the measured 99.5). The pop-in scale and the frame's `0xFFA7A5A7` and 8 Hz blink are wired 2026-11-13. Open, read in `pickup-icon-uv-table.md` and drawn by nothing: the icon's alpha pulse (its trigger is not in `Hud_UpdatePickupIcon`), the release shrink, `DenyPickup`'s blink. Which edge of the frame holds as it widens is unmeasured (ours keeps the left); a Vita3K frame
   mid-fly would settle it.
 - **Wired 2026-10-05**: the speed fills, `PilotAssist`'s draw and
   `ZoneLight0`-`9` - see `2048-hud.md` and `pickup-icon-uv-table.md`. Still

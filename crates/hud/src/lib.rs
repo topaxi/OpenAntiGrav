@@ -756,6 +756,15 @@ pub struct Readout {
     /// [`Self::pickup_announcing`]. Ported by `SlotHud::advance`; drawn only by a title whose art
     /// carries [`oag_title::HudArt::pickup_icon_uv`].
     pub pickup_fly: Option<f32>,
+    /// 2048's pop-in of the grant icon: its width and height as multiples of the table's
+    /// `w x h` (`hud+0x220` falls `10 -> 1` at `70/s`, `hud+0x224` rises `0 -> 1` at `7/s`,
+    /// `Hud_UpdatePickupIcon`), so a fresh grant starts a wide flat bar. `None` draws the icon
+    /// at full size. Ported by `SlotHud::advance`; drawn only by a title whose art carries
+    /// [`oag_title::HudArt::pickup_icon_uv`].
+    pub pickup_pop: Option<[f32; 2]>,
+    /// The running XP of the race's event (the `"%d"` `Hud_UpdateXpLines` writes into `RaceXP`),
+    /// or `None` when no tally is armed: outside a campaign event the caption draws alone.
+    pub race_xp: Option<u32>,
     /// The held pickup's backdrop and icon fade, on a title whose art carries
     /// [`oag_title::HudArt::pickup_fade`]: advanced per rendered tick by
     /// `oag_raceplay`'s `SlotHud` and read by the draw. Its idle default draws

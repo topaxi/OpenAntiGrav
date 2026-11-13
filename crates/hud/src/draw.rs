@@ -248,6 +248,9 @@ pub(super) fn text_for(
         // DLC pair's original frame, `docs/formats/2048-hud.md`, "The HD Campaign's
         // HUD". Nothing but 2048's `HUD_award_xp*.xml` authors these three names.
         "RaceXPTxt" | "RaceXP" | "AwardXP" if !readout.campaign_event => None,
+        // The value: `"%d"` of the event's running tally (`Hud_UpdateXpLines`, `0x8119451c`,
+        // `race-hud-selection.md`). No tally armed draws nothing, as the authored empty string did.
+        "RaceXP" => readout.race_xp.map(|xp| xp.to_string()),
         // **Drawn nothing, on any race this engine runs.** `ObjectiveParent` (the
         // `OBJECTIVE` caption and the three `ObjectiveName` rows under it) is shown
         // only for an event whose `m_options & 4` is set and which authors a pass
@@ -1065,7 +1068,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     // the craft is holding - see `pickup_sprites`.
     let look = super::pickup::look(cx.art, readout);
     if let Some(weapon) = look.map(|look| look.weapon).or(readout.pickup) {
-        for sprite in pickup_sprites(
+        let mut sprites = pickup_sprites(
             cx.layout,
             weapon,
             &readout.ext,
@@ -1073,7 +1076,11 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             readout.pickup_announcing,
             readout.pickup_fly,
             look,
-        ) {
+        );
+        if cx.art.pickup_icon_uv.is_some() {
+            super::dialect_2048::grant_look(&mut sprites, cx.layout, readout);
+        }
+        for sprite in sprites {
             frame
                 .sprites
                 .extend(sprite_draw(&sprite, cx.sheet).map(|draw| {

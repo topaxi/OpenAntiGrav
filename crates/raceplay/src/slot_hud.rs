@@ -51,6 +51,11 @@ pub(super) struct SlotHud {
     /// pixels: `dt * 1800.0` a frame (`Hud_UpdatePickupIcon`). `0.0` while announcing or holding
     /// nothing. Unclamped; the draw stops at the slot ([`oag_hud::Readout::pickup_fly`]).
     pub(super) pickup_fly_travel: f32,
+    /// 2048's pop-in, as `[hud+0x220 - 1, hud+0x224]`: the icon's width above its table width,
+    /// `9` falling to `0`, and its height over its table height, `0` rising to `1`
+    /// ([`oag_hud::Readout::pickup_pop`]). Only the frame where nothing is held and the height
+    /// has run out re-arms it, so a swap of one held weapon for another does not pop again.
+    pub(super) pickup_pop: [f32; 2],
     /// The held pickup's backdrop and icon fade ([`oag_hud::Readout::pickup_fade`]).
     pub(super) pickup_fade: oag_hud::pickup_fade::Fade,
     /// The look of the mod pickup last held, kept so its fade-out after use draws what its
@@ -104,6 +109,14 @@ pub(super) const PICKUP_ANNOUNCE_SECONDS: f32 = 1.0;
 /// The speed of the grant's fly to the slot along y, layout pixels a second: the `0x44e10000`
 /// (1800.0) `Hud_UpdatePickupIcon` multiplies `dt` by.
 pub(super) const PICKUP_FLY_PIXELS_PER_SECOND: f32 = 1800.0;
+
+/// The width multiplier's start above its rest value of `1`, and its fall per second
+/// (`Hud_UpdatePickupIcon`: `10.0` and `70.0`).
+const POP_WIDE_START: f32 = 9.0;
+const POP_WIDE_PER_SECOND: f32 = 70.0;
+/// The height multiplier's rise per second when held, and its fall when nothing is.
+const POP_HIGH_RISE_PER_SECOND: f32 = 7.0;
+const POP_HIGH_FALL_PER_SECOND: f32 = 10.0;
 
 impl SlotHud {
     /// One tick of every bar, in the order the original's update runs them:
@@ -183,6 +196,14 @@ impl SlotHud {
         } else {
             0.0
         };
+        if held.is_some() {
+            self.pickup_pop[0] = (self.pickup_pop[0] - dt * POP_WIDE_PER_SECOND).max(0.0);
+            self.pickup_pop[1] = (self.pickup_pop[1] + dt * POP_HIGH_RISE_PER_SECOND).min(1.0);
+        } else if self.pickup_pop[1] > 0.0 {
+            self.pickup_pop[1] = (self.pickup_pop[1] - dt * POP_HIGH_FALL_PER_SECOND).max(0.0);
+        } else {
+            self.pickup_pop = [POP_WIDE_START, 0.0];
+        }
         self.pickup_fly_travel = if held.is_some() && self.pickup_announce_left <= 0.0 {
             self.pickup_fly_travel + dt * PICKUP_FLY_PIXELS_PER_SECOND
         } else {
