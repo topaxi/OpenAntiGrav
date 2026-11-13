@@ -117,8 +117,16 @@ pub fn hd_bloom_params(
 /// `scene::hd_chain::store` gives once the chains are built.
 pub(in crate::load) fn scene_store(
     title: &oag_title::Title,
-    has_rcsmodel: bool,
+    track_blob: &[u8],
+    ribbon: bool,
 ) -> oag_gpu::formats::SceneStore {
+    store_of(
+        title,
+        oag_vex::vex::geometry_is_external(track_blob) && !ribbon,
+    )
+}
+
+fn store_of(title: &oag_title::Title, has_rcsmodel: bool) -> oag_gpu::formats::SceneStore {
     use oag_gpu::formats::SceneStore;
     if title.looks.wo_composite.applies_everywhere() {
         SceneStore::Squared
@@ -138,7 +146,7 @@ pub(in crate::load) fn for_title(
     oag_post::hd_bloom::Params {
         zoom: title.race.zoom_ring.map(crate::zoom::tuning),
         final_half_texel: title.looks.final_composite_half_texel.applies_everywhere(),
-        store: scene_store(title, true),
+        store: store_of(title, true),
         ..params
     }
 }

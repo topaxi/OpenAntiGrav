@@ -18,8 +18,7 @@ pub(super) fn ps3_pad_models(
     archives: &mut oag_assets::Archives,
     track: &str,
     track_blob: &[u8],
-    geometry: &[u8],
-    store: oag_gpu::formats::SceneStore,
+    (geometry, store): (&[u8], oag_gpu::formats::SceneStore),
     report: &mut Vec<String>,
 ) -> Result<(Option<mesh::Model>, Option<mesh::Model>)> {
     let (pads, built) = mesh::rcs::build_pads(

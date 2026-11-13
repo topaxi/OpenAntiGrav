@@ -18,6 +18,30 @@ fn sky_gtf_name(vex_name: &str) -> Option<String> {
     Some(format!("{}{}sky.gtf", &vex_name[..at], &vex_name[at..=at]))
 }
 
+/// The sky of a PS3-path circuit. Two containers wear the `.rcsmodel` extension, and their skies are
+/// unrelated formats (see `geometry::track_model`'s dispatch on the same check). Wipeout HD authors
+/// no `Skycube` node: its sky is the `sky.gtf` cubemap beside the track, drawn through the same
+/// camera-centred sky path, and a Zone race swaps that file out (see `mesh::sky_cube` and
+/// `oag_hd::race::ZONE_SKY`). Wipeout 2048's is `skycube.rcsmodel`, an authored dome in the
+/// container the track and craft already read ([`psp2_sky_model`]).
+pub(super) fn ps3_sky_model(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    geometry: &[u8],
+    (title, mode, store): (
+        &'static oag_title::Title,
+        oag_race::Mode,
+        oag_gpu::formats::SceneStore,
+    ),
+    report: &mut Vec<String>,
+) -> Option<mesh::Model> {
+    if mesh::rcs::psp2::is_psp2(geometry) {
+        psp2_sky_model(archives, track, report)
+    } else {
+        hd_sky_model(archives, track, title.race, mode, store, report)
+    }
+}
+
 /// Wipeout HD's sky, or `None` with the reason in the report.
 ///
 /// The rotation applied is the circuit's own `Lighting.Sky rotation`, read as

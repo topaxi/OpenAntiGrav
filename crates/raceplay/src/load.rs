@@ -62,9 +62,9 @@ mod zone_livery;
 #[cfg(feature = "view")]
 pub use campaign::load_event;
 #[cfg(feature = "view")]
-pub use environment::{authored_light, hd_bloom_params};
+use environment::cloud_layer;
 #[cfg(feature = "view")]
-use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
+pub use environment::{authored_light, hd_bloom_params};
 use oag_source::remix::craft_of;
 
 /// A disc circuit as a track in this project's own format, opened the way
@@ -314,13 +314,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
 
-    // What the race's scene target stores, which every colour baked into a model is encoded
-    // for (`oag_gpu::formats::SceneStore`). Told here, before the circuit's staging is read.
+    // What the scene target stores, which baked colours are encoded for; told before the staging.
     #[cfg(feature = "view")]
-    let store = environment::scene_store(
-        title,
-        oag_vex::vex::geometry_is_external(&track_blob) && !options.ribbon,
-    );
+    let store = environment::scene_store(title, &track_blob, options.ribbon);
     stages::checkpoint()?;
     // The grid's roster - see `roster::available`.
     let available = roster::available(
@@ -464,8 +460,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             &mut archives,
             &track,
             &track_blob,
-            geometry,
-            store,
+            (geometry, store),
             &mut report,
         )?,
         _ => (None, None),
@@ -590,40 +585,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
     #[cfg(feature = "view")]
+    let sky_scene = (title, options.mode, store);
+    #[cfg(feature = "view")]
     let sky_model = if let Some(geometry) = &ps3_geometry {
-        // Two containers wear this extension, and their skies are unrelated
-        // formats - see `geometry::track_model`'s own dispatch on the same
-        // check. Wipeout HD authors no `Skycube` node at all: its sky is the
-        // `sky.gtf` cubemap beside the track, drawn through the same
-        // camera-centred sky path, and a Zone race swaps that file out (see
-        // `mesh::sky_cube` and `oag_hd::race::ZONE_SKY`). Wipeout 2048's is
-        // `skycube.rcsmodel`, an authored dome in the same `.rcsmodel`
-        // container the track and craft already read - see
-        // `environment::psp2_sky_model`.
-        if mesh::rcs::psp2::is_psp2(geometry) {
-            psp2_sky_model(&mut archives, &track, &mut report)
-        } else {
-            hd_sky_model(
-                &mut archives,
-                &track,
-                title.race,
-                options.mode,
-                store,
-                &mut report,
-            )
-        }
+        environment::ps3_sky_model(&mut archives, &track, geometry, sky_scene, &mut report)
     } else if let Some(sky) = foreign_art.own_sky.take() {
         Some(sky)
     } else if let Some(entry) = &foreign_art.sky {
         track_inputs::foreign_sky(&mut archives, entry, &mut report)
-    } else if let Some(sky) = track_inputs::host_zone_sky(
-        &mut archives,
-        &track,
-        title,
-        options.mode,
-        store,
-        &mut report,
-    ) {
+    } else if let Some(sky) =
+        track_inputs::host_zone_sky(&mut archives, &track, sky_scene, &mut report)
+    {
         Some(sky)
     } else if !vex_geometry {
         None

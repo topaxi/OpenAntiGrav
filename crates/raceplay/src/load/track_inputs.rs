@@ -434,9 +434,11 @@ pub(super) fn export(
 pub(super) fn host_zone_sky(
     archives: &mut Archives,
     track: &str,
-    title: &'static oag_title::Title,
-    mode: Mode,
-    store: oag_gpu::formats::SceneStore,
+    (title, mode, store): (
+        &'static oag_title::Title,
+        Mode,
+        oag_gpu::formats::SceneStore,
+    ),
     report: &mut Vec<String>,
 ) -> Option<Model> {
     if !track.starts_with("foreign:") || title.race.zone_sky.is_none() {
