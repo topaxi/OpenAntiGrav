@@ -1046,6 +1046,7 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
     };
 
 mod centre_line;
+pub use centre_line::TRAIL_HIT_MIN_BRIGHTNESS;
 mod length;
 mod rigid;
 pub use length::{LONG_TRAIL_SAMPLES, TRAIL_CAPACITY, TRAIL_MAX_VERTICES_PER_CRAFT};

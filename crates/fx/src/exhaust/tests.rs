@@ -710,13 +710,13 @@ fn a_full_ribbon() -> Exhaust {
 fn trail_nearest_projects_onto_a_segment_rather_than_snapping_to_a_sample() {
     let exhaust = a_full_ribbon();
     let (on, away) = exhaust
-        .trail_nearest(Vec3::new(-6.0, 3.0, 0.0))
+        .trail_nearest(Vec3::new(-30.0, 3.0, 0.0))
         .expect("a full ring");
-    assert!((on - Vec3::new(-6.0, 0.0, 0.0)).length() < 1e-5, "{on:?}");
+    assert!((on - Vec3::new(-30.0, 0.0, 0.0)).length() < 1e-5, "{on:?}");
     assert!((away - 3.0).abs() < 1e-5, "{away}");
-    // Past the head, the head itself.
-    let (on, _) = exhaust.trail_nearest(Vec3::new(10.0, 0.0, 0.0)).unwrap();
-    assert!((on - Vec3::ZERO).length() < 1e-5, "{on:?}");
+    // Past the head (the newest sample, last pushed), the head itself.
+    let (on, _) = exhaust.trail_nearest(Vec3::new(-50.0, 0.0, 0.0)).unwrap();
+    assert!((on - Vec3::new(-36.0, 0.0, 0.0)).length() < 1e-5, "{on:?}");
 }
 
 /// Until the ring is full the ribbon is not drawn, so it has no line to test against.
@@ -730,6 +730,77 @@ fn trail_nearest_and_bounds_wait_for_a_full_ring() {
     let (low, high) = a_full_ribbon().trail_bounds().unwrap();
     assert_eq!(low, Vec3::new(-36.0, 0.0, 0.0));
     assert_eq!(high, Vec3::ZERO);
+}
+
+/// The lit part of the ribbon ends where the drawn fade reaches the trail-hit floor: on the
+/// original's ten samples a little above sample 5 (the fade runs 0.18 at 4 and 0.099 at 5).
+#[test]
+fn the_lit_age_is_where_the_drawn_fade_reaches_the_floor() {
+    let exhaust = a_full_ribbon();
+    let lit = exhaust.trail_lit_age();
+    assert!(lit > 4.9 && lit < 5.0, "{lit}");
+    let fade = trail_fade_at(exhaust.shape_age(lit));
+    assert!((fade - TRAIL_HIT_MIN_BRIGHTNESS).abs() < 1e-4, "{fade}");
+}
+
+/// A longer ribbon stretches the fade across its whole ring, so the cut stays at the same share
+/// of it (about 55 %) and the line is not cut at sample 5 of 54.
+#[test]
+fn the_lit_age_scales_with_a_longer_ring() {
+    let mut exhaust = Exhaust::new();
+    exhaust.set_trail_samples(LONG_TRAIL_SAMPLES);
+    for k in 0..LONG_TRAIL_SAMPLES {
+        exhaust.push_trail(Vec3::new(k as f32 * -1.0, 0.0, 0.0), Vec3::X);
+    }
+    // The head is the last one pushed, at x = -53.
+    let head = -((LONG_TRAIL_SAMPLES - 1) as f32);
+    let lit = exhaust.trail_lit_age();
+    let share = lit / (LONG_TRAIL_SAMPLES - 1) as f32;
+    assert!((share - a_full_ribbon().trail_lit_age() / 9.0).abs() < 1e-5, "{share}");
+    assert!(lit > 25.0, "{lit}");
+    let fade = trail_fade_at(exhaust.shape_age(lit));
+    assert!((fade - TRAIL_HIT_MIN_BRIGHTNESS).abs() < 1e-4, "{fade}");
+    // One unit a sample: a point at the lit age is on the line, one past it is held at the end.
+    let (on, _) = exhaust.trail_nearest(Vec3::new(head + lit - 1.0, 1.0, 0.0)).unwrap();
+    assert!((on.x - (head + lit - 1.0)).abs() < 1e-4, "{on:?}");
+    let (on, _) = exhaust.trail_nearest(Vec3::new(head + lit + 3.0, 1.0, 0.0)).unwrap();
+    assert!((on.x - (head + lit)).abs() < 1e-4, "{on:?}");
+}
+
+/// The nearest-point query reaches no further back than the lit line: past the cut the nearest
+/// point is the cut itself, and a point beside the dark tail is measured to the lit end.
+#[test]
+fn trail_nearest_stops_at_the_lit_end_of_the_ribbon() {
+    let exhaust = a_full_ribbon();
+    // The head is at x = -36 and the samples run 4 units apart towards 0.
+    let lit_end = -36.0 + 4.0 * exhaust.trail_lit_age();
+    let (on, away) = exhaust
+        .trail_nearest(Vec3::new(-6.0, 0.0, 0.0))
+        .expect("a full ring");
+    assert!((on.x - lit_end).abs() < 1e-3, "{on:?} vs {lit_end}");
+    assert!((away - (-6.0 - lit_end).abs()).abs() < 1e-3, "{away}");
+    let (on, away) = exhaust
+        .trail_nearest(Vec3::new(-24.0, 3.0, 0.0))
+        .expect("a full ring");
+    assert!((on.x + 24.0).abs() < 1e-5 && (away - 3.0).abs() < 1e-5);
+}
+
+/// The polyline query reports how far along the line the nearest point is, in samples.
+#[test]
+fn nearest_on_polyline_reports_the_position_along_the_line() {
+    let line = [Vec3::ZERO, Vec3::new(-4.0, 0.0, 0.0), Vec3::new(-8.0, 0.0, 0.0)];
+    let (_, _, along) = centre_line::nearest_on_polyline(
+        line.into_iter(),
+        Vec3::new(-6.0, 2.0, 0.0),
+        f32::INFINITY,
+    )
+    .unwrap();
+    assert!((along - 1.5).abs() < 1e-5, "{along}");
+    // Cut inside the second segment: the nearest point cannot pass it.
+    let (on, _, along) =
+        centre_line::nearest_on_polyline(line.into_iter(), Vec3::new(-7.0, 0.0, 0.0), 1.25)
+            .unwrap();
+    assert!((along - 1.25).abs() < 1e-5 && (on.x + 5.0).abs() < 1e-5, "{on:?} {along}");
 }
 
 /// The width is the runtime scale `intensity * 0.35 + 0.2` on the widest layer.
