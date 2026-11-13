@@ -14,6 +14,9 @@
 //! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left, which flies and steers
 //! pull r2 0.6 30                   a pad's trigger (`l2` or `r2`) pulled this far, for this many ticks
 //! escape                           the Escape key (a race: the pause menu's way out)
+//! key                              a key no button is bound to went down
+//! mouse 640 360                    the mouse moved to this window pixel
+//! click                            the primary mouse button went down and up
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
 //! quit                             end the run (reaching the end of the script does too)
@@ -118,6 +121,12 @@ pub enum Step {
     },
     /// The Escape key, which a button tap does not reach.
     Escape,
+    /// A key no button is bound to went down: somebody is at the machine.
+    Key,
+    /// The mouse moved to this window pixel.
+    Mouse { x: f32, y: f32 },
+    /// The primary mouse button went down and up.
+    Click,
     /// Let this many ticks pass.
     Ticks(u32),
     /// Write the next frame to this PNG.
@@ -149,6 +158,9 @@ impl std::fmt::Display for Step {
             Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
             Self::Pad { pad, ticks } => write!(f, "pad {pad:?} {ticks}"),
             Self::Escape => f.write_str("escape"),
+            Self::Key => f.write_str("key"),
+            Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
+            Self::Click => f.write_str("click"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
             Self::Quit => f.write_str("quit"),
@@ -373,6 +385,15 @@ impl Script {
                 _ => return Err("screenshot takes one path".into()),
             },
             "escape" if words.is_empty() => Step::Escape,
+            "key" if words.is_empty() => Step::Key,
+            "click" if words.is_empty() => Step::Click,
+            "mouse" => match words.as_slice() {
+                [x, y] => Step::Mouse {
+                    x: x.parse().map_err(|_| format!("{x:?} is not a pixel"))?,
+                    y: y.parse().map_err(|_| format!("{y:?} is not a pixel"))?,
+                },
+                _ => return Err("mouse takes an x and a y".into()),
+            },
             "quit" => Step::Quit,
             other => return Err(format!("unknown step {other:?}")),
         })

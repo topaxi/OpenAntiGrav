@@ -58,6 +58,8 @@ pub struct CaptureOptions {
     /// shows the results table: `--hold cross` drives into the first wall. See
     /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
+    /// `--demo`: the race has nobody in it ([`Race::fly_as_demo`]).
+    pub demo: bool,
     /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
@@ -526,6 +528,9 @@ pub fn capture(
     campaign_2048_event
         .iter()
         .for_each(|event| race.arm_event_xp(event));
+    if options.demo {
+        race.fly_as_demo();
+    }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {

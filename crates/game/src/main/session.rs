@@ -34,6 +34,8 @@ pub(crate) mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
+#[path = "session/demo.rs"]
+mod demo;
 #[path = "session/escape.rs"]
 mod escape;
 #[path = "session/frame.rs"]
@@ -70,6 +72,7 @@ mod music;
 mod mods_page;
 #[path = "session/music_pool_page.rs"]
 mod music_pool_page;
+pub(crate) use demo::State as DemoState;
 pub(crate) use load_probe::LoadProbe;
 pub(crate) use mods_page::Rebuilt;
 #[path = "session/menus.rs"]
@@ -427,6 +430,8 @@ pub(crate) struct Session {
     /// A recording WATCH asked to open, from the launch to the race's hand-over
     /// (`session::replays`).
     pub(crate) watching: Option<replays::Watching>,
+    /// The attract demo's idle count, chain and the demo being loaded (`session::demo`).
+    pub(crate) demo: demo::State,
     /// The replay viewer while a recording is being watched (`session::replays`).
     pub(crate) viewer: Option<replays::Active>,
     /// Whether the menus open on the REPLAYS page: set by leaving the viewer and by a recording

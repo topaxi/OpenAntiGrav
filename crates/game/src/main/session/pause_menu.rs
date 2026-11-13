@@ -39,7 +39,8 @@ impl Session {
     /// The race the pause screen is for: the live one, or the one parked behind the menus.
     fn pausing_race(&self) -> Option<&RaceStage> {
         let race = match &self.stage {
-            Stage::Race(stage) if !stage.race.finished() => Some(&**stage),
+            // A demo is not paused into: leaving it is the main menu.
+            Stage::Race(stage) if !stage.race.finished() && stage.demo.is_none() => Some(&**stage),
             _ => self.suspended_race.as_deref(),
         };
         race.filter(|stage| self.pause_screen_applies(stage))

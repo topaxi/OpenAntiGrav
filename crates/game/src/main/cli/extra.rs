@@ -889,3 +889,26 @@ impl DevArgs {
             .map_err(|why| anyhow::anyhow!("--drive: {why}"))
     }
 }
+
+/// The attract demo as a run of its own.
+#[derive(clap::Args, Debug)]
+pub(crate) struct DemoArgs {
+    /// Start in an all-AI demo race and chain the next when one ends; any input returns to the menu.
+    ///
+    /// With `--dry-run` or `--screenshot` no window opens: `--dry-run` flies demos back to back
+    /// (`--ticks` shortens each) and logs each pick; `--screenshot` captures one. See
+    /// docs/ui/attract-demo.md.
+    #[arg(long, conflicts_with_all = ["race", "launcher"])]
+    pub(crate) demo: bool,
+
+    /// Like `--demo`, as a wallpaper: input is ignored (Escape quits) and the HUD is hidden.
+    #[arg(long, conflicts_with_all = ["race", "launcher"])]
+    pub(crate) wallpaper: bool,
+}
+
+impl DemoArgs {
+    /// `Some(wallpaper)` when the run is a demo.
+    pub(crate) fn mode(&self) -> Option<bool> {
+        (self.demo || self.wallpaper).then_some(self.wallpaper)
+    }
+}

@@ -867,3 +867,112 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
         "turning it off builds the disc's sheet again:\n{stderr}"
     );
 }
+
+/// The ticks a Pulse main menu waits before it starts a demo (`oag_title::demo::Demo::PULSE`).
+const PULSE_IDLE_TICKS: u32 = 60 * 60;
+
+/// The states of a run that were `stage=race` with `demo=running`.
+fn demo_races(run: &Run) -> Vec<&Value> {
+    run.states
+        .iter()
+        .filter(|state| text(state, &["demo"]) == Some("running"))
+        .collect()
+}
+
+/// An untouched main menu starts an attract demo after the title's idle time, and the demo is a
+/// race with nobody in it: no slot a person flies, every craft flown by the AI. Fails on a build
+/// that never launches one, or whose race still seats a person.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_idle_main_menu_launches_a_demo_with_nobody_in_it() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "demo-idle",
+        &format!(
+            "boot; ticks {before}; expect stage=menu; expect page=main; ticks 20; \
+             until stage=race within 3000; expect demo=running; expect humans=0; \
+             expect race.mode=single_race; ticks 300",
+            before = PULSE_IDLE_TICKS - 10,
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stages: Vec<&str> = run
+        .states
+        .iter()
+        .filter_map(|state| text(state, &["stage"]))
+        .collect();
+    assert!(
+        stages.windows(2).any(|pair| pair == ["loading", "race"]),
+        "the demo went through the loading stage: {stages:?}"
+    );
+    let demo = demo_races(&run);
+    assert!(!demo.is_empty(), "no demo race was reported");
+    assert!(
+        demo.iter().all(|state| state["humans"] == 0),
+        "a demo seated a person"
+    );
+    // The race ran: its hash moved with every tick.
+    let hashes: std::collections::BTreeSet<_> =
+        demo.iter().filter_map(|state| text(state, &["hash"])).collect();
+    assert!(hashes.len() > 100, "the demo's race did not tick");
+}
+
+/// A press before the threshold starts the count again, so a menu touched every minute never
+/// launches one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_press_on_the_main_menu_restarts_the_idle_count() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "demo-reset",
+        &format!(
+            "boot; ticks {first}; press down; ticks {second}; expect stage=menu; \
+             ticks {rest}; until stage=race within 3000; expect demo=running",
+            first = PULSE_IDLE_TICKS - 600,
+            second = PULSE_IDLE_TICKS - 100,
+            rest = 200,
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+}
+
+/// Any input in a demo returns to the main menu, and is not also read by it: a pad button (START
+/// would pause a race), a key no button is bound to, the mouse moving and a click. Each is its own
+/// run, since the first ends the demo.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn any_input_in_a_demo_returns_to_the_main_menu() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    for (tag, input) in [
+        ("pad", "press start"),
+        ("key", "key"),
+        ("mouse", "mouse 300 200"),
+        ("click", "click"),
+    ] {
+        let run = drive(
+            &image,
+            &format!("demo-exit-{tag}"),
+            &format!(
+                "boot; ticks {PULSE_IDLE_TICKS}; until stage=race within 3000; ticks 60; \
+                 expect demo=running; {input}; until stage=menu within 300; expect page=main; \
+                 ticks 30; expect page=main"
+            ),
+            None,
+        );
+        assert!(run.output.status.success(), "{tag}: {}", run.why_not_success());
+        let last = run.last();
+        assert_eq!(text(last, &["stage"]), Some("menu"), "{tag}");
+        assert_eq!(text(last, &["page"]), Some("main"), "{tag}: back on the main menu, not paused");
+        assert_eq!(text(last, &["demo"]), None, "{tag}");
+    }
+}

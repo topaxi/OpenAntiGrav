@@ -6,6 +6,8 @@
 //! the windowed session (`session::demo`) and the headless `--demo` run both go through it
 //! (`docs/ui/attract-demo.md`).
 
+pub mod chain;
+
 use oag_core::Rng;
 use oag_title::demo::{AfterEnd, Demo, Selection};
 
@@ -79,13 +81,14 @@ impl Run {
         self.input |= input && !self.wallpaper;
     }
 
-    /// One tick of the live race; `finished` is the race's own end.
-    pub fn tick(&mut self, demo: &Demo, finished: bool) -> Option<Leave> {
+    /// One tick of the live race; `finished` is the race's own end, `length` the ticks a demo
+    /// runs ([`Demo::duration_ticks`], unless a headless run shortens it).
+    pub fn tick(&mut self, length: u32, finished: bool) -> Option<Leave> {
         if std::mem::take(&mut self.input) {
             return Some(Leave::Input);
         }
         self.ticks = self.ticks.saturating_add(1);
-        (finished || self.ticks >= demo.duration_ticks()).then_some(Leave::Over)
+        (finished || self.ticks >= length).then_some(Leave::Over)
     }
 
     /// Ticks the race has run.

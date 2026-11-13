@@ -35,7 +35,7 @@ fn a_menu_with_something_over_it_never_counts() {
 fn input_ends_a_demo_on_its_first_tick_even_when_heard_during_the_load() {
     let mut run = Run::new(false);
     run.hear(true);
-    assert_eq!(run.tick(&PULSE, false), Some(Leave::Input));
+    assert_eq!(run.tick(PULSE.duration_ticks(), false), Some(Leave::Input));
     assert_eq!(run.ticks(), 0);
 }
 
@@ -43,23 +43,23 @@ fn input_ends_a_demo_on_its_first_tick_even_when_heard_during_the_load() {
 fn a_demo_runs_its_length_and_then_is_over() {
     let mut run = Run::new(false);
     for _ in 1..PULSE.duration_ticks() {
-        assert_eq!(run.tick(&PULSE, false), None);
+        assert_eq!(run.tick(PULSE.duration_ticks(), false), None);
     }
-    assert_eq!(run.tick(&PULSE, false), Some(Leave::Over));
+    assert_eq!(run.tick(PULSE.duration_ticks(), false), Some(Leave::Over));
 }
 
 #[test]
 fn a_race_that_finishes_first_ends_the_demo() {
     let mut run = Run::new(false);
-    assert_eq!(run.tick(&PULSE, false), None);
-    assert_eq!(run.tick(&PULSE, true), Some(Leave::Over));
+    assert_eq!(run.tick(PULSE.duration_ticks(), false), None);
+    assert_eq!(run.tick(PULSE.duration_ticks(), true), Some(Leave::Over));
 }
 
 #[test]
 fn a_wallpaper_hears_no_input() {
     let mut run = Run::new(true);
     run.hear(true);
-    assert_eq!(run.tick(&PULSE, false), None);
+    assert_eq!(run.tick(PULSE.duration_ticks(), false), None);
     assert!(run.wallpaper());
 }
 

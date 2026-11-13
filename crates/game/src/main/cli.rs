@@ -431,6 +431,10 @@ pub(crate) struct Cli {
     #[command(flatten)]
     pub(crate) menu_args: extra::MenuArgs,
 
+    /// `--demo`, `--wallpaper` - see [`extra::DemoArgs`].
+    #[command(flatten)]
+    pub(crate) demo: extra::DemoArgs,
+
     /// Show the language picker even when a language is already chosen.
     ///
     /// Without this the picker is skipped once `settings.toml` names a

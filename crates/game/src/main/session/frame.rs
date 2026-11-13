@@ -109,7 +109,7 @@ impl Session {
             && matches!(&self.stage, Stage::Frontend(stage)
                 // `--measure-race-load` times the race path, not the boot
                 // sequence, and skips straight past it.
-                if stage.frontend.is_finished() || self.load_probe.is_some())
+                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some())
         {
             self.launched = true;
             debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
@@ -343,6 +343,12 @@ impl Session {
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
             let pointer = self.pointer.take();
+            // The attract demo: an untouched main menu starts one, input ends it. Before the
+            // stage's own tick so the press that ends a demo is not also read by the menu it
+            // returns to.
+            if self.tick_demo(&pointer) {
+                break;
+            }
             // The further windows' too, every tick, so a click made mid-race is spent and the end
             // screens (the finished arm below) see only what happened since the line.
             let seat_pointers = self.seat_pointers();
@@ -415,6 +421,7 @@ impl Session {
                     crate::race_stage::endrace_touch::EndRace::is_photo));
             if matches!(self.stage, Stage::Race(_))
                 && self.photo.is_none()
+                && !self.in_demo()
                 && self.controls.buttons().is_pressed(Button::Select)
             {
                 self.controls.buttons_mut().consume_press(Button::Select);
@@ -442,6 +449,7 @@ impl Session {
             // A click on a paused race is slot 0's Start, through the same owner
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if self.photo.is_none()
+                && !self.in_demo()
                 && matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
             {
                 let paused = matches!(self.pause, oag_game::pause::State::Paused { .. });
