@@ -773,6 +773,16 @@ pub enum Command {
         /// The icon: the title's own, which fixes the group, or the mod's, which names it.
         warning: Warning,
     },
+    /// End the surfaces of the sending mod's own effect `effect` that it placed for `slot` with
+    /// [`Self::FireModEffectAhead`] before this tick, at once: a portal that closes, a marker
+    /// that is picked up. Particles it still holds go with it. None standing is not a fault.
+    /// An output, never hashed.
+    StopModEffect {
+        /// The grid slot the surfaces were placed for.
+        slot: Slot,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
+    },
 }
 
 impl Command {
@@ -789,6 +799,7 @@ impl Command {
             Self::ScaleSlotPads { .. } => CommandKind::ScaleSlotPads,
             Self::PlayCue { .. } => CommandKind::PlayCue,
             Self::RaiseWarning { .. } => CommandKind::RaiseWarning,
+            Self::StopModEffect { .. } => CommandKind::StopModEffect,
             Self::FireEffect { .. } | Self::FireModEffect { .. } => CommandKind::FireEffect,
             Self::HudTint { .. } => CommandKind::HudTint,
             Self::HudShake { .. } => CommandKind::HudShake,
@@ -850,7 +861,8 @@ impl Command {
             | Self::DrawBeam { slot, .. }
             | Self::SetShaderParam { slot, .. }
             | Self::PortalView { slot, .. }
-            | Self::PlayModSound { slot, .. } => Some(slot),
+            | Self::PlayModSound { slot, .. }
+            | Self::StopModEffect { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
@@ -883,6 +895,7 @@ impl Command {
             | Self::SetShaderParam { shader: name, .. }
             | Self::FireModEffect { effect: name, .. }
             | Self::FireModEffectAhead { effect: name, .. }
+            | Self::StopModEffect { effect: name, .. }
             | Self::PlayModSound { sound: name, .. } => Some(name.as_str()),
             _ => None,
         }
@@ -967,6 +980,7 @@ impl Command {
             | Self::SetShaderParam { .. }
             | Self::PortalView { .. } => scene::encode(self, pool_at).unwrap_or_default(),
             Self::PlayModSound { .. } => sound::encode(self, pool_at).unwrap_or_default(),
+            Self::StopModEffect { .. } => (pool_at, 0, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = self.kind().code();
@@ -1224,6 +1238,10 @@ impl Command {
                 return scene::decode(kind, slot, (arg, value, word), pool);
             }
             CommandKind::PlayModSound => return sound::decode(slot, arg, word, pool),
+            CommandKind::StopModEffect => Self::StopModEffect {
+                slot,
+                effect: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
+            },
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });

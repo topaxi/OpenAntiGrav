@@ -784,6 +784,26 @@ impl<'a> Reply<'a> {
         Ok(())
     }
 
+    /// `stop-mod-effect`: ends the surfaces of the mod's own effect `effect` (its key in
+    /// `[effects]`) that it placed for `craft` with [`Self::fire_mod_effect_ahead`] before this
+    /// tick, at once, particles and all: a portal that closes. None standing is not a fault; a
+    /// key the manifest lacks faults the module. Drawn, never hashed.
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::Full`], [`Refused::Pool`], [`Refused::Range`] for a name over
+    /// `MAX_HUD_TEXT` bytes.
+    pub fn stop_mod_effect(&mut self, craft: &Craft<'_>, effect: &str) -> Result<(), Refused> {
+        let effect = ModName::new(effect).ok_or(Refused::Range)?;
+        self.push_string(
+            &Command::StopModEffect {
+                slot: craft.slot(),
+                effect,
+            },
+            effect.as_str(),
+        )
+    }
+
     /// `fire-effect` with the effect `effect`, its key in the mod's own `[effects]`: a
     /// parametric TOML the manifest declares, played at the craft's nozzle. One the
     /// manifest lacks faults the module, naming it; one that did not load draws nothing,

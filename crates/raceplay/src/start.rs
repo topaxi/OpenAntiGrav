@@ -950,6 +950,7 @@ impl Race {
                 class_announcer,
                 rumble,
                 stage: psys::Stage::new(),
+                surfaces: Vec::new(),
                 scenery_fx: super::scenery_fx::SceneryFx::new(scenery_fx),
                 engine_flare: [None; MAX_SHIPS],
                 projectile_flare: [None; oag_weapons::projectile::MAX_PROJECTILES],

@@ -89,10 +89,16 @@ fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32> {
     return vec3<f32>(across * oag_frame.lens, -1.0);
 }
 
+// The view's width over its height: what a circle on `screen_uv`, which is 0..1 both ways,
+// needs to stay round.
+fn view_aspect() -> f32 {
+    return oag_frame.lens.x / oag_frame.lens.y;
+}
+
 fn mod_fragment(input: ModInput) -> vec4<f32> {
     // The helpers above are the contract, so nothing may strip them from this text.
     let unused = mod_texture(vec2<f32>(0.0)) * 0.0 + engine_texture(engine_uv(vec3<f32>(0.0))) * 0.0
-        + vec4<f32>(craft_frame()[3].xyz + eye_ray(vec2<f32>(0.5)), 0.0) * 0.0;
+        + vec4<f32>(craft_frame()[3].xyz + eye_ray(vec2<f32>(0.5)), view_aspect()) * 0.0;
     return input.colour + unused * select(0.0, 1.0, engine_texture_bound());
 }
 

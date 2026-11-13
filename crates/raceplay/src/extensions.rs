@@ -122,7 +122,8 @@ pub struct Source {
     pub api: u32,
     /// `[extension] memory_pages`.
     pub memory_pages: u32,
-    /// `[extension] state_bytes`.
+    /// `[extension] state_bytes`: 0 when the manifest declares none and the module's own
+    /// `oag_state_len` says.
     pub state_bytes: u32,
     /// `[extension] drives_ai_pickup`: the engine raises no `pickup-fire` for an AI craft
     /// holding the mod pickup; the module decides and clears it itself.
@@ -484,7 +485,7 @@ pub fn prepare(
                                 Scope::Rules => "simulation module",
                                 Scope::Track(_) => "track module",
                             },
-                            source.state_bytes,
+                            module.limits().state_bytes,
                             oag_modhost::FUEL_PER_TICK
                         ),
                     );

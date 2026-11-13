@@ -49,6 +49,7 @@ fn engine_texture_bound() -> bool               // whether this view has one
 fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
 fn craft_frame() -> mat4x4<f32>                 // the view's own craft in eye space: right, up, back, place
 fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32>   // the ray through that point of the view, eye space, z -1
+fn view_aspect() -> f32                         // the view's width over its height: a circle on screen_uv is round with uv.x * view_aspect()
 ```
 
 `craft_frame` and `eye_ray` are what a shader needs to cut geometry of its own round the craft:

@@ -291,6 +291,24 @@ fn a_state_length_export_must_agree_with_the_manifest() {
     assert!(error.to_string().contains("state_bytes = 96"), "{error}");
 }
 
+/// A manifest that declares no `state_bytes` (0) takes the length the module exports, so the
+/// number is written once, in the guest.
+#[test]
+fn a_manifest_without_a_state_length_takes_the_modules() {
+    let says_16 = r#"(func (export "oag_state_len") (result i32) i32.const 16)"#;
+    let undeclared = Limits {
+        state_bytes: 0,
+        ..Limits::default()
+    };
+    let module = Module::compile(&answering(ABI_WORD, says_16), undeclared).unwrap();
+    assert_eq!(module.limits().state_bytes, 16);
+    let huge = r#"(func (export "oag_state_len") (result i32) i32.const 4096)"#;
+    let error = Module::compile(&answering(ABI_WORD, huge), undeclared).unwrap_err();
+    assert!(matches!(error, LoadError::Limits(_)), "{error}");
+    let silent = Module::compile(&answering(ABI_WORD, ""), undeclared).unwrap();
+    assert_eq!(silent.limits().state_bytes, 0, "no export, no state");
+}
+
 /// A guest whose track buffer is at 8192: copies the region's first property value
 /// into the blob and sends the reply `$reply` writes.
 fn track_reader(reply: &str) -> Vec<u8> {

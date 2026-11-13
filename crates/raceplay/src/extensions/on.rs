@@ -96,9 +96,9 @@ fn named(command: &Command) -> Option<(Table, &str)> {
             ..
         }
         | Command::SetShaderParam { shader, .. } => Some((Table::Shaders, shader.as_str())),
-        Command::FireModEffect { effect, .. } | Command::FireModEffectAhead { effect, .. } => {
-            Some((Table::Effects, effect.as_str()))
-        }
+        Command::FireModEffect { effect, .. }
+        | Command::FireModEffectAhead { effect, .. }
+        | Command::StopModEffect { effect, .. } => Some((Table::Effects, effect.as_str())),
         Command::PlayModSound { sound, .. } => Some((Table::Sounds, sound.as_str())),
         _ => None,
     }
@@ -211,7 +211,11 @@ pub(super) struct On {
     pub(super) fov: [f32; oag_gameplay::MAX_SHIPS],
     /// This tick's `draw-beam`s and `set-shader-param`s: outputs, never hashed.
     pub(super) beams: Vec<(usize, super::Beam)>,
+    /// The `set-shader-param`s in force: a scalar holds until it is sent again, until the
+    /// fill through its shader stops, or until its module faults. An output, never hashed.
     pub(super) shader_params: Vec<ShaderParam>,
+    /// The shader (module, place) each slot's fill went through last tick.
+    filled: [Option<(usize, u16)>; oag_gameplay::MAX_SHIPS],
     /// Each slot's `portal-view` this tick (the later module wins): an output, never hashed.
     pub(super) portal_views: [Option<super::PortalRequest>; oag_gameplay::MAX_SHIPS],
     /// Events dropped past a cap, counted for the report: an output, never hashed.
@@ -237,7 +241,7 @@ pub(super) struct On {
 /// place in its `[shaders]`.
 pub(super) type Fill = (oag_ext_abi::Rgba, Option<(usize, u16)>);
 
-/// A `set-shader-param` of this tick.
+/// A `set-shader-param` in force.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ShaderParam {
     pub(super) module: usize,
@@ -471,6 +475,7 @@ impl On {
             beams: Vec::new(),
             portal_views: [None; oag_gameplay::MAX_SHIPS],
             shader_params: Vec::new(),
+            filled: [None; oag_gameplay::MAX_SHIPS],
             sound_loops: Vec::new(),
             fill: [None; oag_gameplay::MAX_SHIPS],
             fov: [0.0; oag_gameplay::MAX_SHIPS],
@@ -933,6 +938,7 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
 fn release(sim: &mut RaceSim, index: usize) {
     super::sound::release(sim, index);
     let on = &mut sim.extensions.on;
+    on.shader_params.retain(|held| held.module != index);
     let me = index as u8 + 1;
     for (scale, by) in on.pad_scale.iter_mut().zip(&mut on.pad_by) {
         if *by == me {
@@ -1126,10 +1132,10 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
     // them rather than piling them up.
     on.effects.clear();
+    on.filled = on.fill.map(|fill| fill.and_then(|(_, shader)| shader));
     on.fill = [None; oag_gameplay::MAX_SHIPS];
     on.beams.clear();
     on.portal_views = [None; oag_gameplay::MAX_SHIPS];
-    on.shader_params.clear();
     on.fov = [0.0; oag_gameplay::MAX_SHIPS];
     let region = on.region.clone();
     let course_length = sim.course.as_ref().map_or(0.0, |course| course.length());
@@ -1227,6 +1233,15 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         };
         for command in commands {
             apply(sim, index, command);
+        }
+    }
+    let on = &mut sim.extensions.on;
+    for slot in 0..oag_gameplay::MAX_SHIPS {
+        if let Some((module, shader)) = on.filled[slot]
+            && on.fill[slot].and_then(|(_, now)| now) != Some((module, shader))
+        {
+            on.shader_params
+                .retain(|held| (held.module, held.slot, held.shader) != (module, slot, shader));
         }
     }
 }
@@ -1332,6 +1347,14 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                     .push((slot.index(), Fired::Own { mod_id, index: own }));
             }
         }
+        Command::StopModEffect { slot, effect } => {
+            let on = &mut sim.extensions.on;
+            if let Some(own) = on.slots[index].names.effect(effect.as_str()) {
+                let mod_id = on.slots[index].mod_id.clone();
+                on.effects
+                    .push((slot.index(), Fired::Stop { mod_id, index: own }));
+            }
+        }
         Command::ScreenFill { slot, rgba, shader } => {
             let on = &mut sim.extensions.on;
             let shader = on.slots[index].names.shader(shader);
@@ -1385,13 +1408,21 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
         } => {
             let on = &mut sim.extensions.on;
             if let Some(shader) = on.slots[index].names.place(Table::Shaders, shader.as_str()) {
-                on.shader_params.push(ShaderParam {
+                let sent = ShaderParam {
                     module: index,
                     slot: slot.index(),
                     shader,
                     index: scalar,
                     value,
-                });
+                };
+                let same = |held: &&mut ShaderParam| {
+                    (held.module, held.slot, held.shader, held.index)
+                        == (index, sent.slot, shader, scalar)
+                };
+                match on.shader_params.iter_mut().find(same) {
+                    Some(held) => held.value = value,
+                    None => on.shader_params.push(sent),
+                }
             }
         }
         Command::FovOffset { slot, degrees } => {

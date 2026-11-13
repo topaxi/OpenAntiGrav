@@ -303,6 +303,8 @@ pub struct RaceView {
     /// permanently hull-mounted emitter re-ignited on a cooldown rather than
     /// an effect that comes and goes - see [`Self::sparks_anchor`].
     pub(super) stage: psys::Stage,
+    /// The surfaces a mod placed on [`Self::stage`] that `stop-mod-effect` can still end.
+    pub(super) surfaces: Vec<super::extension_effects::Surface>,
     /// The circuit's own placed effects, in a pool of their own - see
     /// `race::scenery_fx`.
     pub(super) scenery_fx: super::scenery_fx::SceneryFx,

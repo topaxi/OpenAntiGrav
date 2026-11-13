@@ -20,7 +20,7 @@ fn slot(index: usize) -> Slot {
 }
 
 /// One of every command, with arguments that touch every field.
-fn every_command() -> [Command; 37] {
+fn every_command() -> [Command; 38] {
     [
         Command::ScaleThrust {
             slot: slot(1),
@@ -193,6 +193,9 @@ fn every_command() -> [Command; 37] {
                 side: WarningSide::Forward,
                 icon: ModName::new("portal").unwrap(),
             },
+        },        Command::StopModEffect {
+            slot: slot(3),
+            effect: ModName::new("portal_hd").unwrap(),
         },
     ]
 }
@@ -438,7 +441,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (5, 0xe283_b093_83ff_a47f);
+const REVISION_AND_FOLD: (u32, u64) = (5, 0xf61c_22ce_5593_61ba);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -1292,10 +1295,7 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
     ];
     for command in bad {
         assert!(
-            matches!(
-                round_trip(&command),
-                Err(Malformed::Scene { .. })
-            ),
+            matches!(round_trip(&command), Err(Malformed::Scene { .. })),
             "{command:?}"
         );
     }
@@ -1303,8 +1303,7 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         slot: slot(1),
         effect: ModName::new("ring").unwrap(),
         distance: crate::Distance::Units(10.0),
-    }
-    ;
+    };
     let mut record = unknown.encode_pooled(0);
     record[COMMAND_WORD] = 9;
     assert!(

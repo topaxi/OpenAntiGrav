@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use oag_core::math::Vec3;
 use oag_ext_abi::{Command, Distance, ModName, Rgba, Slot, SoundMode};
 use oag_gameplay::PlayerInputs;
 
@@ -107,7 +106,11 @@ fn a_sound_is_the_one_its_key_names_when_another_sorts_ahead_of_it() {
         };
         places.push(event.index);
     }
-    assert_eq!(places, [1, 2], "the key follows its file, the guest's call is the same");
+    assert_eq!(
+        places,
+        [1, 2],
+        "the key follows its file, the guest's call is the same"
+    );
 }
 
 #[test]
@@ -135,11 +138,10 @@ fn an_effect_is_the_one_its_key_names_when_another_sorts_ahead_of_it() {
         let fired = race.sim.extensions.effects_for_tests();
         let got = fired.iter().find_map(|(_, fired)| match fired {
             Fired::Own { index, .. } | Fired::OwnAt { index, .. } => Some(*index),
-            Fired::Title(_) => None,
+            Fired::Title(_) | Fired::Stop { .. } => None,
         });
         assert_eq!(got, Some(want), "{command:?} in {keys:?}");
     }
-    let _ = Vec3::ZERO;
 }
 
 #[test]
@@ -152,32 +154,52 @@ fn a_key_the_manifest_lacks_faults_the_module_naming_it_and_the_table() {
         shader: Some(name("tagret")),
     };
     let wrong = [
-        ("screen-fill", "[shaders]", Command::ScreenFill {
-            slot: slot(0),
-            rgba: Rgba::new(1, 2, 3, 4),
-            shader: Some(name("tagret")),
-        }),
+        (
+            "screen-fill",
+            "[shaders]",
+            Command::ScreenFill {
+                slot: slot(0),
+                rgba: Rgba::new(1, 2, 3, 4),
+                shader: Some(name("tagret")),
+            },
+        ),
         ("draw-beam", "[shaders]", beam),
-        ("set-shader-param", "[shaders]", Command::SetShaderParam {
-            slot: slot(0),
-            shader: name("tagret"),
-            index: 0,
-            value: 1.0,
-        }),
-        ("fire-effect", "[effects]", Command::FireModEffect {
-            slot: slot(0),
-            effect: name("tagret"),
-        }),
-        ("fire-mod-effect-ahead", "[effects]", Command::FireModEffectAhead {
-            slot: slot(0),
-            effect: name("tagret"),
-            distance: Distance::Units(10.0),
-        }),
-        ("play-mod-sound", "[sounds]", Command::PlayModSound {
-            slot: slot(0),
-            sound: name("tagret"),
-            mode: SoundMode::Once,
-        }),
+        (
+            "set-shader-param",
+            "[shaders]",
+            Command::SetShaderParam {
+                slot: slot(0),
+                shader: name("tagret"),
+                index: 0,
+                value: 1.0,
+            },
+        ),
+        (
+            "fire-effect",
+            "[effects]",
+            Command::FireModEffect {
+                slot: slot(0),
+                effect: name("tagret"),
+            },
+        ),
+        (
+            "fire-mod-effect-ahead",
+            "[effects]",
+            Command::FireModEffectAhead {
+                slot: slot(0),
+                effect: name("tagret"),
+                distance: Distance::Units(10.0),
+            },
+        ),
+        (
+            "play-mod-sound",
+            "[sounds]",
+            Command::PlayModSound {
+                slot: slot(0),
+                sound: name("tagret"),
+                mode: SoundMode::Once,
+            },
+        ),
     ];
     for (kind, heading, command) in wrong {
         let mut race = grid(prepared(&[manifest(&[command], &BEFORE)]));
@@ -190,6 +212,9 @@ fn a_key_the_manifest_lacks_faults_the_module_naming_it_and_the_table() {
             why.contains(kind) && why.contains("\"tagret\"") && why.contains(heading),
             "{kind}: {why}"
         );
-        assert!(why.contains("target"), "{kind}: it lists what it declares: {why}");
+        assert!(
+            why.contains("target"),
+            "{kind}: it lists what it declares: {why}"
+        );
     }
 }

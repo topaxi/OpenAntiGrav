@@ -74,11 +74,13 @@ pub enum CommandKind {
     PortalView = 36,
     /// `raise-warning`, code 37.
     RaiseWarning = 37,
+    /// `stop-mod-effect`, code 38.
+    StopModEffect = 38,
 }
 
 impl CommandKind {
     /// Every kind, in code order.
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 35] = [
         Self::ScaleThrust,
         Self::ShieldDelta,
         Self::GivePickup,
@@ -113,6 +115,7 @@ impl CommandKind {
         Self::SetShaderParam,
         Self::PortalView,
         Self::RaiseWarning,
+        Self::StopModEffect,
     ];
 
     /// The kind byte.
@@ -165,6 +168,7 @@ impl CommandKind {
             Self::SetShaderParam => "set-shader-param",
             Self::PortalView => "portal-view",
             Self::RaiseWarning => "raise-warning",
+            Self::StopModEffect => "stop-mod-effect",
         }
     }
 

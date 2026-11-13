@@ -16,6 +16,7 @@ pub(super) fn is_output(command: &Command) -> bool {
     match command {
         Command::FireEffect { .. }
         | Command::FireModEffect { .. }
+        | Command::StopModEffect { .. }
         | Command::ScreenFill { .. }
         | Command::FovOffset { .. }
         | Command::DrawBeam { .. }

@@ -14,6 +14,7 @@ fn the_host_text_has_the_one_fragment_a_mod_replaces() {
         "fn engine_texture_bound(",
         "fn craft_frame(",
         "fn eye_ray(",
+        "fn view_aspect(",
         "fn fs_backdrop(",
         "fn fs_fringe(",
     ] {
@@ -146,4 +147,11 @@ fn helpers_that_multiply_through_their_calls_are_refused() {
         "fn mod_fragment(input: ModInput) -> vec4<f32> {{ return vec4<f32>(0.0{calls}); }}\n"
     );
     compile("x.wgsl", &format!("{flat}{fragment}")).expect("sixty calls in a row are sixty calls");
+}
+
+/// A circle on `screen_uv` needs the view's shape: the helper is there and a shader can call it.
+#[test]
+fn a_shader_can_ask_for_the_views_aspect() {
+    let round = "fn mod_fragment(input: ModInput) -> vec4<f32> {\n    let across = (input.screen_uv - vec2<f32>(0.5)) * vec2<f32>(view_aspect(), 1.0);\n    return input.colour * select(0.0, 1.0, length(across) < 0.4);\n}\n";
+    assert!(compile("fx/round.wgsl", round).is_ok());
 }
