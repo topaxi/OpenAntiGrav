@@ -1470,3 +1470,10 @@
 0x0881a364	function	Hud_RaiseIncomingWarning	95	hud-incoming-warnings.md
 0x0881aa8c	function	Hud_UpdateIncomingWarnings	95	hud-incoming-warnings.md
 0x08ab0994	data	g_hud_incoming_warning_widgets	92	hud-incoming-warnings.md
+0x08887470	function	Race_CreateCameraNodes	82	attract-demo.md
+0x08886320	function	SceneNode_FindByTypeId	90	attract-demo.md
+0x08886158	function	SpectatorCamera_Create	88	attract-demo.md
+0x0887f9bc	function	SpectatorCamera_Construct	88	attract-demo.md
+0x08a6eb5c	function	SpectatorCamera_GetTypeId	88	attract-demo.md
+0x08acb358	data	g_spectator_camera_vtable	85	attract-demo.md
+0x08b32c64	data	g_spectator_camera	90	attract-demo.md

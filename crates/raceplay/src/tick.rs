@@ -76,6 +76,9 @@ impl Race {
             self.advance_now_playing();
             self.view.contact.shake.advance(self.sim.dt);
             self.advance_seat_shakes(self.sim.dt);
+            if !self.view.camera_shake_on {
+                self.view.contact.shake.cancel();
+            }
             let mut shown = false;
             for slot in 0..MAX_SHIPS {
                 if self.sim.world.person_flown(slot) {

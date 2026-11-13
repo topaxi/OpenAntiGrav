@@ -274,6 +274,62 @@ racing with the overlay up. Three laps at Flash take far less, so only the
 120 s timer ends a demo. Why the lap count does not finish it (the finish path
 was not read) is open. Confidence **85** (one run).
 
+## The demo camera is the spectator director
+
+Read 2026-11-13 (lane `demo-follow`, headless Ghidra on `BOOT.BIN`). This replaces the earlier
+"builds its own camera object, cutting law not read": there is no camera class of the demo's own.
+The chain, each link a decompile:
+
+1. `Race_CreateCameraNodes` (`0x08887470`, called from `Race_CreateModeObject`) first **builds four
+   camera nodes unconditionally** and clears bits 1 and 2 of each one's `+0x2c` (`& 0xfffffff9`): the
+   tripod-class node (`FUN_08885f90`, type id `FUN_08a6e890`), `FUN_08886074` (`FUN_08a6ed28`),
+   `FUN_08886158` (`FUN_08a6eb5c`) and `FUN_0888623c` (`FUN_08a6ec18`). It then **finds one by type id
+   and enables it** (`+0x2c |= 6`), by this order: a hardware debug bit (`sceKernelGetGPI() & 4`) the
+   spectator node; else, when the node of type `FUN_08a6ed34` is missing or `g_game_mode` is 0, the
+   node of type `FUN_08a6e890`; else, for `g_game_mode` 2 (Demo) or `0xc` (AI Race), **the node of type
+   `FUN_08a6eb5c`, found through `FUN_08886320`**; else the tripod pair (`player internal tripod`,
+   `FUN_088865d0`).
+2. `FUN_08886320` is **not a constructor**: a recursive search of the scene tree for the first node
+   whose `+4` equals the type id in its second argument (`FUN_088863cc` and `FUN_088865d0` are the
+   same template for other classes). Confidence 90.
+3. `FUN_08a6eb5c` is a type id: `lui v0,0x08a7; jr ra; addiu v0,v0,-0x14a4` returns its own address.
+   `FUN_08886158` allocates `0x350` bytes, constructs them with **`FUN_0887f9bc`**, and stores that id at
+   `+4`; `FUN_0887f9bc` stores the same id at `+4` itself and sets `g_spectator_camera` (`0x08b32c64`) to
+   the object. So the node the demo enables is **the global camera object** that `race-finish.md`
+   documents, built at every race start and kept disabled until a mode asks for it. Confidence 90.
+4. The constructor sets the object's vtable (`+0x38`) to `0x08acb358`; the word at `+0x24` of it
+   (`0x08acb37c`) is `0x0887fd3c`, **`Camera_UpdateSpectator`**, which has no direct caller. This slot
+   position is the same one `g_demo_session_vtable` keeps its update in (`+0x20`/`+0x24`); that the
+   scene tree calls `+0x24` is a convention read off the demo session and not seen firing in the demo
+   (no breakpoint on `0x0887fd3c` was run during one). Confidence 85.
+5. The constructor's initial state is the director's: mode `+0x1dc = 7`, no station (`+0x1d4 = 0`), no
+   subject, `+0x26c = 1` (random modes allowed), `+0x274 = 0`, follow rate `+0x264` by speed class
+   (`DAT_08b31040`: Venom `0.4`, Flash `0.5`, Rapier and Phantom `0.6`).
+
+So a demo's camera is: **the player's craft first** (`Camera_PickSubject` starts on the player,
+here the Autopilot craft), the node nearest it, then every `10.0` s a re-pick of the subject (a random
+live craft when the player is the craft already drawn), a cut whenever the subject is 60 or more units
+from the node's aim point, and a random mode on each cut (`3` 26 %, `2` 25 %, `6` 25 %, `7` 24 %). No
+flag-to-camera delay applies: the object is live from the race's first frame (the `F+61` start in
+[race-finish.md](race-finish.md) is the race-end flow arming it).
+
+Falsifier set out before reading and not met: an object of its own with its own station table and cut
+code. The only code in the demo's path that is not the finish director is the four-node build and the
+find.
+
+| Address | Name | Kind | Conf |
+| --- | --- | --- | ---: |
+| `0x08887470` | `Race_CreateCameraNodes` | function | 82 |
+| `0x08886320` | `SceneNode_FindByTypeId` | function | 90 |
+| `0x08886158` | `SpectatorCamera_Create` | function | 88 |
+| `0x0887f9bc` | `SpectatorCamera_Construct` | function | 88 |
+| `0x08a6eb5c` | `SpectatorCamera_GetTypeId` | function | 88 |
+| `0x08acb358` | `g_spectator_camera_vtable` | data | 85 |
+| `0x08b32c64` | `g_spectator_camera` | data | 90 |
+
+Per title, the finish camera is read off Pulse PSP only (`oag_raceplay::finish_camera`); the other
+titles' demos are not measured and keep the chase camera until their own directors are read.
+
 ## Exit: any button, back to the main menu
 
 `Demo InGame`'s forward key is `any`, the abstract index `0x14`
@@ -298,7 +354,7 @@ exhaust-flare sound row below.
 | --- | --- | ---: |
 | `RaceMode_UpdateIntro` (`0x08829e6c`, five tests, [race-intro.md](race-intro.md)) | no `InGameTrackDescriptionScreen`, the flyby is skipped as soon as it has started, no transition to `InGame` (the front end stays in `Demo InGame`), and the HUD-shown bits are not set | 85 |
 | `Demo_Construct` | race HUD hidden (above). Live frames show no race HUD at all, only the `Demo_Definition.xml` overlay | 92 |
-| `FUN_08887470` (`0x08887628`), called by `Race_CreateModeObject` | builds the camera with `FUN_08886320` (class `FUN_08a6eb5c`) instead of the player's internal tripod plus `FUN_088865d0`; AI Race (mode 12) shares it. Live: ten frames 3 s apart all trackside views of the pack with cuts between them, earlier frames chase-like behind a craft. The camera's own cutting law is not read | 75 |
+| `FUN_08887470` (`0x08887628`), called by `Race_CreateModeObject` | enables the **global spectator camera** (the object `Camera_UpdateSpectator` drives) instead of the player's internal tripod plus `FUN_088865d0`; AI Race (mode 12) shares it. Not a separate camera class: see [The demo camera](#the-demo-camera-is-the-spectator-director). Live: ten frames 3 s apart all trackside views of the pack with cuts between them, earlier frames chase-like behind a craft | 88 |
 | `WeaponAi_DecideFireOrAbsorb` (`0x08851b18`, [weapon-ai.md](weapon-ai.md)) | AI weapon use x2 | 85 |
 | `RaceSession_IsTeamEligible` (`0x08821e84`, [grid.md](grid.md)) | opponents drawn only from `Multiplayer` teams | 85 |
 | `MusicPlayer_StartNextSong` (`0x08938e70`, test at `0x089390f4`, [now-playing.md](now-playing.md)) | no Now Playing caption | 85 |
@@ -330,7 +386,7 @@ soundtrack settings, was not read. Confidence **85**.
 | class | Flash (ordinal 1), always | 92 |
 | field | 8 crafts, 3 laps; opponents drawn from `Multiplayer` teams | 88 |
 | player | driven by the Autopilot (`autopilot_input`) | 88 |
-| camera | trackside cameras with cuts (mode 2's own camera object) | 75 |
+| camera | the spectator director, the one that runs after the player's finish ([race-finish.md](race-finish.md), "The spectator camera"), active from the race's first frame | 88 |
 | HUD | race HUD hidden; only the XML overlay | 92 |
 | no | flyby skip at once, no track description, no Now Playing, no camera shake, no profile stats, AI weapon use x2 | 82-85 |
 | music, weapons | the soundtrack plays; weapons on | 85 |

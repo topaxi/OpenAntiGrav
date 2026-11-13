@@ -49,6 +49,22 @@ impl Session {
         self.in_demo() || self.viewer_hud_hidden()
     }
 
+    /// Whether this title's demo plays the pre-race flyby.
+    pub(crate) fn demo_plays_intro(&self) -> bool {
+        self.shell
+            .as_ref()
+            .is_some_and(|shell| shell.title.demo.rules.intro.value)
+    }
+
+    /// Whether the race on screen is a demo whose title records nothing from it.
+    pub(crate) fn in_unrecorded_demo(&self) -> bool {
+        self.in_demo()
+            && self
+                .shell
+                .as_ref()
+                .is_some_and(|shell| !shell.title.demo.rules.records_profile.value)
+    }
+
     /// Whether the demo on screen, or loading, ignores input: a wallpaper.
     pub(crate) fn demo_is_wallpaper(&self) -> bool {
         match &self.stage {
@@ -251,10 +267,8 @@ impl Session {
         {
             warn!("{warning}");
         }
-        options.laps_override = Some(demo::LAPS);
-        options.weapons_override = None;
-        options.eliminator_kill_target = None;
-        options.eliminator_score_target = None;
+        options.demo = true;
+        demo::apply_rules(&mut options, title);
         options.seat_picks = Vec::new();
         debug!(
             "attract demo {}: {} as {}",

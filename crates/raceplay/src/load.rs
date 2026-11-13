@@ -1331,6 +1331,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             camera_override: options.camera,
         },
         #[cfg(feature = "view")]
+        demo_overlay: intro::read_demo_screen(&mut archives, title, options, &hud, &mut report),
+        #[cfg(feature = "view")]
         hud,
         #[cfg(feature = "view")]
         track_panel: intro::read_panel(

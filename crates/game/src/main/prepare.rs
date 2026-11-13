@@ -282,6 +282,7 @@ impl Pending {
             world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
             gantry_seconds: self.cli.gantry_seconds,
             camera: self.camera,
+            demo: false,
         };
         // A track file that borrows from another title's disc races as a remix
         // with that disc as the track source (ADR-0076 decision 13).

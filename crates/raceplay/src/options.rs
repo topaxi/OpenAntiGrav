@@ -441,6 +441,9 @@ pub struct Options {
     /// the original showed, and only a replicated camera replicates *how it was
     /// framed*. `None` uses the chase camera as always.
     pub camera: Option<CameraOverride>,
+    /// The race is an attract demo: nobody in it. The title's demo screen is read for it
+    /// ([`Loaded::demo_overlay`]).
+    pub demo: bool,
 }
 
 /// The two capture aids [`Options::pose`] and [`Options::camera`] carry.
@@ -1060,6 +1063,9 @@ pub struct Loaded {
     /// `None` elsewhere and when a part of it would not read - the load report says which. See
     /// [`crate::track_panel`].
     pub track_panel: Option<crate::track_panel::Assets>,
+    /// The screen an attract demo draws over its race: `Some` for an [`Options::demo`] race of a
+    /// title that authors one, when it read. See [`crate::demo_overlay`].
+    pub demo_overlay: Option<crate::demo_overlay::Assets>,
     /// The circuit's own `stats.xml`, for the HUD's `RECORD` readout. `None`
     /// off Pulse's PSP disc, or when the file did not read - the load report
     /// says which.

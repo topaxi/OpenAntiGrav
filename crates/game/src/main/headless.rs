@@ -710,6 +710,7 @@ pub(crate) fn run_race(
                 give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
                 demo: cli.demo.mode().is_some(),
+                wallpaper: cli.demo.mode() == Some(true),
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,

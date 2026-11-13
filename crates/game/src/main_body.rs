@@ -608,11 +608,15 @@ fn run(cli: Cli) -> Result<()> {
     if cli.dry_run || cli.screenshot.is_some() {
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
+        // A `--demo` capture's race is the demo's, so the title's demo screen is read for it; the
+        // windowed session's own options never are (a demo's `Session::demo_options` says so).
+        let mut options = pending.race_options(&source, Vec::new());
+        options.demo = pending.cli.demo.mode().is_some();
         return run_windowless(
             &pending.cli,
             &pending.boot_options(&source),
             settings,
-            pending.race_options(&source, Vec::new()),
+            options,
             anisotropy,
             audio,
             music_discs,

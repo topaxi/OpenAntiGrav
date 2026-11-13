@@ -243,7 +243,7 @@ Four things this pass adds:
   other way in. `psp-drive.py` compared exactly and reported "the front end is in
   `'Main menu'`, not `'Main Menu'`", which reads like a changed menu tree. It now
   compares case-insensitively.
-- **The attract demo is a race by state name.** Idle ~120 s at the menus and the
+- **The attract demo is a race by state name.** Idle more than 60 s on the main menu (the demo itself runs 120 s) and the
   game starts driving itself, announcing `Demo InGame` - which contains `InGame`,
   so `psp-drive.py menu` read it as "already in a race" and returned success
   having done nothing. Any button leaves it and one press lands at the main menu;

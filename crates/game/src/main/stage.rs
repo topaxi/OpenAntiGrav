@@ -467,6 +467,7 @@ impl Stage {
             title,
             hud,
             track_panel,
+            demo_overlay,
             track_model,
             behind_glass,
             liveries,
@@ -670,6 +671,13 @@ impl Stage {
             })
             .transpose()
             .context("building the track-description panel")?;
+        // The attract demo's screen, built the same way.
+        let demo_overlay = demo_overlay
+            .map(|assets| {
+                oag_game::demo_overlay::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &assets)
+            })
+            .transpose()
+            .context("building the demo screen")?;
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
@@ -740,6 +748,7 @@ impl Stage {
             resume_art: None,
             resume_go: String::new(),
             track_panel,
+            demo_overlay,
             result_key,
             record_target,
             personal_best: None,

@@ -7,6 +7,10 @@
 //! captures that check its timing are
 //! [`race-finish.md`](../../../../docs/ghidra/functions/psp-pulse-usa/race-finish.md).
 //!
+//! The attract demo watches its race through the same director, from the first tick
+//! ([`Race::fly_as_demo`]; `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`, "The demo camera
+//! is the spectator director").
+//!
 //! # What is ported
 //!
 //! | Rule | Source |
@@ -198,6 +202,11 @@ impl FinishCamera {
             cuts: 0,
             last_shot: None,
         }
+    }
+
+    /// The same director on a stream seeded from `seed`, so each race cuts differently.
+    pub(super) fn reseed(&mut self, seed: u64) {
+        self.rng = Rng::new(seed ^ SPECTATOR_SEED);
     }
 
     /// Whether the director has any node to sit on. A circuit that authors none (or a title
@@ -563,7 +572,14 @@ impl Race {
 
     /// Steps the post-race camera one tick and imposes its pose, once the player's craft
     /// has crossed the line and the world is running on behind the panels.
+    ///
+    /// An attract demo's director runs from the first tick, on the player's craft, with no
+    /// finish to wait for ([`Race::fly_as_demo`]).
     pub(super) fn advance_finish_camera(&mut self) {
+        if self.view.spectates_from_start {
+            self.step_director(START_TICKS, None);
+            return;
+        }
         if self.view.finish_camera.is_none() || !self.runs_on_after_the_end() {
             return;
         }
@@ -592,13 +608,19 @@ impl Race {
                     fov: destroyed.fov,
                 }
             });
-        let live = self.spectator_subjects();
         let since = self
             .sim
             .world
             .tick
             .saturating_sub(finish)
             .saturating_sub(delay);
+        self.step_director(since, wreck);
+    }
+
+    /// One tick of the director, `since` ticks into its life, imposing its pose.
+    fn step_director(&mut self, since: u64, wreck: Option<Wreck>) {
+        let player = self.player_slot();
+        let live = self.spectator_subjects();
         let Some(director) = self.view.finish_camera.as_mut() else {
             return;
         };

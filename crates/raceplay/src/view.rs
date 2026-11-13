@@ -65,6 +65,8 @@ pub struct RaceView {
     pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
     /// Whether the shake runs ([`super::Race::set_hull_shake`]).
     pub(super) hull_shake_on: bool,
+    /// Whether an impact shakes the camera; a demo's does not ([`super::Race::fly_as_demo`]).
+    pub(super) camera_shake_on: bool,
     /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
     pub(super) player_tags_on: bool,
     /// The grid slot this machine's person flies in a network race, set by
@@ -95,6 +97,9 @@ pub struct RaceView {
     /// The spectator director that flies the camera behind the end-race panels, `None` on a
     /// title it was not read for. See [`super::finish_camera`].
     pub(super) finish_camera: Option<super::finish_camera::FinishCamera>,
+    /// Whether the director runs from the race's first tick, not after the player's finish: an
+    /// attract demo's camera ([`super::Race::fly_as_demo`]).
+    pub(super) spectates_from_start: bool,
     /// Photo mode's camera while it is open. See [`super::photo`].
     pub(super) photo: Option<super::photo::Photo>,
     /// The tick the player's wreck ended the race on, `None` until it does.

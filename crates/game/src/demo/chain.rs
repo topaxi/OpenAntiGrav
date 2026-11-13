@@ -8,11 +8,23 @@ use anyhow::{Context, Result};
 
 use oag_gameplay::PlayerInputs;
 use oag_raceplay::{self as race, Race};
+use oag_ui::frontend::Draw;
 
 use oag_tables::demo_config::DemoConfig;
 
 use super::{Leave, Pick, Run, Timing, authored_circuit, chain_seed, pick};
 use crate::remix::Catalogue;
+
+/// What a demo's screen draws once it has settled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenDraws {
+    /// Solid rules and backdrops.
+    pub fills: usize,
+    /// Images.
+    pub sprites: usize,
+    /// Texts.
+    pub texts: usize,
+}
 
 /// One demo of a chain, as it ended.
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +43,14 @@ pub struct Report {
     pub ticks: u32,
     /// Why it ended.
     pub leave: Leave,
+    /// What the screen over the demo draws, when the title authors one and it read.
+    pub screen: Option<ScreenDraws>,
+    /// Times the picture jumped to another shot, and whether the spectator director was the camera.
+    pub cuts: u32,
+    /// Whether the spectator director was the camera at the end.
+    pub spectated: bool,
+    /// The loader's lines about that screen.
+    pub screen_notes: Vec<String>,
 }
 
 impl std::fmt::Display for Report {
@@ -71,9 +91,9 @@ pub fn run(
     demos: u32,
     length: u32,
 ) -> Result<Vec<Report>> {
-    let rule = oag_source::title::identify(&base.source)
-        .with_context(|| format!("{} is not a title this build knows", base.source))?
-        .demo;
+    let title = oag_source::title::identify(&base.source)
+        .with_context(|| format!("{} is not a title this build knows", base.source))?;
+    let rule = title.demo;
     let tracks: Vec<_> = catalogue
         .tracks
         .iter()
@@ -116,20 +136,34 @@ pub fn run(
         options.track = Some(tracks[chosen.track].entry_name());
         options.team = Some(teams[chosen.team].to_string());
         options.seed = Some(chain_seed(seed, n));
-        options.laps_override = Some(super::LAPS);
+        options.demo = true;
+        super::apply_rules(&mut options, title);
         let loaded = race::load(&options)
             .with_context(|| format!("loading demo {} on {}", n + 1, tracks[chosen.track].id))?;
-        let (timing, difficulty) = (
-            Timing::of(&loaded.title.demo, config),
-            loaded.setup.difficulty,
-        );
+        let demo = loaded.title.demo;
+        let screen_notes: Vec<String> = loaded
+            .report
+            .iter()
+            .filter(|line| line.starts_with("demo screen"))
+            .cloned()
+            .collect();
+        let screen = loaded.demo_overlay.as_ref().map(|assets| {
+            let list = assets.draw_list(f32::MAX);
+            let count = |keep: fn(&Draw) -> bool| list.iter().filter(|draw| keep(draw)).count();
+            ScreenDraws {
+                fills: count(|d| matches!(d, Draw::Fill { .. })),
+                sprites: count(|d| matches!(d, Draw::Sprite { .. })),
+                texts: count(|d| matches!(d, Draw::Text { .. })),
+            }
+        });
+        let (timing, difficulty) = (Timing::of(&demo, config), loaded.setup.difficulty);
         let mut race = Race::start(loaded.setup);
         crate::ai_choice::apply(
             &mut race,
             crate::ai_choice::AiChoice::default(),
             crate::ai_choice::Source::Free(difficulty),
         );
-        race.fly_as_demo();
+        race.fly_as_demo(&demo);
         let craft = usize::from(race.sim.world.ship_count);
         let start: Vec<_> = (0..craft)
             .map(|slot| race.sim.world.ships[slot].physics.body.position)
@@ -155,6 +189,10 @@ pub fn run(
             moved,
             ticks: run.ticks(),
             leave,
+            cuts: race.camera_cuts(),
+            spectated: race.spectator_mode().is_some(),
+            screen,
+            screen_notes,
         });
     }
     Ok(reports)

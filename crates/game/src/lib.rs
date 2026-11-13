@@ -32,6 +32,7 @@ pub mod capture;
 pub mod cursor;
 pub mod custom_tracks;
 pub mod demo;
+pub mod demo_overlay;
 pub mod devrun;
 pub mod drive;
 pub mod endrace;

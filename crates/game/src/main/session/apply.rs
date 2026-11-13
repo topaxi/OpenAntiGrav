@@ -132,7 +132,7 @@ impl Session {
     /// See [`oag_game::official`].
     pub(crate) fn race_is_unofficial(&self) -> bool {
         // A demo leaves no record, medal, loyalty or ghost.
-        self.in_demo()
+        self.in_unrecorded_demo()
             || self
                 .race_options
                 .as_ref()
