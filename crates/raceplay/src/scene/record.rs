@@ -685,15 +685,21 @@ pub(crate) fn track_blended<'a>(
 /// Sorting the shading itself was slower to land: 44.1 -> 37.4 ms at 3200x1800 on an
 /// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
 /// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
-/// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
-/// order. Per view, from its own eye, while the view records, into `order`, emptied first.
+/// that follows keeps the model's own order. Equal keys keep the model's order: the index breaks
+/// the tie, which is what a stable sort would do, without the scratch buffer it allocates. Per
+/// view, from its own eye, while the view records, into `order`, emptied first.
 fn opaque_order(track: &Drawable, eye: Vec3, order: &mut Vec<(f32, u32)>) {
     order.clear();
     order.extend(track.opaque_draws().iter().zip(0u32..).map(|(draw, i)| {
         let centre = Vec3::from_array(draw.bounds.centre);
         (centre.distance(eye) - draw.bounds.radius, i)
     }));
-    order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    nearest_first(order);
+}
+
+/// Sorts `(key, index)` pairs by key, ties by index.
+fn nearest_first(order: &mut [(f32, u32)]) {
+    order.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
 }
 
 // A view's recording reads only these, from a thread of its own (`Scene::render_slots`). wgpu's
@@ -714,6 +720,17 @@ mod tests {
     /// list-B mesh, which then paints over it where it passes its own depth test (the ribbon
     /// writes no depth). The ribbons must be recorded before the circuit's blended list, and the
     /// circuit's own draw must leave that list out, or it draws twice and over the ribbon.
+    /// Equal distances keep the model's order, as the stable sort this replaced did.
+    #[test]
+    fn the_prepass_order_breaks_ties_by_model_order() {
+        let keys = [2.0, -1.0, 2.0, 0.5, -1.0, 2.0, 0.5, 0.0];
+        let mut stable: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        stable.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut order: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        nearest_first(&mut order);
+        assert_eq!(order, stable);
+    }
+
     #[test]
     fn the_ribbons_are_drawn_before_the_blended_list() {
         let mut list = DrawList(Vec::new());

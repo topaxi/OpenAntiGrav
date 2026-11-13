@@ -378,6 +378,9 @@ pub(crate) struct Uploads<'a> {
 pub(crate) struct Staging {
     blocks: Vec<(u32, Uniforms)>,
     packed: Vec<u8>,
+    /// `(slot, index into blocks)`, sorted: the order a stable sort of `blocks` by slot gives,
+    /// without the scratch buffer a stable sort allocates on every call.
+    order: Vec<(u32, u32)>,
 }
 
 impl<'a> Uploads<'a> {
@@ -453,16 +456,18 @@ impl<'a> Uploads<'a> {
         let Staging {
             blocks: staged,
             packed,
+            order,
         } = &mut *staging;
-        staged.sort_by_key(|&(slot, _)| slot);
+        staging_order(staged.iter().map(|&(slot, _)| slot), order);
         let stride = mesh_render::UNIFORMS_STRIDE as usize;
         let mut index = 0;
-        while index < staged.len() {
-            let first = staged[index].0;
+        while index < order.len() {
+            let first = order[index].0;
             packed.clear();
             let mut next = first;
-            while index < staged.len() && staged[index].0 <= next {
-                let (slot, uniforms) = &staged[index];
+            while index < order.len() && order[index].0 <= next {
+                let (slot, at) = order[index];
+                let uniforms = &staged[at as usize].1;
                 let at = (slot - first) as usize * stride;
                 packed.resize(at + stride, 0);
                 packed[at..at + std::mem::size_of::<Uniforms>()]
@@ -562,5 +567,27 @@ impl Drawable {
                 bytemuck::bytes_of(&uniforms),
             ),
         }
+    }
+}
+
+/// `(slot, index)` for each staged block, by slot and then by when it was staged: the order a
+/// stable sort by slot gives (so a slot staged twice is written by its last block), without the
+/// scratch buffer a stable sort allocates on every call.
+fn staging_order(slots: impl Iterator<Item = u32>, order: &mut Vec<(u32, u32)>) {
+    order.clear();
+    order.extend(slots.zip(0u32..));
+    order.sort_unstable();
+}
+
+#[cfg(test)]
+mod staging_order_tests {
+    #[test]
+    fn the_order_is_a_stable_sort_by_slot() {
+        let slots = [7, 3, 7, 0, 3, 3, 9, 0, 7, 1];
+        let mut stable: Vec<(u32, u32)> = slots.iter().copied().zip(0u32..).collect();
+        stable.sort_by_key(|&(slot, _)| slot);
+        let mut order = vec![(99, 99)];
+        super::staging_order(slots.iter().copied(), &mut order);
+        assert_eq!(order, stable);
     }
 }
