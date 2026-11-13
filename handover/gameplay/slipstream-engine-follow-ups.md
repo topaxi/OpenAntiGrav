@@ -187,10 +187,11 @@ Open from it, each small:
    (lane mod-effect-axis): a mod effect fired by `fire-effect` (`Fired::Own`) takes the `axis`
    its file declares through `Stage::play_aimed` (`play` + `orient_surface`; mod effects only,
    a title's `Fired::Title` still plays unoriented)
-   (`psys::tests::a_fired_mod_effect_takes_the_axis_its_file_declares`, red before). Looked at:
-   `wall-penalty`'s `sputter.toml` (`rear`) on Pulse PSP EU `16_Track`, throttle held into the
-   wall, tick 700: before, the smoke stood on world up and filled the chase camera; now it
-   streams back past the camera and the hull is clear.
+   (`psys::tests::a_fired_mod_effect_takes_the_axis_its_file_declares` and
+   `tests::extension_view::a_fired_mod_effect_leaves_its_craft_along_its_files_axis`, both red
+   before). Looked at: `wall-penalty`'s `sputter.toml` (`rear`) on Pulse PSP EU `16_Track`,
+   throttle held into the wall, far camera, tick 660: before, the smoke filled the whole view;
+   now a small dark puff sits behind the hull, on the rear side.
 4. **A float target's values above 1 clamp in `engine_texture`**: `fs_main` clamps a shader's output,
    so HD's and Omega's brightest highlights in a portal stop at white. Size S (40).
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
