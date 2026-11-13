@@ -182,10 +182,10 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // 7e-4, -7e-6; cells over the old bounds, of 12): before 0 0 0 1 2 1 2 1 1 (median 1,
     // max 2), after 1 0 0 1 1 1 1 1 1 (median 1, max 1). Destroyed per board, before
     // 20 15 12 16 18 16 14 16 16 (143), after 16 14 16 11 15 17 14 16 16 (135).
-    // 2026-11-13, reversed 0 -> 1 (lane `pulse-own-craft-box`): the firing craft's own box now hides
-    // the floor from a projectile's first probes, so every race after an opponent's first rocket,
-    // missile or plasma shot is a different race. Two cells of 24 exceeded their bound, by one each
-    // (this one and PHANTOM 1 reversed 2 -> 3); the other 22 stayed at or under theirs.
+    // reversed 0 -> 1: the firing craft's own box hides the floor from a projectile's first
+    // probes, so races diverge after an opponent's first shot. Two cells of 24 exceeded their
+    // bound, by one each (this one and PHANTOM 1 reversed 2 -> 3); the other 22 stayed at or
+    // under theirs.
     ("VENOM", 1, 1, 1),
     ("VENOM", 2, 2, 1),
     // Reversed 0 -> 1: a craft-to-craft bump charges the pool

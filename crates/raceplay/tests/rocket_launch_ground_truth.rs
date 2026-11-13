@@ -16,8 +16,8 @@
 //! against the original's frames 51/61/70 and 185/221/252, and the centre shot's
 //! last position is within about four units of the original's. The original's
 //! rocket flies the first 2-3 updates on its fall arm (`Collision_SweepSegment`
-//! returned `0x7f` with the floor four units below: the firing craft's own box, since
-//! wired), a slow 166.67 units/s phase. The tolerances stay three ticks and twelve units.
+//! returned `0x7f` with the floor four units below: the firing craft's own box),
+//! a slow 166.67 units/s phase. The tolerances stay three ticks and twelve units.
 //!
 //! Our own start lands the craft at z -199.4 heading 1.7 degrees toward -Z
 //! rather than that pose, so a volley from *our* craft cannot be compared with
