@@ -10,6 +10,100 @@ use crate::sim::RaceSim;
 // A guest's `Craft::speed` undoes the factor the host's own speed readouts use.
 const _: () = assert!(oag_ext_abi::SPEED_TO_KMH == oag_core::math::SPEED_TO_KMH);
 
+/// The keys of a mod's `[icons]`, `[shaders]`, `[effects]` and `[sounds]`, each in the
+/// manifest's name order, which is the place the loaders give the file. A command names a
+/// file by its key; [`Names::place`] is the only place that turns a key into a place.
+#[derive(Debug, Clone, Default)]
+pub(super) struct Names {
+    icons: Vec<String>,
+    shaders: Vec<String>,
+    effects: Vec<String>,
+    sounds: Vec<String>,
+}
+
+/// One manifest table a command names a file of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Table {
+    Icons,
+    Shaders,
+    Effects,
+    Sounds,
+}
+
+impl Table {
+    fn heading(self) -> &'static str {
+        match self {
+            Self::Icons => "[icons]",
+            Self::Shaders => "[shaders]",
+            Self::Effects => "[effects]",
+            Self::Sounds => "[sounds]",
+        }
+    }
+}
+
+impl Names {
+    pub(super) fn of(source: &super::Source) -> Self {
+        let keys = |list: &[(String, String)]| list.iter().map(|(name, _)| name.clone()).collect();
+        Self {
+            icons: source.icons.iter().map(|icon| icon.name.clone()).collect(),
+            shaders: keys(&source.shaders),
+            effects: keys(&source.effects),
+            sounds: keys(&source.sounds),
+        }
+    }
+
+    fn table(&self, table: Table) -> &[String] {
+        match table {
+            Table::Icons => &self.icons,
+            Table::Shaders => &self.shaders,
+            Table::Effects => &self.effects,
+            Table::Sounds => &self.sounds,
+        }
+    }
+
+    /// The place of `name` in `table`, in the manifest's name order.
+    fn place(&self, table: Table, name: &str) -> Option<u16> {
+        let at = self.table(table).iter().position(|have| have == name)?;
+        u16::try_from(at).ok()
+    }
+
+    /// The place of the effect `name`; `None` for a key the manifest lacks, which
+    /// [`refusal`] faults before any command lands.
+    pub(super) fn effect(&self, name: &str) -> Option<u16> {
+        self.place(Table::Effects, name)
+    }
+
+    /// The place of the shader a draw names, if it names one.
+    fn shader(&self, name: Option<oag_ext_abi::ModName>) -> Option<u16> {
+        self.place(Table::Shaders, name?.as_str())
+    }
+}
+
+/// The file a command names in the sending mod's own tables.
+fn named(command: &Command) -> Option<(Table, &str)> {
+    use oag_ext_abi::Warning;
+    match command {
+        Command::RaiseWarning {
+            warning: Warning::Mod { icon, .. },
+            ..
+        } => Some((Table::Icons, icon.as_str())),
+        Command::ScreenFill {
+            shader: Some(shader),
+            ..
+        }
+        | Command::DrawBeam {
+            shader: Some(shader),
+            ..
+        }
+        | Command::SetShaderParam { shader, .. } => Some((Table::Shaders, shader.as_str())),
+        Command::FireModEffect { effect, .. } | Command::FireModEffectAhead { effect, .. } => {
+            Some((Table::Effects, effect.as_str()))
+        }
+        Command::PlayModSound { sound, .. } => Some((Table::Sounds, sound.as_str())),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct Slot {
     pub(super) mod_id: String,
@@ -21,8 +115,8 @@ pub(super) struct Slot {
     drives_ai_pickup: bool,
     /// The player's picks on the mod's choice rows (`Source::options`).
     options: super::Picks,
-    /// The names of the mod's `[icons]`: what a `raise-warning` of its own art may name.
-    icons: Vec<String>,
+    /// The keys of the mod's manifest tables: what its commands may name.
+    pub(super) names: Names,
     module: Module,
     pub(super) blob: Vec<u8>,
     faulted: Option<(u64, String)>,
@@ -255,7 +349,7 @@ impl On {
                     scale: place.scale(),
                     color: colour(rgba),
                     what: if own {
-                        What::ModIcon(super::mod_icon_src(
+                        What::ModName(super::mod_icon_src(
                             &self.slots[module].mod_id,
                             sprite.as_str(),
                         ))
@@ -289,10 +383,10 @@ impl On {
         self
     }
 
-    /// Each module's `[icons]` names, in module order.
-    pub(super) fn with_icons(mut self, icons: Vec<Vec<String>>) -> Self {
-        for (slot, icons) in self.slots.iter_mut().zip(icons) {
-            slot.icons = icons;
+    /// Each module's manifest keys, in module order.
+    pub(super) fn with_names(mut self, names: Vec<Names>) -> Self {
+        for (slot, names) in self.slots.iter_mut().zip(names) {
+            slot.names = names;
         }
         self
     }
@@ -340,7 +434,7 @@ impl On {
                     publishes,
                     drives_ai_pickup,
                     options: super::Picks::default(),
-                    icons: Vec::new(),
+                    names: Names::default(),
                     mod_id,
                     module,
                     faulted: None,
@@ -802,16 +896,6 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
                     ));
                 }
             }
-            Command::RaiseWarning {
-                warning: oag_ext_abi::Warning::Mod { icon, .. },
-                ..
-            } if !module.icons.iter().any(|name| name == icon.as_str()) => {
-                return Some(format!(
-                    "raise-warning names icon {:?}, which its oag-mod.toml [icons] does not (it declares {:?})",
-                    icon.as_str(),
-                    module.icons
-                ));
-            }
             Command::GivePickup { .. }
             | Command::ClearPickup { .. }
             | Command::PickupRoll { .. }
@@ -823,7 +907,18 @@ fn refusal(on: &On, index: usize, commands: &[Command]) -> Option<String> {
                         .to_string(),
                 );
             }
-            _ => {}
+            _ => {
+                if let Some((table, name)) = named(command)
+                    && module.names.place(table, name).is_none()
+                {
+                    return Some(format!(
+                        "{} names {name:?}, which its oag-mod.toml {} does not (it declares {:?})",
+                        command.kind().name(),
+                        table.heading(),
+                        module.names.table(table)
+                    ));
+                }
+            }
         }
     }
     None
@@ -1218,28 +1313,29 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                 slot.index(),
             ));
         }
-        Command::PlayModSound {
-            slot,
-            index: sound,
-            mode,
-        } => {
-            super::sound::apply(sim, index, slot.index() as u8, sound, mode);
+        Command::PlayModSound { slot, sound, mode } => {
+            let names = &sim.extensions.on.slots[index].names;
+            if let Some(sound) = names.place(Table::Sounds, sound.as_str()) {
+                super::sound::apply(sim, index, slot.index() as u8, sound, mode);
+            }
         }
         Command::FireEffect { slot, effect } => sim
             .extensions
             .on
             .effects
             .push((slot.index(), Fired::Title(self::effect(effect)))),
-        Command::FireModEffect { slot, index: own } => {
-            let mod_id = sim.extensions.on.slots[index].mod_id.clone();
-            sim.extensions
-                .on
-                .effects
-                .push((slot.index(), Fired::Own { mod_id, index: own }));
+        Command::FireModEffect { slot, effect } => {
+            let on = &mut sim.extensions.on;
+            if let Some(own) = on.slots[index].names.effect(effect.as_str()) {
+                let mod_id = on.slots[index].mod_id.clone();
+                on.effects
+                    .push((slot.index(), Fired::Own { mod_id, index: own }));
+            }
         }
         Command::ScreenFill { slot, rgba, shader } => {
-            sim.extensions.on.fill[slot.index()] =
-                Some((rgba, shader.map(|shader| (index, shader))));
+            let on = &mut sim.extensions.on;
+            let shader = on.slots[index].names.shader(shader);
+            on.fill[slot.index()] = Some((rgba, shader.map(|shader| (index, shader))));
         }
         Command::DrawBeam {
             slot,
@@ -1247,16 +1343,20 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             rgba,
             half_width,
             shader,
-        } => sim.extensions.on.beams.push((
-            index,
-            super::Beam {
-                from: slot.index(),
-                to: to.index(),
-                rgba: super::unit(rgba),
-                half_width,
-                shader,
-            },
-        )),
+        } => {
+            let on = &mut sim.extensions.on;
+            let shader = on.slots[index].names.shader(shader);
+            on.beams.push((
+                index,
+                super::Beam {
+                    from: slot.index(),
+                    to: to.index(),
+                    rgba: super::unit(rgba),
+                    half_width,
+                    shader,
+                },
+            ));
+        }
         Command::PortalView {
             slot,
             entrance,
@@ -1282,13 +1382,18 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
             shader,
             index: scalar,
             value,
-        } => sim.extensions.on.shader_params.push(ShaderParam {
-            module: index,
-            slot: slot.index(),
-            shader,
-            index: scalar,
-            value,
-        }),
+        } => {
+            let on = &mut sim.extensions.on;
+            if let Some(shader) = on.slots[index].names.place(Table::Shaders, shader.as_str()) {
+                on.shader_params.push(ShaderParam {
+                    module: index,
+                    slot: slot.index(),
+                    shader,
+                    index: scalar,
+                    value,
+                });
+            }
+        }
         Command::FovOffset { slot, degrees } => {
             let fov = &mut sim.extensions.on.fov[slot.index()];
             *fov = (*fov + degrees).clamp(

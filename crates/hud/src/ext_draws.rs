@@ -71,7 +71,7 @@ pub enum What {
     /// The title's HUD sprite of this name; nothing if the layout has none.
     Icon(String),
     /// A mod's own PNG, by its key in the HUD sheet; nothing if the sheet lacks it.
-    ModIcon(String),
+    ModName(String),
 }
 
 /// One `hud-text` or `hud-icon`.
@@ -330,7 +330,7 @@ pub fn append(frame: &mut Frame, cx: &Context<'_>, outputs: &Outputs, grid: (f32
                 frame.hud_text.extend(text_shadow(cx, &draw));
                 frame.hud_text.push(draw);
             }
-            What::ModIcon(src) => {
+            What::ModName(src) => {
                 let Some(placed) = cx.sheet.get(src) else {
                     continue;
                 };

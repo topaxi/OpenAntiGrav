@@ -137,13 +137,13 @@ pub struct Source {
     /// The mod's `[icons]`.
     pub icons: Vec<IconSource>,
     /// The mod's `[effects]`, in name order: name and the TOML's path in the mod. A
-    /// module's `fire-mod-effect` names one by its place in this list.
+    /// module's `fire-mod-effect` names one by its key; the load reads them in this order.
     pub effects: Vec<(String, String)>,
     /// The mod's `[shaders]`, in name order: name and the file's path in the mod. A
-    /// module's draws name one by its place in this list, an effect file by its name.
+    /// module's draws and an effect file name one by its key.
     pub shaders: Vec<(String, String)>,
     /// The mod's `[sounds]`, in name order: name and the WAV's path in the mod. A
-    /// module's `play-mod-sound` names one by its place in this list.
+    /// module's `play-mod-sound` names one by its key.
     pub sounds: Vec<(String, String)>,
     /// Reads any file of the mod by its path (an effect's TOML and PNGs).
     pub files: Files,
@@ -337,9 +337,10 @@ pub struct Prepared {
     /// Each module's [`Source::options`], in module order.
     #[cfg(feature = "extensions")]
     options: Vec<Picks>,
-    /// The names of each module's mod's `[icons]`, in module order.
+    /// The keys of each module's mod's `[icons]`, `[shaders]`, `[effects]` and `[sounds]`,
+    /// in module order.
     #[cfg(feature = "extensions")]
-    icons: Vec<Vec<String>>,
+    names: Vec<on::Names>,
     /// Each module whose mod declares `[[pickup.odds]]` (the weapon pads draw its pickup
     /// with them), in module order, with its rows and the race's title.
     #[cfg(feature = "extensions")]
@@ -428,7 +429,7 @@ pub fn prepare(
         let mut drives_ai = Vec::new();
         let mut publishes = Vec::new();
         let mut options = Vec::new();
-        let mut icons = Vec::new();
+        let mut names = Vec::new();
         let mut odds = Vec::new();
         let mut pickup_mods = 0;
         let mut track_module = false;
@@ -498,7 +499,7 @@ pub fn prepare(
                     drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                     options.push(source.options);
-                    icons.push(source.icons.iter().map(|icon| icon.name.clone()).collect());
+                    names.push(on::Names::of(&source));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
@@ -512,7 +513,7 @@ pub fn prepare(
             drives_ai,
             publishes,
             options,
-            icons,
+            names,
             odds,
             title: oag_ext_abi::channel_key(&title.to_ascii_lowercase()),
             beacons,
@@ -830,7 +831,7 @@ impl Extensions {
                 )
                 .with_title(prepared.title)
                 .with_options(&prepared.options)
-                .with_icons(prepared.icons),
+                .with_names(prepared.names),
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }
@@ -1223,9 +1224,16 @@ impl crate::Race {
                 }
                 oag_ext_abi::Command::FireModEffectAhead {
                     slot,
-                    index: own,
+                    effect,
                     distance,
-                } => self.fire_effect_ahead(index, slot.index(), own, distance),
+                } => {
+                    let own = self.sim.extensions.on.slots[index]
+                        .names
+                        .effect(effect.as_str());
+                    if let Some(own) = own {
+                        self.fire_effect_ahead(index, slot.index(), own, distance);
+                    }
+                }
                 _ => {}
             }
         }

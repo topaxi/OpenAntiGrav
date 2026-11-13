@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use oag_core::math::Vec3;
-use oag_ext_abi::{Command, Rgba, Slot};
+use oag_ext_abi::{Command, ModName, Rgba, Slot};
 use oag_gameplay::PlayerInputs;
 
 use super::extension_faults::scripted;
@@ -78,19 +78,19 @@ fn a_race_with_no_mod_lists_no_shader_and_builds_no_stage() {
     assert!(shaders.list().is_empty());
 }
 
-fn beam(shader: Option<u16>) -> Command {
+fn beam(shader: Option<&str>) -> Command {
     Command::DrawBeam {
         slot: slot(1),
         to: slot(2),
         rgba: Rgba::new(255, 128, 0, 255),
         half_width: 1.5,
-        shader,
+        shader: shader.and_then(ModName::new),
     }
 }
 
 #[test]
 fn a_beam_reaches_the_views_surfaces_between_its_two_crafts() {
-    let mut race = race(&[beam(None), beam(Some(0))]);
+    let mut race = race(&[beam(None), beam(Some("a-good"))]);
     race.tick(&PlayerInputs::none());
     let eye = Vec3::new(0.0, 500.0, 0.0);
     let surfaces = race.mod_surfaces(Vec3::X, Vec3::Y, eye);
@@ -123,17 +123,17 @@ fn a_shaded_fill_leaves_the_wash_alone_and_a_scalar_lands_on_its_shader() {
     let fill = Command::ScreenFill {
         slot: slot(0),
         rgba: Rgba::new(0, 255, 0, 255),
-        shader: Some(0),
+        shader: ModName::new("a-good"),
     };
     let param = Command::SetShaderParam {
         slot: slot(0),
-        shader: 0,
+        shader: ModName::new("a-good").unwrap(),
         index: 2,
         value: 0.75,
     };
     let other_view = Command::SetShaderParam {
         slot: slot(1),
-        shader: 0,
+        shader: ModName::new("a-good").unwrap(),
         index: 0,
         value: 9.0,
     };
@@ -154,16 +154,25 @@ fn a_shaded_fill_leaves_the_wash_alone_and_a_scalar_lands_on_its_shader() {
     );
 }
 
-/// A fill naming a place the mod does not have is no fill and no wash: never the flat colour.
+/// A fill naming a shader the manifest lacks faults the module and draws nothing: never the
+/// flat colour, never another shader.
 #[test]
-fn a_fill_naming_no_shader_of_the_mods_draws_nothing() {
+fn a_fill_naming_no_shader_of_the_mods_faults_it_and_draws_nothing() {
     let fill = Command::ScreenFill {
         slot: slot(0),
         rgba: Rgba::new(0, 255, 0, 255),
-        shader: Some(40),
+        shader: ModName::new("a-gone"),
     };
     let mut race = race(&[fill]);
     race.tick(&PlayerInputs::none());
+    let (_, why) = race.extension_reports()[0]
+        .faulted
+        .clone()
+        .expect("faulted");
+    assert!(
+        why.contains("\"a-gone\"") && why.contains("[shaders]"),
+        "{why}"
+    );
     assert_eq!(race.screen_wash(), None);
     assert_eq!(race.mod_fill(), None);
 }
@@ -173,11 +182,11 @@ fn shader_draws_never_reach_the_hash() {
     let fill = Command::ScreenFill {
         slot: slot(0),
         rgba: Rgba::new(0, 255, 0, 255),
-        shader: Some(0),
+        shader: ModName::new("a-good"),
     };
     let param = Command::SetShaderParam {
         slot: slot(0),
-        shader: 0,
+        shader: ModName::new("a-good").unwrap(),
         index: 0,
         value: 1.0,
     };
@@ -198,7 +207,10 @@ fn shader_draws_never_reach_the_hash() {
         update: oag_ext_abi::ViewUpdate::Continuous,
         generation: 0,
     };
-    assert_eq!(hashes(&[]), hashes(&[beam(Some(0)), fill, param, portal]));
+    assert_eq!(
+        hashes(&[]),
+        hashes(&[beam(Some("a-good")), fill, param, portal])
+    );
 }
 
 /// An effect file's `shader` key, played where `fire-mod-effect-ahead` plays it: its particles

@@ -406,22 +406,20 @@ pub(super) mod on {
         );
     }
 
-    /// Every tick: `fire-effect` with bit 15 set, the mod's own effect 2, for slot 1.
+    /// Every tick: the mod's own effect "c-ring" (the third of its `[effects]`) for slot 1.
     fn mod_effect_firer(id: &str, fires: bool) -> Source {
-        let body = if fires {
-            format!(
-                "(i32.store (i32.const {REPLY}) (i32.const 1))
-                 (i32.store8 (i32.const {c}) (i32.const 6)) (i32.store8 (i32.const {s}) (i32.const 1))
-                 (i32.store16 (i32.const {a}) (i32.const 0x8002))
-                 i32.const 0",
-                c = REPLY + 4,
-                s = REPLY + 5,
-                a = REPLY + 6,
-            )
-        } else {
-            "i32.const 0".to_string()
+        if !fires {
+            return module(id, "i32.const 0");
+        }
+        let fire = oag_ext_abi::Command::FireModEffect {
+            slot: oag_ext_abi::Slot::new(1).unwrap(),
+            effect: oag_ext_abi::ModName::new("c-ring").unwrap(),
         };
-        module(id, &body)
+        let mut source = super::super::extension_faults::scripted(id, "", &[fire], &[]);
+        source.effects = ["a-flash", "b-spark", "c-ring"]
+            .map(|name| (name.to_string(), format!("fx/{name}.toml")))
+            .to_vec();
+        source
     }
 
     #[test]
@@ -717,7 +715,7 @@ pub(super) mod on {
         let items = shown(Some("German"), &[namer()]);
         assert_eq!(
             items[1].what,
-            oag_hud::ext_draws::What::ModIcon("mod:test.names/badge".into())
+            oag_hud::ext_draws::What::ModName("mod:test.names/badge".into())
         );
         let mut bare = namer();
         bare.strings = Arc::new(|_| Default::default());

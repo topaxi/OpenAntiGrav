@@ -211,34 +211,26 @@ fn fire_commands(module: &Module, title: u32) -> (Vec<Command>, u64) {
 fn its_portal_is_the_titles_own_and_a_fire_fits_the_fuel_budget() {
     let Some(slipstream) = open() else { return };
     let module = compiled(&slipstream);
-    let effects: Vec<&String> = slipstream.manifest.effects.keys().collect();
-    assert_eq!(
-        effects,
-        [
-            "portal_2048",
-            "portal_hd",
-            "portal_omega",
-            "portal_pulse",
-            "portal_pure"
-        ],
-        "the guest's indices are this table's name order"
-    );
-    for (title, index) in [
-        ("wipeout-2048", 0),
-        ("wipeout-hd", 1),
-        ("wipeout-omega-collection", 2),
-        ("wipeout-pulse", 3),
-        ("wipeout-pure", 4),
+    for (title, effect) in [
+        ("wipeout-2048", "portal_2048"),
+        ("wipeout-hd", "portal_hd"),
+        ("wipeout-omega-collection", "portal_omega"),
+        ("wipeout-pulse", "portal_pulse"),
+        ("wipeout-pure", "portal_pure"),
     ] {
+        assert!(
+            slipstream.manifest.effects.contains_key(effect),
+            "{effect} is a key of the manifest's [effects]"
+        );
         let (commands, fuel) = fire_commands(&module, oag_ext_abi::channel_key(title));
-        let portals: Vec<u16> = commands
+        let portals: Vec<&str> = commands
             .iter()
             .filter_map(|c| match c {
-                Command::FireModEffectAhead { index, .. } => Some(*index),
+                Command::FireModEffectAhead { effect, .. } => Some(effect.as_str()),
                 _ => None,
             })
             .collect();
-        assert_eq!(portals, [index, index], "{title}");
+        assert_eq!(portals, [effect, effect], "{title}");
         assert!(commands.iter().any(|c| matches!(
             c,
             Command::Transit {

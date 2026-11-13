@@ -2,7 +2,8 @@
 //! `fire-mod-effect-ahead`, `draw-beam`, `set-shader-param` and `portal-view`. Outputs only:
 //! re-sent each tick they should hold, never hashed, never read by the simulation.
 
-use crate::{Command, Distance, Malformed, Rgba, Slot};
+use crate::hud::pool_string;
+use crate::{Command, Distance, Malformed, ModName, Rgba, Slot};
 
 /// The largest `fov-offset`, degrees either way. Chosen.
 pub const MAX_FOV_OFFSET_DEG: f32 = 30.0;
@@ -15,9 +16,6 @@ pub const MAX_BEAMS_PER_TICK: usize = 16;
 
 /// The scalars a mod's shader has.
 pub const MAX_SHADER_PARAMS: u8 = 4;
-
-/// The last place in a mod's `[shaders]` a draw can name.
-pub const MAX_SHADER_INDEX: u16 = 254;
 
 /// The generations of a `portal-view` snapshot: six bits of `arg`.
 pub const MAX_VIEW_GENERATION: u8 = 64;
@@ -74,26 +72,34 @@ fn exit_of(word: u32) -> Option<Distance> {
         .then_some(Distance::Trigger((word & 0xffff) as u16))
 }
 
-/// A shader in the byte `screen-fill` and `draw-beam` carry it in: 0 for none, else its
-/// place plus one.
-fn shader_byte(shader: Option<u16>) -> u16 {
-    shader.map_or(0, |shader| shader + 1)
+/// A shader name's `arg` for `screen-fill`: 0 for none, else its pool offset plus one.
+fn shader_arg(shader: Option<ModName>, pool_at: u16) -> u16 {
+    shader.map_or(0, |_| pool_at + 1)
 }
 
-fn shader_of(byte: u16) -> Option<u16> {
-    byte.checked_sub(1)
+/// The shader a pool offset plus one names; `None` for 0.
+fn shader_of(arg: u16, pool: &[u8]) -> Result<Option<ModName>, Malformed> {
+    let Some(at) = arg.checked_sub(1) else {
+        return Ok(None);
+    };
+    let name = pool_string(pool, at).ok_or(Malformed::Pool(at))?;
+    Ok(Some(ModName::from_string(name)))
 }
+
+/// A `draw-beam` shader sits above the four bits that name the craft it ends at: the pool
+/// offset plus one, in the twelve that remain ([`crate::POOL_LEN`] fits).
+const BEAM_TO_BITS: u32 = 4;
+const _: () = assert!(crate::MAX_CRAFTS <= 1 << BEAM_TO_BITS);
+const _: () = assert!(crate::POOL_LEN < 1 << (16 - BEAM_TO_BITS));
 
 /// `(arg, value, word)` of one of this module's commands.
-pub(crate) fn encode(command: &Command) -> Option<(u16, u32, u32)> {
+pub(crate) fn encode(command: &Command, pool_at: u16) -> Option<(u16, u32, u32)> {
     Some(match *command {
-        Command::ScreenFill { rgba, shader, .. } => (shader_byte(shader), 0, rgba.to_u32()),
+        Command::ScreenFill { rgba, shader, .. } => (shader_arg(shader, pool_at), 0, rgba.to_u32()),
         Command::FovOffset { degrees, .. } => (0, degrees.to_bits(), 0),
-        Command::FireModEffectAhead {
-            index, distance, ..
-        } => {
+        Command::FireModEffectAhead { distance, .. } => {
             let (kind, amount) = distance.split();
-            (index, amount.to_bits(), u32::from(kind))
+            (pool_at, amount.to_bits(), u32::from(kind))
         }
         Command::DrawBeam {
             to,
@@ -102,16 +108,13 @@ pub(crate) fn encode(command: &Command) -> Option<(u16, u32, u32)> {
             shader,
             ..
         } => (
-            to.index() as u16 | shader_byte(shader) << 8,
+            to.index() as u16 | shader_arg(shader, pool_at) << BEAM_TO_BITS,
             half_width.to_bits(),
             rgba.to_u32(),
         ),
-        Command::SetShaderParam {
-            shader,
-            index,
-            value,
-            ..
-        } => (shader, value.to_bits(), u32::from(index)),
+        Command::SetShaderParam { index, value, .. } => {
+            (pool_at, value.to_bits(), u32::from(index))
+        }
         Command::PortalView {
             entrance,
             exit,
@@ -136,6 +139,7 @@ pub(crate) fn decode(
     kind: crate::CommandKind,
     slot: Slot,
     (arg, value, word): (u16, f32, u32),
+    pool: &[u8],
 ) -> Result<Command, Malformed> {
     let bad = Malformed::Scene {
         kind: kind.code(),
@@ -144,18 +148,14 @@ pub(crate) fn decode(
         word,
     };
     match kind {
-        crate::CommandKind::ScreenFill => {
-            if arg > MAX_SHADER_INDEX + 1 {
-                return Err(bad);
-            }
-            Ok(Command::ScreenFill {
-                slot,
-                rgba: Rgba::from_u32(word),
-                shader: shader_of(arg),
-            })
-        }
+        crate::CommandKind::ScreenFill => Ok(Command::ScreenFill {
+            slot,
+            rgba: Rgba::from_u32(word),
+            shader: shader_of(arg, pool)?,
+        }),
         crate::CommandKind::DrawBeam => {
-            let to = Slot::new(usize::from(arg & 0xff)).filter(|to| *to != slot);
+            let to =
+                Slot::new(usize::from(arg & ((1 << BEAM_TO_BITS) - 1))).filter(|to| *to != slot);
             let to = to.ok_or(bad)?;
             if !(value > 0.0 && value <= MAX_BEAM_HALF_WIDTH) {
                 return Err(bad);
@@ -165,7 +165,7 @@ pub(crate) fn decode(
                 to,
                 rgba: Rgba::from_u32(word),
                 half_width: value,
-                shader: shader_of(arg >> 8),
+                shader: shader_of(arg >> BEAM_TO_BITS, pool)?,
             })
         }
         crate::CommandKind::SetShaderParam => {
@@ -178,7 +178,7 @@ pub(crate) fn decode(
             }
             Ok(Command::SetShaderParam {
                 slot,
-                shader: arg,
+                shader: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
                 index,
                 value,
             })
@@ -221,7 +221,7 @@ pub(crate) fn decode(
                 .ok_or(bad)?;
             Ok(Command::FireModEffectAhead {
                 slot,
-                index: arg,
+                effect: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
                 distance,
             })
         }

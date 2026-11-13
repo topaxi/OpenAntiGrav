@@ -323,7 +323,7 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
     let fill = Command::ScreenFill {
         slot: Slot::new(0).unwrap(),
         rgba: oag_ext_abi::Rgba::new(255, 255, 255, 255),
-        shader: Some(0),
+        shader: oag_ext_abi::ModName::new("a-window"),
     };
     let flown = |text: &'static str| {
         let mut race = race_with(&[fill], text);

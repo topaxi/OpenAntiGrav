@@ -309,7 +309,7 @@ fn a_mods_own_icon_is_drawn_from_its_place_in_the_sheet_at_its_own_size() {
         y: 3.0,
         scale: 2.0,
         color: [1.0, 1.0, 0.5, 1.0],
-        what: What::ModIcon(src.into()),
+        what: What::ModName(src.into()),
     };
     let ext = Outputs {
         items: vec![item("mod:test/badge"), item("mod:test/missing")],

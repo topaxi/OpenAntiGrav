@@ -248,13 +248,13 @@ fn looking(icon: &str) -> oag_tables::pickup_look::PickupLook {
 #[test]
 fn the_hud_draws_the_look_of_the_kind_held_and_another_mods_look_command_does_not_reach_it() {
     use super::extension_faults::scripted;
-    use oag_ext_abi::{Colour, Command, Icon, ModIcon, Rgba, Slot};
+    use oag_ext_abi::{Colour, Command, Icon, ModName, Rgba, Slot};
     use oag_tables::pickup_look::Icon as LookIcon;
     // `test.a` (kind 0) declares the icon "a" and sends a `pickup-look` for slot 0 every
     // tick; `test.b` (kind 1) declares "b" and sends nothing.
     let sent = Command::PickupLook {
         slot: Slot::new(0).unwrap(),
-        icon: Icon::Mod(ModIcon::new("sent").unwrap()),
+        icon: Icon::Mod(ModName::new("sent").unwrap()),
         colour: Colour::Rgba(Rgba::new(9, 9, 9, 9)),
     };
     let mut a = scripted("test.a", "", &[sent], &[]);
@@ -281,9 +281,11 @@ fn the_hud_draws_the_look_of_the_kind_held_and_another_mods_look_command_does_no
     race.sim.world.ships[0].pickup.weapon = kind(0);
     race.tick(&PlayerInputs::none());
     let look = race.view.huds[0].pickup_look.clone().expect("a look");
-    // `scripted` writes the command with no string pool, so the sent icon's name is empty:
-    // what tells it from the manifest's "a" is that it is the command's.
-    assert_eq!(look.icon, key("test.a", ""), "its own module's pickup-look");
+    assert_eq!(
+        look.icon,
+        key("test.a", "sent"),
+        "its own module's pickup-look"
+    );
     assert_eq!(
         look.colour,
         oag_tables::pickup_look::Colour::Rgba([9, 9, 9, 9])

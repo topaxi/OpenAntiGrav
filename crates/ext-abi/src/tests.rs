@@ -64,7 +64,7 @@ fn every_command() -> [Command; 37] {
         },
         Command::PickupLook {
             slot: slot(9),
-            icon: Icon::Mod(ModIcon::new("bolt").unwrap()),
+            icon: Icon::Mod(ModName::new("bolt").unwrap()),
             colour: Colour::Title(Weapon::Shield),
         },
         Command::HudShake {
@@ -138,7 +138,7 @@ fn every_command() -> [Command; 37] {
         Command::ScreenFill {
             slot: slot(5),
             rgba: Rgba::new(0x10, 0x20, 0x30, 0x40),
-            shader: Some(7),
+            shader: Some(ModName::new("wormhole").unwrap()),
         },
         Command::FovOffset {
             slot: slot(6),
@@ -146,12 +146,12 @@ fn every_command() -> [Command; 37] {
         },
         Command::FireModEffectAhead {
             slot: slot(7),
-            index: 3,
+            effect: ModName::new("lock").unwrap(),
             distance: crate::Distance::Units(100.0),
         },
         Command::PlayModSound {
             slot: slot(8),
-            index: 5,
+            sound: ModName::new("transit").unwrap(),
             mode: crate::SoundMode::Loop,
         },
         Command::DrawBeam {
@@ -159,11 +159,11 @@ fn every_command() -> [Command; 37] {
             to: slot(2),
             rgba: Rgba::new(1, 2, 3, 4),
             half_width: 1.5,
-            shader: Some(MAX_SHADER_INDEX),
+            shader: Some(ModName::new("beam").unwrap()),
         },
         Command::SetShaderParam {
             slot: slot(10),
-            shader: 3,
+            shader: ModName::new("tunnel").unwrap(),
             index: MAX_SHADER_PARAMS - 1,
             value: -0.25,
         },
@@ -191,7 +191,7 @@ fn every_command() -> [Command; 37] {
             slot: slot(2),
             warning: Warning::Mod {
                 side: WarningSide::Forward,
-                icon: ModIcon::new("portal").unwrap(),
+                icon: ModName::new("portal").unwrap(),
             },
         },
     ]
@@ -254,20 +254,15 @@ fn a_craft() -> Craft {
     }
 }
 
+/// A command through its record and back, with the pool its string reads from.
+fn round_trip(command: &Command) -> Result<Command, Malformed> {
+    Command::decode_in(&command.encode_pooled(0), &pool_for(command))
+}
+
 /// The pool a command's string reads from: its entry at offset 0.
 fn pool_for(command: &Command) -> Vec<u8> {
-    let text = match command {
-        Command::HudText { text, .. } => text.as_str(),
-        Command::HudIcon { sprite, .. } => sprite.as_str(),
-        Command::PickupLook {
-            icon: Icon::Mod(name),
-            ..
-        }
-        | Command::RaiseWarning {
-            warning: Warning::Mod { icon: name, .. },
-            ..
-        } => name.as_str(),
-        _ => return Vec::new(),
+    let Some(text) = command.pooled_name() else {
+        return Vec::new();
     };
     let mut pool = vec![text.len() as u8];
     pool.extend_from_slice(text.as_bytes());
@@ -443,7 +438,7 @@ fn layout_fold() -> u64 {
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (4, 0x0348_ffba_7c33_a0fc);
+const REVISION_AND_FOLD: (u32, u64) = (5, 0xe283_b093_83ff_a47f);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -1018,12 +1013,12 @@ const COMMAND_BYTES: [&str; 33] = [
     "1b023c000000004001002823",
     "1c0300000000003f00000000",
     "1d0400000000f04200000041",
-    "1e0508000000000010203040",
+    "1e0501000000000010203040",
     "1f0600000000484100000000",
-    "200703000000c84200000000",
-    "210805000000000001000000",
-    "220902ff0000c03f01020304",
-    "230a0300000080be03000000",
+    "200700000000c84200000000",
+    "210800000000000001000000",
+    "220912000000c03f01020304",
+    "230a0000000080be03000000",
 ];
 
 /// The bytes of one of every event, in `every_event`'s order, as hex.
@@ -1065,10 +1060,10 @@ fn every_event_encodes_to_the_bytes_it_always_has() {
 fn the_own_flag_rides_bit_15_of_the_argument() {
     let effect = Command::FireModEffect {
         slot: slot(3),
-        index: 5,
+        effect: ModName::new("sputter").unwrap(),
     };
-    assert_eq!(hex(&effect.encode()), "060305800000000000000000");
-    assert_eq!(Command::decode(&effect.encode()), Ok(effect));
+    assert_eq!(hex(&effect.encode_pooled(0)), "060300800000000000000000");
+    assert_eq!(round_trip(&effect), Ok(effect));
 }
 
 /// `raise-warning` is kind 37 with the icon's code as the argument; the icon fixes the group.
@@ -1091,7 +1086,7 @@ fn a_mod_raise_warning_names_a_pool_entry_and_a_group() {
         slot: slot(1),
         warning: Warning::Mod {
             side: WarningSide::Forward,
-            icon: ModIcon::new("portal").unwrap(),
+            icon: ModName::new("portal").unwrap(),
         },
     };
     let pool = pool_for(&portal);
@@ -1118,7 +1113,7 @@ fn a_mod_raise_warning_with_an_unknown_group_or_pool_entry_is_refused() {
         slot: slot(0),
         warning: Warning::Mod {
             side: WarningSide::Rear,
-            icon: ModIcon::new("portal").unwrap(),
+            icon: ModName::new("portal").unwrap(),
         },
     }
     .encode_pooled(0);
@@ -1229,12 +1224,12 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         },
         Command::FireModEffectAhead {
             slot: slot(1),
-            index: 0,
+            effect: ModName::new("ring").unwrap(),
             distance: crate::Distance::Units(0.0),
         },
         Command::FireModEffectAhead {
             slot: slot(1),
-            index: 0,
+            effect: ModName::new("ring").unwrap(),
             distance: crate::Distance::Units(f32::NAN),
         },
         Command::DrawBeam {
@@ -1260,13 +1255,13 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
         },
         Command::SetShaderParam {
             slot: slot(1),
-            shader: 0,
+            shader: ModName::new("tunnel").unwrap(),
             index: MAX_SHADER_PARAMS,
             value: 1.0,
         },
         Command::SetShaderParam {
             slot: slot(1),
-            shader: 0,
+            shader: ModName::new("tunnel").unwrap(),
             index: 0,
             value: f32::INFINITY,
         },
@@ -1298,20 +1293,24 @@ fn a_scene_command_out_of_its_ranges_is_malformed() {
     for command in bad {
         assert!(
             matches!(
-                Command::decode(&command.encode()),
+                round_trip(&command),
                 Err(Malformed::Scene { .. })
             ),
             "{command:?}"
         );
     }
-    let mut unknown = Command::FireModEffectAhead {
+    let unknown = Command::FireModEffectAhead {
         slot: slot(1),
-        index: 0,
+        effect: ModName::new("ring").unwrap(),
         distance: crate::Distance::Units(10.0),
     }
-    .encode();
-    unknown[COMMAND_WORD] = 9;
-    assert!(Command::decode(&unknown).is_err(), "distance kind 9");
+    ;
+    let mut record = unknown.encode_pooled(0);
+    record[COMMAND_WORD] = 9;
+    assert!(
+        Command::decode_in(&record, &pool_for(&unknown)).is_err(),
+        "distance kind 9"
+    );
 }
 
 /// Another mod's pickup has a code of its own per kind: never a title weapon's, never the
@@ -1372,20 +1371,20 @@ fn a_mod_sound_round_trips_each_mode_and_refuses_a_mode_the_abi_lacks() {
     for mode in SoundMode::ALL {
         let command = Command::PlayModSound {
             slot: slot(3),
-            index: 700,
+            sound: ModName::new("transit").unwrap(),
             mode,
         };
-        assert_eq!(Command::decode(&command.encode()), Ok(command));
+        assert_eq!(round_trip(&command), Ok(command));
     }
-    let mut record = Command::PlayModSound {
+    let once = Command::PlayModSound {
         slot: slot(1),
-        index: 0,
+        sound: ModName::new("transit").unwrap(),
         mode: SoundMode::Once,
-    }
-    .encode();
+    };
+    let mut record = once.encode_pooled(0);
     record[COMMAND_WORD] = 3;
     assert!(matches!(
-        Command::decode(&record),
+        Command::decode_in(&record, &pool_for(&once)),
         Err(Malformed::ModSound { word: 3, .. })
     ));
 }

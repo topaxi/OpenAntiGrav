@@ -112,10 +112,14 @@ fn a_fov_offset_reaches_its_slots_view_alone() {
 fn a_fire_effect_ahead_queues_the_mods_effect_on_the_road_in_front_of_its_craft() {
     let ahead = Command::FireModEffectAhead {
         slot: slot(1),
-        index: 2,
+        effect: oag_ext_abi::ModName::new("c-ring").unwrap(),
         distance: Distance::Units(20.0),
     };
-    let mut race = grid(prepared(&[scripted("test.portal", "", &[ahead], &[])]));
+    let mut source = scripted("test.portal", "", &[ahead], &[]);
+    source.effects = ["a-flash", "b-spark", "c-ring"]
+        .map(|name| (name.to_string(), format!("fx/{name}.toml")))
+        .to_vec();
+    let mut race = grid(prepared(&[source]));
     let ship = &mut race.sim.world.ships[1];
     ship.physics.body.position.x = 10.0;
     ship.physics.body.position.z = 0.0;
@@ -351,7 +355,7 @@ fn raising_portal(side: oag_ext_abi::WarningSide, name: &str) -> Command {
         slot: slot(0),
         warning: oag_ext_abi::Warning::Mod {
             side,
-            icon: oag_ext_abi::ModIcon::new(name).unwrap(),
+            icon: oag_ext_abi::ModName::new(name).unwrap(),
         },
     }
 }

@@ -250,7 +250,7 @@ colour = { rgba = "E0202080" }      # RRGGBBAA, or { title = "shield" }
 
 `pickup-look` overrides it for one tick and slot (record: `arg` the icon's weapon code, or
 bit 15 and a pool offset for a mod icon; `value` 0 for an rgba or the colour weapon's code;
-`word` the rgba). The SDK's `Icon::{Title(Weapon), Mod(ModIcon)}` and
+`word` the rgba). The SDK's `Icon::{Title(Weapon), Mod(ModName)}` and
 `Colour::{Title(Weapon), Rgba(Rgba)}` name the sources, with the per-weapon constants
 `icon::title::TURBO`, `colour::title::SHIELD` and so on for all fourteen weapons. A bad
 weapon in a record is malformed by name. An output, never hashed; `hud-shake` of the

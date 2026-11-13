@@ -1,7 +1,8 @@
 //! `play-mod-sound`: one of the sending mod's own sounds (its `[sounds]`) from a craft.
 //! An output: heard, never hashed, never read by the simulation.
 
-use crate::{Command, CommandKind, Malformed, Slot};
+use crate::hud::pool_string;
+use crate::{Command, CommandKind, Malformed, ModName, Slot};
 
 /// What a `play-mod-sound` does with the sound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,19 +34,19 @@ impl SoundMode {
     }
 }
 
-/// `(arg, value, word)` of `play-mod-sound`.
-pub(crate) fn encode(command: &Command) -> Option<(u16, u32, u32)> {
+/// `(arg, value, word)` of `play-mod-sound`, its sound's name at `pool_at` in the pool.
+pub(crate) fn encode(command: &Command, pool_at: u16) -> Option<(u16, u32, u32)> {
     match *command {
-        Command::PlayModSound { index, mode, .. } => Some((index, 0, mode.code())),
+        Command::PlayModSound { mode, .. } => Some((pool_at, 0, mode.code())),
         _ => None,
     }
 }
 
-/// The command of a `play-mod-sound` record: a mode the ABI names.
-pub(crate) fn decode(slot: Slot, arg: u16, word: u32) -> Result<Command, Malformed> {
+/// The command of a `play-mod-sound` record: a name in the pool and a mode the ABI names.
+pub(crate) fn decode(slot: Slot, arg: u16, word: u32, pool: &[u8]) -> Result<Command, Malformed> {
     Ok(Command::PlayModSound {
         slot,
-        index: arg,
+        sound: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
         mode: SoundMode::from_code(word).ok_or(Malformed::ModSound {
             kind: CommandKind::PlayModSound.code(),
             word,
