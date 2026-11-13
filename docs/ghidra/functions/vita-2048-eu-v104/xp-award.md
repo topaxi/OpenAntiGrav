@@ -132,18 +132,18 @@ tally and banks its total.
 | 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
 | 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
 | 11 | Boost start | **read, ready**: the perfect launch: human first-thrust edge inside `[windowStart, windowEnd)`; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80) |
-| 12 | Hit with Rocket | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 13 | Hit with Missile | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 14 | Hit with Plasma | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 15 | Hit with Cannon | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 3; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 16 | Hit with Mine | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 4; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 17 | Hit with Quake | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 5; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 18 | Hit with Bomb | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 6; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 19 | Hit with Leach Beam | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 7; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 20 | Hit with Light Barrier | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 10; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 21 | Taken 1st! | **read, ready**: first time the human's place reaches 1 (best place `+0x6f3c` starts at 99), after crossing the line once, rivals > 1, gate; `Race_SortPlaces` `0x812bc06c` (75) |
-| 22 | Taken 2nd! | **read, ready**: as 21 for place 2, rivals > 2; `0x812bc090` (75) |
-| 23 | Taken 3rd! | **read, ready**: as 21 for place 3, rivals > 3; `0x812bc0a6` (75) |
+| 12 | Hit with Rocket | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 13 | Hit with Missile | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 14 | Hit with Plasma | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 15 | Hit with Cannon | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 3; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 16 | Hit with Mine | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 4; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 17 | Hit with Quake | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 5; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 18 | Hit with Bomb | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 6; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 19 | Hit with Leach Beam | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 7; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 20 | Hit with Light Barrier | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 10; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 21 | Taken 1st! | **read, ready**: first time the human's place reaches 1 (best place `+0x6f3c` starts at 99), after crossing the line once, pilot count > 1, gate; `Race_SortPlaces` `0x812bc06c` (75) |
+| 22 | Taken 2nd! | **read, ready**: as 21 for place 2, pilot count > 2; `0x812bc090` (75) |
+| 23 | Taken 3rd! | **read, ready**: as 21 for place 3, pilot count > 3; `0x812bc0a6` (75) |
 | 24 | Finished 1st! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 25 | Finished 2nd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 26 | Finished 3rd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
@@ -165,7 +165,7 @@ tally and banks its total.
 | 42 | Held 1st for 20sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 43 | Held 1st for 10sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 44 | Cross Start/Finish Line with full health | **read, ready**: lap completed with health `+0x5634` at or above the ship's maximum; human, gate; `Pilot_UpdateLapProgress` `0x811c39a4` (75) |
-| 45 | 5 seconds ahead | **read, ready**: single player, the first rival crosses a split 5 to 10 s after the human; no gate; `Race_RecordSplit` `0x811c2a80` (75) |
+| 45 | 5 seconds ahead | **read, ready**: `DAT_8154135c == 0` (likely single player), the first rival crosses a split 5 to 10 s after the human; no gate; `Race_RecordSplit` `0x811c2a80` (75) |
 | 46 | 10 seconds ahead | **read, ready**: as 45, 10 to 15 s; `0x811c2aa8` (75) |
 | 47 | 15 seconds ahead | **read, ready**: as 45, 15 s or more; `0x811c2acc` (75) |
 | 48 | Hit Zone 10 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
@@ -232,8 +232,8 @@ same total is a higher Omega rank). Decided (maintainer, 2026-11-12): each title
 ## When a hidden event is promoted (2026-11-13, lane `w2048-xp-unlock-re`)
 
 Ghidra `/2048/eboot-vita-2048-eu-v104.elf`, decompile and disassembly; `SP.xml` re-read from the
-v1.04 `data.psarc` (`data/xml/SP.xml`, 1,316,363 bytes; the patch's `data1.psarc` copy differs by one
-byte at offset 1,291,041 and gives the same census below). Builds on
+v1.04 patch's `data1.psarc` (`data/xml/SP.xml`, 1,316,362 bytes, the copy v1.04 loads; the base
+`data.psarc` copy is 1,316,363 bytes, differs at offset 1,291,041 and gives the same census below). Builds on
 [canvas-music-wave.md](canvas-music-wave.md), section 3, which read `Campaign_UnlockEvents` and
 `GameModeBase_IsUnlockable`; this section reads the flag and the triggers that section left open.
 
@@ -250,7 +250,7 @@ byte at offset 1,291,041 and gives the same census below). Builds on
 1. **Race end**, after the race's XP is banked: `GameModeBase_OnRaceEnd` (`0x812b4872`) calls
    `Profile_BankRaceXP` first, shows the unlock cards, then `Campaign_UnlockEvents` at `0x812b49d8`.
 2. **Building the map's event buttons**: `TouchCampaign_BuildEventButtons` (`0x810f041e`, slot `+0x2c`
-   of the TouchCampaign vtable at `0x8150e958`, the slot the base widget fills with `0x81064900`) calls
+   of the TouchCampaign vtable at `0x8150e958`; it calls the base widget's `0x81064900` first) calls
    it at `0x810f0800`, before it creates a button for every event whose button `+0x1ec` is still null.
 
 In that pass an event is promoted when all of these hold:
@@ -281,9 +281,11 @@ Tower 29, Arena 30, Cathedral 31, Subway 32, Sol 33, Altima 34 (S Phantom Challe
 challenge goes to progress 1 at the first race end or map build at which the XP total has reached
 its rank's `XPRanks.xml` threshold**, and a tap on its spot takes it to 2 (canvas-music-wave.md).
 
-**Why the rank-50 test promoted nothing (explanation, confidence 60).** That test wrote the XP total
-into a running game whose map was already built and did not finish a race, so neither trigger ran
-after the write. The law above needs no extra gate to explain it. Not yet confirmed live: the check
+**Why the rank-50 test promoted nothing: unknown (hypothesis, 60).** If that test wrote the XP total
+into a running game whose map was already built, never left and re-entered the map page and did not
+finish a race, neither trigger ran after the write and the law needs no extra gate. Against it: the
+builder only creates a button where `event+0x1ec` is null, so it expects to run more than once, and
+the earlier note does not say whether the page was re-entered. Not yet confirmed live: the check
 is to write `profile+0x3257c` before the first map entry of a boot, then read a side challenge's
 `+0x2d8` on the map (expect 1); a 0 there would point at the event list `Campaign_UnlockEvents`
 walks (`0x81965b28`, vector at `+0x24`) not holding the side challenges, since the button builder
@@ -323,7 +325,8 @@ result; this section is the evidence. "Gate" is `FUN_8100d2a6` (that section), "
 calls and no other reference. Each call's index register was read off the instruction before it
 (a scan of 34 sites, with six of them re-read by hand, plus the sites the earlier lane read):
 every one is a literal except three bounded expressions: `Finished Nth` is `place + 0x17` (24 to
-31; `0x8100c33c`, `0x812bbdc2`) and `Hit Zone N` is `0x2f + zone/10` (48 to 57; `0x812c4310`).
+31; `0x8100c33c`, `0x812bbdc2`) and `Hit Zone N` is `0x2f + zone/10` (48 to 57; `0x812c4310`, capped
+by `cmp r0, #0x64; bgt` at `0x812c42c0` and `zone % 10 == 0` at `0x812c42de`).
 No call can pass 59, 60, 61, 65 to 70 or 77. **"No wreck for 30/60/90 seconds", "No hits for 10 to
 60 seconds" and "Evade Zombie" are authored in `XPAwards.xml` and never paid by this executable**;
 an indirect call through a pointer is the only way left open, and none was found. Omega agrees for
@@ -332,20 +335,21 @@ or 0x41.
 
 **Damage and the perfect lap (78).** `Pilot_TakeDamage` (`0x811c4a06`, pilot, kind, weapon type,
 amount in `s0`; the decompiler gives up on it, read as disassembly) sets `+0x60a4 |= 0x20 | 0x400000`
-on any damage above 0 (`0x811c4ed2`), plus `0x1000000` when `FUN_810018d4` (a mode test) holds, and
+on any damage above 0 (`0x811c4ed2`), plus `0x1000000` when `GameMode_IsZoneFamily` (`0x810018d4`, named at 65 elsewhere) holds, and
 zeroes the time since the last hit `+0x60f8` (`0x811c4cca`). `Pilot_UpdateLapProgress`
 (`0x811c2ad6`, per pilot per frame) on a completed lap (the lap counter `+0x6e50` reaching the
 expected `+0x6e54`; the first crossing at the start only arms it) pays, for a human through the gate:
 `Perfect lap` when `0x20` is clear (`0x811c38a0`; it also counts a profile stat and fires trophy 0x36
 at ten), then `Cross Start/Finish Line with full health` when the ship's maximum health (ship table
 `+0x80`, class slot `+0x98`) is at or below the health `+0x5634` (`0x811c39a4`), and then clears
-`0x20`. So the earlier lane's open `+0x60a4 & 0x20` is "damaged this lap", and `0x1000000` is that
-same damage edge in the modes `FUN_810018d4` selects (the zone family, which our `zone_dirty`
-stands for).
+`0x20`. So the earlier lane's open `+0x60a4 & 0x20` is "damaged this lap", and `0x1000000` is the same
+damage edge in the zone family (as sure as that function's name, 65), the flag our `zone_dirty`
+stands for.
 
 **Weapon hits (75).** `Pilot_TakeDamage` calls `XpAward_WeaponHit(victim, attacker index, kind,
-weapon type)` at `0x811c4cc0` only when the victim is not human (`+0x58dc` neither 0 nor 2); the
-attacker index is the hit record's `+0x12c`. It pays when `kind == 2`, the attacker is human, the
+weapon type)` at `0x811c4cc0`, reached by a short path for non-human pilots (`0x811c4ca6`) and at the
+end of the main damage path (`0x811c540c`, `0x811c54aa` jump back to `0x811c4cac`), so any victim;
+the attacker index is the hit record's `+0x12c`. It pays when `kind == 2`, the attacker is human, the
 attacker is not the victim (`+0x58d4`) and the gate passes. Weapon type to award: 0 Rocket (12), 1
 Missile, 2 Plasma, 3 Cannon, 4 Mine, 5 Quake, 6 Bomb, 7 Leach Beam (19), 10 Light Barrier (20); 8
 and 9 pay nothing. This is a third enum, neither `WeaponType`'s bits
@@ -366,16 +370,17 @@ is set to 99 at pilot reset (`0x811b8c28`, `0x811baa0e`), so each pays at most o
 first evaluation after the start pays the place held then.
 
 **N seconds ahead (75).** `Race_RecordSplit(pilot, split)` keeps one record per lap and split (three
-splits a lap; the line is split 0) in the race object (`+0xfb7c`). Single player only
-(`DAT_8154135c == 0`). The human crossing first stores the race clock; when a rival is the first
+splits a lap; the line is split 0) in the race object (`+0xfb7c`). Only while
+`DAT_8154135c == 0` (unread; likely single player). The human crossing first stores the race clock
+as an integer (`*piVar5 = (int)clock`, truncated); when a rival is the first
 non-human to cross that split afterwards, the gap is the clock minus the human's time: 15 s or more
 pays 47, 10 to 15 s pays 46, 5 to 10 s pays 45. There is no gate here.
 
 **Boost start (80).** `Race_UpdateLaunchGrade` (`0x81175fc8`) is Pulse's launch grader
 ([launch-boost.md](../../../physics/launch-boost.md)) with the same four windows, read from
 `windowStart`, `windowEnd`, `stallEnd` and `overallDuration` by `Handling_ReadGlobalSettings`
-(`0x811ad82c`, keys at `0x814901e4`): a human whose first-thrust edge (`ship+0x595`, the analogue of
-Pulse's `+0x2d5`) lands in `[windowStart, windowEnd)` gets grade 2 and award 11 (`0x811760de`). No
+(`0x811ad82c`, keys at `0x814901e4`): a human whose first-thrust edge (`ship+0x595`; it has no literal-offset writer in 2048, so
+"first-thrust edge" is inherited from Pulse's `+0x2d5`) lands in `[windowStart, windowEnd)` gets grade 2 and award 11 (`0x811760de`). No
 gate. `Ship_UpdateStartBoost` (`0x811bf07e`) reads the grade `+0x58e0` into the multiplier
 `+0x548` exactly as Pulse's does, and also holds the turbo award (71).
 

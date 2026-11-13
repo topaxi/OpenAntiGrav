@@ -152,7 +152,7 @@ here, confidence 80): 0 with the lock test (`m_options & 0x10`) set, state 0; 0 
 **1, state 3**; 2, state 2 grey; 3 green; 4 yellow.
 
 **Who writes 1** (`Campaign_UnlockEvents` `0x812b5b6c`, confidence 80): for every event with
-progress 0, not skipped (`+0x2e5`, `FUN_812b40b4`) and unlockable (`GameModeBase_IsUnlockable`
+progress 0, not skipped (`+0x2e5`, `FUN_812b40b4`; **correction 2026-11-13**: `+0x2e5` is "chain member", set on every event reachable along next or branch, [xp-award.md](xp-award.md), "When a hidden event is promoted") and unlockable (`GameModeBase_IsUnlockable`
 `0x812b3a76`), it calls `SetProgress(1)` when the lock test (vtable `+0x74`, `m_options & 0x10`) or
 `m_options & 8` is set, and `SetProgress(2)` otherwise. It runs from the map builder (`FUN_810f041e`,
 `0x810f0800`) and from the race-end hook (`FUN_812b4872`, `0x812b49d8`). So **a hidden prototype event

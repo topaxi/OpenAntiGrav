@@ -70,9 +70,9 @@ the query the campaign map calls.
 
 1. In-race awards, ready to wire into `XpTally` (laws and addresses on `xp-award.md`, "The other 52
    award triggers"): Perfect lap (5, a lap with no damage), full health at the line (44), Taken
-   1st/2nd/3rd (21-23, once per race, best place starts at 99), N seconds ahead (45-47, single player,
+   1st/2nd/3rd (21-23, once per race, best place starts at 99), N seconds ahead (45-47, `DAT_8154135c == 0`,
    first rival's gap at a split), Boost start (11, launch grade 2), Weapon pad (8), Hit with X (12-20,
-   AI victim of a human-fired weapon), Shielded against X (32-40). Note the gate differs: 11 and
+   any other ship hit by the human's weapon), Shielded against X (32-40). Note the gate differs: 11 and
    45-47 skip `FUN_8100d2a6`. Never paid in v1.04, do not wire: 59-61, 65-70, 77.
    Still unread (address and recipe on the page): 4, 7 (`+0x6128`), 58, 62, 63-64, 71-76.
 2b. The in-race `AwardXP` `+N` popup (HUD, `Hud_UpdateXpLines`), and the two readouts above once a host screen is found.
