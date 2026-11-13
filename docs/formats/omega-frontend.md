@@ -357,10 +357,17 @@ here draws them: the gating is unread. It also authors a `Cell Mode Redirect Tea
 goes to HD's `Team Selection` - Change craft on a card is therefore **off on a map hosted
 without a `team` screen** (open: route it to `Team Selection`).
 
-**Pad, focus and highlight: nothing authored.** The map is `TouchScroll` > `FE3DCanvas` +
-`TouchCampaign`, as Vita 2048's, with no focus, highlight or pad attribute anywhere in the file
-(grep over the 29,919 bytes), so there is no Omega behaviour to port back to 2048. The d-pad, the
-cursor and the key choices stay 2048's, labelled chosen, not measured.
+**Pad, focus and highlight: not in the XML, in the code (2026-11-13).** The map is
+`TouchScroll` > `FE3DCanvas` + `TouchCampaign`, as Vita 2048's, and the file carries no focus,
+highlight or pad attribute (grep over the 29,919 bytes). Omega's `TouchCampaign` code adds them:
+the d-pad (with auto-repeat, not the stick) moves focus between per-event canvas buttons by
+130-degree direction cones and nearest distance, never across seasons; a focus change selects the
+event, plays `newGUI_select`, scrolls the view to it, brightens it with a 1.26 s pulse and runs a
+2.5 s ripple over the lattice around it; Triangle opens the event's records. Law, addresses and
+confidence (72 to 84, static reading): [campaign-map-pad.md](../ghidra/functions/ps4-omega-eu/campaign-map-pad.md).
+Cross's launch path is open there. Ported back to 2048 by rule (one shared map): not wired yet;
+until it is, the d-pad, the cursor and the key choices on both titles stay 2048's, labelled
+chosen, not measured.
 
 **Missing art, said in the loader report:** `Data\FE\NewImages\trackscreens\*.gtf` (the event
 cards' track pictures), `Data\FE\NewImages\Demo\*` and each 2048 circuit's

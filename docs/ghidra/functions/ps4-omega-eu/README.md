@@ -151,6 +151,12 @@ unnamed rather than forced.
   `wohdmeshrefract` (flag `0x20`), as 2048 does. It is wired: 212 meshes on
   Vineta K and 1 on Sebenco Climb.
 
+- [campaign-map-pad.md](campaign-map-pad.md) - the 2048 campaign map under a
+  pad: d-pad focus over per-event canvas buttons (`Canvas_FindButtonInDirection`,
+  130-degree cones, nearest by distance, never across seasons), the view
+  scrolling to the focused event, a 1.26 s brightness pulse and a 2.5 s lattice
+  ripple as the focus look; Triangle opens records; Cross's launch path is open.
+
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be

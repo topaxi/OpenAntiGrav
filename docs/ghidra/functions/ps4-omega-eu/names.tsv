@@ -127,7 +127,6 @@
 0x0147e8e0	function	CampaignCell_ParseValues	72	ai-controls.md
 0x015a0f90	function	GameMode_SetCurrent	70	ai-controls.md
 0x01926700	data	g_GameModeNames	84	ai-controls.md
-
 # 2026-10-14 (mp-collision-re): the collision world and the byte MPTimeTrial clears. See mp-time-trial-collision.md.
 0x01393610	function	Collision_Construct	76	mp-time-trial-collision.md
 0x0131ca50	function	Collision_ProcessPairs	74	mp-time-trial-collision.md
@@ -135,7 +134,6 @@
 0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md
 0x012f7200	function	HullShake_Update	80	hull-shake.md
 0x0193f750	data	g_hud_pickup_widget_table	90	omega-pickup-table.md
-
 # 2026-10-31 hd-quake-leach-instances (weapon-instance-limits.md)
 0x013674e0	function	QuakeManager_Fire	80	weapon-instance-limits.md
 0x01366150	function	Quake_Init	70	weapon-instance-limits.md
@@ -215,3 +213,19 @@
 0x0193fc54	data	g_ShipWallCofR	84	craft-laws.md
 0x01f999e0	data	g_skill_level	82	craft-laws.md
 0x01257f00	function	Collision_SweepSegment	84	own-craft-box.md
+0x014df620	function	TouchCampaign_Update	78	campaign-map-pad.md
+0x013de330	function	Canvas_FindButtonInDirection	84	campaign-map-pad.md
+0x014e32c0	function	TouchCampaign_BuildEventButtons	76	campaign-map-pad.md
+0x014e1b10	function	TouchCampaign_UpdateEvent	74	campaign-map-pad.md
+0x014e4de0	function	TouchCampaign_OnEventFocused	72	campaign-map-pad.md
+0x014e5220	function	TouchCampaign_SetActive	62	campaign-map-pad.md
+0x014e0f50	function	TouchCampaign_FindStartEvent	72	campaign-map-pad.md
+0x014e0be0	function	TouchCampaign_SetScrollLimits	76	campaign-map-pad.md
+0x013da000	function	Canvas3D_Update	72	campaign-map-pad.md
+0x013d7ec0	function	CanvasButton_Activate	76	campaign-map-pad.md
+0x013d8160	function	CanvasButton_GetSeason	72	campaign-map-pad.md
+0x01749330	function	Pad_ActionPressed	84	campaign-map-pad.md
+0x01749310	function	Pad_ActionHeld	84	campaign-map-pad.md
+0x017494d0	function	Pad_ActionByName	84	campaign-map-pad.md
+0x0151d530	function	Campaign2048Screen_Update	72	campaign-map-pad.md
+0x014e5c70	function	TouchCampaign_CommitEvent	55	campaign-map-pad.md
