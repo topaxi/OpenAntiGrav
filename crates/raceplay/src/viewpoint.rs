@@ -168,6 +168,33 @@ impl Race {
         self.fit_sights();
     }
 
+    /// Camera-only windows, for a race nobody flies (an attract demo shown as a wallpaper, one
+    /// window per monitor): `windows` OS windows of one view each, window 1 on the player's
+    /// slot (its own camera, the spectator director in a demo), each further window on the next
+    /// craft's chase camera, cycling once every craft fielded (at most
+    /// [`oag_render::viewport::MAX_VIEWPORTS`]) has a window. Seats nobody: view side only, like
+    /// [`Self::set_windows`], so no tick reads it and the state hash does not hold it. `0` or
+    /// `1` is no windows. Call it again when a window opens or closes.
+    pub fn watch_in_windows(&mut self, windows: usize) {
+        if windows <= 1 {
+            self.set_windows(Vec::new());
+            self.set_viewport_count(1);
+            return;
+        }
+        let count = self.set_viewport_count(windows);
+        let player = self.player_slot();
+        let order: Vec<usize> = std::iter::once(player)
+            .chain((0..count).filter(|&slot| slot != player))
+            .collect();
+        let views = (0..windows)
+            .map(|window| WindowViews {
+                seats: vec![order[window % order.len()]],
+                cut: oag_render::viewport::Cut::default(),
+            })
+            .collect();
+        self.set_windows(views);
+    }
+
     /// Takes window `index` out of the layout (it was closed), so the windows after it
     /// keep their place in the list. Its seats stay in the race, flown by the AI.
     /// Window 1 (index 0) is never removed: closing it ends the run.

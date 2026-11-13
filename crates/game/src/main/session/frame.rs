@@ -980,10 +980,13 @@ impl Session {
                         if let Some(keeper) = &mut stage.keeper {
                             keeper.recut_first(&stage.race);
                         }
-                        oag_game::split_screen::follow_devices(
-                            &mut stage.race,
-                            self.controls.assignment(),
-                        );
+                        // A demo is nobody's: a seat left from an earlier race takes no slot.
+                        if stage.demo.is_none() {
+                            oag_game::split_screen::follow_devices(
+                                &mut stage.race,
+                                self.controls.assignment(),
+                            );
+                        }
                         stage.race.tick(&inputs);
                         // Photo mode's rewind goes back through these (`session::photo_rewind`).
                         if let Some(keeper) = &mut stage.keeper {

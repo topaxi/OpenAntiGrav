@@ -554,7 +554,9 @@ impl Session {
             );
         }
         oag_game::texture_pack::attach(&mut options, &self.settings.mods);
-        self.seat_the_windows(&mut options);
+        if !options.demo {
+            self.seat_the_windows(&mut options);
+        }
         options.people = 0;
         if let Some(seats) = self
             .split_lobby
@@ -795,8 +797,10 @@ impl Session {
                         ai_choice,
                         oag_game::ai_choice::Source::Free(ai_difficulty),
                     );
+                    // Several windows (a wallpaper on several monitors): a camera each, on
+                    // craft of its own, and nobody seated.
                     if let Some(shell) = &self.shell {
-                        race_stage.race.fly_as_demo(&shell.title.demo);
+                        oag_game::demo::hand_over(&mut race_stage.race, &shell.title.demo, open_windows);
                     }
                     race_stage.race.begin_speed_plans();
                     race_stage.demo = Some(run);

@@ -902,13 +902,25 @@ pub(crate) struct DemoArgs {
     pub(crate) demo: bool,
 
     /// Like `--demo`, as a wallpaper: input is ignored (Escape quits) and the HUD is hidden.
+    /// On a Wayland compositor with `wlr-layer-shell` (niri, sway, Hyprland) it is the desktop
+    /// background of every output, a camera each; SIGINT or SIGTERM ends it.
     #[arg(long, conflicts_with_all = ["race", "launcher"])]
     pub(crate) wallpaper: bool,
+
+    /// The most frames a second a `--wallpaper` draws (a rate, or `unlimited`), whatever the
+    /// VSYNC and FRAME LIMIT settings say, so a background does not run the GPU flat out.
+    #[arg(long, value_name = "FPS", default_value = "30", requires = "wallpaper")]
+    pub(crate) wallpaper_fps: oag_present::perf::FrameLimit,
 }
 
 impl DemoArgs {
     /// `Some(wallpaper)` when the run is a demo.
     pub(crate) fn mode(&self) -> Option<bool> {
         (self.demo || self.wallpaper).then_some(self.wallpaper)
+    }
+
+    /// `--wallpaper-fps`, for a wallpaper only.
+    pub(crate) fn limit(&self) -> Option<oag_present::perf::FrameLimit> {
+        self.wallpaper.then_some(self.wallpaper_fps)
     }
 }

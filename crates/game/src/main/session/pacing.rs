@@ -24,6 +24,11 @@ impl Session {
     /// free to run ahead, and under `smooth` the limit is the only thing
     /// stopping the GPU rendering frames that are then discarded.
     fn frame_period(&self) -> Option<std::time::Duration> {
+        // A wallpaper's own cap holds under every VSYNC value: a desktop background is drawn at
+        // its rate or not at all.
+        if let Some(limit) = self.demo.limit {
+            return limit.period();
+        }
         if self.settings.display.vsync.paces_itself() {
             return None;
         }
@@ -41,6 +46,9 @@ impl Session {
     /// Under `Vsync::On` [`Session::frame_period`] returns before this is read,
     /// so the cap is inert there.
     fn active_limit(&self) -> perf::FrameLimit {
+        if let Some(limit) = self.demo.limit {
+            return limit;
+        }
         let limit = self.settings.display.frame_limit;
         match self.stage {
             Stage::Race(_) => limit,
