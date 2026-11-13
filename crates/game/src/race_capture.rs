@@ -1287,42 +1287,19 @@ pub fn capture(
         // The track-description panel, over the flyby and fading out behind the chase view - the
         // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there, and on every
         // window of a multi-window race against that window's own views.
-        let (panel_views, panel_cut) = match window {
-            Some(index) => (race.window_drawn(index).len(), race.window_cut(index)),
-            None => (race.views_drawn(), race.cut()),
-        };
-        if let (Some(assets), Some(progress), true) = (
+        crate::track_panel::draw_captured(
+            (&device, &queue, format),
             track_panel.clone(),
-            race.track_panel_progress(),
-            panel_views > 0,
-        ) {
-            crate::track_panel::draw_once(
-                &device,
-                &queue,
-                format,
-                assets,
-                &mut encoder,
-                &hud_view,
-                progress,
-                crate::hud_views::panel_viewport(panel_views, panel_cut, hud_viewport),
-            );
-        }
-        // An attract demo's screen, `tick` ticks in, as the window draws it over a demo.
-        if options.demo
-            && let Some(assets) = demo_overlay.as_ref()
-        {
-            match crate::demo_overlay::Overlay::new(&device, &queue, format, assets) {
-                Ok(mut screen) => screen.draw(
-                    &device,
-                    &queue,
-                    &mut encoder,
-                    &hud_view,
-                    race.sim.world.tick as f32 / 60.0,
-                    hud_viewport,
-                ),
-                Err(why) => warn!("the demo screen did not build ({why}); capturing without it"),
-            }
-        }
+            (&race, window),
+            (&mut encoder, &hud_view, hud_viewport),
+        );
+        // An attract demo's screen, as the window draws it over a demo.
+        crate::demo_overlay::draw_once(
+            (&device, &queue, format),
+            demo_overlay.as_ref().filter(|_| options.demo),
+            (&mut encoder, &hud_view, hud_viewport),
+            race.sim.world.tick as f32 / 60.0,
+        );
         let scale = options.hud_scale;
         // Every window that holds a seat shows the board, as the window frame loop does
         // (`RaceStage::draw_end_screens`).

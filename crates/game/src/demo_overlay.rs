@@ -80,3 +80,24 @@ impl Overlay {
         );
     }
 }
+
+/// Builds an overlay for `assets` and draws it once - what a headless capture does, with no
+/// stage to keep one in. A screen that will not build is skipped with a warning.
+pub fn draw_once(
+    (device, queue, format): (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    assets: Option<&Assets>,
+    (encoder, view, viewport): (
+        &mut wgpu::CommandEncoder,
+        &wgpu::TextureView,
+        (f32, f32, f32, f32),
+    ),
+    seconds: f32,
+) {
+    let Some(assets) = assets else {
+        return;
+    };
+    match Overlay::new(device, queue, format, assets) {
+        Ok(mut screen) => screen.draw(device, queue, encoder, view, seconds, viewport),
+        Err(why) => log::warn!("the demo screen did not build ({why}); capturing without it"),
+    }
+}
