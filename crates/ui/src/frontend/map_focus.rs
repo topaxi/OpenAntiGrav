@@ -115,7 +115,7 @@ impl PadFocus {
 /// How much the focused event brightens, in 0..=255 levels: `sin(phase) * 32.5 + 32.5`.
 #[must_use]
 pub fn pulse(phase: f32) -> f32 {
-    phase.sin() * 32.5 + 32.5
+    oag_core::math::sin(phase) * 32.5 + 32.5
 }
 
 /// The alpha a lattice tile at squared distance `d2` from the focus gets `t`
@@ -123,7 +123,7 @@ pub fn pulse(phase: f32) -> f32 {
 #[must_use]
 pub fn ripple_alpha(t: f32, d2: f32, r: f32) -> f32 {
     let r2 = r * r;
-    let shape = ((-5.5 * t - std::f32::consts::PI + 0.15 * d2).sin() + 1.0) * 128.0;
+    let shape = (oag_core::math::sin(-5.5 * t - std::f32::consts::PI + 0.15 * d2) + 1.0) * 128.0;
     let rise = (4.0 * t).min(1.0);
     let fade = ((RIPPLE_SECONDS - t) / RIPPLE_SECONDS).clamp(0.0, 1.0);
     let reach = ((r2 - d2) / r2).clamp(0.0, 1.0);
@@ -147,7 +147,7 @@ pub fn pick(
         .into_iter()
         .filter_map(|(at, to)| {
             let (dcol, drow) = (to.0 - from.0, to.1 - from.1);
-            let angle = (dcol.atan2(drow).to_degrees() + 360.0) % 360.0;
+            let angle = (oag_core::math::atan2(dcol, drow).to_degrees() + 360.0) % 360.0;
             let inside = match direction {
                 Button::Right => (25.0..155.0).contains(&angle),
                 Button::Up => (115.0..245.0).contains(&angle),
