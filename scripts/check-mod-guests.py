@@ -19,16 +19,17 @@ For every `assets/mods/*/*/guest/Cargo.toml`:
 1. `cargo test` in the guest passes. A failure fails the check.
 2. `cargo build --release --target wasm32-unknown-unknown` gives, byte for byte, the module
    committed under `ext/`. One that differs is reported as stale: rebuild it with the guest's
-   `build.sh` and commit it. Stale modules fail the check only with `--strict`: a module built
-   against an older SDK that still speaks the same ABI revision loads and runs, so staleness
-   is a report until the tree is clean of it. Skipped, and said so, where the wasm target is
-   not installed (`rustup target add wasm32-unknown-unknown`).
+   `build.sh` and commit it. Without `--strict` staleness is a report; with it, a stale module
+   fails, and so does a missing wasm target (a check that compared nothing must not pass).
+   Install it with `rustup target add wasm32-unknown-unknown`.
 
 A guest builds against the SDK in this checkout (`assets/mods/.cargo/config.toml` patches the
 git dependency), with the toolchain `rust-toolchain.toml` pins, so the bytes are a function of
 the tree.
 
-Not in the default gate: it builds seven small crates twice and needs the wasm target.
+`just` (the `check` recipe), `just gate-affected` and CI's `test` job run it with `--strict`.
+A toolchain bump or an SDK change stales every module at once, which is the intended failure;
+one command rebuilds them all: `just rebuild-guests`.
 """
 
 import subprocess
@@ -59,6 +60,9 @@ def main() -> int:
     build = has_target()
     if not build:
         print(f"check-mod-guests: {TARGET} is not installed, modules not compared")
+        if strict:
+            print(f"    rustup target add {TARGET}")
+            return 1
     failed, stale = [], []
     for manifest in guests:
         guest = manifest.parent

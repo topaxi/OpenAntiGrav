@@ -44,6 +44,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       # `oag-audio` builds `cpal` with its PipeWire host, which links
       # libpipewire-0.3 through pkg-config, and its ALSA backend needs
@@ -88,6 +89,11 @@ jobs:
         run: python3 scripts/check-strings.py
       - name: Assert every shipped TOML validates against its schema and the schemas stage for Pages
         run: scripts/check-schemas.sh
+      # Each mod guest is a workspace of its own: the steps above compile none of them. Its
+      # tests pass and its committed ext/*.wasm is byte-identical to a fresh build, or the
+      # module a player runs is not the source beside it. `just rebuild-guests` regenerates.
+      - name: Assert every mod guest's tests pass and its committed module is its build
+        run: python3 -I scripts/check-mod-guests.py --strict
 
   docs:
     name: documentation links
