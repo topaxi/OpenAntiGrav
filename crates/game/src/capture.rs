@@ -475,6 +475,7 @@ pub fn run(
                 input_script: None,
                 autopilot: options.autopilot,
                 demo: false,
+                wallpaper: false,
                 pilot_assist: options.pilot_assist,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,

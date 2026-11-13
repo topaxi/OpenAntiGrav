@@ -60,6 +60,8 @@ pub struct CaptureOptions {
     pub autopilot: bool,
     /// `--demo`: nobody is in the race ([`Race::fly_as_demo`]).
     pub demo: bool,
+    /// `--wallpaper`: a demo nobody can press a button in, so its screen is not drawn.
+    pub wallpaper: bool,
     /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
@@ -1296,7 +1298,9 @@ pub fn capture(
         // An attract demo's screen, as the window draws it over a demo.
         crate::demo_overlay::draw_once(
             (&device, &queue, format),
-            demo_overlay.as_ref().filter(|_| options.demo),
+            demo_overlay
+                .as_ref()
+                .filter(|_| options.demo && !options.wallpaper),
             (&mut encoder, &hud_view, hud_viewport),
             race.sim.world.tick as f32 / 60.0,
         );
