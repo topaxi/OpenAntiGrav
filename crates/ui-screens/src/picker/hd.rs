@@ -50,8 +50,8 @@
 //!   `ShipModel` values ([`ShipModel`]) by `oag_game::preview::ship_model`.
 //! - **The `middle="true"` marks** of the `SHIP MODEL` bracket (art not
 //!   found), the `Padlock` and the `Unlockcondition` text (this build keeps
-//!   no unlock state), the `UnlockNobble0..4` hearts (their thresholds are
-//!   unscaled onto the bar) and the `Squares` page dots (an empty item
+//!   no unlock state), the `UnlockNobble0..4` hearts (the thresholds' source
+//!   is unread, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-loyalty.md`) and the `Squares` page dots (an empty item
 //!   `the screen cpp` fills). `LiveryString` is authored empty and filled by code this
 //!   build has not read; the honeycomb's cursor row shows the chosen model
 //!   instead, so nothing stands in for it.
@@ -353,6 +353,15 @@ const MINI_TEXT_INSET: f32 = 20.0;
 /// and the loyalty block beside them.
 const STAT_BLOCKS: [&str; 4] = ["Slide_0", "Slide_1", "Slide_2", "Slide_3"];
 const LOYALTY_BLOCK: &str = "Slide_4";
+
+/// The total at which the loyalty bar is full: the cap a banked total is held to
+/// and the `max` the screen's update passes the stat-bar setter.
+const LOYALTY_MAX: f32 = 100_000.0;
+
+/// A 0..100 rating as the fraction of its bar.
+fn rating_fraction(rating: u8) -> f32 {
+    f32::from(rating) / 100.0
+}
 /// The palette entry a variant's added rating is drawn in, see
 /// [`TeamScreen::bonus`].
 const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
@@ -451,7 +460,8 @@ pub(super) fn body(
         let base = base.map(|base| base.values()[index]);
         stat_bar(
             block,
-            (value, base),
+            (value.map(rating_fraction), base.map(rating_fraction)),
+            value.map(|value| format!("{value:03}")),
             layout,
             extra,
             frame,
@@ -460,20 +470,22 @@ pub(super) fn body(
         );
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
-        // The running loyalty total on the stat bars' own 0..100 scale.
-        // **Only the empty total is measured** (`000` on a fresh profile,
-        // the nobble at the bar's left end); how a larger total scales
-        // onto the bar and its three digits is chosen, not measured.
-        let loyalty = match &entry.details {
+        // `TeamSelectionScreen_Update` hands the team's banked total
+        // (`Loyalty_FindTeamRecord`, `record + 8`) and the cap 100000.0 to the
+        // stat-bar setter, which scales the bar by `total / max` and prints the
+        // total through `%03d` (`docs/ghidra/functions/ps3-hdfury-eu/
+        // team-selection-loyalty.md`).
+        let total = match &entry.details {
             Details::Ship {
                 loyalty: Some(total),
                 ..
-            } => Some((*total).min(100) as u8),
+            } => Some(*total),
             _ => None,
         };
         stat_bar(
             block,
-            (loyalty, None),
+            (total.map(|total| total as f32 / LOYALTY_MAX), None),
+            total.map(|total| format!("{total:03}")),
             layout,
             extra,
             frame,
@@ -586,7 +598,8 @@ pub fn logo_src(location: &str) -> String {
 /// loyalty block) the block draws in its own colour, as any block does.
 fn stat_bar(
     block: &BlockWidget,
-    (value, base): (Option<u8>, Option<u8>),
+    (value, base): (Option<f32>, Option<f32>),
+    text: Option<String>,
     layout: &Layout,
     extra: &TeamScreen,
     frame: &Frame,
@@ -599,7 +612,7 @@ fn stat_bar(
         .iter()
         .find(|(n, _)| n == name)
         .map(|(_, solid)| *solid);
-    let split = value.map(|value| block.x + block.width * (f32::from(value) / 100.0).min(1.0));
+    let split = value.map(|value| block.x + block.width * value.min(1.0));
     if let Some(art) = frame.blocks {
         let whole = oag_ui::menu::block::Block {
             x: block.x,
@@ -617,8 +630,7 @@ fn stat_bar(
                 if let (Some(value), Some(base), Some(bonus)) = (value, base, extra.bonus)
                     && value > base
                 {
-                    let at =
-                        |rating: u8| block.x + block.width * (f32::from(rating) / 100.0).min(1.0);
+                    let at = |fraction: f32| block.x + block.width * fraction.min(1.0);
                     oag_ui::menu::block::draw_span(
                         &whole,
                         at(base),
@@ -641,7 +653,7 @@ fn stat_bar(
         positioned.scale = block.text_scale;
         out.push(text_draw(&positioned, &content, layout));
     }
-    let (Some(value), Some(split)) = (value, split) else {
+    let (Some(readout), Some(split)) = (text, split) else {
         return;
     };
     let index = name.trim_start_matches("Slide_");
@@ -661,7 +673,7 @@ fn stat_bar(
         let mut moved = text.clone();
         let nobble_width = 16.0;
         moved.x = split - nobble_width - 2.0;
-        out.push(text_draw(&moved, &format!("{value:03}"), layout));
+        out.push(text_draw(&moved, &readout, layout));
     }
 }
 

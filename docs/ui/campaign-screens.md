@@ -3801,15 +3801,14 @@ against the original at its box.
 | --- | --- | --- |
 | Panel corner marks | `<Bracket corner="true">` (`Colour` `HD_Grey`), `cell_brackets::draws` | drawn on both screens. **`corner2.gtf`'s own corner is bottom-left**: the shared draw had it top-left, which drew every top mark turned over on Cell Selection too (found on Ship Select at 8x; fixed for all three screens, `cell_brackets` doc) |
 | `▸` before SPEED/THRUST/HANDLING/SHIELD/LOYALTY and the RECORDS header | `arrowcolor` on an `unselectable` block, drawn in `NonSelectable_Arrow_HD.gtf` 21 units in, centred | drawn. **Art chosen from the file's name, place measured** (one frame, pixel-level match); the executable's draw for an unselectable block is unread (`Block_MakeSelectable` is the 32x32 `HD_options_arrow` selectable path) |
-| LOYALTY value | `Slide_4`/`Nobble_4`/`Label_4` and the records store's team total | `000` and the nobble at the bar's left end on a fresh profile (measured). A non-zero total's scale onto the bar and its digits is chosen (the stat bars' 0..100) |
+| LOYALTY value | `Slide_4`/`Nobble_4`/`Label_4` and the records store's team total | the total through `%03d` and the bar at `total / 100000` of the block, read off the update (`team-selection-loyalty.md`, 2026-11-13); a fresh profile prints `000` with the nobble at the bar's left end. Test: `hd_ship_select_shows_the_highlighted_teams_loyalty_total` |
 | `CIRCUIT LENGTH`/`RACE DISTANCE` `4.4KM`/`13.2KM` | measured off the circuit's own spline | already drawn: the pair recorded `race.track = 01_Vineta_K` (the environment directory) where HD's circuit id is `01_Track`, so the capture selected no circuit and kept the dash. `scripts/rpcs3-hd-menu-pair.py` fixed; a pair recorded before needs `ours.race.track` set to `01_Track` |
 
 Not done, with where it was looked for: the page `Squares` (empty `<Item>` in
 both files, filled by screen code that was not read); the circuit thumbnail is
 the `FlyByMovie` (`Loading_Icon.bik` authored, the environment's
 `fe/preview.bik` by code), which needs a streaming Bink widget in the picker;
-the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar) need the
-unlock thresholds scaled onto the bar; the `middle="true"` marks.
+the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar): the placing law is read (`team-selection-loyalty.md`) but the thresholds' source is not; the `middle="true"` marks.
 
 Omega: **ported**. Its Ship Select goes through the same `picker::hd` path and
 shows the corner marks, the arrow and `000` on a `--menu-page ship-select`
