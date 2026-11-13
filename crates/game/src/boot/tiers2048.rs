@@ -269,7 +269,7 @@ fn card(
     // The circuit's photo is a file of its own per circuit; a circuit driven
     // backwards shows its forward twin's.
     let photo = cell.track.as_deref().map(|id| {
-        let forward = id.strip_suffix("_R").unwrap_or(id);
+        let forward = id.trim_suffix("_R");
         format!(r"Data\FE\NewImages\trackscreens\{forward}.gtf")
     });
     let emblem = track.map(|track| format!(r"{}\fe\TrackSelectEmblem.gtf", track.location));

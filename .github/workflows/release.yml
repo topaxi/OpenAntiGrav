@@ -150,7 +150,7 @@ jobs:
         with:
           submodules: true
       # Same pinned toolchain as ci.yml; rust-toolchain.toml names it too.
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v7
         with:
@@ -199,7 +199,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
@@ -257,7 +257,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v7
         with:
@@ -319,7 +319,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: aarch64-apple-ios
       - uses: Swatinem/rust-cache@v2

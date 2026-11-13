@@ -403,7 +403,7 @@ fn the_lock_hash_covers_the_hold_and_not_the_picture() {
     }
     assert_eq!(hash(&a), hash(&b));
     b.alpha = 17.0;
-    b.blink = !b.blink;
+    b.blink.toggle();
     b.blink_timer = 0.05;
     b.spin = 1.0;
     assert_eq!(hash(&a), hash(&b), "the hash reads what only draws");

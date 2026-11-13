@@ -25,6 +25,8 @@
 //! `race_ground_truth::the_ai_drives_the_field_along_the_track` (needs a disc).
 //! This says the controller is stable against a plant of the right *shape*.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
 #![expect(
     clippy::disallowed_methods,
     reason = "test fixtures and reference values: poses and angles built with glam and the \

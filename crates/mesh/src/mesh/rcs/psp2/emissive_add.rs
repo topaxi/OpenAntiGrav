@@ -95,7 +95,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or(&material.name);
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha") {
         Some(Kind {
             mask: "Texture2Alpha",

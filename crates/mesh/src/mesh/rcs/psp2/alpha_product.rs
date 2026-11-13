@@ -23,12 +23,12 @@ fn is_family(material: &Material) -> bool {
         .next()
         .unwrap_or(&material.name)
         .to_ascii_lowercase();
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(&stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     let stem = stem
         .strip_suffix("_1")
         .or_else(|| stem.strip_suffix("_2"))
         .unwrap_or(stem);
-    let stem = stem.strip_suffix("new").unwrap_or(stem);
+    let stem = stem.trim_suffix("new");
     stem == "m_diffuse_normal_constantspecular"
 }
 

@@ -84,7 +84,7 @@ fn file_stem(material: &Material) -> &str {
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or(&material.name);
-    stem.strip_suffix(".rcsmaterial").unwrap_or(stem)
+    stem.trim_suffix(".rcsmaterial")
 }
 
 /// Whether the material is Omega's `rt_icetunnel` (Sebenco Climb's ice tunnel). Its GCN pixel

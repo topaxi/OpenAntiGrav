@@ -127,7 +127,7 @@ fn file_name(title: &str, unix: u64, n: u32) -> String {
 
 /// The `(unix seconds, n)` a name carries: the last two `-` separated numbers of its stem.
 fn stamp(name: &str) -> (u64, u32) {
-    let stem = name.strip_suffix(&format!(".{EXTENSION}")).unwrap_or(name);
+    let stem = name.trim_suffix(&format!(".{EXTENSION}"));
     let mut parts = stem.rsplit('-');
     let n = parts.next().and_then(|n| n.parse().ok());
     let unix = parts.next().and_then(|unix| unix.parse().ok());

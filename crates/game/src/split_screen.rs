@@ -33,8 +33,14 @@ pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) ->
     }
     let count = race.set_viewport_count(players);
     race.set_cut(cut);
-    for slot in 0..count.min(MAX_PLAYERS) {
-        race.sim.world.controllers[slot] = Controller::Local;
+    for controller in race
+        .sim
+        .world
+        .controllers
+        .iter_mut()
+        .take(count.min(MAX_PLAYERS))
+    {
+        *controller = Controller::Local;
     }
     if count < players {
         log::warn!("--players {players}: only {count} craft are fielded, so {count} views");

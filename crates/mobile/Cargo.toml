@@ -7,13 +7,14 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[dependencies]
-log.workspace = true
-
 # Android: NativeActivity (no Java in the APK), winit's backend over
 # `android-activity`. See docs/tools/android.md.
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { workspace = true, features = ["android-native-activity"] }
+
+# iOS: the only code that logs is `ios.rs`.
+[target.'cfg(target_os = "ios")'.dependencies]
+log.workspace = true
 
 [dev-dependencies]
 oag-mod.workspace = true

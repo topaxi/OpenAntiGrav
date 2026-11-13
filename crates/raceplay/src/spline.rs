@@ -348,8 +348,8 @@ impl Spline {
         let from = around.saturating_sub(window);
         let to = around.saturating_add(window).min(last);
         let mut best: Option<(usize, f32)> = None;
-        for index in from..=to {
-            let distance = (Vec3::from_array(self.samples[index].pos) - position).length();
+        for (index, sample) in self.samples.iter().enumerate().take(to + 1).skip(from) {
+            let distance = (Vec3::from_array(sample.pos) - position).length();
             if best.is_none_or(|(_, previous)| distance < previous) {
                 best = Some((index, distance));
             }

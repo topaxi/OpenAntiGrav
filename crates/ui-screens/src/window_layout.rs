@@ -469,7 +469,7 @@ impl Picker {
             }
             Row::Mode if self.one_window_only => None,
             Row::Mode => {
-                self.fullscreen = !self.fullscreen;
+                self.fullscreen.toggle();
                 Some(Event::Changed)
             }
             Row::Window => {
@@ -482,7 +482,7 @@ impl Picker {
             Row::Seats => self.trade_seat(delta).then_some(Event::Changed),
             Row::Cut => {
                 let window = &mut self.windows[self.edit];
-                window.vertical = !window.vertical;
+                window.vertical.toggle();
                 Some(Event::Changed)
             }
             Row::Monitor => {

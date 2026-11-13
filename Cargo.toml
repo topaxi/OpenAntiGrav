@@ -64,7 +64,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/topaxi/OpenAntiGrav"
-rust-version = "1.97.1"
+rust-version = "1.100"
 
 [workspace.dependencies]
 oag-2048 = { path = "crates/2048" }
@@ -275,6 +275,12 @@ glam = { version = "0.34", default-features = false, features = [
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_debug_implementations = "warn"
+
+[workspace.lints.cargo]
+# Cargo's own check for a normal dependency nothing names. It does not look at
+# dev-dependencies or at a dependency only tests use, so `just check-unused-deps`
+# (cargo shear) stays.
+unused_dependencies = "warn"
 
 [workspace.lints.clippy]
 # Float lints, all off: the simulation is float arithmetic by design, and the

@@ -36,7 +36,7 @@ use crate::mesh::{Emissive, ModelTexture, PROGRAM_STATIC_HOLOGRAM};
 /// Whether a material is the plain `dc_hologramwithstatic` by file name.
 fn is_static_hologram(name: &str) -> bool {
     let stem = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     stem.eq_ignore_ascii_case("dc_hologramwithstatic")
 }
 

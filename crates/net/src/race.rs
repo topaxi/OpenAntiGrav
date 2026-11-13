@@ -113,8 +113,9 @@ fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
 ///
 /// A control scheme this build does not know.
 pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
-    for slot in 0..usize::from(params.people).min(oag_gameplay::MAX_PLAYERS) {
-        race.sim.world.controllers[slot] = Controller::Remote;
+    let people = usize::from(params.people).min(oag_gameplay::MAX_PLAYERS);
+    for controller in race.sim.world.controllers.iter_mut().take(people) {
+        *controller = Controller::Remote;
     }
     race.set_control_scheme(scheme(params)?);
     race.set_autopilot(false);
@@ -150,9 +151,17 @@ fn zone_target(params: &RaceParams) -> Option<u16> {
 /// (`Race::finished`) counts only people. Both ends call it with the same mask at the same
 /// tick. **Chosen, not measured**: the original has no network race.
 pub fn retire(race: &mut Race, retired: u8) {
-    for slot in 0..oag_gameplay::MAX_PLAYERS.min(8) {
+    let seats = oag_gameplay::MAX_PLAYERS.min(8);
+    for (slot, controller) in race
+        .sim
+        .world
+        .controllers
+        .iter_mut()
+        .enumerate()
+        .take(seats)
+    {
         if retired >> slot & 1 == 1 {
-            race.sim.world.controllers[slot] = Controller::Ai;
+            *controller = Controller::Ai;
         }
     }
 }
