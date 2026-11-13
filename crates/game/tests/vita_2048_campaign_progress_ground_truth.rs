@@ -343,7 +343,7 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
     gathered.observe_kills(1);
     let kill = awards.xp(6, column);
     assert!(kill > 0, "the table authors Opponent destroyed");
-    let paid = store.bank_event_xp(&mut gathered, Some(records::Medal::Bronze), Some(3));
+    let paid = store.bank_event_xp(&mut gathered, None, Some(records::Medal::Bronze), Some(3));
     let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
     let third = awards.xp(oag_tables::xp::award::FINISHED_1ST + 2, column);
     assert!(pass > 0 && third > 0, "the table authors both rows");
@@ -355,14 +355,96 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
         "banking empties the tally, so a second call adds nothing"
     );
 
-    // First place is elite; the stored total accumulates.
+    // First place is elite over the pass before it: Elite alone, and the stored total accumulates.
     let before = store.xp();
-    let paid = store.bank_event_xp(&mut tally(), Some(records::Medal::Gold), Some(1));
-    let expected = awards.xp(oag_tables::xp::award::EVENT_ELITE, column)
-        + awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
-    assert_eq!(paid, expected);
-    assert_eq!(store.xp(), before + expected);
+    let first = awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
+    let elite = awards.xp(oag_tables::xp::award::EVENT_ELITE, column);
+    let paid = store.bank_event_xp(
+        &mut tally(),
+        Some(records::Medal::Bronze),
+        Some(records::Medal::Gold),
+        Some(1),
+    );
+    assert_eq!(paid, elite + first);
+    assert_eq!(store.xp(), before + elite + first);
+
+    // An elite as a first pass pays both completion awards.
+    let paid = store.bank_event_xp(&mut tally(), None, Some(records::Medal::Gold), Some(1));
+    assert_eq!(paid, pass + elite + first);
+
+    // Repeating a result that does not beat the best pays the finishing place only.
+    for (prior, now) in [
+        (records::Medal::Bronze, records::Medal::Bronze),
+        (records::Medal::Gold, records::Medal::Gold),
+        (records::Medal::Gold, records::Medal::Bronze),
+    ] {
+        let paid = store.bank_event_xp(&mut tally(), Some(prior), Some(now), Some(1));
+        assert_eq!(paid, first, "{prior:?} then {now:?}");
+    }
     assert_eq!(store.xp_rank(&ranks), ranks.rank(store.xp()));
+}
+
+/// A whole event raced under the autopilot pays the lap and place awards the disc's table
+/// authors, through the edges the race reports. Each lap's expectation is read off the ship as it
+/// is driven (a drop in health since the last line is damage; health at the maximum at the line is
+/// full), and the shield is refilled after the first line so a clean, full lap exists whatever the
+/// autopilot scraped. Fails if the lap or place feeds are dropped from `Race::tick`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
+    let Some(source) = source() else { return };
+    let options = race::Options {
+        source: source.display().to_string(),
+        ..race::Options::default()
+    };
+    let loaded = race::load_event(&options, "2048 - Event 1").expect("the event loads");
+    let progress = loaded.campaign_2048_event.clone().expect("an event");
+    let awards = progress.xp_awards.clone().expect("the table loads");
+    let mut run = race::Race::start(loaded.setup);
+    run.arm_event_xp(&progress);
+    run.set_autopilot(true);
+    let max = run.sim.world.ships[0].handling.dimensions.shield;
+    let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
+    let (mut perfect, mut full) = (0, 0);
+    while !run.finished() && run.sim.world.tick < 30_000 {
+        run.tick(&oag_gameplay::PlayerInputs::none());
+        let now = run.sim.world.ships[0].physics.shield;
+        damaged |= now < shield;
+        shield = now;
+        if run.sim.world.race[0].lap > lap {
+            lap = run.sim.world.race[0].lap;
+            perfect += u32::from(!damaged);
+            full += u32::from(now >= max);
+            damaged = false;
+            run.sim.world.ships[0].physics.shield = max;
+            shield = max;
+        }
+    }
+    assert!(run.finished(), "the event did not finish in 30000 ticks");
+    let tally = run.xp_tally().expect("armed");
+    let column = progress.xp_column;
+    assert!(
+        awards.xp(5, column) > 0 && awards.xp(44, column) > 0 && awards.xp(21, column) > 0,
+        "the table authors the lap and place awards"
+    );
+    assert_eq!(tally.times_paid(5), perfect, "Perfect lap, lap by lap");
+    assert_eq!(
+        tally.times_paid(44),
+        full,
+        "full health at the line, lap by lap"
+    );
+    assert!(
+        perfect >= 1 && full >= 1,
+        "sanity: {perfect} clean, {full} full"
+    );
+    let taken: u32 = [21, 22, 23]
+        .map(|index| tally.times_paid(index))
+        .iter()
+        .sum();
+    assert!(
+        taken >= 1,
+        "the player took at least one of the first three places"
+    );
 }
 
 /// The rank gate reaches the map: the 15 hidden side challenges author the rank they wait for,
@@ -420,4 +502,42 @@ fn the_xp_total_decides_which_hidden_events_are_revealable() {
     assert!(store.record_found("wipeout 2048", feisar));
     boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
     assert_eq!(loaded.frontend.campaign_reveal(feisar), Some(Reveal::Found));
+}
+
+/// The race-end sequence on a map that is already built: the finish banks the event's XP through
+/// `Store::bank_event_xp`, and asking the map again (`boot::reveals2048::refresh`, which
+/// `MapSeed::open` runs on every opening) reveals the challenges the new total reaches, with no
+/// restart. Fails if the refresh stops reading the live total.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_rank_reached_by_a_finish_reveals_its_events_on_the_next_map_build() {
+    use oag_ui::frontend::Reveal;
+    let Some(source) = source() else { return };
+    let text = source.display().to_string();
+    let mut loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut archives = oag_2048::open(&text).expect("this is 2048");
+    let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+    let column = oag_tables::xp::Column::Race;
+    let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
+    let rank_10 = ranks.threshold_xp(10, 0);
+    let feisar = "Feisar - P Ship Challenge";
+    let (mut store, _) = records::parse("").expect("an empty file parses");
+    store.bank_xp(rank_10 - pass);
+
+    boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
+    assert_eq!(
+        loaded.frontend.campaign_reveal(feisar),
+        Some(Reveal::Hidden)
+    );
+
+    let mut tally = oag_raceplay::xp_tally::XpTally::new(awards, column);
+    let paid = store.bank_event_xp(&mut tally, None, Some(records::Medal::Bronze), None);
+    assert_eq!(paid, pass, "a first pass pays the pass award alone");
+    assert_eq!(ranks.rank(store.xp()), 10);
+
+    boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
+    assert_eq!(
+        loaded.frontend.campaign_reveal(feisar),
+        Some(Reveal::Revealable)
+    );
 }

@@ -449,6 +449,21 @@ impl Race {
         law.credit_damage(&mut self.sim.world.ships[attacker].standing, person, amount);
     }
 
+    /// The impact that reached `slot` this tick: the one that struck it, or whose blast radius
+    /// holds it. The owner of that impact is who hit `slot`.
+    pub(super) fn impact_reaching<'a>(
+        &self,
+        impacts: &'a [Option<oag_weapons::projectile::Impact>],
+        slot: usize,
+    ) -> Option<&'a oag_weapons::projectile::Impact> {
+        let position = self.sim.world.ships[slot].physics.body.position;
+        impacts.iter().flatten().find(|impact| {
+            impact.struck.is_some_and(|struck| struck as usize == slot)
+                || oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
+                    .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
+        })
+    }
+
     /// Credits this tick's projectile hits: each struck or blasted craft to the impact that
     /// reached it, the way [`Self::credit_blast`] names an owner.
     pub(super) fn credit_impact_points(
@@ -463,16 +478,10 @@ impl Race {
             if !hit.landed || hit.amount <= 0.0 {
                 continue;
             }
-            let position = self.sim.world.ships[slot].physics.body.position;
-            let by = |impact: &&oag_weapons::projectile::Impact| {
-                impact.struck.is_some_and(|struck| struck as usize == slot)
-                    || oag_weapons::projectile::blast_stats(
-                        self.sim.weapons.as_deref(),
-                        impact.kind,
-                    )
-                    .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
-            };
-            if let Some(owner) = impacts.iter().flatten().find(by).map(|impact| impact.owner) {
+            if let Some(owner) = self
+                .impact_reaching(impacts, slot)
+                .map(|impact| impact.owner)
+            {
                 self.credit_hit_points(slot, owner, hit.amount);
             }
         }

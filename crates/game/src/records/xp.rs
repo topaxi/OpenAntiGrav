@@ -9,7 +9,7 @@
 use oag_tables::xp::Ranks;
 
 use super::{Medal, Store};
-use oag_raceplay::xp_tally::XpTally;
+use oag_raceplay::xp_tally::{Completion, XpTally};
 
 impl Store {
     /// The profile's XP total.
@@ -40,19 +40,24 @@ impl Store {
 
     /// Banks a finished 2048 event: the race's `tally` (its in-race awards and chain bonuses)
     /// plus the race-end awards, which go through the same tally so they chain like any other:
-    /// the completion award for the tier `medal` stands for (Gold is Elite, Bronze Pass, none
-    /// pays no completion) and `Finished Nth` for `place`. Returns what was added.
+    /// the completion awards when `medal` beats `prior`, the best before the race (Gold is
+    /// Elite, any other medal Pass; see [`Completion::on_improvement`]), and `Finished Nth` for
+    /// `place`. Read `prior` before the race's medal is recorded. Returns what was added.
     ///
-    /// **Chosen, not measured**: the completion pays on every finish, not only the first, and
-    /// Elite pays instead of Pass rather than as well; both are unread
-    /// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Wired").
+    /// **Chosen, not measured**: `Finished Nth` pays on every finish, and the mode column is by
+    /// event kind (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Wired").
     pub fn bank_event_xp(
         &mut self,
         tally: &mut XpTally,
+        prior: Option<Medal>,
         medal: Option<Medal>,
         place: Option<u8>,
     ) -> u32 {
-        tally.finish(medal.map(|m| m == Medal::Gold), place);
+        let elite = |m: Medal| m == Medal::Gold;
+        tally.finish(
+            Completion::on_improvement(prior.map(elite), medal.map(elite)),
+            place,
+        );
         let award = tally.take();
         self.bank_xp(award);
         award

@@ -67,8 +67,18 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
     let (mut store, _) = records::parse("").expect("an empty file parses");
     assert_eq!(store.xp(), 0);
     let in_race = run.xp_tally_mut().expect("armed").total();
+    // The edges added to the tally for 2048 run in an Omega race too: the lap and place awards.
+    let edge_awards: u32 = [5, 44, 21, 22, 23]
+        .into_iter()
+        .map(|index| run.xp_tally().expect("armed").times_paid(index))
+        .sum();
+    assert!(
+        edge_awards >= 1,
+        "no lap or place award paid in an Omega race"
+    );
     let paid = store.bank_event_xp(
         run.xp_tally_mut().expect("armed"),
+        None,
         Some(records::Medal::Bronze),
         Some(place),
     );
@@ -83,4 +93,13 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
     if in_race == 0 {
         assert_eq!(paid, pass + nth);
     }
+
+    // Completion pays on improvement here too: a second Bronze over the first pays the place alone.
+    let again = store.bank_event_xp(
+        &mut oag_raceplay::xp_tally::XpTally::new(awards.clone(), progress.xp_column),
+        Some(records::Medal::Bronze),
+        Some(records::Medal::Bronze),
+        Some(place),
+    );
+    assert_eq!(again, nth, "no completion award on a repeat");
 }

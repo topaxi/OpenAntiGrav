@@ -13,6 +13,8 @@
 
 use std::collections::BTreeMap;
 
+use oag_gameplay::MAX_SHIPS;
+use oag_tables::weapons::Weapon;
 use oag_tables::xp::{Awards, Column, award};
 
 /// The chain window, 2.0 s at the fixed 60 Hz timestep.
@@ -30,6 +32,41 @@ const OPPONENT_DESTROYED: u32 = 6;
 /// `Zone` (a zone with a wall contact) and `Perfect Zone`.
 const ZONE: u32 = 9;
 const PERFECT_ZONE: u32 = 10;
+/// A lap with no damage.
+const PERFECT_LAP: u32 = 5;
+/// A weapon pickup from a pad.
+const WEAPON_PAD: u32 = 8;
+/// The perfect launch.
+const BOOST_START: u32 = 11;
+/// `Cross Start/Finish Line with full health`.
+const FULL_HEALTH: u32 = 44;
+/// `Taken 1st!` is award 21, `2nd` 22, `3rd` 23.
+const TAKEN_BASE: u32 = 20;
+/// `Hit with Rocket` is award 12; the weapons follow in [`weapon_offset`] order.
+const HIT_WITH_BASE: u32 = 12;
+/// `Shielded against Rocket` is award 32, in the same order.
+const SHIELDED_BASE: u32 = 32;
+/// The best place before the first evaluation.
+const NO_PLACE: u8 = 99;
+
+/// Where `weapon` sits in the original's weapon-type order (rocket 0, missile 1, plasma 2,
+/// cannon 3, mine 4, quake 5, bomb 6, leach beam 7), which orders both the `Hit with` and the
+/// `Shielded against` awards. Light Barrier (type 10, the ninth row of each) is not a weapon
+/// this engine has; anything else pays nothing
+/// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Weapon hits").
+fn weapon_offset(weapon: Weapon) -> Option<u32> {
+    Some(match weapon {
+        Weapon::Rocket => 0,
+        Weapon::Missile => 1,
+        Weapon::Plasma => 2,
+        Weapon::Cannon => 3,
+        Weapon::Mine => 4,
+        Weapon::Quake => 5,
+        Weapon::Bomb => 6,
+        Weapon::LeachBeam => 7,
+        _ => return None,
+    })
+}
 
 /// One race's running XP.
 #[derive(Debug, Clone, PartialEq)]
@@ -42,6 +79,10 @@ pub struct XpTally {
     kills_seen: u32,
     held_place: u8,
     held_ticks: u32,
+    best_place: u8,
+    last_shield: Option<f32>,
+    damaged_lap: bool,
+    launched: bool,
     paid: BTreeMap<u32, u32>,
 }
 
@@ -58,6 +99,10 @@ impl XpTally {
             kills_seen: 0,
             held_place: 0,
             held_ticks: 0,
+            best_place: NO_PLACE,
+            last_shield: None,
+            damaged_lap: false,
+            launched: false,
             paid: BTreeMap::new(),
         }
     }
@@ -159,17 +204,120 @@ impl XpTally {
         }
     }
 
-    /// The race-end awards: `Event complete` (Elite or Pass; `None` pays none) and `Finished Nth`.
-    pub fn finish(&mut self, completion: Option<bool>, place: Option<u8>) {
-        if let Some(elite) = completion {
-            self.award(if elite {
-                award::EVENT_ELITE
-            } else {
-                award::EVENT_PASS
-            });
+    /// The player's best place so far, `Taken 1st/2nd/3rd!` once each: the first time the place
+    /// reaches `1`, `2` or `3` with more craft than that in the race (`Race_SortPlaces`). The
+    /// best place is kept for every place, so a craft that first shows up fourth and climbs to
+    /// third is paid for third. Call only once the player has crossed the line.
+    pub fn observe_taken(&mut self, place: u8, field: usize) {
+        if place >= self.best_place {
+            return;
+        }
+        self.best_place = place;
+        if (1..=3).contains(&place) && field > usize::from(place) {
+            self.award(TAKEN_BASE + u32::from(place));
+        }
+    }
+
+    /// The player's health this tick. A drop is damage: the original sets the lap's damage flag
+    /// on any damage above nothing (`Pilot_TakeDamage`), and a hit a shield absorbs never
+    /// reaches it, so it never lowers the health either.
+    pub fn observe_health(&mut self, shield: f32) {
+        if self.last_shield.is_some_and(|before| shield < before) {
+            self.damaged_lap = true;
+        }
+        self.last_shield = Some(shield);
+    }
+
+    /// The player completed a lap with `shield` of at most `max` health: `Perfect lap` when no
+    /// damage came in the lap, then `Cross Start/Finish Line with full health` at the maximum,
+    /// then the lap's damage is forgotten (`Pilot_UpdateLapProgress`).
+    pub fn lap_completed(&mut self, shield: f32, max: f32) {
+        self.observe_health(shield);
+        if !self.damaged_lap {
+            self.award(PERFECT_LAP);
+        }
+        if shield >= max {
+            self.award(FULL_HEALTH);
+        }
+        self.damaged_lap = false;
+    }
+
+    /// Whether the player's launch has been graded perfect: pays `Boost start` once, the first time
+    /// it is (`Race_UpdateLaunchGrade` writes the grade once, on the first-thrust edge).
+    pub fn observe_launch(&mut self, perfect: bool) {
+        if perfect && !self.launched {
+            self.launched = true;
+            self.award(BOOST_START);
+        }
+    }
+
+    /// A weapon pickup was handed over by a pad.
+    pub fn weapon_pad_taken(&mut self) {
+        self.award(WEAPON_PAD);
+    }
+
+    /// The player's weapon damaged another craft: `Hit with <weapon>`.
+    pub fn weapon_hit(&mut self, weapon: Weapon) {
+        if let Some(offset) = weapon_offset(weapon) {
+            self.award(HIT_WITH_BASE + offset);
+        }
+    }
+
+    /// The player's shield swallowed a hit: `Shielded against <weapon>`.
+    pub fn shielded_against(&mut self, weapon: Weapon) {
+        if let Some(offset) = weapon_offset(weapon) {
+            self.award(SHIELDED_BASE + offset);
+        }
+    }
+
+    /// The race-end awards: `Event complete` as `completion` says and `Finished Nth`.
+    pub fn finish(&mut self, completion: Completion, place: Option<u8>) {
+        if completion.pass {
+            self.award(award::EVENT_PASS);
+        }
+        if completion.elite {
+            self.award(award::EVENT_ELITE);
         }
         if let Some(p) = place.filter(|p| (1..=8).contains(p)) {
             self.award(award::FINISHED_1ST + u32::from(p) - 1);
+        }
+    }
+
+    /// What the completion awards paid at their authored value, chain bonuses left out: the
+    /// end-race page's `PassBonusXP`.
+    #[must_use]
+    pub fn completion_xp(&self) -> u32 {
+        [award::EVENT_PASS, award::EVENT_ELITE]
+            .into_iter()
+            .map(|index| self.awards.xp(index, self.column) * self.times_paid(index))
+            .sum()
+    }
+}
+
+/// Which `Event complete` awards a finish pays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Completion {
+    /// `Event complete- PASS`.
+    pub pass: bool,
+    /// `Event complete- ELITE`.
+    pub elite: bool,
+}
+
+impl Completion {
+    /// The awards a result pays given the best before it, each `None` for no pass, `Some(false)`
+    /// for a pass and `Some(true)` for an elite. The completion awards pay on improvement only:
+    /// the end-race page shows `PassBonusXP` when the result state differs from the best before
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Completion pays on improvement").
+    /// An elite on a first pass pays both, an elite over a pass the Elite alone.
+    #[must_use]
+    pub fn on_improvement(before: Option<bool>, now: Option<bool>) -> Self {
+        let rank = |tier: Option<bool>| tier.map_or(0, |elite| 1 + u8::from(elite));
+        if rank(now) <= rank(before) {
+            return Self::default();
+        }
+        Self {
+            pass: before.is_none(),
+            elite: now == Some(true),
         }
     }
 }
@@ -199,24 +347,94 @@ impl crate::Race {
         self.sim.xp.as_deref_mut()
     }
 
-    /// Feeds the tally what the player did this tick: kills and place. Counts only while the
-    /// player is racing (`FUN_8100d2a6` is false on the grid and after the finish); the zone
-    /// step is fed from `advance_player_rules` where its edge is.
+    /// Whether the player's in-race awards count this tick: the tally is armed and the player is
+    /// racing (`FUN_8100d2a6` is false on the grid and after the finish). The boost start and the
+    /// N-seconds-ahead awards skip this gate in the original and do not ask it.
+    fn xp_racing(&self) -> bool {
+        self.sim.xp.is_some() && {
+            let standing = &self.sim.world.ships[self.player_slot()].standing;
+            standing.finish_tick.is_none()
+                && !oag_race::RaceState::thrust_gated(self.sim.world.tick)
+        }
+    }
+
+    /// Feeds the tally what the player did this tick: kills, place, health. The zone step and the
+    /// lap are fed from `advance_player_rules` where their edges are.
     pub(super) fn observe_xp(&mut self) {
         let slot = self.player_slot();
-        if self.sim.xp.is_none() {
+        // Before the racing gate: the launch award is paid without one.
+        let launched = self.sim.world.controllers[slot].is_human()
+            && self.sim.world.ships[slot].physics.launch.grade
+                == oag_physics::launch::Grade::Perfect;
+        if let Some(xp) = self.sim.xp.as_mut() {
+            xp.observe_launch(launched);
+        }
+        if !self.xp_racing() {
             return;
         }
-        let standing = self.sim.world.ships[slot].standing;
-        if standing.finish_tick.is_some() || oag_race::RaceState::thrust_gated(self.sim.world.tick)
-        {
-            return;
-        }
+        let ship = &self.sim.world.ships[slot];
+        let (kills, shield) = (ship.standing.kills, ship.physics.shield);
+        let crossed = ship.standing.lap_start_tick.is_some();
         let place = self.sim.places()[slot];
         let field = usize::from(self.sim.world.ship_count);
         if let Some(xp) = self.sim.xp.as_mut() {
-            xp.observe_kills(standing.kills);
+            xp.observe_kills(kills);
             xp.observe_place(place, field);
+            xp.observe_health(shield);
+            if crossed {
+                xp.observe_taken(place, field);
+            }
+        }
+    }
+
+    /// The player completed a lap this tick.
+    pub(super) fn xp_lap_completed(&mut self) {
+        let ship = &self.sim.world.ships[self.player_slot()];
+        let (shield, max) = (ship.physics.shield, ship.handling.dimensions.shield);
+        if let Some(xp) = self.sim.xp.as_mut() {
+            xp.lap_completed(shield, max);
+        }
+    }
+
+    /// A pad handed `slot` a weapon.
+    pub(super) fn xp_weapon_pad(&mut self, slot: usize) {
+        if slot == self.player_slot()
+            && self.xp_racing()
+            && let Some(xp) = self.sim.xp.as_mut()
+        {
+            xp.weapon_pad_taken();
+        }
+    }
+
+    /// This tick's weapon hits, from the player's side: a hit the player's shield swallowed, and
+    /// a hit the player's weapon landed on another craft. `by[slot]` names who hit `slot` and
+    /// with what, where the caller can tell (a weapon with no owner on its hit report stays
+    /// unpaid: Leach Beam, whose drain is per tick, and Light Barrier, which this engine has not).
+    pub(super) fn xp_weapon_hits(
+        &mut self,
+        hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
+        by: &[Option<(u8, Weapon)>; MAX_SHIPS],
+    ) {
+        if !self.xp_racing() {
+            return;
+        }
+        let me = self.player_slot();
+        let Some(xp) = self.sim.xp.as_mut() else {
+            return;
+        };
+        if hits[me].absorbed
+            && let Some(weapon) = hits[me].weapon
+        {
+            xp.shielded_against(weapon);
+        }
+        for (slot, hit) in hits.iter().enumerate() {
+            if slot != me
+                && hit.landed
+                && let Some((owner, weapon)) = by[slot]
+                && usize::from(owner) == me
+            {
+                xp.weapon_hit(weapon);
+            }
         }
     }
 }

@@ -53,12 +53,11 @@ fn the_reveal_query_agrees_with_the_rank_at_every_boundary() {
 }
 
 #[test]
-fn a_race_end_pays_completion_and_finishing_place_in_the_mode_column() {
+fn an_award_pays_its_value_in_the_mode_column_and_nothing_where_unauthored() {
     let a = Awards::parse(AWARDS).expect("awards");
-    assert_eq!(a.race_end(Column::Race, Some(false), Some(1)), 4 + 9);
-    assert_eq!(a.race_end(Column::Race, Some(true), Some(3)), 40 + 2);
-    assert_eq!(a.race_end(Column::Zone, None, Some(1)), 6);
-    assert_eq!(a.race_end(Column::Speed, Some(false), None), 5);
-    assert_eq!(a.race_end(Column::Race, None, Some(9)), 0, "no 9th row");
-    assert_eq!(a.race_end(Column::Race, None, Some(2)), 0, "unauthored 2nd");
+    assert_eq!(a.xp(award::EVENT_PASS, Column::Race), 4);
+    assert_eq!(a.xp(award::EVENT_ELITE, Column::Race), 40);
+    assert_eq!(a.xp(award::FINISHED_1ST, Column::Zone), 6);
+    assert_eq!(a.xp(award::FINISHED_1ST + 2, Column::Zombie), 0);
+    assert_eq!(a.xp(award::FINISHED_1ST + 1, Column::Race), 0, "no 2nd row");
 }

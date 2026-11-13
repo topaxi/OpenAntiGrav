@@ -447,6 +447,9 @@ impl Race {
         {
             xp.zone_cleared(self.sim.world.race[slot].zone, outcome.perfect_zone);
         }
+        if primary && outcome.lap_completed {
+            self.xp_lap_completed();
+        }
         if primary && outcome.perfect_zone && self.draws() {
             self.view.run_stats.perfect_zones += 1;
         }

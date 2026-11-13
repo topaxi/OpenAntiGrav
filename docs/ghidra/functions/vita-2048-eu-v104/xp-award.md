@@ -55,13 +55,20 @@ page (`FUN_81131100`: `xprank`, `xpbartext`, `xpbar`; `FUN_810c8286`: `CO_RANK`,
 `CO_TOTAL_XP`; host screens not found) and by a Vita activity-feed string (`FUN_81013c8e`, the rank
 is the payload).
 
+### Completion pays on improvement
+
 **The end-race page reads the completion award as a first-earn bonus.** `PassBonusXP` shows only
 when the event's result state improved on the best before (`+0x2d8 != +0x2dc`), and is `Event
 complete- ELITE` (plus `PASS` when the old best was below a pass) or `PASS`. That points at the
 completion awards paying on improvement, not on every finish, and at an elite on a first pass paying
-both. `Store::bank_event_xp` still pays one completion award on every finish and Elite instead of
-Pass (chosen, above); the page shows the bonus that was banked, so the numbers add up. Aligning the
-banking with the page is open.
+both (confidence 70: the page's branch, not the award call sites, which `0x812b3f90` and the pass
+path were not re-read for the improvement test). **Ours** (`XpTally::finish`, `Completion::on_improvement`):
+the best before the race is read from the campaign row before the race's medal is recorded
+(`Store::campaign_medal`'s `best_medal`, Gold is Elite, any other medal Pass); Pass pays when no pass
+stood, Elite when the result is Elite over a lesser best, both for an elite first pass, none for a
+repeat or a worse result. `Finished Nth` still pays on every finish (**chosen, not measured**). The
+page's `PassBonusXP` is the completion payout the tally recorded (`XpTally::completion_xp`), so it is
+absent on a repeat, as in the original.
 
 ## Verdict on "2048's XP is its loyalty"
 
@@ -120,30 +127,30 @@ tally and banks its total.
 
 | Index | Award | Status |
 | --- | --- | --- |
-| 0 | Event complete- PASS | **wired** at the finish, `0x812b3f90` (flags 0,0, joins the chain); Pass or Elite by medal, **chosen** |
-| 1 | Event complete- ELITE | **wired** at the finish, `0x812b3f90` (flags 0,0, joins the chain); Pass or Elite by medal, **chosen** |
+| 0 | Event complete- PASS | **wired** at the finish (`0x812b3f90`, flags 0,0, joins the chain), **on improvement only** (see "Completion pays on improvement") |
+| 1 | Event complete- ELITE | **wired** at the finish (`0x812b3f90`, flags 0,0, joins the chain), **on improvement only**; an elite on a first pass pays 0 and 1 |
 | 2 | Finished multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
 | 3 | Won multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
 | 4 | Barrel roll | **read**, unwired: a completed roll (after the roll boost `+0x6104` is stored), human, gate, local slot `+0x7060 == 0`; `0x811c03d6` in `FUN_811bf7aa` (65) |
-| 5 | Perfect lap | **read, ready**: lap completed with the damage flag `+0x60a4 & 0x20` clear, human, gate; `Pilot_UpdateLapProgress` `0x811c38a0` (78) |
+| 5 | Perfect lap | **wired**: lap completed with no health lost in the lap (ours: no drop in the ship's shield pool since the last line), human, gate; `Pilot_UpdateLapProgress` `0x811c38a0` (78); `XpTally::lap_completed` |
 | 6 | Opponent destroyed | **wired** (`0x812ccfe0`, `0x8123b5ea`, `0x811c4a06`: human killer, `FUN_8100d2a6`); fed from `Standing::kills` |
 | 7 | Speed pad hit | **read**, unwired: pad hit, human, gate, and `pilot+0x6128` byte 0 (that flag still unread); `0x811cd052` (60) |
-| 8 | Weapon pad hit | **read, ready**: weapon pickup from a pad, human, gate; `0x811c9ee8` (75) |
+| 8 | Weapon pad hit | **wired**: the pad hands the human a weapon, gate; `0x811c9ee8` (75); `Race::test_weapon_pads`'s grant |
 | 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
 | 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
-| 11 | Boost start | **read, ready**: the perfect launch: human first-thrust edge inside `[windowStart, windowEnd)`; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80) |
-| 12 | Hit with Rocket | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 13 | Hit with Missile | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 14 | Hit with Plasma | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 15 | Hit with Cannon | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 3; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 16 | Hit with Mine | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 4; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 17 | Hit with Quake | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 5; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 18 | Hit with Bomb | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 6; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 19 | Hit with Leach Beam | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 7; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 20 | Hit with Light Barrier | **read, ready**: any other ship takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 10; `XpAward_WeaponHit` `0x811c42d2` (75) |
-| 21 | Taken 1st! | **read, ready**: first time the human's place reaches 1 (best place `+0x6f3c` starts at 99), after crossing the line once, pilot count > 1, gate; `Race_SortPlaces` `0x812bc06c` (75) |
-| 22 | Taken 2nd! | **read, ready**: as 21 for place 2, pilot count > 2; `0x812bc090` (75) |
-| 23 | Taken 3rd! | **read, ready**: as 21 for place 3, pilot count > 3; `0x812bc0a6` (75) |
+| 11 | Boost start | **wired**: the perfect launch, human; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80); ours is the player's launch grade turning Perfect (`XpTally::observe_launch`, `crates/physics/src/launch.rs`), read in the simulation so a build without the view pays it too |
+| 12 | Hit with Rocket | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 13 | Hit with Missile | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 14 | Hit with Plasma | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 15 | Hit with Cannon | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 3; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 16 | Hit with Mine | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 4; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 17 | Hit with Quake | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 5; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 18 | Hit with Bomb | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 6; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 19 | Hit with Leach Beam | **read, unwired**: the Leach Beam drains every tick of the link (`Beam::advance`); whether the original pays per tick or per link is unread. Type 7; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 20 | Hit with Light Barrier | **read, not wired**: Light Barrier (type 10) is not a weapon this engine has (`Weapon::from_type` drops it, `docs/gameplay/weapon-lineage.md`); `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 21 | Taken 1st! | **wired**: first time the human's place reaches 1 (best place starts at 99, kept for every place), after crossing the line once (ours: `lap_start_tick`), pilot count > 1, gate; `Race_SortPlaces` (75); `XpTally::observe_taken` |
+| 22 | Taken 2nd! | **wired**: first time the human's place reaches 2 (best place starts at 99, kept for every place), after crossing the line once (ours: `lap_start_tick`), pilot count > 2, gate; `Race_SortPlaces` (75); `XpTally::observe_taken` |
+| 23 | Taken 3rd! | **wired**: first time the human's place reaches 3 (best place starts at 99, kept for every place), after crossing the line once (ours: `lap_start_tick`), pilot count > 3, gate; `Race_SortPlaces` (75); `XpTally::observe_taken` |
 | 24 | Finished 1st! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 25 | Finished 2nd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 26 | Finished 3rd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
@@ -152,22 +159,22 @@ tally and banks its total.
 | 29 | Finished 6th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 30 | Finished 7th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 31 | Finished 8th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
-| 32 | Shielded against Rocket | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 0; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 33 | Shielded against Missile | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 1; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 34 | Shielded against Plasma | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 2; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 35 | Shielded against Cannon | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 3; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 36 | Shielded against Mine | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 4; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 37 | Shielded against Quake | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 5; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 38 | Shielded against Bomb | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 6; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 39 | Shielded against Leach Beam | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 7; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 40 | Shielded against Light Barrier | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 10; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 32 | Shielded against Rocket | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 0; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 33 | Shielded against Missile | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 1; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 34 | Shielded against Plasma | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 2; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 35 | Shielded against Cannon | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 3; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 36 | Shielded against Mine | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 4; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 37 | Shielded against Quake | **read, unreachable**: a Quake wave meeting a running shield asks nothing and reports no absorb (`Wave::apply_hits`), so the weapon is never named and the award cannot fire; weapon type 5; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 38 | Shielded against Bomb | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 6; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 39 | Shielded against Leach Beam | **read, unwired**: the Leach Beam link reports a drain, not an absorb (`advance_one_leach_beam`); weapon type 7; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 40 | Shielded against Light Barrier | **read, not wired**: Light Barrier (type 10), see 20; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 41 | Held 1st for 30sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 42 | Held 1st for 20sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 43 | Held 1st for 10sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
-| 44 | Cross Start/Finish Line with full health | **read, ready**: lap completed with health `+0x5634` at or above the ship's maximum; human, gate; `Pilot_UpdateLapProgress` `0x811c39a4` (75) |
-| 45 | 5 seconds ahead | **read, ready**: `DAT_8154135c == 0` (likely single player), the first rival crosses a split 5 to 10 s after the human; no gate; `Race_RecordSplit` `0x811c2a80` (75) |
-| 46 | 10 seconds ahead | **read, ready**: as 45, 10 to 15 s; `0x811c2aa8` (75) |
-| 47 | 15 seconds ahead | **read, ready**: as 45, 15 s or more; `0x811c2acc` (75) |
+| 44 | Cross Start/Finish Line with full health | **wired**: lap completed with the shield pool at the ship's maximum (`dimensions.shield`); human, gate; `Pilot_UpdateLapProgress` `0x811c39a4` (75); paid whether or not the lap was clean |
+| 45 | 5 seconds ahead | **read, unwired**: needs split checkpoints (three a lap, positions unread) and each rival's first crossing; this engine has no split signal; `DAT_8154135c == 0`, no gate; `Race_RecordSplit` (75) |
+| 46 | 10 seconds ahead | **read, unwired**: needs split checkpoints (three a lap, positions unread) and each rival's first crossing; this engine has no split signal; `DAT_8154135c == 0`, no gate; `Race_RecordSplit` (75) |
+| 47 | 15 seconds ahead | **read, unwired**: needs split checkpoints (three a lap, positions unread) and each rival's first crossing; this engine has no split signal; `DAT_8154135c == 0`, no gate; `Race_RecordSplit` (75) |
 | 48 | Hit Zone 10 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 49 | Hit Zone 20 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 50 | Hit Zone 30 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
@@ -199,11 +206,21 @@ tally and banks its total.
 | 76 | Evade Missile | **read in part**: missile state `+0x64 == 1` and a distance test; `0x811f9352` in `FUN_811f89fa` (50) |
 | 77 | Evade Zombie | **never paid**: as 59 (75) |
 
+Awarded in ours through `XpTally`, fed from `Race::tick`'s own edges and never part of the state hash:
+`oag_raceplay::tests::xp_edges` pins the lap, launch, pad, place, rocket, shield and Quake feeds, and
+`an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors` runs a disc event. A hit is
+attributed to the human through `Impact::owner` (the Eliminator's `Race::impact_reaching`, shared)
+or `Wave::owner`; Missile, Plasma, Cannon, Mine and Bomb go through the same lookup and are not
+tested one by one. Never paid by the original and left unpaid here: 59-61, 65-70, 77.
+An award that would land after the player's own finish is not banked: the finish banks and empties the tally
+at `race.finished()` while rivals still lap (**chosen, not measured**; matters for none of the wired awards,
+and would for 45-47 on the final crossing).
+
 Not wired by anything here, in the original: the rank bar and the `RaceXP` popups.
 
-**Omega check.** Omega ships a byte-identical `XPAwards.xml` and the same loader: **checked,
-applies, not wired** (Omega's event launch banks nothing yet; the tally takes any
-`Awards`, so the wiring is arming it from Omega's event progress).
+**Omega check.** Omega ships a byte-identical `XPAwards.xml` and the same loader: **ported**, with its own
+ground truth (an Omega `--event` arms the tally from Omega's table; `omega_event_xp_ground_truth` checks a
+lap or place award pays in an Omega race and that a repeat Bronze pays no completion).
 
 ## Cross-check
 
@@ -217,8 +234,8 @@ applies, not wired** (Omega's event launch banks nothing yet; the tally takes an
 ## Wired (2026-11-12)
 
 `oag_tables::xp` reads both files; `Store::bank_event_xp` banks a finished 2048 event's
-`Event complete` (Pass or Elite) plus `Finished Nth`. **Chosen, not measured**: pays on every
-finish; Elite instead of Pass; column by event kind. The profile total is one number shared with
+`Event complete` awards on improvement ("Completion pays on improvement") plus `Finished Nth`.
+**Chosen, not measured**: `Finished Nth` on every finish; column by event kind. The profile total is one number shared with
 Omega.
 
 **Shared XP across 2048 and Omega (maintainer rule, 2026-11-12).** One XP total per player
@@ -291,9 +308,14 @@ is to write `profile+0x3257c` before the first map entry of a boot, then read a 
 walks (`0x81965b28`, vector at `+0x24`) not holding the side challenges, since the button builder
 walks a different list (`0x81965b60`, vector at `+4`).
 
-**Ours.** `Store::rank_reveals`, asked at boot, is the map-build trigger. The race-end trigger is not
-wired (a reveal earned by a race shows at the next launch); wiring it means asking the same query
-after `Store::bank_event_xp`.
+**Ours.** `Store::rank_reveals` is asked by `boot::reveals2048::refresh` every time a map is built
+from the live profile: at boot, and on every opening of the hosted map (`MapSeed::open`, Omega's
+chooser). So a rank reached in a race reveals its challenges the next time a map is built, with no
+restart (`a_rank_reached_by_a_finish_reveals_its_events_on_the_next_map_build`, which banks through
+`Store::bank_event_xp` and refreshes the same map). **Vita 2048 itself cannot reach a map after a
+race**: `Session::leave_finished_race` lands on this build's own menus and `Stage::Frontend` has no
+rebuild path (`MapSeed::of` requires `front_end.menu`, 2048 has none), so there a revealed event shows
+at the next launch until the way back to the map exists.
 
 **Omega: checked, applies, not wired.** Omega's `eboot.bin` has the same function at `0x015a1200`
 (found through `"2049 - Event 1"`): the three heads by name to 2, then the loop with
@@ -399,7 +421,11 @@ call site back to its first compare.
 (32-40). Ours already grades the launch (`crates/physics/src/launch.rs`); which of our signals stands for
 each other trigger is the wiring lane's check.
 
-**Omega: checked, applies, not wired.** Omega's `AwardXP` (`0x01667e30`, found through
-`AWARD_GROUP_CHAIN`) has 51 direct calls against 2048's 82. Spot checks use the same indices:
-`WeaponPads_TestCraft` pays 8 (`0x01305932`), `PlasmaManager_Update` pays 63 (`0x0135fae5`). Omega's
-event launch banks no in-race awards yet, so nothing is wired there.
+**Omega: checked, applies, ported through the shared tally.** Omega's `AwardXP` (`0x01667e30`, found
+through `AWARD_GROUP_CHAIN`) has 51 direct calls against 2048's 82. Spot checks use the same indices:
+`WeaponPads_TestCraft` pays 8 (`0x01305932`), `PlasmaManager_Update` pays 63 (`0x0135fae5`). An Omega
+`--event` race arms the same `XpTally` from Omega's byte-identical `XPAwards.xml` and the feeds above
+run in it unchanged (they hang off the shared simulation, not a title). Only 8 was checked against
+Omega's own call sites; the other wired awards take 2048's reading by lineage (2048 <-> Omega), and
+Omega's dispatch between its loyalty block and its XP block is still untraced
+(`ps4-omega-eu/xp-and-loyalty.md`), so paying XP there is **chosen, not measured**.

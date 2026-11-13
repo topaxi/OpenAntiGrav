@@ -356,6 +356,8 @@ impl Race {
         if let Some(weapon) = drawn {
             let pickup = &mut self.sim.world.ships[slot].pickup;
             pickup.grant(weapon);
+            self.xp_weapon_pad(slot);
+            let pickup = &mut self.sim.world.ships[slot].pickup;
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
             if let Some(kind) = self.sim.extensions.rolls(slot, weapon) {
