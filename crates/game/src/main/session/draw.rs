@@ -158,7 +158,7 @@ impl Session {
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.output.size(), self.aspect());
         let pose_view = self.pose_view_shown();
-        let viewer_hud_off = self.viewer_hud_hidden() || self.demo_is_wallpaper();
+        let viewer_hud_off = self.viewer_hud_hidden() || self.in_demo();
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window

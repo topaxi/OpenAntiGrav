@@ -1,9 +1,8 @@
 //! The attract demo a title plays when its main menu is left alone: how long the menu waits, how
 //! long a demo runs, what ends it, and how its race is chosen.
 //!
-//! Per title (ADR-0058). Pulse's numbers are read off the executable
-//! (`docs/ghidra/functions/psp-pulse-usa/state-machine.md`, "The literal states";
-//! `main-loop.md`). HD authors the demo's screens in `demo_definition.xml`: `Demo Launch Real`
+//! Per title (ADR-0058). Pulse's numbers are measured live
+//! (`docs/ghidra/functions/psp-pulse-usa/attract-demo.md`). HD authors the demo's screens in `demo_definition.xml`: `Demo Launch Real`
 //! sets the `Mode` global to `Demo` and launches, `Demo InGame` leaves on `forward="any"`, so any
 //! press ends it. It authors no timer, so its two durations are Pulse's. 2048 and Omega take HD's
 //! (`docs/ui/attract-demo.md`).
@@ -17,6 +16,10 @@ pub enum Selection {
     /// Chosen, not measured: the original's rule is unread, and a recovered one is a new variant
     /// here rather than an edit of this one.
     SeededFromPlayable,
+    /// Every circuit of the title's race list, **unlocks ignored**, and a team out of the ones it
+    /// marks `multiplayer`; the circuit and the team both differ from the previous demo's. Pulse
+    /// PSP, measured live (`docs/ghidra/functions/psp-pulse-usa/attract-demo.md`).
+    AnyCircuitMultiplayerTeam,
 }
 
 /// Where a demo that ran its full length goes.
@@ -49,17 +52,22 @@ pub struct Demo {
     pub after_end: Sourced<AfterEnd>,
     /// How the race is picked.
     pub selection: Sourced<Selection>,
+    /// The file the title authors its demo in, by entry name, when it does: its timeouts replace
+    /// [`Self::idle_seconds`] and [`Self::duration_seconds`] and its circuit list is the cycle
+    /// (`oag_tables::demo_config`). 2048 and Omega ship one; Pulse and HD do not.
+    pub config: Option<&'static str>,
 }
 
 impl Demo {
-    /// Pulse's: the main menu's 60 s idle test and the 120 s attract timeout, both read, with the
-    /// rest chosen.
+    /// Pulse's, all of it measured: the 60 s idle test, the 120 s run, any button ending it, the next
+    /// demo after it and the circuit and team law.
     pub const PULSE: Self = Self {
         idle_seconds: Sourced::measured(60),
         duration_seconds: Sourced::measured(120),
-        exit: Sourced::chosen(Exit::AnyInput),
-        after_end: Sourced::chosen(AfterEnd::MainMenu),
-        selection: Sourced::chosen(Selection::SeededFromPlayable),
+        exit: Sourced::measured(Exit::AnyInput),
+        after_end: Sourced::measured(AfterEnd::NextDemo),
+        selection: Sourced::measured(Selection::AnyCircuitMultiplayerTeam),
+        config: None,
     };
 
     /// A title that takes the two durations from `from` (Pulse's, by way of HD where `from` is
@@ -70,8 +78,9 @@ impl Demo {
             idle_seconds: Sourced::inherited(60, from),
             duration_seconds: Sourced::inherited(120, from),
             exit,
-            after_end: Sourced::chosen(AfterEnd::MainMenu),
-            selection: Sourced::chosen(Selection::SeededFromPlayable),
+            after_end: Sourced::inherited(AfterEnd::NextDemo, from),
+            selection: Sourced::inherited(Selection::AnyCircuitMultiplayerTeam, from),
+            config: None,
         }
     }
 

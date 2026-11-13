@@ -3,7 +3,7 @@ use super::*;
 const PULSE: Demo = Demo::PULSE;
 
 fn idle_for(attract: &mut Attract, ticks: u32) -> Option<u32> {
-    (1..=ticks).find(|_| attract.tick(&PULSE, true, false))
+    (1..=ticks).find(|_| attract.tick(PULSE.idle_ticks(), true, false))
 }
 
 #[test]
@@ -16,17 +16,17 @@ fn an_idle_main_menu_launches_a_demo_after_the_titles_threshold() {
 fn a_press_before_the_threshold_restarts_the_count() {
     let mut attract = Attract::default();
     assert_eq!(idle_for(&mut attract, PULSE.idle_ticks() - 1), None);
-    assert!(!attract.tick(&PULSE, true, true), "the press itself launches nothing");
+    assert!(!attract.tick(PULSE.idle_ticks(), true, true), "the press itself launches nothing");
     assert_eq!(attract.idle_ticks(), 0);
     assert_eq!(idle_for(&mut attract, PULSE.idle_ticks() - 1), None, "the clock started over");
-    assert!(attract.tick(&PULSE, true, false));
+    assert!(attract.tick(PULSE.idle_ticks(), true, false));
 }
 
 #[test]
 fn a_menu_with_something_over_it_never_counts() {
     let mut attract = Attract::default();
     for _ in 0..PULSE.idle_ticks() * 2 {
-        assert!(!attract.tick(&PULSE, false, false));
+        assert!(!attract.tick(PULSE.idle_ticks(), false, false));
     }
     assert_eq!(attract.idle_ticks(), 0);
 }
@@ -65,13 +65,14 @@ fn a_wallpaper_hears_no_input() {
 
 #[test]
 fn a_demo_that_ran_out_goes_where_the_title_says_and_a_cli_run_always_chains() {
-    assert_eq!(after_over(&PULSE, false), Next::Menu);
+    assert_eq!(after_over(&PULSE, false), Next::Demo, "Pulse goes on to a new circuit");
     assert_eq!(after_over(&PULSE, true), Next::Demo);
-    let chained = Demo {
-        after_end: oag_title::pre_race::Sourced::chosen(AfterEnd::NextDemo),
+    let to_menu = Demo {
+        after_end: oag_title::pre_race::Sourced::chosen(AfterEnd::MainMenu),
         ..PULSE
     };
-    assert_eq!(after_over(&chained, false), Next::Demo);
+    assert_eq!(after_over(&to_menu, false), Next::Menu);
+    assert_eq!(after_over(&to_menu, true), Next::Demo);
 }
 
 #[test]
@@ -100,4 +101,62 @@ fn a_chain_does_not_repeat_the_circuit_it_just_flew() {
 fn nothing_to_pick_from_is_none() {
     assert_eq!(pick(&PULSE, 1, 0, 3, None), None);
     assert_eq!(pick(&PULSE, 1, 3, 0, None), None);
+}
+
+fn authored(start: Option<f32>, end: Option<f32>, tracks: &[&str]) -> DemoConfig {
+    DemoConfig {
+        start_seconds: start,
+        end_seconds: end,
+        tracks: tracks.iter().map(ToString::to_string).collect(),
+    }
+}
+
+#[test]
+fn the_authored_timeouts_replace_the_titles_and_a_missing_one_does_not() {
+    assert_eq!(Timing::of(&PULSE, None), Timing { idle: 3600, length: 7200 });
+    let both = authored(Some(30.0), Some(120.0), &[]);
+    assert_eq!(Timing::of(&PULSE, Some(&both)), Timing { idle: 1800, length: 7200 });
+    let start_only = authored(Some(10.0), None, &[]);
+    assert_eq!(Timing::of(&PULSE, Some(&start_only)), Timing { idle: 600, length: 7200 });
+    let nonsense = authored(Some(-1.0), Some(f32::NAN), &[]);
+    assert_eq!(Timing::of(&PULSE, Some(&nonsense)), Timing::of(&PULSE, None));
+}
+
+#[test]
+fn the_authored_cycle_names_circuits_by_id_or_environment_directory() {
+    let circuits = [("a", "Data\\Environments\\Alpha"), ("b", "data/environments/Tower"), ("c", "x")];
+    let config = authored(None, None, &["tower", "C", "missing"]);
+    assert_eq!(authored_circuit(Some(&config), &circuits, 0), Some(1));
+    assert_eq!(authored_circuit(Some(&config), &circuits, 1), Some(2));
+    assert_eq!(authored_circuit(Some(&config), &circuits, 2), Some(1), "wraps over the two on offer");
+    assert_eq!(authored_circuit(Some(&authored(None, None, &["gone"])), &circuits, 0), None);
+    assert_eq!(authored_circuit(None, &circuits, 0), None);
+}
+
+#[test]
+fn the_measured_rule_ignores_unlocks_and_draws_multiplayer_teams_and_never_repeats_either() {
+    assert!(unlocks_ignored(&PULSE));
+    let teams = [("a", true), ("b", false), ("c", true), ("d", true)];
+    assert_eq!(offered_teams(&PULSE, &teams), ["a", "c", "d"]);
+    let none_marked = [("a", false), ("b", false)];
+    assert_eq!(offered_teams(&PULSE, &none_marked), ["a", "b"], "a title that marks none offers all");
+    let mut last = None;
+    for n in 0..300 {
+        let next = pick(&PULSE, chain_seed(3, n), 24, 8, last).expect("a pick");
+        if let Some(previous) = last {
+            assert_ne!(next.track, previous.track, "demo {n}");
+            assert_ne!(next.team, previous.team, "demo {n}");
+        }
+        last = Some(next);
+    }
+}
+
+#[test]
+fn a_title_with_the_chosen_rule_offers_every_team_and_respects_unlocks() {
+    let chosen = Demo {
+        selection: oag_title::pre_race::Sourced::chosen(Selection::SeededFromPlayable),
+        ..PULSE
+    };
+    assert!(!unlocks_ignored(&chosen));
+    assert_eq!(offered_teams(&chosen, &[("a", true), ("b", false)]), ["a", "b"]);
 }

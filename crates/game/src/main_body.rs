@@ -526,16 +526,21 @@ fn run(cli: Cli) -> Result<()> {
         let music_discs = pending.music_discs(&source);
         let mut options = pending.race_options(&source, Vec::new());
         let catalogue = oag_game::remix::catalogue(&source)?;
+        let config = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+            .ok()
+            .and_then(|mut opened| {
+                oag_game::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
+            });
         let length = if cli.ticks > 0 { cli.ticks } else { u32::MAX };
         let seed = options.seed.unwrap_or_else(oag_game::race_seed::fresh);
         let unlocked = oag_game::unlock::unlock_all();
         let playable = |track: &race::catalogue::Track| unlocked || track.unlock_grid.is_none();
         if cli.dry_run {
-            for (n, report) in oag_game::demo::chain::run(&options, &catalogue, playable, seed, 2, length)?
+            for (n, report) in oag_game::demo::chain::run(&options, &catalogue, config.as_ref(), playable, seed, 2, length)?
                 .iter()
                 .enumerate()
             {
-                println!("{}: {report:?}", n + 1);
+                println!("demo {}: {report}", n + 1);
             }
             return Ok(());
         }

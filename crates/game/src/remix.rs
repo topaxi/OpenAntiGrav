@@ -21,6 +21,8 @@ use oag_ui::menu;
 pub struct Catalogue {
     pub tracks: Vec<(oag_raceplay::catalogue::Track, String)>,
     pub teams: Vec<menu::Choice>,
+    /// The ids of the teams the definition marks `multiplayer="true"`.
+    pub multiplayer_teams: Vec<String>,
 }
 
 impl Catalogue {
@@ -122,11 +124,21 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
             (track.clone(), label)
         })
         .collect();
-    let teams = oag_raceplay::catalogue::teams(&team_xml)
+    let declared = oag_raceplay::catalogue::teams(&team_xml);
+    let multiplayer_teams = declared
+        .iter()
+        .filter(|team| team.multiplayer)
+        .map(|team| team.id.clone())
+        .collect();
+    let teams = declared
         .iter()
         .map(|team| menu::Choice::labelled(&team.id, team.label(&strings)))
         .collect();
-    Ok(Catalogue { tracks, teams })
+    Ok(Catalogue {
+        tracks,
+        teams,
+        multiplayer_teams,
+    })
 }
 
 /// Reads and parses one plugin definition, named in every error so a bad path

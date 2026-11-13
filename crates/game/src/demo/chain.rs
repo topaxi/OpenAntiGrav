@@ -9,7 +9,9 @@ use anyhow::{Context, Result};
 use oag_gameplay::PlayerInputs;
 use oag_raceplay::{self as race, Race};
 
-use super::{Leave, Pick, Run, chain_seed, pick};
+use oag_tables::demo_config::DemoConfig;
+
+use super::{Leave, Pick, Run, Timing, authored_circuit, chain_seed, pick};
 use crate::remix::Catalogue;
 
 /// One demo of a chain, as it ended.
@@ -31,6 +33,25 @@ pub struct Report {
     pub leave: Leave,
 }
 
+impl std::fmt::Display for Report {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} as {}: {} craft, {} human slots, {} flew, {} ticks ({})",
+            self.track,
+            self.team,
+            self.craft,
+            self.humans,
+            self.moved,
+            self.ticks,
+            match self.leave {
+                Leave::Over => "over",
+                Leave::Input => "input",
+            }
+        )
+    }
+}
+
 /// How far a craft must have gone from its grid slot to count as having flown (metres).
 pub const MOVED: f32 = 50.0;
 
@@ -44,29 +65,42 @@ pub const MOVED: f32 = 50.0;
 pub fn run(
     base: &race::Options,
     catalogue: &Catalogue,
+    config: Option<&DemoConfig>,
     playable: impl Fn(&race::catalogue::Track) -> bool,
     seed: u64,
     demos: u32,
     length: u32,
 ) -> Result<Vec<Report>> {
+    let rule = oag_source::title::identify(&base.source)
+        .with_context(|| format!("{} is not a title this build knows", base.source))?
+        .demo;
     let tracks: Vec<_> = catalogue
         .tracks
         .iter()
         .map(|(track, _)| track)
-        .filter(|track| playable(track))
+        .filter(|track| super::unlocks_ignored(&rule) || playable(track))
         .collect();
-    let teams: Vec<_> = catalogue.teams.iter().map(|team| team.value.as_str()).collect();
+    let marked: Vec<(&str, bool)> = catalogue
+        .teams
+        .iter()
+        .map(|team| (team.value.as_str(), catalogue.multiplayer_teams.contains(&team.value)))
+        .collect();
+    let teams = super::offered_teams(&rule, &marked);
     let mut reports = Vec::new();
     let mut previous: Option<Pick> = None;
-    let rule = oag_source::title::identify(&base.source)
-        .with_context(|| format!("{} is not a title this build knows", base.source))?
-        .demo;
     for n in 0..demos {
         let mut options = base.clone();
-        let Some(chosen) = pick(&rule, chain_seed(seed, n), tracks.len(), teams.len(), previous)
+        let Some(mut chosen) = pick(&rule, chain_seed(seed, n), tracks.len(), teams.len(), previous)
         else {
             break;
         };
+        let circuits: Vec<(&str, &str)> = tracks
+            .iter()
+            .map(|track| (track.id.as_str(), track.location.as_str()))
+            .collect();
+        if let Some(track) = authored_circuit(config, &circuits, n) {
+            chosen.track = track;
+        }
         previous = Some(chosen);
         options.mode = oag_race::Mode::SingleRace;
         options.track = Some(tracks[chosen.track].entry_name());
@@ -74,7 +108,7 @@ pub fn run(
         options.seed = Some(chain_seed(seed, n));
         let loaded = race::load(&options)
             .with_context(|| format!("loading demo {} on {}", n + 1, tracks[chosen.track].id))?;
-        let (demo, difficulty) = (loaded.title.demo, loaded.setup.difficulty);
+        let (timing, difficulty) = (Timing::of(&loaded.title.demo, config), loaded.setup.difficulty);
         let mut race = Race::start(loaded.setup);
         crate::ai_choice::apply(
             &mut race,
@@ -89,7 +123,7 @@ pub fn run(
         let mut run = Run::new(false);
         let leave = loop {
             race.tick(&PlayerInputs::default());
-            if let Some(leave) = run.tick(length.min(demo.duration_ticks()), race.finished()) {
+            if let Some(leave) = run.tick(length.min(timing.length), race.finished()) {
                 break leave;
             }
         };

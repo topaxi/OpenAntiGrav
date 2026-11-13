@@ -82,14 +82,14 @@ impl Session {
             return false;
         };
         let key = std::mem::take(&mut self.demo.key);
-        let input = key
-            || self.controls.pad_spoke()
-            || self.controls.buttons().pressed_mask() != 0
-            || !pointer.is_idle();
+        // A button press, any key, the mouse or a finger. **Not `pad_spoke`**, which also reads a
+        // stick off centre: 2 s of full stick left the original's demo running (measured).
+        let input = key || self.controls.buttons().pressed_mask() != 0 || !pointer.is_idle();
         match &self.stage {
             Stage::Menu(_) => {
                 let eligible = self.attract_eligible();
-                let launch = self.demo.attract.tick(&title.demo, eligible, input);
+                let idle = self.demo_timing(title).idle;
+                let launch = self.demo.attract.tick(idle, eligible, input);
                 // A `--demo` run opens the menus once and launches from them.
                 let cli_launch = eligible && self.demo.cli.is_some() && self.demo.loading.is_none();
                 if (launch || cli_launch) && self.launch_demo() {
@@ -103,6 +103,7 @@ impl Session {
             }
             Stage::Race(stage) if stage.demo.is_some() => {
                 let finished = stage.race.finished();
+                let length = self.demo_timing(title).length;
                 let Stage::Race(stage) = &mut self.stage else {
                     return false;
                 };
@@ -110,7 +111,7 @@ impl Session {
                     return false;
                 };
                 run.hear(input);
-                if let Some(leave) = run.tick(title.demo.duration_ticks(), finished) {
+                if let Some(leave) = run.tick(length, finished) {
                     self.end_demo(leave);
                     return true;
                 }
@@ -118,6 +119,12 @@ impl Session {
             _ => {}
         }
         false
+    }
+
+    /// The title's demo timing, with its authored `DemoConfig.xml` over it.
+    fn demo_timing(&self, title: &'static oag_title::Title) -> demo::Timing {
+        let config = self.shell.as_ref().and_then(|shell| shell.demo_config.as_ref());
+        demo::Timing::of(&title.demo, config)
     }
 
     /// Escape in a demo: a wallpaper quits, any other demo is left like any other input.
@@ -175,9 +182,12 @@ impl Session {
             .tracks_for(mode)
             .iter()
             .map(|(track, _)| track)
-            .filter(|track| match &gate {
-                Some(gate) => gate.offers(track, &self.records, &campaign_title),
-                None => track.unlock_grid.is_none(),
+            .filter(|track| {
+                demo::unlocks_ignored(&title.demo)
+                    || match &gate {
+                        Some(gate) => gate.offers(track, &self.records, &campaign_title),
+                        None => track.unlock_grid.is_none(),
+                    }
             })
             .collect();
         // A title that gates its teams on the campaign (Pure) offers only the player's own pick,
@@ -190,16 +200,36 @@ impl Session {
                 .filter(|team| *team == self.settings.race.team)
                 .collect()
         } else {
-            shell.teams.iter().map(|choice| choice.value.as_str()).collect()
+            let all: Vec<(&str, bool)> = shell
+                .teams
+                .iter()
+                .map(|choice| {
+                    let marked = shell
+                        .team_details
+                        .iter()
+                        .any(|team| team.id == choice.value && team.multiplayer);
+                    (choice.value.as_str(), marked)
+                })
+                .collect();
+            demo::offered_teams(&title.demo, &all)
         };
         let seed = *self.demo.seed.get_or_insert_with(|| oag_game::race_seed::fresh());
-        let pick = demo::pick(
+        let mut pick = demo::pick(
             &title.demo,
             demo::chain_seed(seed, self.demo.started),
             tracks.len(),
             teams.len(),
             self.demo.previous,
         )?;
+        // A title that authors its circuit cycle (`DemoConfig.xml`) flies that, in order.
+        let circuits: Vec<(&str, &str)> = tracks
+            .iter()
+            .map(|track| (track.id.as_str(), track.location.as_str()))
+            .collect();
+        let config = shell.demo_config.as_ref();
+        if let Some(track) = demo::authored_circuit(config, &circuits, self.demo.started) {
+            pick.track = track;
+        }
         let mut options = self.race_options.clone()?;
         options.mode = mode;
         options.track = Some(tracks[pick.track].entry_name());

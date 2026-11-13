@@ -967,6 +967,8 @@ pub(crate) struct Shell {
     /// [`Self::tracks`] - what the CIRCUIT row shows once MODE is Zone. See
     /// `boot::Shell::zone_tracks` and [`Self::tracks_for`].
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
+    /// What the title's `DemoConfig.xml` authors for its attract demo (`session::demo`).
+    pub(crate) demo_config: Option<oag_tables::demo_config::DemoConfig>,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -1176,6 +1178,7 @@ impl Shell {
                     )
                 })
                 .collect(),
+            demo_config: boot_shell.demo_config.clone(),
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()

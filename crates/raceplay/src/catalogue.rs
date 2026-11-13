@@ -404,6 +404,9 @@ pub struct Team {
     /// `TMTX_NAME` plays. `None` where it declares none. Measured on all eight
     /// of a fresh profile's teams; see [`Track::sound_register`].
     pub sound_register: Option<u8>,
+    /// The `multiplayer="true"` the entry authors: a team the original's multiplayer pickers and
+    /// its attract demo's field draw on. `false` where the entry declares none.
+    pub multiplayer: bool,
     /// The alternate paint jobs this team declares, in file order.
     ///
     /// Every `PI_ModelSkin` nested under this team's
@@ -633,6 +636,7 @@ fn read_team(node: &Node) -> Option<Team> {
         sound_register: values
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
+        multiplayer: values.attr("multiplayer") == Some("true"),
         skins: read_skins(node),
         rating: read_rating(node),
         models: read_models(node),

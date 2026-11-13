@@ -212,6 +212,8 @@ pub struct Shell {
     pub tracks: Vec<oag_raceplay::catalogue::Track>,
     /// The circuits a Zone race can be picked from. See [`oag_title::ZoneCircuit::menu_tracks`].
     pub zone_tracks: Vec<oag_raceplay::catalogue::Track>,
+    /// What the title's own `DemoConfig.xml` authors for its attract demo, when it ships one.
+    pub demo_config: Option<oag_tables::demo_config::DemoConfig>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -610,6 +612,7 @@ pub fn load_shell(
         team_ratings2048::load(title, front_end.touch.is_some(), &documents, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
+    let demo_config = demo_config::load(&mut archives, title, &mut report);
     let teams = load_teams(
         &mut archives,
         title.race,
@@ -877,6 +880,7 @@ pub fn load_shell(
             strings,
             tracks,
             zone_tracks,
+            demo_config,
             circuit_names,
             teams,
             font,
@@ -1199,6 +1203,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         strings,
         tracks,
         zone_tracks: _,
+        demo_config: _,
         circuit_names,
         teams,
         font,
@@ -1621,6 +1626,7 @@ fn load_second_movie(
 }
 
 pub mod backdrop;
+pub mod demo_config;
 pub(crate) mod campaign2048;
 pub mod fonts;
 pub mod fury;

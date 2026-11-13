@@ -976,3 +976,83 @@ fn any_input_in_a_demo_returns_to_the_main_menu() {
         assert_eq!(text(last, &["demo"]), None, "{tag}");
     }
 }
+
+/// `--demo` skips the front end, starts in a demo and goes on to the next when one ends, never
+/// touching the menus in between: the run is a chain of races on different circuits, through the
+/// loading stage each time. Any input then hands it back to the main menu.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_demo_flag_chains_demos_until_somebody_takes_over() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let length = 120 * 60;
+    let run = drive_args(
+        &image,
+        "demo-flag",
+        &format!(
+            "until stage=race within 3000; expect demo=running; expect humans=0; \
+             ticks {}; until demo=running within 3000; ticks 100; key; \
+             until stage=menu within 300; expect page=main",
+            length + 100
+        ),
+        None,
+        &[],
+        &["--demo"],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let mut stages: Vec<&str> = run
+        .states
+        .iter()
+        .filter_map(|state| text(state, &["stage"]))
+        .collect();
+    stages.dedup();
+    let first_menu = stages.iter().position(|stage| *stage == "menu").expect("a menu at the end");
+    assert_eq!(
+        first_menu,
+        stages.len() - 1,
+        "no menu between the demos, only after the input: {stages:?}"
+    );
+    assert!(
+        stages.windows(3).any(|three| three == ["race", "loading", "race"]),
+        "the first demo's end loaded the next: {stages:?}"
+    );
+    let tracks: std::collections::BTreeSet<_> = demo_races(&run)
+        .iter()
+        .filter_map(|state| text(state, &["race", "track"]))
+        .collect();
+    assert!(tracks.len() >= 2, "two demos on different circuits: {tracks:?}");
+}
+
+/// `--wallpaper`: input is ignored (a pad button, a key, the mouse, a click all leave the demo
+/// running), Escape quits, and the HUD is not drawn.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_wallpaper_ignores_input_and_quits_on_escape() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_args(
+        &image,
+        "wallpaper",
+        "until stage=race within 3000; expect demo=running; ticks 100; \
+         key; click; mouse 5 5; press start; press cross; ticks 30; \
+         expect stage=race; expect demo=running; escape",
+        None,
+        &[],
+        &["--wallpaper"],
+    );
+    let stderr = run.stderr();
+    assert!(
+        stderr.contains("escape: the game quit"),
+        "Escape ended the run, which nothing else did:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("expect") && !stderr.contains("does not hold"),
+        "input left the wallpaper:\n{stderr}"
+    );
+    assert!(
+        run.states.iter().all(|state| text(state, &["stage"]) != Some("menu")),
+        "the wallpaper reached the menu"
+    );
+}

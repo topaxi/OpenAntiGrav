@@ -138,6 +138,7 @@ fn query_lists(
                 Some(_) => remix::Catalogue {
                     tracks: Vec::new(),
                     teams: Vec::new(),
+                    multiplayer_teams: Vec::new(),
                 },
                 None => craft_catalogue(titles, args.title, "")?,
             };
