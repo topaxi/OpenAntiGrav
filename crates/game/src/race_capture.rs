@@ -1083,10 +1083,7 @@ pub fn capture(
                 if let Some(timer) = timer {
                     timer.resolve(&mut encoder);
                 }
-                let commands = encoder.finish();
-                oag_gpu::perfprobe::mark("t-encoder-finish");
-                queue.submit(Some(commands));
-                oag_gpu::perfprobe::mark("t-submit");
+                queue.submit(Some(encoder.finish()));
             },
         );
     }
