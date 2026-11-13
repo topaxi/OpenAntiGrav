@@ -18,7 +18,7 @@
 
 use super::*;
 use crate::screen::Redirect;
-use oag_2048::frontend::states as w2048;
+pub(super) use oag_2048::frontend::states as w2048;
 
 /// Every 2048 screen this build can enter and leave - the list `can_drive`
 /// and `Frontend::booting` both read. See `can_drive`'s own doc for what
@@ -242,7 +242,7 @@ impl Frontend {
                 out
             }
             w2048::BOOT_STUDIO_LOGO | w2048::TITLE_SCREEN => {
-                let mut out = self.draw_screen_at(current, self.on_screen_for);
+                let mut out = self.draw_screen_at(self.screen_for(current), self.on_screen_for);
                 out.insert(1, white);
                 if current == w2048::TITLE_SCREEN {
                     self.insert_lattice(&mut out);

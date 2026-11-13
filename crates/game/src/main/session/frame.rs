@@ -175,6 +175,8 @@ impl Session {
             }
         }
 
+        self.poll_hosted_map();
+
         // As soon as the circuit's own load lands, not only once the fade that
         // covers it has run out - see `Session::advance_race_build`, which is
         // the fix for the gap that otherwise opens up behind the black screen.

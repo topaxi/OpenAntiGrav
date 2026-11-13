@@ -357,6 +357,9 @@ impl Frontend {
                 self.update_event_card(input);
                 return;
             }
+            if self.leave_hosted_map(input) {
+                return;
+            }
             for (button, target) in [
                 (Button::Triangle, w2048::HOME),
                 (Button::Circle, w2048::GAME_MODE_CHOICE),

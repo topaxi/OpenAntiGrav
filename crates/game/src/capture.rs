@@ -1220,16 +1220,19 @@ pub fn run(
             renderer.inset(),
         );
     }
-    if let (Some(race), Some(craft), Some(touch)) = (
+    if let (Some(race), Some(craft), Some(origin)) = (
         &options.race,
         frontend.team_hull(),
-        title.front_end.and_then(|front_end| front_end.touch),
+        title
+            .front_end
+            .and_then(|front_end| front_end.touch)
+            .and_then(|touch| touch.team_model_origin),
     ) {
         crate::team_hull::TeamHull::new(
             race.source.clone(),
             race.dlc.clone(),
             title.race.ship_dir,
-            touch.team_model_origin,
+            origin,
         )
         .draw(
             &device,

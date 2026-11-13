@@ -789,14 +789,23 @@ impl CampaignStage {
         }
     }
 
+    /// Whether `campaign` is the one whose events are a campaign map (2048's,
+    /// `Campaign2048_Definition.xml`) rather than HD's grids.
+    pub(crate) fn is_map_campaign(&self, campaign: Campaign) -> bool {
+        self.chooser
+            .as_ref()
+            .and_then(|chooser| chooser.entry(campaign))
+            .is_some_and(|entry| entry.tag() == Some("2048"))
+    }
+
     /// Opens `campaign`'s own `Grid Selection`/`Grid Selection
     /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
     /// grids - `Campaign Selection`'s own `Event::Confirmed`.
     ///
     /// `false`, staying on `Campaign Selection`, when none of the campaign's
     /// grids is loaded: Omega's 2048 grids (`grid_16`..`grid_18`) author no
-    /// `RequiredPoints` and are skipped by the grid reader, and its events live
-    /// in `Campaign2048_Definition.xml`, which is not read.
+    /// `RequiredPoints` and are skipped by the grid reader; its events are the
+    /// campaign map ([`Self::is_map_campaign`]).
     pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) -> bool {
         let Some(entry) = self.chooser.as_ref().and_then(|chooser| chooser.entry(campaign)) else {
             return false;

@@ -19,6 +19,7 @@ mod campaign_wave;
 mod drawing;
 mod event_card;
 mod focus;
+mod hosted_map;
 mod intro;
 mod navs;
 mod pointer;

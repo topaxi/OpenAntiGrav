@@ -228,6 +228,7 @@ impl Session {
             ship_select: None,
             ship_select_split: None,
             team_details: Vec::new(),
+            map: None,
             strings,
         });
         self.prefetch_pending = None;

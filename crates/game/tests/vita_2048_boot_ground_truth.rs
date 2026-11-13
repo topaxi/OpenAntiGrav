@@ -1070,7 +1070,10 @@ fn every_select_team_hull_builds_with_its_textures() {
         boot::load_shell(&options(&source)).expect("2048's front end walks");
     let roster = title.race.team_variants.expect("2048's native roster");
     let touch = title.front_end.and_then(|front_end| front_end.touch);
-    assert_eq!(touch.map(|t| t.team_model_origin), Some((1400.0, 264.0)));
+    assert_eq!(
+        touch.and_then(|t| t.team_model_origin),
+        Some((1400.0, 264.0))
+    );
     let mut hulls = 0;
     for team in roster.teams {
         for variant in roster.variants {
