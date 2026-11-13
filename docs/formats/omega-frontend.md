@@ -373,8 +373,8 @@ wired: the per-type button footprints (every event takes the default 3 x 2, whic
 of the cone), the start-focus walk, Triangle records. **Season filter**: the map has
 `Frontend::set_map_season` (season from the year in the event name, `event+0x308` unread), but
 Omega's host leaves it off: `Grid Selection 2048` is not wired (`grid_16`..`grid_18` are stubs
-the grid reader skips and it is a 3D flyer carousel), so no season is ever chosen. Vita 2048
-keeps all three seasons by the maintainer's decision.
+the grid reader skips and it is a 3D flyer carousel), so no season is ever chosen. **Departure:** Omega's map shows all three seasons until the chooser lands (the original shows one).
+Vita 2048 keeps all three seasons by the maintainer's decision.
 
 **Missing art, said in the loader report:** `Data\FE\NewImages\trackscreens\*.gtf` (the event
 cards' track pictures), `Data\FE\NewImages\Demo\*` and each 2048 circuit's
