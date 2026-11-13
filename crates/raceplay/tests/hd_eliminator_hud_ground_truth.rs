@@ -376,6 +376,9 @@ fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
     );
     let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
     assert_eq!(places, (1..=8).collect::<Vec<u8>>());
+    // The place a campaign cell's medal is read from is the player's row on this board.
+    let player = board.player().expect("the player's row");
+    assert_eq!(race.eliminator_place(), player.place);
 }
 
 /// The laps the opponent with the most points has completed.
