@@ -1342,6 +1342,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             &mut report,
         ),
         #[cfg(feature = "view")]
+        demo_overlay: intro::read_demo_screen(&mut archives, title, options, &mut report),
+        #[cfg(feature = "view")]
         track_stats,
         #[cfg(feature = "view")]
         track_model,

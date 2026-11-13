@@ -267,6 +267,7 @@ impl Session {
         {
             warn!("{warning}");
         }
+        options.demo = true;
         demo::apply_rules(&mut options, title);
         options.seat_picks = Vec::new();
         debug!(

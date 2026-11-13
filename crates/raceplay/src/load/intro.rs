@@ -123,18 +123,8 @@ pub(super) fn read_panel(
         ));
         return None;
     };
-    let plugins = title
-        .front_end
-        .map_or::<&[&str], _>(&[], |f| f.language_plugins);
-    let languages = oag_ui::language::load::load_languages(
-        archives,
-        plugins,
-        title.front_end.and_then(|f| f.disc_strings),
-        report,
-    );
+    let (languages, strings) = language(archives, title, preferred_language, report);
     let chosen = oag_ui::language::load::chosen_language(&languages, preferred_language);
-    let strings =
-        oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);
     let menu_role = title.front_end?.menu?.menu_font?;
     let menu = crate::hud::hud_font(archives, &languages, chosen, menu_role, report);
     let default = crate::hud::hud_font(
@@ -145,4 +135,53 @@ pub(super) fn read_panel(
         report,
     );
     crate::track_panel::read(archives, &id, &strings, (menu, default), report)
+}
+
+/// The title's languages and the chosen one's string table, for a screen the race draws.
+pub(super) fn language(
+    archives: &mut oag_assets::source::Archives,
+    title: &'static oag_title::Title,
+    preferred_language: Option<&str>,
+    report: &mut Vec<String>,
+) -> (
+    Vec<oag_ui::language::Language>,
+    oag_ui::language::StringTable,
+) {
+    let plugins = title
+        .front_end
+        .map_or::<&[&str], _>(&[], |f| f.language_plugins);
+    let languages = oag_ui::language::load::load_languages(
+        archives,
+        plugins,
+        title.front_end.and_then(|f| f.disc_strings),
+        report,
+    );
+    let strings =
+        oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);
+    (languages, strings)
+}
+
+/// The screen an attract demo draws over its race, when this is a demo and the title authors
+/// one. Says which part will not read in `report`.
+pub(super) fn read_demo_screen(
+    archives: &mut oag_assets::source::Archives,
+    title: &'static oag_title::Title,
+    options: &crate::Options,
+    report: &mut Vec<String>,
+) -> Option<crate::demo_overlay::Assets> {
+    if !options.demo {
+        return None;
+    }
+    let screen = title.demo.screen?.value;
+    let (languages, strings) = language(archives, title, options.language.as_deref(), report);
+    let chosen = oag_ui::language::load::chosen_language(&languages, options.language.as_deref());
+    // `font="scroll"`, `Demo_Definition.xml`'s text face, is the language's `Stats` slot.
+    let font = crate::hud::hud_font(
+        archives,
+        &languages,
+        chosen,
+        oag_ui::language::roles::STATS,
+        report,
+    );
+    crate::demo_overlay::read(archives, &screen, strings, font, report)
 }

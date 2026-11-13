@@ -416,6 +416,7 @@ pub fn capture(
         setup,
         mut hud,
         track_panel,
+        demo_overlay,
         track_model,
         behind_glass,
         liveries,
@@ -1305,6 +1306,22 @@ pub fn capture(
                 progress,
                 crate::hud_views::panel_viewport(panel_views, panel_cut, hud_viewport),
             );
+        }
+        // An attract demo's screen, `tick` ticks in, as the window draws it over a demo.
+        if options.demo
+            && let Some(assets) = demo_overlay.as_ref()
+        {
+            match crate::demo_overlay::Overlay::new(&device, &queue, format, assets) {
+                Ok(mut screen) => screen.draw(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &hud_view,
+                    race.sim.world.tick as f32 / 60.0,
+                    hud_viewport,
+                ),
+                Err(why) => warn!("the demo screen did not build ({why}); capturing without it"),
+            }
         }
         let scale = options.hud_scale;
         // Every window that holds a seat shows the board, as the window frame loop does

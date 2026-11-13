@@ -52,6 +52,8 @@ pub(crate) struct RaceStage {
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
+    /// The screen an attract demo draws over its race, when the title authors one and it read.
+    pub(crate) demo_overlay: Option<oag_game::demo_overlay::Overlay>,
     /// Which circuit/mode/class row [`oag_game::records`] persists this
     /// race's outcome under - resolved once, at load, from
     /// [`oag_raceplay::Loaded::title`] and the [`oag_raceplay::Options`]
@@ -690,6 +692,24 @@ impl RaceStage {
             self.race.cut(),
         );
         self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+    }
+
+    /// The attract demo's screen over `view`, `seconds` into the demo. Nothing off a demo, in a
+    /// wallpaper (which has no one to tell to press a button) or with no screen to draw.
+    pub(crate) fn draw_demo_screen(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let Some(run) = self.demo.as_ref().filter(|run| !run.wallpaper()) else {
+            return;
+        };
+        let seconds = run.ticks() as f32 / 60.0;
+        if let Some(screen) = &mut self.demo_overlay {
+            screen.draw(gpu.device(), gpu.queue(), encoder, view, seconds, viewport);
+        }
     }
 
     /// The race's HUD alone over `view`: photo mode with its HUD row on, and a parked race under

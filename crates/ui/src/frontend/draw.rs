@@ -664,6 +664,15 @@ impl Frontend {
             rect: [0.0, 0.0, width, height],
             color: [0.0, 0.0, 0.0, 1.0],
         }];
+        out.extend(self.draw_screen_over(name, elapsed));
+        out
+    }
+
+    /// [`Self::draw_screen_at`] without the black backdrop under it: the screen's own widgets
+    /// alone, for one drawn over a picture (the attract demo's `Demo InGame` over its race).
+    #[must_use]
+    pub fn draw_screen_over(&self, name: &str, elapsed: f64) -> Vec<Draw> {
+        let mut out = Vec::new();
 
         let Some(screen) = self
             .screens

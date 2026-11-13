@@ -767,7 +767,13 @@ impl Session {
             match stage.race.photo().map(oag_raceplay::photo::Photo::hud) {
                 // POSE VIEW: hulls at their recorded poses, no HUD. A viewer whose SQUARE
                 // turned the HUD off draws none either.
-                None if pose_view || viewer_hud_off => {}
+                None if pose_view => {}
+                None if viewer_hud_off => stage.draw_demo_screen(
+                    &self.gpu,
+                    &mut encoder,
+                    self.framebuffer.output(),
+                    rect,
+                ),
                 None => stage.draw_hud(
                     &self.gpu,
                     &mut encoder,

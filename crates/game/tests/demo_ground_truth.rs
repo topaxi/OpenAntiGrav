@@ -37,7 +37,7 @@ fn demos_on(image: &Path, demos: u32) -> Vec<chain::Report> {
 /// Two demos in a row: each has no slot a person flies, every craft on its grid travelled, each
 /// ran its length and ended `Over`, and the second is another circuit. Fails when the race still
 /// seats a person (`humans` is 1) or the camera craft is not flown (`flew` is one short).
-fn a_chain_of_demos_has_nobody_in_it(image: &Path) {
+fn a_chain_of_demos_has_nobody_in_it(image: &Path, screen: Option<bool>, craft: Option<usize>) {
     let reports = demos_on(image, 2);
     assert_eq!(reports.len(), 2, "{reports:#?}");
     for report in &reports {
@@ -47,6 +47,28 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path) {
         assert_eq!(report.moved, report.craft, "every craft flew: {report}");
         assert_eq!(report.ticks, LENGTH, "{report}");
         assert_eq!(report.leave, Leave::Over, "{report}");
+        // The screen over the demo reads off the disc: Pulse's `Demo InGame` is two rules, the
+        // logo and the pulsing text. Fails when the XML, its logo or its string is not read.
+        if let Some(logo) = screen {
+            let drawn = report
+                .screen
+                .unwrap_or_else(|| panic!("no demo screen: {report:?}"));
+            assert!(drawn.fills >= 2, "the two rules: {drawn:?}");
+            // Pure's file names a logo its disc does not hold: left out, nothing in its place.
+            assert_eq!(
+                drawn.sprites >= 1,
+                logo,
+                "the logo: {drawn:?} {:?}",
+                report.screen_notes
+            );
+            assert!(drawn.texts >= 1, "Press any button: {drawn:?}");
+        } else {
+            assert_eq!(report.screen, None, "{report}");
+        }
+        // The race is set up as measured: Flash's eight craft, where the title's grid is measured.
+        if let Some(craft) = craft {
+            assert_eq!(report.craft, craft, "{report}");
+        }
     }
     assert_ne!(
         reports[0].track, reports[1].track,
@@ -58,7 +80,7 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path) {
 #[ignore = "needs a disc image in data/images/"]
 fn pulse_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("pulse-psp-eu.chd") {
-        a_chain_of_demos_has_nobody_in_it(&image);
+        a_chain_of_demos_has_nobody_in_it(&image, Some(true), Some(8));
     }
 }
 
@@ -66,7 +88,7 @@ fn pulse_demos_have_nobody_in_them() {
 #[ignore = "needs a disc image in data/images/"]
 fn pure_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("pure-psp-eu.chd") {
-        a_chain_of_demos_has_nobody_in_it(&image);
+        a_chain_of_demos_has_nobody_in_it(&image, Some(false), None);
     }
 }
 
@@ -74,7 +96,7 @@ fn pure_demos_have_nobody_in_them() {
 #[ignore = "needs a disc image in data/images/"]
 fn hd_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") {
-        a_chain_of_demos_has_nobody_in_it(&image);
+        a_chain_of_demos_has_nobody_in_it(&image, None, None);
     }
 }
 

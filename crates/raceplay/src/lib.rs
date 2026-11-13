@@ -197,6 +197,8 @@ mod cues;
 mod damage_fx;
 mod demo;
 #[cfg(feature = "view")]
+pub mod demo_overlay;
+#[cfg(feature = "view")]
 mod destroy_camera;
 #[cfg(feature = "view")]
 mod drawable;
