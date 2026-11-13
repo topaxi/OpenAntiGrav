@@ -15,9 +15,8 @@ use crate::transit::Exit;
 /// A portal pair as the view being drawn sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PortalShot {
-    /// The authored track section the entrance stands in, [`UNPLACED`] where the spline does
-    /// not say: what the main view's visible set is asked about.
-    pub(crate) entrance_section: u8,
+    /// What the surface reaches, which the main view's visible sets are asked about.
+    pub(crate) reach: Reach,
     /// The view matrix of the camera through the pair.
     pub(crate) view: Mat4,
     /// The exit's plane in [`Self::view`]'s eye space.
@@ -25,6 +24,17 @@ pub(crate) struct PortalShot {
     /// What takes a world point at the entrance to `engine_uv`'s clip space: the secondary
     /// camera after [`portal::through`], so the surface reads the picture where it stands.
     pub(crate) engine_view_projection: Mat4,
+}
+
+/// The part of the track a portal's surface reaches: a sphere of the request's radius about the
+/// entrance's centre.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Reach {
+    /// The authored sections of the road inside the sphere, one bit each, and [`ALWAYS`] where
+    /// one of them is not named: a section partition masks nothing it cannot place.
+    pub(crate) sections: u64,
+    pub(crate) centre: Vec3,
+    pub(crate) radius: f32,
 }
 
 impl Race {
@@ -67,10 +77,16 @@ impl Race {
         if !facing || !in_view {
             return None;
         }
+        let reach = Reach {
+            sections: crate::spline::section_bit(entrance_section)
+                | self.sim.spline.sections_within(centre, request.radius),
+            centre,
+            radius: request.radius,
+        };
         let through = portal::through(entrance, exit);
         let view = portal::view(main, through);
         Some(PortalShot {
-            entrance_section,
+            reach,
             view,
             exit_plane: portal::eye_plane(view, exit),
             engine_view_projection: projection * view * through,

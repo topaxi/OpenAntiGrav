@@ -165,6 +165,15 @@ impl TrackVisibility {
         }
     }
 
+    /// A track whose chunks are partitioned by `pvs`, with no sections.
+    #[cfg(test)]
+    pub(super) fn declaring_chunks(pvs: oag_rcs::hd_pvs::Pvs) -> Self {
+        Self {
+            chunks: Some(pvs),
+            ..Self::declaring(oag_vex::pvs::TrackPvs::empty())
+        }
+    }
+
     /// The circuit's chunk partition, when it has one.
     #[must_use]
     pub fn chunks(&self) -> Option<&oag_rcs::hd_pvs::Pvs> {

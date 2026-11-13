@@ -45,6 +45,24 @@ pub(super) struct PortalPass {
 }
 
 impl Scene {
+    /// Which of a PS3 circuit's chunks the viewed seat's craft and camera may draw: tier one on
+    /// a circuit that partitions by chunk rather than by section (`oag_render::pvs::ChunkSet`).
+    /// Located from world positions, because `track.pvs` carries its own cell positions and is
+    /// not indexed by the `.vex` spline at all. `None` draws every chunk.
+    pub(super) fn chunk_set(&self, race: &Race, pvs_cull: bool) -> Option<ChunkSet> {
+        self.visibility
+            .as_ref()
+            .filter(|_| pvs_cull && race.photo().is_none())
+            .and_then(|visibility| visibility.chunks())
+            .and_then(|pvs| {
+                ChunkSet::around(
+                    pvs,
+                    race.viewed_ship().physics.body.position,
+                    race.camera_position(),
+                )
+            })
+    }
+
     /// Draws one frame into `view`. One render pass with one clear: a
     /// second pass would either wipe the first's colour or need its own
     /// decision about the depth buffer.
@@ -369,18 +387,7 @@ impl Scene {
         // positions rather than from spline sample ids because `track.pvs`
         // carries its own cell positions and is not indexed by the `.vex`
         // spline at all.
-        let chunk_set = self
-            .visibility
-            .as_ref()
-            .filter(|_| pvs_cull && race.photo().is_none())
-            .and_then(|visibility| visibility.chunks())
-            .and_then(|pvs| {
-                ChunkSet::around(
-                    pvs,
-                    race.viewed_ship().physics.body.position,
-                    race.camera_position(),
-                )
-            });
+        let chunk_set = self.chunk_set(race, pvs_cull);
         // The animation clock, in seconds, from the tick and never the wall
         // clock - so a replay of the same tick draws the same frame. The
         // original passes every world mesh one clock that began when the
