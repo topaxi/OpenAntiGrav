@@ -215,7 +215,10 @@ colours, up to 8.5 levels of 255 per channel (darks brightened most, a stored 32
 is now `encode`, the inverse of `decode` on every store. Measured after: worst error 0.13 level per
 channel on HD (the half float's own rounding; `an_encoded_scene_passes_the_engine_texture_through_within_one_level`),
 and Omega's and 2048's float scenes within 1% (`a_float_scene_passes_the_engine_texture_through`).
-On a gamma target `amount` is 0, so `mix` returns the value untouched and Pulse's 8-bit bytes are
+Seen with `oag.slipstream` fired at tick 700 on HD (Talon's Junction, 1440x816, ticks 725 and 750,
+before and after): the change is confined to the view through the portal, a few levels darker there
+(mean 1.7 and 2.4 of 255, max 9), and the rest of the frame is identical (max 1, and 7 at 750 in the
+bloom's spill). On a gamma target `amount` is 0, so `mix` returns the value untouched and Pulse's 8-bit bytes are
 unchanged (`an_eight_bit_target_still_clamps_a_value_above_one`).
 
 **The camera.** `virtual = exit * rotation_180 * entrance^-1 * main`, the turn about the portal's
