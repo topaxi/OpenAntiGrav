@@ -322,6 +322,25 @@ against the rebuilt modules, and the vanilla fold did not move.
 Not built yet: an `oag-ext check` tool, a generated C header and a C++ example
 built from it, and a template mod.
 
+### A committed module is its guest's build (2026-11-13)
+A guest (`assets/mods/*/*/guest/`) is a workspace of its own, so the engine's build compiles
+neither it nor its tests, and the `.wasm` a player loads is a file a person committed. The
+module is a function of the guest source, the SDK it patches in (`assets/mods/.cargo/config.toml`)
+and the toolchain `rust-toolchain.toml` pins. `just check-guests --strict`
+(`scripts/check-mod-guests.py`) runs every guest's `cargo test`, builds it for
+`wasm32-unknown-unknown` and requires `ext/<name>.wasm` to be byte-identical; a stale module, a
+guest that does not build and a missing wasm target (`rustup target add wasm32-unknown-unknown`)
+all fail. It is in `just`, `just gate-affected` and CI's `test` job. Bare `just check-guests`
+only reports a stale module. A stale module still loads while its ABI revision matches, which is
+how seven of them shipped an older SDK unnoticed until 2026-11-10 (the pinned toolchain had not
+moved since 2026-10-02; the SDK had grown, for example `raise_warning`).
+
+To regenerate after an SDK, ABI or toolchain change (one command): `just rebuild-guests`
+(runs each `guest/build.sh`), then commit `ext/` in the `assets/mods/examples` and
+`assets/mods/official` submodules, then the pointers. Proof it fails: a byte appended to
+`tether.wasm` gives `1 stale module(s) ... Failing: --strict`, rc 1; a `rustup` that lists no
+target gives rc 1 naming the install command.
+
 ### Breakable armour from the Shield (2026-10-30)
 
 A mod turns the title's Shield into armour with generic pieces; the armour itself is a

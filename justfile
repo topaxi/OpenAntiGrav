@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -212,7 +212,7 @@ test-data *ARGS:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
@@ -1368,11 +1368,23 @@ check-test-groups:
     python3 -I scripts/check-test-groups.py
 
 # Every mod guest crate under assets/mods passes its own tests, and each committed
-# `ext/*.wasm` is what its guest builds: the gate compiles neither, a guest being a workspace
-# of its own. A stale module is reported; `just check-guests --strict` fails on one. Needs
-# `rustup target add wasm32-unknown-unknown` to compare modules. Not in the gate.
+# `ext/*.wasm` is what its guest builds: the main workspace compiles neither, a guest being a
+# workspace of its own. Needs `rustup target add wasm32-unknown-unknown`. After an SDK, ABI or
+# toolchain change, regenerate every module with `just rebuild-guests` and commit
+# `assets/mods/*/*/ext/` in each submodule. Bare, a stale module is only reported; the gate and
+# CI run `--strict`, which fails a stale module and a missing wasm target.
 check-guests *ARGS:
     python3 -I scripts/check-mod-guests.py "$@"
+
+# `git status` in `assets/mods/examples` and `assets/mods/official` shows which modules changed.
+# Rebuild every mod guest's committed module (the one command after an SDK or toolchain change)
+rebuild-guests:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for build in assets/mods/*/*/guest/build.sh; do
+        echo "== $build"
+        bash "$build"
+    done
 
 # Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
 # schema and its loader give the same verdict on each example, and the schemas
