@@ -138,7 +138,7 @@ tally and banks its total.
 | 8 | Weapon pad hit | **wired**: the pad hands the human a weapon, gate; `0x811c9ee8` (75); `Race::test_weapon_pads`'s grant |
 | 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
 | 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
-| 11 | Boost start | **wired**: the perfect launch, human; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80); ours is `fire_perfect_starts`' grade edge (`crates/physics/src/launch.rs`) |
+| 11 | Boost start | **wired**: the perfect launch, human; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80); ours is the player's launch grade turning Perfect (`XpTally::observe_launch`, `crates/physics/src/launch.rs`), read in the simulation so a build without the view pays it too |
 | 12 | Hit with Rocket | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
 | 13 | Hit with Missile | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
 | 14 | Hit with Plasma | **wired**: the human's projectile (`Impact::owner`) or Quake wave (`Wave::owner`) damages another craft (`WeaponHit::landed`), gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |

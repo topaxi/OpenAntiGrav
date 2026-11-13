@@ -82,6 +82,7 @@ pub struct XpTally {
     best_place: u8,
     last_shield: Option<f32>,
     damaged_lap: bool,
+    launched: bool,
     paid: BTreeMap<u32, u32>,
 }
 
@@ -101,6 +102,7 @@ impl XpTally {
             best_place: NO_PLACE,
             last_shield: None,
             damaged_lap: false,
+            launched: false,
             paid: BTreeMap::new(),
         }
     }
@@ -240,14 +242,18 @@ impl XpTally {
         self.damaged_lap = false;
     }
 
+    /// Whether the player's launch has been graded perfect: pays `Boost start` once, the first time
+    /// it is (`Race_UpdateLaunchGrade` writes the grade once, on the first-thrust edge).
+    pub fn observe_launch(&mut self, perfect: bool) {
+        if perfect && !self.launched {
+            self.launched = true;
+            self.award(BOOST_START);
+        }
+    }
+
     /// A weapon pickup was handed over by a pad.
     pub fn weapon_pad_taken(&mut self) {
         self.award(WEAPON_PAD);
-    }
-
-    /// The perfect launch (`Race_UpdateLaunchGrade`'s grade 2).
-    pub fn perfect_start(&mut self) {
-        self.award(BOOST_START);
     }
 
     /// The player's weapon damaged another craft: `Hit with <weapon>`.
@@ -355,10 +361,16 @@ impl crate::Race {
     /// Feeds the tally what the player did this tick: kills, place, health. The zone step and the
     /// lap are fed from `advance_player_rules` where their edges are.
     pub(super) fn observe_xp(&mut self) {
+        let slot = self.player_slot();
+        // Before the racing gate: the launch award is paid without one.
+        let launched =
+            self.sim.world.ships[slot].physics.launch.grade == oag_physics::launch::Grade::Perfect;
+        if let Some(xp) = self.sim.xp.as_mut() {
+            xp.observe_launch(launched);
+        }
         if !self.xp_racing() {
             return;
         }
-        let slot = self.player_slot();
         let ship = &self.sim.world.ships[slot];
         let (kills, shield) = (ship.standing.kills, ship.physics.shield);
         let crossed = ship.standing.lap_start_tick.is_some();
@@ -390,15 +402,6 @@ impl crate::Race {
             && let Some(xp) = self.sim.xp.as_mut()
         {
             xp.weapon_pad_taken();
-        }
-    }
-
-    /// `slot` made the perfect launch. No gate.
-    pub(super) fn xp_perfect_start(&mut self, slot: usize) {
-        if slot == self.player_slot()
-            && let Some(xp) = self.sim.xp.as_mut()
-        {
-            xp.perfect_start();
         }
     }
 

@@ -41,7 +41,6 @@ impl Race {
             }
             let now = self.sim.world.ships[slot].physics.launch.grade;
             if now == Grade::Perfect && was != Grade::Perfect {
-                self.xp_perfect_start(slot);
                 self.boost_plume(slot);
                 self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,

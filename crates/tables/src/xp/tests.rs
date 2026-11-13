@@ -51,3 +51,13 @@ fn the_reveal_query_agrees_with_the_rank_at_every_boundary() {
     }
     assert!(r.meets(0, None));
 }
+
+#[test]
+fn an_award_pays_its_value_in_the_mode_column_and_nothing_where_unauthored() {
+    let a = Awards::parse(AWARDS).expect("awards");
+    assert_eq!(a.xp(award::EVENT_PASS, Column::Race), 4);
+    assert_eq!(a.xp(award::EVENT_ELITE, Column::Race), 40);
+    assert_eq!(a.xp(award::FINISHED_1ST, Column::Zone), 6);
+    assert_eq!(a.xp(award::FINISHED_1ST + 2, Column::Zombie), 0);
+    assert_eq!(a.xp(award::FINISHED_1ST + 1, Column::Race), 0, "no 2nd row");
+}

@@ -288,3 +288,18 @@ fn a_weapon_pays_its_own_row_in_the_originals_type_order() {
         "a turbo and a repulser pay nothing"
     );
 }
+
+#[test]
+fn the_perfect_launch_pays_boost_start_once() {
+    let mut t = XpTally::new(
+        Awards::parse(
+            r#"<XPAwards><Award index="11" name="boost" zone="30" elim="30" zombie="30" race="30" speed="30"/></XPAwards>"#,
+        )
+        .expect("fixture"),
+        Column::Race,
+    );
+    t.observe_launch(false);
+    t.observe_launch(true);
+    t.observe_launch(true);
+    assert_eq!(t.times_paid(11), 1);
+}
