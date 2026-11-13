@@ -750,7 +750,7 @@ fn the_lit_age_scales_with_a_longer_ring() {
     let mut exhaust = Exhaust::new();
     exhaust.set_trail_samples(LONG_TRAIL_SAMPLES);
     for k in 0..LONG_TRAIL_SAMPLES {
-        exhaust.push_trail(Vec3::new(k as f32 * -1.0, 0.0, 0.0), Vec3::X);
+        exhaust.push_trail(Vec3::new(-(k as f32), 0.0, 0.0), Vec3::X);
     }
     // The head is the last one pushed, at x = -53.
     let head = -((LONG_TRAIL_SAMPLES - 1) as f32);
