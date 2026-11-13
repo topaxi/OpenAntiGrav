@@ -139,11 +139,27 @@ fn vs_fill(@builtin(vertex_index) index: u32) -> Varying {
     return out;
 }
 
+// The largest value a half float holds: a scene target of the linear kind stores one, and a
+// value past it would be infinity, which the bloom's blur spreads across the frame.
+const SCENE_MAX: f32 = 65504.0;
+
+// A shader's gamma-authored colour as the target stores it. A target that computes in linear
+// light is a float one, which keeps a value above 1 for the bloom and the tonemap (a bright
+// highlight read back through `engine_texture` stays bright); one that stores encoded values
+// clamps at white in `target_out`, as the console's packer does. A gamma target is an
+// 8-bit one and clamps here. Nothing is stored below 0.
+fn scene_rgb(rgb: vec3<f32>) -> vec3<f32> {
+    if linear_out > 0.5 {
+        return min(gamma_to_target(max(rgb, vec3<f32>(0.0)), linear_out), vec3<f32>(SCENE_MAX));
+    }
+    return gamma_to_target(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), linear_out);
+}
+
 @fragment
 fn fs_main(in: Varying) -> @location(0) vec4<f32> {
     let screen_uv = in.screen.xy / in.screen.w * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5);
     let shaded = mod_fragment(ModInput(in.uv, screen_uv, in.world, in.colour, oag_frame.time, oag_frame.between));
-    let rgb = gamma_to_target(clamp(shaded.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), linear_out);
+    let rgb = scene_rgb(shaded.rgb);
     return vec4<f32>(target_out(rgb), shaded.a);
 }
 
@@ -170,7 +186,7 @@ fn fs_backdrop(in: Varying) -> Backdrop {
     if shaded.a < BACKDROP_ALPHA {
         discard;
     }
-    let rgb = gamma_to_target(clamp(shaded.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), linear_out);
+    let rgb = scene_rgb(shaded.rgb);
     return Backdrop(vec4<f32>(target_out(rgb), shaded.a), BACKDROP_DEPTH);
 }
 
@@ -183,6 +199,6 @@ fn fs_fringe(in: Varying) -> @location(0) vec4<f32> {
     if shaded.a >= BACKDROP_ALPHA {
         discard;
     }
-    let rgb = gamma_to_target(clamp(shaded.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), linear_out);
+    let rgb = scene_rgb(shaded.rgb);
     return vec4<f32>(target_out(rgb), shaded.a);
 }
