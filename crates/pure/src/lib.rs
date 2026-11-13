@@ -296,6 +296,8 @@ pub const TITLE: &Title = &Title {
         grid_card_pose: None,
         selection_card_scale: None,
         medal_tier_rows: None,
+        // Pulse's law, inherited: Pure's Zone cells count up.
+        counting_modes: &["Zone", "Elimination"],
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: false,

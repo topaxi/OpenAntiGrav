@@ -133,39 +133,71 @@ fn a_result_is_judged_against_the_rung_it_was_flown_at() {
     let time_trial = cell(&hd.grids, "grid0_2_2");
     assert_eq!(time_trial.mode, Mode::TimeTrial);
     assert_eq!(
-        time_trial.evaluate_medal_for_difficulty(11900, Difficulty::Easy),
+        time_trial.evaluate_medal_for_difficulty(
+            11900,
+            Difficulty::Easy,
+            oag_hd::TITLE.campaign.counting_modes
+        ),
         Some(Medal::Gold)
     );
     assert_eq!(
-        time_trial.evaluate_medal_for_difficulty(11900, Difficulty::Hard),
+        time_trial.evaluate_medal_for_difficulty(
+            11900,
+            Difficulty::Hard,
+            oag_hd::TITLE.campaign.counting_modes
+        ),
         Some(Medal::Bronze)
     );
     let speed_lap = cell(&hd.grids, "grid0_3_2");
     assert_eq!(
-        speed_lap.evaluate_medal_for_difficulty(3703, Difficulty::Easy),
+        speed_lap.evaluate_medal_for_difficulty(
+            3703,
+            Difficulty::Easy,
+            oag_hd::TITLE.campaign.counting_modes
+        ),
         Some(Medal::Gold)
     );
     assert_eq!(
-        speed_lap.evaluate_medal_for_difficulty(3703, Difficulty::Hard),
+        speed_lap.evaluate_medal_for_difficulty(
+            3703,
+            Difficulty::Hard,
+            oag_hd::TITLE.campaign.counting_modes
+        ),
         Some(Medal::Silver)
     );
 }
 
-/// Fury's `Elimination` and `NitroBattle` cells author the dummy `1`/`2`/`3` and
-/// a `NitroElim*` number whose unit and tier law are unmeasured: no kill count
-/// scores a medal, and a launched Elimination keeps the race's own kill target
-/// rather than ending on the first kill.
+/// Fury's `Elimination` cells author `1`/`2`/`3` on every rung: place thresholds, compared `<=`
+/// with no flip (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`). The place on the
+/// board is the medal: 1st gold, 2nd silver, 3rd bronze, 4th nothing; a kill count is not a
+/// place. A launched Elimination ends on the cell's `NitroElim*` score, never on one kill.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn an_elimination_cell_awards_nothing_it_cannot_measure() {
+fn an_elimination_cell_awards_its_medal_by_place() {
     let Some(hd) = open() else { return };
+    let counting = oag_hd::TITLE.campaign.counting_modes;
     let elimination = cell(&hd.grids, "grid8_3_2");
     assert_eq!(elimination.mode, Mode::Elimination);
+    assert!(elimination.ends_on_nitro_score());
     for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
-        for kills in [1, 5, 200, 400] {
-            assert_eq!(
-                elimination.evaluate_medal_for_difficulty(kills, difficulty),
+        let by_place: Vec<_> = (1..=4)
+            .map(|place| elimination.evaluate_medal_for_difficulty(place, difficulty, counting))
+            .collect();
+        assert_eq!(
+            by_place,
+            [
+                Some(Medal::Gold),
+                Some(Medal::Silver),
+                Some(Medal::Bronze),
                 None
+            ],
+            "{difficulty:?}"
+        );
+        for kills in [5, 200, 400] {
+            assert_eq!(
+                elimination.evaluate_medal_for_difficulty(kills, difficulty, counting),
+                None,
+                "{kills} kills is not a place"
             );
         }
     }
@@ -232,7 +264,11 @@ fn a_medal_persists_and_the_points_it_earns_open_the_next_grid() {
 
     let time_trial = cell(&hd.grids, "grid0_2_2");
     let medal = time_trial
-        .evaluate_medal_for_difficulty(11900, Difficulty::Easy)
+        .evaluate_medal_for_difficulty(
+            11900,
+            Difficulty::Easy,
+            oag_hd::TITLE.campaign.counting_modes,
+        )
         .expect("gold at novice");
     store.record_campaign(
         TITLE,

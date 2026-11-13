@@ -317,6 +317,36 @@ impl Race {
         self.view.results_revision = self.view.results_revision.wrapping_add(1);
     }
 
+    /// The player's 1-based place on an Eliminator's end-of-race board, off the standings as
+    /// they are now: `oag_race::score::final_places` over each craft's whole points on a score
+    /// race, kills on a kill race. The number a campaign cell's medal is read from on a title
+    /// that awards it by place (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
+    ///
+    /// A kill race (Omega's, whose score law is unmeasured) ranks on kills with the kill count
+    /// as the first key and again as the tie-break: chosen, not measured.
+    #[must_use]
+    pub fn eliminator_place(&self) -> u8 {
+        let scored = self.sim.score_law.is_some();
+        let field: Vec<oag_race::score::Finisher> = (0..usize::from(self.sim.world.ship_count))
+            .map(|slot| {
+                let standing = &self.sim.world.ships[slot].standing;
+                oag_race::score::Finisher {
+                    points: if scored {
+                        standing.whole_score()
+                    } else {
+                        standing.kills
+                    },
+                    kills: standing.kills,
+                    person: self.sim.world.person_flown(slot),
+                }
+            })
+            .collect();
+        oag_race::score::final_places(&field)
+            .get(self.player_slot())
+            .copied()
+            .unwrap_or(1)
+    }
+
     /// The board off the world as it is now, ended on `tick`.
     fn take_board(&self, tick: u64) -> Board {
         let places = self.places();

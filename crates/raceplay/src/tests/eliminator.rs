@@ -605,3 +605,34 @@ mod flip {
         assert_eq!(controls.airbrake_left, 1.0);
     }
 }
+
+/// The medal's place is the original's end-of-race sort, not the HUD's: a player who tied an
+/// opponent on points with more kills is 2nd; with equal kills too the person is 1st.
+#[test]
+fn the_player_place_ties_on_points_break_on_fewer_kills_then_the_person() {
+    let mut race = scored(200);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[0].standing.score = 177.9;
+    race.sim.world.ships[1].standing.score = 177.2;
+    race.sim.world.ships[0].standing.kills = 4;
+    race.sim.world.ships[1].standing.kills = 1;
+    assert_eq!(race.eliminator_place(), 2);
+    race.sim.world.ships[1].standing.kills = 4;
+    assert_eq!(race.eliminator_place(), 1);
+    race.sim.world.ships[1].standing.score = 178.0;
+    assert_eq!(race.eliminator_place(), 2);
+}
+
+/// A kill race (no score law: Omega's) ranks on kills.
+#[test]
+fn the_player_place_on_a_kill_race_ranks_on_kills() {
+    let mut race = eliminator();
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ship_count = 2;
+    assert!(race.sim.score_law.is_none());
+    race.sim.world.ships[0].standing.kills = 2;
+    race.sim.world.ships[1].standing.kills = 3;
+    assert_eq!(race.eliminator_place(), 2);
+    race.sim.world.ships[0].standing.kills = 3;
+    assert_eq!(race.eliminator_place(), 1);
+}

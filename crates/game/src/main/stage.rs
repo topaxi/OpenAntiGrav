@@ -758,6 +758,7 @@ impl Stage {
             // which drain `Session::campaign_cell` into here. Never known
             // here: this function has no `Session` to read it from.
             campaign_cell: None,
+            title,
             campaign_custom: None,
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,

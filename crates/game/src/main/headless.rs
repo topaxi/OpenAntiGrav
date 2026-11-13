@@ -763,6 +763,7 @@ pub(crate) fn run_race(
                         title,
                         cli.wreck.campaign_cell.as_deref(),
                     )?,
+                    counting_modes: title.campaign.counting_modes,
                     ..Default::default()
                 },
                 path,

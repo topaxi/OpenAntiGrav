@@ -109,6 +109,9 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The title this race runs, for the law its campaign cell's medal is read with
+    /// ([`oag_title::Campaign::counting_modes`]).
+    pub(crate) title: &'static oag_title::Title,
     /// A mod campaign event's extras, drained from `Session::campaign_custom`
     /// with [`Self::campaign_cell`]: where its medal is kept, and its AI.
     pub(crate) campaign_custom: Option<oag_game::campaign::custom::Launch>,
@@ -606,7 +609,15 @@ impl RaceStage {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
             CampaignMode::Zone => oag_game::medal_watch::live_value(&cell.mode, &self.race),
-            CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
+            // Kills on a title that flips Elimination, the place on the end-of-race board
+            // elsewhere (HD, Omega): `oag_game::medal_watch::elimination_value`.
+            CampaignMode::Elimination => oag_game::medal_watch::elimination_value(
+                self.title.campaign.counting_modes,
+                self.campaign_custom.is_some(),
+                finished,
+                self.race.player_standing().kills,
+                self.race.eliminator_place(),
+            ),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
             CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
         }?;
@@ -624,7 +635,11 @@ impl RaceStage {
             Some(launch) => launch
                 .tier_targets
                 .evaluate(&cell.mode, value, difficulty),
-            None => cell.evaluate_medal_for_difficulty(value, difficulty),
+            None => cell.evaluate_medal_for_difficulty(
+                value,
+                difficulty,
+                self.title.campaign.counting_modes,
+            ),
         }
     }
 

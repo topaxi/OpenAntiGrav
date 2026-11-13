@@ -3,6 +3,9 @@
 
 use super::*;
 
+/// Pulse's flip set (`oag_pulse::TITLE.campaign.counting_modes`); this crate cannot name a title.
+const PULSE: &[&str] = &["Zone", "Elimination"];
+
 const FIXTURE: &str = r#"
 <PI_Grid name="gridX">
   <Values RequiredPoints="9" Locked="true"></Values>
@@ -185,30 +188,30 @@ fn definition_xml_lists_its_load_xml_entries() {
 fn a_race_position_hits_each_tier_at_its_exact_target() {
     let grid = parse(FIXTURE).expect("parses");
     let race = &grid.cells[0];
-    assert_eq!(race.evaluate_medal(1), Some(Medal::Gold));
-    assert_eq!(race.evaluate_medal(2), Some(Medal::Silver));
-    assert_eq!(race.evaluate_medal(3), Some(Medal::Bronze));
-    assert_eq!(race.evaluate_medal(4), None);
+    assert_eq!(race.evaluate_medal(1, PULSE), Some(Medal::Gold));
+    assert_eq!(race.evaluate_medal(2, PULSE), Some(Medal::Silver));
+    assert_eq!(race.evaluate_medal(3, PULSE), Some(Medal::Bronze));
+    assert_eq!(race.evaluate_medal(4, PULSE), None);
 }
 
 #[test]
 fn an_elimination_kill_count_hits_each_tier_at_its_exact_target() {
     let grid = parse(FIXTURE).expect("parses");
     let elim = &grid.cells[2];
-    assert_eq!(elim.evaluate_medal(10), Some(Medal::Gold));
-    assert_eq!(elim.evaluate_medal(7), Some(Medal::Silver));
-    assert_eq!(elim.evaluate_medal(5), Some(Medal::Bronze));
-    assert_eq!(elim.evaluate_medal(4), None);
+    assert_eq!(elim.evaluate_medal(10, PULSE), Some(Medal::Gold));
+    assert_eq!(elim.evaluate_medal(7, PULSE), Some(Medal::Silver));
+    assert_eq!(elim.evaluate_medal(5, PULSE), Some(Medal::Bronze));
+    assert_eq!(elim.evaluate_medal(4, PULSE), None);
 }
 
 #[test]
 fn a_zone_count_hits_each_tier_at_its_exact_target() {
     let grid = parse(FIXTURE).expect("parses");
     let zone = &grid.cells[3];
-    assert_eq!(zone.evaluate_medal(20), Some(Medal::Gold));
-    assert_eq!(zone.evaluate_medal(17), Some(Medal::Silver));
-    assert_eq!(zone.evaluate_medal(15), Some(Medal::Bronze));
-    assert_eq!(zone.evaluate_medal(14), None);
+    assert_eq!(zone.evaluate_medal(20, PULSE), Some(Medal::Gold));
+    assert_eq!(zone.evaluate_medal(17, PULSE), Some(Medal::Silver));
+    assert_eq!(zone.evaluate_medal(15, PULSE), Some(Medal::Bronze));
+    assert_eq!(zone.evaluate_medal(14, PULSE), None);
 }
 
 /// The guard: an `Elimination` value between the silver and bronze targets
@@ -218,7 +221,7 @@ fn a_zone_count_hits_each_tier_at_its_exact_target() {
 fn elimination_direction_is_flipped_not_the_default_less_is_better() {
     let grid = parse(FIXTURE).expect("parses");
     let elim = &grid.cells[2];
-    assert_eq!(elim.evaluate_medal(6), Some(Medal::Bronze));
+    assert_eq!(elim.evaluate_medal(6, PULSE), Some(Medal::Bronze));
 }
 
 /// The same guard for `Zone`: 16 zones clears only bronze (`16 >= 15`, `16 <
@@ -227,7 +230,7 @@ fn elimination_direction_is_flipped_not_the_default_less_is_better() {
 fn zone_direction_is_flipped_not_the_default_less_is_better() {
     let grid = parse(FIXTURE).expect("parses");
     let zone = &grid.cells[3];
-    assert_eq!(zone.evaluate_medal(16), Some(Medal::Bronze));
+    assert_eq!(zone.evaluate_medal(16, PULSE), Some(Medal::Bronze));
 }
 
 /// The mirror guard: a `Race` position of 3 is bronze under `<=` (`3 <= 3`);
@@ -236,7 +239,7 @@ fn zone_direction_is_flipped_not_the_default_less_is_better() {
 fn race_direction_is_not_flipped() {
     let grid = parse(FIXTURE).expect("parses");
     let race = &grid.cells[0];
-    assert_eq!(race.evaluate_medal(3), Some(Medal::Bronze));
+    assert_eq!(race.evaluate_medal(3, PULSE), Some(Medal::Bronze));
 }
 
 #[test]
@@ -244,10 +247,10 @@ fn zero_and_the_unset_sentinel_are_no_result_regardless_of_mode() {
     let grid = parse(FIXTURE).expect("parses");
     let race = &grid.cells[0];
     let elim = &grid.cells[2];
-    assert_eq!(race.evaluate_medal(0), None);
-    assert_eq!(race.evaluate_medal(0xFFFF_FFFF), None);
-    assert_eq!(elim.evaluate_medal(0), None);
-    assert_eq!(elim.evaluate_medal(0xFFFF_FFFF), None);
+    assert_eq!(race.evaluate_medal(0, PULSE), None);
+    assert_eq!(race.evaluate_medal(0xFFFF_FFFF, PULSE), None);
+    assert_eq!(elim.evaluate_medal(0, PULSE), None);
+    assert_eq!(elim.evaluate_medal(0xFFFF_FFFF, PULSE), None);
 }
 
 /// `<= 0`, not only `== 0`: the deliberately wider guard (see
@@ -256,7 +259,7 @@ fn zero_and_the_unset_sentinel_are_no_result_regardless_of_mode() {
 fn a_negative_value_is_also_no_result() {
     let grid = parse(FIXTURE).expect("parses");
     let race = &grid.cells[0];
-    assert_eq!(race.evaluate_medal(-1), None);
+    assert_eq!(race.evaluate_medal(-1, PULSE), None);
 }
 
 #[test]
@@ -410,28 +413,65 @@ fn nitro_elimination_target_reads_by_rung() {
     );
 }
 
-/// An HD `Elimination` cell's flat and per-rung targets are the dummy
-/// `1`/`2`/`3` with a flipped `>=` compare, so one kill would score gold on
-/// every rung: the cell's medal law is unmeasured and it awards nothing, while
-/// Pulse's `Eliminator` (no nitro triple) still scores by kills.
+/// HD's flip set: Zone and Detonator, never Elimination
+/// (`oag_hd::TITLE.campaign.counting_modes`).
+const HD: &[&str] = &["Zone", "Detonator"];
+
+/// An HD `Elimination` cell's `1`/`2`/`3` are place thresholds, compared `<=` with no flip:
+/// 1st gold, 2nd silver, 3rd bronze, 4th nothing, on every rung
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`).
 #[test]
-fn an_hd_elimination_cell_awards_no_medal_on_its_dummy_targets() {
+fn an_hd_elimination_cell_awards_its_medal_by_place() {
     let grid = parse(NITRO_FIXTURE).expect("parses");
     let elim = &grid.cells[0];
-    assert!(elim.medal_law_is_unmeasured());
+    assert!(elim.ends_on_nitro_score());
     for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
-        for kills in [1, 3, 250] {
-            assert_eq!(elim.evaluate_medal_for_difficulty(kills, difficulty), None);
-        }
+        let by_place: Vec<_> = (1..=4)
+            .map(|place| elim.evaluate_medal_for_difficulty(place, difficulty, HD))
+            .collect();
+        assert_eq!(
+            by_place,
+            [
+                Some(Medal::Gold),
+                Some(Medal::Silver),
+                Some(Medal::Bronze),
+                None
+            ],
+            "{difficulty:?}"
+        );
     }
+}
+
+/// The value is the place, so a kill count (250 here) is not a medal on an HD cell: flipped,
+/// as Pulse reads it, `250 >= 1` would be gold.
+#[test]
+fn an_hd_elimination_cell_does_not_flip_so_a_kill_count_earns_nothing() {
+    let grid = parse(NITRO_FIXTURE).expect("parses");
+    let elim = &grid.cells[0];
+    for kills in [6, 250] {
+        assert_eq!(
+            elim.evaluate_medal_for_difficulty(kills, Difficulty::Hard, HD),
+            None
+        );
+        assert_eq!(
+            elim.evaluate_medal_for_difficulty(kills, Difficulty::Hard, PULSE),
+            Some(Medal::Gold),
+            "the flip set is what separates the two laws"
+        );
+    }
+}
+
+/// Pulse's `Eliminator` keeps its kill target in `gold`, carries no nitro triple, and counts up.
+#[test]
+fn a_pulse_elimination_cell_still_scores_by_kills() {
     let pulse = parse(FIXTURE).expect("parses");
-    let pulse_elim = pulse
+    let cell = pulse
         .cells
         .iter()
         .find(|cell| cell.mode == Mode::Elimination)
         .expect("an Elimination cell");
-    assert!(!pulse_elim.medal_law_is_unmeasured());
-    assert!(pulse_elim.evaluate_medal(10).is_some());
+    assert!(!cell.ends_on_nitro_score());
+    assert!(cell.evaluate_medal(10, PULSE).is_some());
 }
 
 /// A cell with no `<NitroElimNovice>` (every `FIXTURE` cell) reads `None`.

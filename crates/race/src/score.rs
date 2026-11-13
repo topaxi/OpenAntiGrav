@@ -79,6 +79,50 @@ pub fn ranked(points: &[u32]) -> Vec<usize> {
     rows
 }
 
+/// One craft of a finished Eliminator, as the end-of-race builder sorts it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Finisher {
+    /// The score the race is won on (whole points on a score race, kills on a kill race).
+    pub points: u32,
+    /// Kills, the first tie-break.
+    pub kills: u32,
+    /// Whether a person flies it, the second.
+    pub person: bool,
+}
+
+/// Each craft's 1-based place on the end-of-race board: `result[craft]`, with `field` in grid
+/// order.
+///
+/// The end-of-race builder's bubble sort (`0x0005ac00`, `docs/ghidra/functions/ps3-hdfury-eu/
+/// cell-medal-award.md`, "End of race", confidence 72): a higher score ranks first; on equal
+/// score **fewer kills** rank first; on equal score and kills a person ranks above an opponent.
+/// It swaps only on a strict difference, so craft still equal keep grid order (the lower slot
+/// first). This is not [`ranked`], the HUD's rows (the later slot on top, kills ignored): the
+/// place a campaign cell's medal is read from is this one.
+#[must_use]
+pub fn final_places(field: &[Finisher]) -> Vec<u8> {
+    let above = |a: &Finisher, b: &Finisher| {
+        a.points > b.points
+            || (a.points == b.points
+                && (a.kills < b.kills || (a.kills == b.kills && a.person && !b.person)))
+    };
+    field
+        .iter()
+        .enumerate()
+        .map(|(index, mine)| {
+            let ahead = field
+                .iter()
+                .enumerate()
+                .filter(|&(other, theirs)| {
+                    other != index
+                        && (above(theirs, mine) || (!above(mine, theirs) && other < index))
+                })
+                .count();
+            u8::try_from(ahead + 1).unwrap_or(u8::MAX)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,5 +201,57 @@ mod tests {
             ..Standing::default()
         };
         assert_eq!(craft.whole_score(), 199);
+    }
+
+    fn finisher(points: u32, kills: u32, person: bool) -> Finisher {
+        Finisher {
+            points,
+            kills,
+            person,
+        }
+    }
+
+    #[test]
+    fn a_higher_score_places_first() {
+        let field = [
+            finisher(90, 0, false),
+            finisher(177, 3, false),
+            finisher(177, 3, true),
+        ];
+        assert_eq!(final_places(&field), [3, 2, 1]);
+    }
+
+    /// Equal score: the craft with fewer kills is above, so a player who tied an opponent on
+    /// points with more kills is placed second, not first.
+    #[test]
+    fn on_equal_score_fewer_kills_place_first() {
+        let field = [finisher(177, 1, false), finisher(177, 4, true)];
+        assert_eq!(final_places(&field), [1, 2]);
+        let field = [finisher(177, 4, false), finisher(177, 1, true)];
+        assert_eq!(final_places(&field), [2, 1]);
+    }
+
+    /// Equal score and kills: the person is above an opponent even from a later slot.
+    #[test]
+    fn on_equal_score_and_kills_a_person_is_above() {
+        let field = [
+            finisher(50, 2, false),
+            finisher(50, 2, false),
+            finisher(50, 2, true),
+        ];
+        assert_eq!(final_places(&field), [2, 3, 1]);
+    }
+
+    /// Two opponents equal in everything keep grid order, and the places are always a
+    /// permutation: no two craft share one, unlike the board's shown number.
+    #[test]
+    fn places_are_distinct_and_full_ties_keep_grid_order() {
+        let field = [
+            finisher(0, 0, false),
+            finisher(0, 0, false),
+            finisher(0, 0, false),
+        ];
+        assert_eq!(final_places(&field), [1, 2, 3]);
+        assert!(final_places(&[]).is_empty());
     }
 }

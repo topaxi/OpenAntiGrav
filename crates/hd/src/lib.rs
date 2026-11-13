@@ -287,6 +287,8 @@ pub const TITLE: &Title = &Title {
         grid_card_pose: None,
         selection_card_scale: None,
         medal_tier_rows: None,
+        // `PI_Cell_EvaluateMedalForValue` (`0x001e1028`) flips modes 6 and 14 only; Elimination is a place.
+        counting_modes: &["Zone", "Detonator"],
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,

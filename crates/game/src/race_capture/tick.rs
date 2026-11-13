@@ -17,6 +17,8 @@ pub struct Medals {
         oag_tables::race_campaign::Cell,
         oag_tables::race_campaign::Difficulty,
     )>,
+    /// The title's [`oag_title::Campaign::counting_modes`], the law [`Self::cell`] is judged by.
+    pub counting_modes: &'static [&'static str],
     /// The best medal the watch has raised so far, as `RaceStage::earned_medal`.
     pub earned: std::cell::Cell<Option<oag_tables::race_campaign::Medal>>,
 }
@@ -82,7 +84,13 @@ pub(super) fn advance_one_tick(
     }
     if let Some((cell, difficulty)) = &options.medals.cell {
         let mut earned = options.medals.earned.get();
-        crate::medal_watch::tick(cell, *difficulty, &mut earned, race);
+        crate::medal_watch::tick(
+            cell,
+            *difficulty,
+            options.medals.counting_modes,
+            &mut earned,
+            race,
+        );
         options.medals.earned.set(earned);
     }
     race.set_weapon_lights(!options.no_weapon_lights);

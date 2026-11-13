@@ -204,36 +204,55 @@ fn lap_overrides_are_the_cells_own_and_only_for_the_modes_that_take_one() {
     }
 }
 
-/// Omega re-ships HD's per-difficulty schema, `NitroElim*` and all, so the
-/// same guard holds: an `Elimination` or `NitroBattle` cell with a real triple
-/// awards no medal on the dummy `1`/`2`/`3`, and a launched `Elimination` keeps
-/// the race's own kill target instead of ending on the first kill.
+/// Omega re-ships HD's per-difficulty schema, `NitroElim*` and all, and its evaluator
+/// (`FUN_014a6280`) is HD's: an `Elimination` or `NitroBattle` cell's `1`/`2`/`3` are place
+/// thresholds, so 1st is gold, 2nd silver, 3rd bronze and a kill count earns nothing; a launched
+/// `Elimination` keeps the race's own kill target instead of ending on the first kill.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-fn an_elimination_cell_with_a_nitro_triple_awards_nothing_it_cannot_measure() {
+fn an_elimination_cell_with_a_nitro_triple_awards_its_medal_by_place() {
     let Some(omega) = open() else { return };
-    let mut unmeasured = 0;
+    let counting = oag_omega::TITLE.campaign.counting_modes;
+    let mut by_place = 0;
     for (grid, cell) in &omega.cells {
-        if !cell.medal_law_is_unmeasured() {
+        let nitro = cell.mode == race_campaign::Mode::Elimination
+            || matches!(&cell.mode, race_campaign::Mode::Other(name) if name == "NitroBattle");
+        if !nitro || cell.nitro_elimination_targets.is_none() {
             continue;
         }
-        unmeasured += 1;
+        by_place += 1;
         for difficulty in [
             race_campaign::Difficulty::Easy,
             race_campaign::Difficulty::Medium,
             race_campaign::Difficulty::Hard,
         ] {
+            let medals: Vec<_> = (1..=4)
+                .map(|place| cell.evaluate_medal_for_difficulty(place, difficulty, counting))
+                .collect();
             assert_eq!(
-                cell.evaluate_medal_for_difficulty(5, difficulty),
+                medals,
+                [
+                    Some(race_campaign::Medal::Gold),
+                    Some(race_campaign::Medal::Silver),
+                    Some(race_campaign::Medal::Bronze),
+                    None
+                ],
+                "grid {grid} {} {difficulty:?}",
+                cell.name
+            );
+            assert_eq!(
+                cell.evaluate_medal_for_difficulty(5, difficulty, counting),
                 None,
                 "grid {grid} {}",
                 cell.name
             );
         }
-        if let Ok(plan) = plan(&omega, cell) {
+        if cell.ends_on_nitro_score()
+            && let Ok(plan) = plan(&omega, cell)
+        {
             assert_eq!(plan.eliminator_kill_target, None, "{}", cell.name);
         }
     }
-    println!("{unmeasured} Omega cells carry an unmeasured nitro law");
-    assert!(unmeasured > 0);
+    println!("{by_place} Omega cells award their medal by place");
+    assert!(by_place > 0);
 }

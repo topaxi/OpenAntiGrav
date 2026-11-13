@@ -194,6 +194,7 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
         oag_game::medal_watch::tick(
             &cell,
             oag_tables::race_campaign::Difficulty::Medium,
+            oag_pulse::TITLE.campaign.counting_modes,
             &mut earned,
             &mut race,
         );
@@ -292,6 +293,7 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
             if let Some(tier) = oag_game::medal_watch::tick(
                 &cell,
                 oag_tables::race_campaign::Difficulty::Medium,
+                oag_hd::TITLE.campaign.counting_modes,
                 &mut earned,
                 &mut race,
             ) {

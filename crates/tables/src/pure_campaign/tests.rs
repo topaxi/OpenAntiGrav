@@ -1,5 +1,8 @@
 use super::*;
 
+/// Pulse's flip set (`oag_pulse::TITLE.campaign.counting_modes`); this crate cannot name a title.
+const PULSE: &[&str] = &["Zone", "Elimination"];
+
 const DEFINITION: &str = r#"<Screen name="Top">
 <PI_Track name="Vineta K"><Values type="Race" location="Data\Environments\01_Vineta_K"></Values></PI_Track>
 <PI_Track name="Karbonis"><Values type="Classic" location="Data\ClassicsNS\01_Karbonis"></Values>
@@ -136,21 +139,21 @@ fn the_medal_law_is_the_executables_for_each_mode() {
     let list = events(&definition, &stats(), PureClass::Venom);
     let by = |name: &str| list.iter().find(|e| e.name == name).unwrap();
     let race = &by("race/Vineta K/Venom").cell;
-    assert_eq!(race.evaluate_medal(1), Some(Medal::Gold));
-    assert_eq!(race.evaluate_medal(3), Some(Medal::Bronze));
-    assert_eq!(race.evaluate_medal(4), None);
+    assert_eq!(race.evaluate_medal(1, PULSE), Some(Medal::Gold));
+    assert_eq!(race.evaluate_medal(3, PULSE), Some(Medal::Bronze));
+    assert_eq!(race.evaluate_medal(4, PULSE), None);
     let trial = &by("timetrial/Vineta K/Venom").cell;
     assert_eq!(
         (trial.gold, trial.silver, trial.bronze),
         (10_500, 10_800, 11_100)
     );
-    assert_eq!(trial.evaluate_medal(10_500), Some(Medal::Gold));
-    assert_eq!(trial.evaluate_medal(10_501), Some(Medal::Silver));
-    assert_eq!(trial.evaluate_medal(11_101), None);
+    assert_eq!(trial.evaluate_medal(10_500, PULSE), Some(Medal::Gold));
+    assert_eq!(trial.evaluate_medal(10_501, PULSE), Some(Medal::Silver));
+    assert_eq!(trial.evaluate_medal(11_101, PULSE), None);
     let zone = &by("zone/Zone 1").cell;
-    assert_eq!(zone.evaluate_medal(30), Some(Medal::Gold));
-    assert_eq!(zone.evaluate_medal(20), Some(Medal::Bronze));
-    assert_eq!(zone.evaluate_medal(19), None);
+    assert_eq!(zone.evaluate_medal(30, PULSE), Some(Medal::Gold));
+    assert_eq!(zone.evaluate_medal(20, PULSE), Some(Medal::Bronze));
+    assert_eq!(zone.evaluate_medal(19, PULSE), None);
     let class_time = |class: PureClass| {
         let list = events(&definition, &stats(), class);
         list.iter()
