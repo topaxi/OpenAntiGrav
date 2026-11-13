@@ -81,8 +81,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      original's. Medium (35); needs Omega's item layout read first.
   `hull_orbit` remains only for Pulse-shaped fallbacks
 - Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
-  `hd-select-chrome`: corner marks, block arrows, `000`; open: the `middle`
-  marks, `UnlockNobble` hearts, the page `Squares`); the hex column draws
+  `hd-select-chrome`: corner marks, block arrows, `000`; loyalty value LANDED 2026-11-13, `hd-shipselect-loyalty`: raw total `%03d`, bar `total/100000`; open: the `middle`
+  marks, `UnlockNobble` hearts (law read, threshold source unread, `team-selection-loyalty.md`), the page `Squares`); the hex column draws
   (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); the
   original's default team is the maintainer's save (Feisar), not a gap
