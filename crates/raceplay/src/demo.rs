@@ -29,7 +29,10 @@ impl Race {
         self.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
         self.set_autopilot(true);
         self.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
-        self.view.camera_shake_on = demo.rules.camera_shake.value;
+        #[cfg(feature = "view")]
+        {
+            self.view.camera_shake_on = demo.rules.camera_shake.value;
+        }
         #[cfg(feature = "view")]
         if demo.camera.value == oag_title::demo::Camera::Spectator
             && let Some(director) = &mut self.view.finish_camera
