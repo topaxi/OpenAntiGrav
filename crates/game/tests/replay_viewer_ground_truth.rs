@@ -382,6 +382,54 @@ fn photo_mode_and_the_viewer_switch_both_ways_at_the_tick_the_player_chose() {
     );
 }
 
+/// Leaving a recording lands on REPLAYS, and backing out of that is the front end's main page: the
+/// title's pause screen (its RESTART RACE and QUIT RACE rows) is for a race that can be resumed,
+/// and a watched one is never parked. Keyboard, pad and pointer each leave the viewer.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn leaving_a_recording_never_lands_on_the_pause_screen() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let profile = Profile::new("leave");
+    let (status, _) = profile.drive(
+        &image,
+        &format!("{TO_THE_RACE} ticks 280; hold cross 600; quit"),
+        &[],
+    );
+    assert!(status.success());
+    let watch = "select watch_replay; press cross; until replay=playing within 4000; ticks 60; ";
+    // The EXIT chip of the viewer's bar, at the window the drive opens (1440x816).
+    let exit_chip = "mouse 1093 41; ticks 2; click; ";
+    let back_out =
+        "until page=replays; ticks 10; press circle; until page=main within 50; ticks 10; ";
+    let (status, states) = profile.drive(
+        &image,
+        &format!(
+            "{TO_THE_LIST} ticks 30; {watch} escape; {back_out} \
+             select replays; press cross; until page=replays; ticks 10; {watch} press circle; {back_out} \
+             select replays; press cross; until page=replays; ticks 10; {watch} {exit_chip} {back_out} quit"
+        ),
+        &[],
+    );
+    assert!(status.success());
+    let mut pages: Vec<&str> = states
+        .iter()
+        .filter(|state| text(state, "stage") == Some("menu"))
+        .filter_map(|state| text(state, "page"))
+        .collect();
+    pages.dedup();
+    assert!(
+        !pages.contains(&"pause"),
+        "the pause screen was shown for a watched recording: {pages:?}"
+    );
+    let landed = pages.iter().filter(|page| **page == "main").count();
+    assert_eq!(
+        landed, 4,
+        "the front end, then each of three ways out: {pages:?}"
+    );
+}
+
 /// A race a `--race` run builds records nothing unless it asks (decision 1).
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
