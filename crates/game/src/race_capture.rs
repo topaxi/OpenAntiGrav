@@ -456,18 +456,13 @@ pub fn capture(
         ..
     } = loaded;
     let mode = setup.mode;
+    let previous = options.previous_best.as_ref();
     let record_target = oag_hud::RecordTarget::new(
         setup.mode,
         &setup.class,
         track_stats.as_ref(),
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_total_ticks),
-        options
-            .previous_best
-            .as_ref()
-            .and_then(|record| record.best_lap_ticks),
+        previous.and_then(|record| record.best_total_ticks),
+        previous.and_then(|record| record.best_lap_ticks),
     );
     let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
@@ -516,10 +511,7 @@ pub fn capture(
     race.set_player_tags(options.player_tags);
     crate::split_screen::name_first_seat(&mut race, &options.player, &title.profile);
     race.set_hull_shake(options.hull_shake);
-    let best_lap = options
-        .previous_best
-        .as_ref()
-        .and_then(|r| r.best_lap_ticks);
+    let best_lap = previous.and_then(|r| r.best_lap_ticks);
     race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
     race.apply_launch(&oag_raceplay::Launch {
@@ -531,9 +523,9 @@ pub fn capture(
         campaign_skill: None,
         skill_level: None,
     });
-    if let Some(progress) = campaign_2048_event.as_ref() {
-        race.arm_event_xp(progress);
-    }
+    campaign_2048_event
+        .iter()
+        .for_each(|event| race.arm_event_xp(event));
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
