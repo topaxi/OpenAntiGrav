@@ -1004,6 +1004,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mod_icons,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let demo_space = hud.space;
 
     // The countdown's own `<Mode3D><Model>` mesh - see `load::countdown`.
