@@ -167,7 +167,7 @@ pub(super) fn read_demo_screen(
     archives: &mut oag_assets::source::Archives,
     title: &'static oag_title::Title,
     options: &crate::Options,
-    space: oag_display::space::Space,
+    hud: &oag_hud::Assets,
     report: &mut Vec<String>,
 ) -> Option<crate::demo_overlay::Assets> {
     if !options.demo {
@@ -184,5 +184,5 @@ pub(super) fn read_demo_screen(
         oag_ui::language::roles::STATS,
         report,
     );
-    crate::demo_overlay::read(archives, &screen, strings, font, space, report)
+    crate::demo_overlay::read(archives, &screen, strings, font, hud.space, report)
 }
