@@ -182,7 +182,11 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // 7e-4, -7e-6; cells over the old bounds, of 12): before 0 0 0 1 2 1 2 1 1 (median 1,
     // max 2), after 1 0 0 1 1 1 1 1 1 (median 1, max 1). Destroyed per board, before
     // 20 15 12 16 18 16 14 16 16 (143), after 16 14 16 11 15 17 14 16 16 (135).
-    ("VENOM", 1, 1, 0),
+    // 2026-11-13, reversed 0 -> 1 (lane `pulse-own-craft-box`): the firing craft's own box now hides
+    // the floor from a projectile's first probes, so every race after an opponent's first rocket,
+    // missile or plasma shot is a different race. Two cells of 24 exceeded their bound, by one each
+    // (this one and PHANTOM 1 reversed 2 -> 3); the other 22 stayed at or under theirs.
+    ("VENOM", 1, 1, 1),
     ("VENOM", 2, 2, 1),
     // Reversed 0 -> 1: a craft-to-craft bump charges the pool
     // (`oag_physics::damage::apply_pair`). Slot 7 dies with walls 5.0, bumps 13.6, the rest
@@ -212,7 +216,7 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // old bounds, of 12): cage off 0 1 0 0 0 0 1 0 1 (median 0, max 1), on 0 0 0 1 1 2 0 0 2
     // (median 0, max 2), inside the bar of off + 2 on both. Destroyed per board, off
     // 7 14 16 14 13 11 9 12 11, on 13 16 14 16 20 16 10 15 17.
-    ("PHANTOM", 1, 2, 2),
+    ("PHANTOM", 1, 2, 3),
     // 2026-10-20, reversed 3 -> 4: the collision cage (`oag_gameplay::cage`).
     // Over seeds 1-8, every class, both layouts (`ai_dekonstruct_black_board`):
     // destroyed 35 -> 31 (PHANTOM 29 -> 22, RAPIER 6 -> 9, VENOM and FLASH 0).
