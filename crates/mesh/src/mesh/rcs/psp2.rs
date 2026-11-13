@@ -1057,7 +1057,15 @@ fn bind_textures(
                 None => emissive_add
                     .colour(Some(index))
                     .or_else(|| alpha_emissive::specular_picture(material).map(|s| s.picture))
-                    .or_else(|| material.diffuse_texture_without(&refused)),
+                    .or_else(|| {
+                        let mut not_pictures = refused.clone();
+                        if super::skin::NITRO_FAMILIES
+                            .contains(&lighting_only::family(material).as_str())
+                        {
+                            not_pictures.extend(super::skin::NITRO_LOOKUPS);
+                        }
+                        material.diffuse_texture_without(&not_pictures)
+                    }),
             };
             let refused_here = layer.is_none()
                 && material
