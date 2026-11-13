@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-13
-summary: "Pulse's demo has its screen, set-up and spectator camera; HD's screen, wallpaper cameras and other titles' stations are open"
+summary: "Pulse's demo and per-output wallpaper landed; HD's screen, other titles' stations, the wallpaper on niri/X11/Windows open"
 categories: [rendering]
 difficulty: medium (45)
 ---
@@ -29,11 +29,20 @@ difficulty: medium (45)
   truth, not applied (a Single Race grid is already eight there); on a title whose grid differs
   the demo takes its own. `Rules::laps` (3) applies only to a demo that ends on laps, which the
   original's does not.
-- **A wallpaper per output with its own camera.** The user's wish: a window per monitor, each with
-  an individual camera. The multi-window layer (`docs/rendering/multi-window.md`) deals *seats*
-  across windows, and a demo has none. It needs camera-only views that follow a chosen AI craft
-  (`oag_raceplay::viewpoint`) per window, then `--wallpaper --windows N`. A true desktop-background
-  surface (Wayland layer-shell, X11 root, Windows WorkerW) is separate, platform work.
+- **The wallpaper's leftovers** (the desktop background per output, a camera each, landed:
+  `docs/ui/attract-demo.md`, "A desktop background"):
+  - **Not run on niri live**: the maintainer runs
+    `oag-game data/images/pulse-psp-eu.chd --no-audio --wallpaper` on the niri session and checks a
+    background on each output, distinct cameras, and that drawing stops while the screen is locked
+    (CPU of the process near zero).
+  - **Fractional scale** (`wp_fractional_scale_v1` plus `wp_viewporter`): drawn at the next integer
+    scale up today.
+  - **A desktop background on X11 (root window), Windows (WorkerW) and macOS (desktop-level
+    window)**: not built; there `--wallpaper --windows N` gives N ordinary windows, a camera each.
+  - **A hull drawn with garbage texels** was seen once on a 1920x1080 output's chase camera
+    (2026-11-13, Pulse PSP, second demo); not traced, not known to be the wallpaper's.
+  - Window 1's own camera is the spectator director, which can frame the craft a further output
+    chases for a while; the further outputs never share a craft with each other.
 - **2048 and Omega read `DemoConfig.xml`'s circuit and timeouts but not its demo music
   (`Data\Music\07`) or ship.** Pulse's selection was measured on Pulse PSP only: Pure, HD and the
   rest inherit it.
@@ -49,5 +58,5 @@ difficulty: medium (45)
 ## Next Steps
 
 1. Read HD's `demo_definition.xml` screen (grid, `.gtf` logo) through `oag_raceplay::demo_overlay`.
-2. Add camera-only views for wallpaper windows.
+2. The maintainer runs the wallpaper on niri (command in Open).
 3. Read the spectator stations for the titles other than Pulse PSP, then their demos watch through them.
