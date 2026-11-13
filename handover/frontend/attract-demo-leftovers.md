@@ -29,6 +29,12 @@ difficulty: medium (45)
 - **2048 and Omega read `DemoConfig.xml`'s circuit and timeouts but not its demo music
   (`Data\Music\07`) or ship.** Pulse's selection was measured on Pulse PSP only: Pure, HD and the
   rest inherit it.
+- **2048's idle count.** Its main screen is the touch front end (`Stage::Frontend`); `tick_demo`
+  only counts on `Stage::Menu`, so an untouched 2048 front end starts no demo (`--demo` works).
+  The authored 30 s is read and ready.
+- **Pure and Pulse PS2 were not driven through the idle path**, and Pure's demo is limited to
+  the player's own team (its team gates are read from the archives, which a demo may not open on
+  the frame thread).
 - **No pointer or touch test beyond the drive verbs** (`mouse`, `click`); a real winit key event
   sets `Session::demo.key` in `app.rs` and is checked by hand only.
 

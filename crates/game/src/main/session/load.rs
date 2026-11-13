@@ -798,6 +798,8 @@ impl Session {
                     race_stage.race.fly_as_demo();
                     race_stage.race.begin_speed_plans();
                     race_stage.demo = Some(run);
+                    // Never the player's best-lap ghost.
+                    race_stage.race.set_ghost_visible(false);
                     // Nothing a demo does is a result.
                     race_stage.result_saved = true;
                 } else if let Some(watching) = self.watching.take() {

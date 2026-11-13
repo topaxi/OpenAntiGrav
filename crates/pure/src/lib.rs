@@ -110,7 +110,10 @@ pub const TITLE: &Title = &Title {
     // No motors on a PSP (`docs/gameplay/rumble.md`, "Provenance per title").
     rumble: oag_title::rumble::Rumble::Absent,
     // Inherited by lineage, `docs/ui/attract-demo.md`.
-    demo: oag_title::demo::Demo::inheriting("Pulse", oag_title::pre_race::Sourced::chosen(oag_title::demo::Exit::AnyInput)),
+    demo: oag_title::demo::Demo::inheriting(
+        "Pulse",
+        oag_title::pre_race::Sourced::chosen(oag_title::demo::Exit::AnyInput),
+    ),
     // **One table, all lower case, and no Eliminator variant.**
     // `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`,
     // three strings before the `"WeaponStats"` and `"Weapon"` element names the

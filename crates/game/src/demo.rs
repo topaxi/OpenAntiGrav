@@ -62,8 +62,14 @@ impl Timing {
                 .map_or(own, |seconds| (seconds * 60.0).round() as u32)
         };
         Self {
-            idle: ticks(config.and_then(|config| config.start_seconds), demo.idle_ticks()),
-            length: ticks(config.and_then(|config| config.end_seconds), demo.duration_ticks()),
+            idle: ticks(
+                config.and_then(|config| config.start_seconds),
+                demo.idle_ticks(),
+            ),
+            length: ticks(
+                config.and_then(|config| config.end_seconds),
+                demo.duration_ticks(),
+            ),
         }
     }
 }
@@ -73,7 +79,11 @@ impl Timing {
 /// a circuit's id or the last part of its location, ignoring case. `None` when nothing authored
 /// is on offer, and the seeded pick stands.
 #[must_use]
-pub fn authored_circuit(config: Option<&DemoConfig>, circuits: &[(&str, &str)], n: u32) -> Option<usize> {
+pub fn authored_circuit(
+    config: Option<&DemoConfig>,
+    circuits: &[(&str, &str)],
+    n: u32,
+) -> Option<usize> {
     let names = &config?.tracks;
     let wanted: Vec<usize> = names
         .iter()
@@ -128,12 +138,14 @@ impl Run {
     }
 
     /// One tick of the live race; `finished` is the race's own end, `length` the ticks a demo
-    /// runs ([`Demo::duration_ticks`], unless a headless run shortens it).
-    pub fn tick(&mut self, length: u32, finished: bool) -> Option<Leave> {
+    /// runs ([`Demo::duration_ticks`], unless a headless run shortens it); `stepping` is whether the
+    /// race stepped this tick.
+    pub fn tick(&mut self, length: u32, finished: bool, stepping: bool) -> Option<Leave> {
         if std::mem::take(&mut self.input) {
             return Some(Leave::Input);
         }
-        self.ticks = self.ticks.saturating_add(1);
+        // A race held still (a window away, a pause) is not running down its length.
+        self.ticks = self.ticks.saturating_add(u32::from(stepping));
         (finished || self.ticks >= length).then_some(Leave::Over)
     }
 
@@ -143,6 +155,11 @@ impl Run {
         self.ticks
     }
 }
+
+/// The laps a demo's race is set to, so it never ends on them: with its timer held off the
+/// original's demo ran 376 s and never finished, and only the length ends one (measured on Pulse
+/// PSP, `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`).
+pub const LAPS: u32 = 99;
 
 /// What follows a demo that ran out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

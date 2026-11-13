@@ -83,15 +83,25 @@ pub fn run(
     let marked: Vec<(&str, bool)> = catalogue
         .teams
         .iter()
-        .map(|team| (team.value.as_str(), catalogue.multiplayer_teams.contains(&team.value)))
+        .map(|team| {
+            (
+                team.value.as_str(),
+                catalogue.multiplayer_teams.contains(&team.value),
+            )
+        })
         .collect();
     let teams = super::offered_teams(&rule, &marked);
     let mut reports = Vec::new();
     let mut previous: Option<Pick> = None;
     for n in 0..demos {
         let mut options = base.clone();
-        let Some(mut chosen) = pick(&rule, chain_seed(seed, n), tracks.len(), teams.len(), previous)
-        else {
+        let Some(mut chosen) = pick(
+            &rule,
+            chain_seed(seed, n),
+            tracks.len(),
+            teams.len(),
+            previous,
+        ) else {
             break;
         };
         let circuits: Vec<(&str, &str)> = tracks
@@ -106,9 +116,13 @@ pub fn run(
         options.track = Some(tracks[chosen.track].entry_name());
         options.team = Some(teams[chosen.team].to_string());
         options.seed = Some(chain_seed(seed, n));
+        options.laps_override = Some(super::LAPS);
         let loaded = race::load(&options)
             .with_context(|| format!("loading demo {} on {}", n + 1, tracks[chosen.track].id))?;
-        let (timing, difficulty) = (Timing::of(&loaded.title.demo, config), loaded.setup.difficulty);
+        let (timing, difficulty) = (
+            Timing::of(&loaded.title.demo, config),
+            loaded.setup.difficulty,
+        );
         let mut race = Race::start(loaded.setup);
         crate::ai_choice::apply(
             &mut race,
@@ -123,7 +137,7 @@ pub fn run(
         let mut run = Run::new(false);
         let leave = loop {
             race.tick(&PlayerInputs::default());
-            if let Some(leave) = run.tick(length.min(timing.length), race.finished()) {
+            if let Some(leave) = run.tick(length.min(timing.length), race.finished(), true) {
                 break leave;
             }
         };

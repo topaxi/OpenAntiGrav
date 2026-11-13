@@ -58,7 +58,7 @@ pub struct CaptureOptions {
     /// shows the results table: `--hold cross` drives into the first wall. See
     /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
-    /// `--demo`: the race has nobody in it ([`Race::fly_as_demo`]).
+    /// `--demo`: nobody is in the race ([`Race::fly_as_demo`]).
     pub demo: bool,
     /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
@@ -528,9 +528,7 @@ pub fn capture(
     campaign_2048_event
         .iter()
         .for_each(|event| race.arm_event_xp(event));
-    if options.demo {
-        race.fly_as_demo();
-    }
+    options.demo.then(|| race.fly_as_demo());
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
@@ -1335,7 +1333,8 @@ pub fn capture(
                 }
                 Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
             },
-            None if !race.hud_shown() => {}
+            // A demo draws no HUD (measured on Pulse PSP), as the window's draw does not.
+            None if !race.hud_shown() || options.demo => {}
             None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale)
                 .map(|built| {
                     built.map(|mut o| {

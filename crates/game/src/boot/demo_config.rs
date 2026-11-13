@@ -17,7 +17,9 @@ pub fn load(
     {
         Ok(xml) => xml,
         Err(error) => {
-            report.push(format!("{name}: {error}, so the attract demo takes the title's own timing"));
+            report.push(format!(
+                "{name}: {error}, so the attract demo takes the title's own timing"
+            ));
             return None;
         }
     };

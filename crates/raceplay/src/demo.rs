@@ -33,7 +33,11 @@ mod tests {
     #[test]
     fn a_demo_has_no_person_and_every_craft_is_flown_by_the_ai() {
         let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
-        assert_eq!(race.sim.world.human_slots().count(), 1, "the default grid has a person");
+        assert_eq!(
+            race.sim.world.human_slots().count(),
+            1,
+            "the default grid has a person"
+        );
         race.fly_as_demo();
         assert_eq!(race.sim.world.human_slots().count(), 0);
         let camera_slot = race.sim.world.primary_slot();

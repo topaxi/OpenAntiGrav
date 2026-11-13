@@ -48,7 +48,10 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path) {
         assert_eq!(report.ticks, LENGTH, "{report}");
         assert_eq!(report.leave, Leave::Over, "{report}");
     }
-    assert_ne!(reports[0].track, reports[1].track, "the next demo is another circuit");
+    assert_ne!(
+        reports[0].track, reports[1].track,
+        "the next demo is another circuit"
+    );
 }
 
 #[test]
@@ -98,12 +101,23 @@ fn the_headless_demo_run_chains_demos_with_nobody_in_them() {
         .output()
         .expect("running oag-game");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "{:?}\n{}", output.status, String::from_utf8_lossy(&output.stderr));
-    let lines: Vec<&str> = stdout.lines().filter(|line| line.starts_with("demo ")).collect();
+    assert!(
+        output.status.success(),
+        "{:?}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let lines: Vec<&str> = stdout
+        .lines()
+        .filter(|line| line.starts_with("demo "))
+        .collect();
     assert_eq!(lines.len(), 2, "{stdout}");
     for line in lines {
         assert!(line.contains("0 human slots"), "{line}");
-        assert!(line.contains("8 craft") && line.contains("8 flew"), "{line}");
+        assert!(
+            line.contains("8 craft") && line.contains("8 flew"),
+            "{line}"
+        );
         assert!(line.ends_with("700 ticks (over)"), "{line}");
     }
 }
@@ -125,13 +139,18 @@ fn the_authored_demo_config_of_2048_and_omega_sets_their_timing_and_circuit() {
         let source = path.to_string_lossy().into_owned();
         let mut opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())
             .unwrap_or_else(|e| panic!("{source}: {e:#}"));
-        let config = oag_game::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
-            .unwrap_or_else(|| panic!("{source}: no DemoConfig.xml read"));
+        let config =
+            oag_game::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
+                .unwrap_or_else(|| panic!("{source}: no DemoConfig.xml read"));
         assert_eq!(config.start_seconds, Some(30.0), "{source}");
         assert_eq!(config.end_seconds, Some(120.0), "{source}");
         assert_eq!(config.tracks, ["tower"], "{source}");
         let timing = oag_game::demo::Timing::of(&opened.title.demo, Some(&config));
-        assert_eq!(timing.idle, 30 * 60, "{source}: the authored 30 s, not the inherited 60");
+        assert_eq!(
+            timing.idle,
+            30 * 60,
+            "{source}: the authored 30 s, not the inherited 60"
+        );
         let catalogue = oag_game::remix::catalogue(&source).expect("the roster");
         let options = oag_raceplay::Options {
             source,

@@ -20,7 +20,7 @@ menus (`session::demo`, `oag_game::demo`).
   (the original's demo kept running under 2 s of full stick, measured).
 - **Exit**: the same inputs, in a demo. The press is consumed (the menu is not also fed it, and
   START does not pause a demo) and the menus open on the main page, not the pause screen.
-- **Length**: the title's seconds of race time; a race that finishes first ends it too.
+- **Length**: the title's seconds of race time. The race is set to 99 laps so it never ends on them (the original's demo ran 376 s with its timer held off and never finished, measured); a wreck that ends the race ends the demo too.
 - **After a demo ran out**: the next demo, a new circuit and team, through the loading screen.
 - **HUD**: hidden in every demo (measured on Pulse PSP). The flyby is skipped.
 - **Idle inhibition**: a demo does not hold the screen awake; a wallpaper does.
@@ -63,6 +63,12 @@ on 2048's patch): the trial build's content, not read here.
 `demo_definition.xml` is 4,092 bytes like HD's and its patch's 4,164, so the screen set is HD's;
 HD ships no `DemoConfig.xml`, and Omega's timing comes from that file.
 
+**2048's main screen is its touch front end** (`Stage::Frontend`, not the menu stage), so the
+idle count never runs there and an untouched 2048 front end starts no demo; `--demo` works on 2048
+(`oag-game data/extracted/vita/PCSF00007 --demo --dry-run` flies `tower` twice). Pulse, Pure's
+sibling Pulse, HD and Omega were driven through the idle path (`drive_ground_truth`, Pulse, HD and
+Omega; Pure and Pulse PS2 share Pulse's code path, not driven).
+
 ## `--demo` and `--wallpaper`
 
 ```sh
@@ -76,7 +82,9 @@ oag-game --demo --screenshot demo.png --ticks 500
 over and the next demo starts after the idle time. `--wallpaper` is for a desktop background:
 **one window on one output, one camera**. A window and camera per output is not built (see the
 handover thread `attract-demo-leftovers`): the multi-window layer deals *seats* (people) across
-windows and a wallpaper has none.
+windows and a wallpaper has none. Checked with `--demo --window-seats 1,1 --screenshot`: it writes
+two windows, the second a seated view of another grid slot, because the seats are people the demo
+later hands to the AI.
 
 ## Tests
 

@@ -400,6 +400,7 @@ fn state_of(session: &mut Session) -> State {
         state.ghost_visible = Some(stage.race.ghost_visible());
         state.recorded_events = stage.race.recorded_event_count();
         state.humans = Some(stage.race.sim.world.human_slots().count());
+        state.hud = Some(if session.race_hud_hidden() { "off" } else { "on" }.to_string());
     }
     state.demo = match &session.stage {
         Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),

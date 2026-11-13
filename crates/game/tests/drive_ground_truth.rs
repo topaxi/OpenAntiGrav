@@ -893,7 +893,7 @@ fn an_idle_main_menu_launches_a_demo_with_nobody_in_it() {
         "demo-idle",
         &format!(
             "boot; ticks {before}; expect stage=menu; expect page=main; ticks 20; \
-             until stage=race within 3000; expect demo=running; expect humans=0; \
+             until stage=race within 3000; expect demo=running; expect humans=0; expect hud=off; \
              expect race.mode=single_race; ticks 300",
             before = PULSE_IDLE_TICKS - 10,
         ),
@@ -916,8 +916,10 @@ fn an_idle_main_menu_launches_a_demo_with_nobody_in_it() {
         "a demo seated a person"
     );
     // The race ran: its hash moved with every tick.
-    let hashes: std::collections::BTreeSet<_> =
-        demo.iter().filter_map(|state| text(state, &["hash"])).collect();
+    let hashes: std::collections::BTreeSet<_> = demo
+        .iter()
+        .filter_map(|state| text(state, &["hash"]))
+        .collect();
     assert!(hashes.len() > 100, "the demo's race did not tick");
 }
 
@@ -969,10 +971,18 @@ fn any_input_in_a_demo_returns_to_the_main_menu() {
             ),
             None,
         );
-        assert!(run.output.status.success(), "{tag}: {}", run.why_not_success());
+        assert!(
+            run.output.status.success(),
+            "{tag}: {}",
+            run.why_not_success()
+        );
         let last = run.last();
         assert_eq!(text(last, &["stage"]), Some("menu"), "{tag}");
-        assert_eq!(text(last, &["page"]), Some("main"), "{tag}: back on the main menu, not paused");
+        assert_eq!(
+            text(last, &["page"]),
+            Some("main"),
+            "{tag}: back on the main menu, not paused"
+        );
         assert_eq!(text(last, &["demo"]), None, "{tag}");
     }
 }
@@ -991,7 +1001,7 @@ fn the_demo_flag_chains_demos_until_somebody_takes_over() {
         &image,
         "demo-flag",
         &format!(
-            "until stage=race within 3000; expect demo=running; expect humans=0; \
+            "until stage=race within 3000; expect demo=running; expect humans=0; expect hud=off; \
              ticks {}; until demo=running within 3000; ticks 100; key; \
              until stage=menu within 300; expect page=main",
             length + 100
@@ -1007,21 +1017,29 @@ fn the_demo_flag_chains_demos_until_somebody_takes_over() {
         .filter_map(|state| text(state, &["stage"]))
         .collect();
     stages.dedup();
-    let first_menu = stages.iter().position(|stage| *stage == "menu").expect("a menu at the end");
+    let first_menu = stages
+        .iter()
+        .position(|stage| *stage == "menu")
+        .expect("a menu at the end");
     assert_eq!(
         first_menu,
         stages.len() - 1,
         "no menu between the demos, only after the input: {stages:?}"
     );
     assert!(
-        stages.windows(3).any(|three| three == ["race", "loading", "race"]),
+        stages
+            .windows(3)
+            .any(|three| three == ["race", "loading", "race"]),
         "the first demo's end loaded the next: {stages:?}"
     );
     let tracks: std::collections::BTreeSet<_> = demo_races(&run)
         .iter()
         .filter_map(|state| text(state, &["race", "track"]))
         .collect();
-    assert!(tracks.len() >= 2, "two demos on different circuits: {tracks:?}");
+    assert!(
+        tracks.len() >= 2,
+        "two demos on different circuits: {tracks:?}"
+    );
 }
 
 /// `--wallpaper`: input is ignored (a pad button, a key, the mouse, a click all leave the demo
@@ -1052,7 +1070,44 @@ fn a_wallpaper_ignores_input_and_quits_on_escape() {
         "input left the wallpaper:\n{stderr}"
     );
     assert!(
-        run.states.iter().all(|state| text(state, &["stage"]) != Some("menu")),
+        run.states
+            .iter()
+            .all(|state| text(state, &["stage"]) != Some("menu")),
         "the wallpaper reached the menu"
     );
+}
+
+/// The same idle launch on HD (Pulse's 60 s, inherited), and on Omega, whose `DemoConfig.xml`
+/// authors 30 s: the demo is on screen well before a minute, not after. Fails when the authored
+/// timeout is not laid over the title's.
+#[test]
+#[ignore = "needs an HD disc image in data/images/ and data/extracted/ps4"]
+fn an_idle_main_menu_launches_a_demo_on_hd_and_at_omegas_authored_30_seconds() {
+    if let Some(image) = hd() {
+        let run = drive(
+            &image,
+            "demo-idle-hd",
+            &format!(
+                "boot; ticks {PULSE_IDLE_TICKS}; until stage=race within 3000; expect demo=running; \
+                 expect humans=0; expect hud=off; ticks 30"
+            ),
+            None,
+        );
+        assert!(run.output.status.success(), "hd: {}", run.why_not_success());
+    }
+    let omega = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4");
+    if omega.exists() {
+        let run = drive(
+            &omega,
+            "demo-idle-omega",
+            "boot; ticks 1780; expect stage=menu; ticks 20; until stage=race within 100; \
+             expect demo=running; expect humans=0; expect hud=off; ticks 30",
+            None,
+        );
+        assert!(
+            run.output.status.success(),
+            "omega: {}",
+            run.why_not_success()
+        );
+    }
 }

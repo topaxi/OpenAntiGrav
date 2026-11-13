@@ -43,6 +43,12 @@ impl Session {
         matches!(&self.stage, Stage::Race(stage) if stage.demo.is_some())
     }
 
+    /// Whether the race on screen draws no HUD: a demo's (measured on Pulse PSP), and a watched
+    /// recording's when its viewer turned it off.
+    pub(crate) fn race_hud_hidden(&self) -> bool {
+        self.in_demo() || self.viewer_hud_hidden()
+    }
+
     /// Whether the demo on screen, or loading, ignores input: a wallpaper.
     pub(crate) fn demo_is_wallpaper(&self) -> bool {
         match &self.stage {
@@ -104,6 +110,7 @@ impl Session {
             Stage::Race(stage) if stage.demo.is_some() => {
                 let finished = stage.race.finished();
                 let length = self.demo_timing(title).length;
+                let frozen = self.pause.frozen();
                 let Stage::Race(stage) = &mut self.stage else {
                     return false;
                 };
@@ -111,7 +118,7 @@ impl Session {
                     return false;
                 };
                 run.hear(input);
-                if let Some(leave) = run.tick(length, finished) {
+                if let Some(leave) = run.tick(length, finished, !frozen) {
                     self.end_demo(leave);
                     return true;
                 }
@@ -213,7 +220,8 @@ impl Session {
                 .collect();
             demo::offered_teams(&title.demo, &all)
         };
-        let seed = *self.demo.seed.get_or_insert_with(|| oag_game::race_seed::fresh());
+        let named = self.race_options.as_ref().and_then(|options| options.seed);
+        let seed = *self.demo.seed.get_or_insert_with(|| oag_game::race_seed::for_launch(named));
         let mut pick = demo::pick(
             &title.demo,
             demo::chain_seed(seed, self.demo.started),
@@ -243,7 +251,7 @@ impl Session {
         {
             warn!("{warning}");
         }
-        options.laps_override = None;
+        options.laps_override = Some(demo::LAPS);
         options.weapons_override = None;
         options.eliminator_kill_target = None;
         options.eliminator_score_target = None;

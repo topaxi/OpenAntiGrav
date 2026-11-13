@@ -197,6 +197,9 @@ pub struct State {
     /// (`session::demo`); absent in every other race.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub demo: Option<String>,
+    /// `on` or `off`: whether the race on screen draws its HUD, on `stage=race`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hud: Option<String>,
     /// How many slots a person flies, on `stage=race`: `0` in a demo.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub humans: Option<usize>,
@@ -248,6 +251,7 @@ impl State {
             "replay_hud" => one(self.replay_hud.clone()),
             "endrace" => one(self.endrace.clone()),
             "demo" => one(self.demo.clone()),
+            "hud" => one(self.hud.clone()),
             "humans" => one(self.humans.map(|humans| humans.to_string())),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
@@ -306,6 +310,7 @@ impl State {
                 | "replay_hud"
                 | "endrace"
                 | "demo"
+                | "hud"
                 | "humans"
                 | "opening_reads"
         ) || key.strip_prefix("race.").is_some_and(|rest| {

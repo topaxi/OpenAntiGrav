@@ -1592,42 +1592,9 @@ fn load_backdrop(
     }
 }
 
-/// Decodes Pure's second boot movie - see
-/// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
-/// its name was found, and what it takes to actually draw it (the other half
-/// of that work, done alongside this function: see `oag_ui::frontend::Frontend`
-/// and `crate::main::FrontendStage` for the rest).
-///
-/// `None`, and nothing attempted at all, for a source whose `screens` has no
-/// `FMV Intro` state - every Pulse source, and any future title this build
-/// has not seen. Checked against `screens` rather than tried unconditionally
-/// the way [`load_backdrop`] tries `BACKDROP_MOVIE` for every source: a miss
-/// there is silent by construction (no report line), but `FMV_INTRO_MOVIE` is
-/// a Pure-specific literal, and trying it against a Pulse source would add a
-/// "no second boot movie" line nobody asked about.
-fn load_second_movie(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-    options: &Options,
-    report: &mut Vec<String>,
-    watch: crate::movie::Watch<'_>,
-) -> Option<Movie> {
-    let wanted = Options {
-        extent: Extent::Whole,
-        ..options.clone()
-    };
-    match load_movie(archives, name, &wanted, report, watch) {
-        Ok(movie) => movie,
-        Err(e) => {
-            report.push(format!("no second boot movie: {e:#}"));
-            None
-        }
-    }
-}
-
 pub mod backdrop;
-pub mod demo_config;
 pub(crate) mod campaign2048;
+pub mod demo_config;
 pub mod fonts;
 pub mod fury;
 mod images;
@@ -1648,7 +1615,9 @@ mod team_ratings2048;
 
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
-use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region, same_planes};
+use movies::{
+    load_movie, load_second_movie, resolve_movie_region, resolve_pure_movie_region, same_planes,
+};
 use oag_ui::language::load::{chosen_language, load_languages, load_strings};
 use oag_ui::xml::expand;
 pub use progress::MediaProgress;
