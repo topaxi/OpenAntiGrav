@@ -172,9 +172,13 @@ Open from it, each small:
    where the seat's own visible set leaves out the section of the entrance's spline sample
    (`tests::portal_view::a_portal_behind_a_wall_draws_nothing`, red before: 5 passes for 0;
    `a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view`; the open case,
-   `a_portal_in_the_main_views_pvs_still_draws`). Left: the test is the entrance's one section, not
-   the sections the radius reaches, and only on a PSP-style section partition (a chunk partition, HD
-   and 2048, keeps drawing).
+   `a_portal_in_the_main_views_pvs_still_draws`). ~~Left: the test is the entrance's one section,
+   and only on a section partition~~ Landed (lane portal-occlusion-chunks): the test is every section
+   the radius reaches (`a_portal_whose_radius_reaches_a_visible_section_still_draws`, red before) and,
+   on a chunk partition (HD, 2048, Omega), every non-moving draw the sphere meets
+   (`a_portal_among_hidden_chunks_draws_nothing`, red before: 5 passes for 0;
+   `a_portal_whose_radius_reaches_a_visible_chunk_still_draws`). Checked on a disc, HD and Omega
+   (the portal still draws); 2048 not run, only a PFS-encrypted `.pkg` is held.
 3. ~~**`Stage::orient` is a no-op on an effect from `play_held`**~~ Landed for `Fired::OwnAt`:
    `Stage::orient_surface` addresses a held surface by its generation
    (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself
