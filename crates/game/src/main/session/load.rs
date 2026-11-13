@@ -363,16 +363,20 @@ impl Session {
         // Building the front end spawns the intro's decode thread and uploads a
         // sprite sheet; that is a load, and a load is not a frame time.
         self.stalled = true;
-        let hull = self.race_options.as_ref().zip(touch).map(|(options, touch)| {
-            oag_game::team_hull::TeamHull::new(
-                options.source.clone(),
-                options.dlc.clone(),
-                ship_dir,
-                touch.team_model_origin,
-            )
-        });
+        let hull = self
+            .race_options
+            .as_ref()
+            .zip(touch.and_then(|touch| touch.team_model_origin))
+            .map(|(options, origin)| {
+                oag_game::team_hull::TeamHull::new(
+                    options.source.clone(),
+                    options.dlc.clone(),
+                    ship_dir,
+                    origin,
+                )
+            });
         self.controls.silence_motors();
-        let touch_front_end = touch.is_some();
+        let touch_front_end = loaded.title.front_end.is_some_and(|front_end| front_end.touch_shell().is_some());
         let hud_art = loaded.title.hud_art;
         self.stage = Stage::frontend(&self.gpu, loaded, video_format, trace, &mut self.audio)?;
         if let Stage::Frontend(stage) = &mut self.stage {

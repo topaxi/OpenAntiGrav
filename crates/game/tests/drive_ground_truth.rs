@@ -867,3 +867,89 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
         "turning it off builds the disc's sheet again:\n{stderr}"
     );
 }
+
+fn omega() -> Option<PathBuf> {
+    oag_testdata::exact("data/extracted/ps4")
+}
+
+/// Every state line the game reported, as `(stage, frontend state, screen kind)`.
+fn stages(run: &Run) -> Vec<(String, Option<String>, Option<String>)> {
+    run.states
+        .iter()
+        .map(|state| {
+            (
+                text(state, &["stage"]).unwrap_or_default().to_string(),
+                text(state, &["frontend"]).map(str::to_string),
+                text(state, &["screen", "kind"]).map(str::to_string),
+            )
+        })
+        .collect()
+}
+
+/// Choosing 2048 at Omega's `Campaign Selection` opens the 2048 campaign map (`newFEshell`, in
+/// the front end's own stage), and Back lands on the chooser again with the menus intact.
+/// Fails on a build whose chooser has no hand-off: it stays in the menus and the map is never
+/// reached.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair"]
+fn omegas_chooser_opens_the_2048_map_and_back_returns_to_it() {
+    let Some(image) = omega() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "omega-map-back",
+        "boot; select campaign; press cross; until screen=campaign; ticks 20; press cross; \
+         until frontend=newFEshell; ticks 20; press circle; until stage=menu; ticks 5",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stages = stages(&run);
+    let at_map = stages
+        .iter()
+        .position(|(stage, frontend, _)| {
+            stage == "frontend" && frontend.as_deref() == Some("newFEshell")
+        })
+        .unwrap_or_else(|| panic!("the map never opened: {stages:?}"));
+    let (stage, _, kind) = stages.last().expect("a state");
+    assert_eq!(
+        (stage.as_str(), kind.as_deref()),
+        ("menu", Some("campaign"))
+    );
+    assert!(
+        stages[at_map..].iter().any(|(stage, ..)| stage == "menu"),
+        "Back returned to the menus after the map: {stages:?}"
+    );
+    assert!(
+        text(run.last(), &["screen", "id"]) == Some("selection"),
+        "the chooser, not the menu root: {}",
+        run.last()
+    );
+}
+
+/// An event launched from Omega's 2048 map starts a race on Omega's own source, through the
+/// same `Launch 2048` the Vita front end ends on.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair"]
+fn an_event_launched_from_omegas_2048_map_starts_a_race() {
+    let Some(image) = omega() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "omega-map-launch",
+        "boot; select campaign; press cross; until screen=campaign; ticks 20; press cross; \
+         until frontend=newFEshell; ticks 20; press cross; ticks 20; press cross; \
+         until stage=loading",
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let race = run
+        .last()
+        .get("race")
+        .expect("a race was handed to the loader");
+    assert!(
+        text(race, &["source"]).is_some_and(|source| source.ends_with("ps4")),
+        "{race}"
+    );
+}

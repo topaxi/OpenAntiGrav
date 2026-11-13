@@ -607,6 +607,7 @@ impl App {
             backdrop: None,
             backdrop_shape: None,
             held_menu_backdrop: None,
+            parked_menu: None,
             // Nothing running yet on either line: the conversion may not start
             // until the boot's own movies are done with the cache, which is
             // what `start_prefetch` waits for.

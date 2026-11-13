@@ -242,7 +242,7 @@ impl Frontend {
                 out
             }
             w2048::BOOT_STUDIO_LOGO | w2048::TITLE_SCREEN => {
-                let mut out = self.draw_screen_at(current, self.on_screen_for);
+                let mut out = self.draw_screen_at(self.screen_for(current), self.on_screen_for);
                 out.insert(1, white);
                 if current == w2048::TITLE_SCREEN {
                     self.insert_lattice(&mut out);

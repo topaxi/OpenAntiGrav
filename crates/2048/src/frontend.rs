@@ -432,14 +432,15 @@ pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
         },
     ],
     // `Team_Definition.xml`'s `teamshell->team` screen, `type="team2048"`.
-    team_screen: "team",
+    team_screen: Some("team"),
     // That screen's `<Model name="ShipModel">`: `<Values OriginX="1400"
     // OriginY="264" ...>`.
-    team_model_origin: (1400.0, 264.0),
+    team_model_origin: Some((1400.0, 264.0)),
     // `newFEshell`'s own `<TouchScroll name="FeShellTouchScroll">` nests
     // `<FE3DCanvas>` - see `oag_title::TouchFrontEnd::canvas_screen`'s own
     // doc for why no `<CanvasLabel>` coordinate is carried here.
     canvas_screen: "newFEshell",
+    canvas_definition: None,
     // Recovered, not authored on the widget - see
     // `oag_title::TouchFrontEnd::canvas_texture`'s own doc. Verified present
     // in the base package this session: `cargo run -p oag-assets --example

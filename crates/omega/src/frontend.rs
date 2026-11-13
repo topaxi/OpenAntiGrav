@@ -207,6 +207,34 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 26] = {
     ]
 };
 
+/// The touch vocabulary Omega keeps: 2048's campaign map and nothing else of
+/// the Vita shell (no `GameModeChoice`, `Home` or `team` screen ships).
+///
+/// The map screen is `Cell Selection 2048` in `Campaign2048_Definition.xml`,
+/// read by its own entry because `Skin.xml` does not include it
+/// (`docs/formats/omega-frontend.md`, "The campaign-map content"). Its canvas
+/// labels equal 2048's name for name and cell for cell
+/// (`omega_2048_map_ground_truth`).
+pub const TOUCH: &oag_title::TouchFrontEnd = &oag_title::TouchFrontEnd {
+    game_mode_choice: &[],
+    home: &[],
+    team_screen: None,
+    team_model_origin: None,
+    canvas_screen: "Cell Selection 2048",
+    canvas_definition: Some(r"Data\Plugins\Frontend\Gui\Campaign2048_Definition.xml"),
+    // The same atlas name 2048 ships, as `.gnf`; the case is the archive's.
+    canvas_texture: r"Data\FE\NewImages\canvasTexture.gnf",
+    // **Chosen, not measured:** 2048's projection (`oag_2048::campaign::tier::MAP`,
+    // read off the Vita executable), used on Omega because Omega's `SP.xml`
+    // events and canvas labels carry 2048's cells (`omega_2048_map_ground_truth`);
+    // no Omega executable readout of the quad exists.
+    map_nodes: oag_title::NodeMap {
+        scale: (4, 2),
+        bias: (55, 25),
+        group_offsets: &[(0, 0)],
+    },
+};
+
 /// Omega's front end: the layout it authors and the boot order it takes.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
@@ -216,9 +244,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     assumed_release: Some("CUSA-05670"),
     menu: Some(MENU_SKIN),
     menu_ps2: None,
-    // Omega authors HD's `FEGlobals`/`<HorizMenu>` vocabulary, not 2048's
-    // touch-icon idiom.
-    touch: None,
+    // HD's `FEGlobals`/`<HorizMenu>` vocabulary is the front end; `touch` is
+    // only the 2048 campaign map the chooser hands off to.
+    touch: Some(TOUCH),
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     // The eight `.gnf` that are HD's `.gtf` bytes in HD's own row order,

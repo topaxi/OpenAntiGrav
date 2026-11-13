@@ -208,6 +208,8 @@ pub struct Shell {
     /// [`crate::loading::Assets::load`] needs to put a tip on the loading
     /// screen, which is the other reason this phase exists.
     pub strings: StringTable,
+    /// The campaign map a title's menus hand off to, see [`campaign2048::map_screens`].
+    pub map_screens: Option<Screens>,
     /// The raceable circuits, for the menus.
     pub tracks: Vec<oag_raceplay::catalogue::Track>,
     /// The circuits a Zone race can be picked from. See [`oag_title::ZoneCircuit::menu_tracks`].
@@ -525,7 +527,7 @@ pub fn load_shell(
     )?;
     // A touch front end's screens are in the root's includes - see
     // `boot::includes` for why only that idiom is followed.
-    if front_end.touch.is_some() {
+    if front_end.touch_shell().is_some() {
         includes::follow(
             &mut archives,
             front_end.root,
@@ -586,11 +588,12 @@ pub fn load_shell(
     // titles here, whose screens were matched against captures without it.
     let face_scales = fonts::face_scales(
         &mut archives,
-        preferred_language.filter(|_| front_end.touch.is_some()),
+        preferred_language.filter(|_| front_end.touch_shell().is_some()),
         font.line_height,
         &mut report,
     );
     steps.lap("menu and title fonts");
+    let map_screens = campaign2048::map_screens(&mut archives, front_end, &screens, &mut report);
     let (campaign_events, extra_tiles) = campaign2048::touch_menus(
         front_end.touch.is_some(),
         (&mut archives, &strings, &mut report),
@@ -606,8 +609,12 @@ pub fn load_shell(
         ],
         &mut report,
     );
-    let team_ratings =
-        team_ratings2048::load(title, front_end.touch.is_some(), &documents, &mut report);
+    let team_ratings = team_ratings2048::load(
+        title,
+        front_end.touch_shell().is_some(),
+        &documents,
+        &mut report,
+    );
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
@@ -672,6 +679,7 @@ pub fn load_shell(
         &mut archives,
         &std::iter::once(&screens)
             .chain(race_box.as_ref())
+            .chain(map_screens.as_ref())
             .chain(team_box.as_ref().map(|team_box| &team_box.screens))
             .chain(track_box.as_ref().map(|track_box| &track_box.screens))
             .collect::<Vec<_>>(),
@@ -871,6 +879,7 @@ pub fn load_shell(
             title,
             platform: archives.layout.platform,
             screens,
+            map_screens,
             entries: preferred_language.and_then(|language| language.entries.clone()),
             loading: title.loading,
             languages: offered,
@@ -1193,6 +1202,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         title,
         platform,
         screens,
+        map_screens: _,
         entries,
         loading: _,
         languages,
@@ -1291,22 +1301,16 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         languages,
         placements,
     );
-    frontend.set_menu_skin(menu_skin);
-    // Only where they were measured - see `load_shell`'s own gate.
-    if !face_scales.is_empty() {
-        frontend.set_face_scales(face_scales.clone(), font.line_height);
-    }
-    if profile.picker_from_loaded_faces {
-        frontend.set_picker_line_height(font.line_height);
-    }
-    if !campaign_events.is_empty() {
-        frontend.set_campaign(campaign_events);
-    }
-    if !extra_tiles.is_empty() {
-        frontend.set_extra_tiles(extra_tiles);
-    }
-    frontend.set_tiers(tiers);
-    frontend.set_team_ratings(team_ratings);
+    configure::apply(
+        &mut frontend,
+        menu_skin,
+        (
+            &face_scales,
+            font.line_height,
+            profile.picker_from_loaded_faces,
+        ),
+        (campaign_events, extra_tiles, tiers, team_ratings),
+    );
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1622,10 +1626,12 @@ fn load_second_movie(
 
 pub mod backdrop;
 pub(crate) mod campaign2048;
+mod configure;
 pub mod fonts;
 pub mod fury;
 mod images;
 mod includes;
+pub mod map_seed;
 mod movies;
 mod options;
 mod progress;

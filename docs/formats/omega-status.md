@@ -1797,7 +1797,7 @@ Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
 `stats.xml`, and the field finishes on Vineta K, Talon's Junction, Ubermall
 (Phantom) and Amphiseum reversed with no respawn
 (`crates/raceplay/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
-not wired: this project does not read Omega's 2048 campaign.
+not wired: the 2048 campaign map opens from the chooser ([omega-frontend.md](omega-frontend.md), "The 2048 map opens from the chooser") but the lineage laws are 2048's and Omega's races on it are the incomplete ones this page lists.
 
 ## Engine trail and flare (2026-10-16, `omega-exhaust`)
 

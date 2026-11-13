@@ -106,6 +106,7 @@ pub mod canvas_prism;
 pub mod canvas_wave;
 mod event_card;
 mod faces;
+mod hosted_map;
 mod map_cursor;
 mod mode_grid;
 mod options2048;
@@ -446,6 +447,9 @@ pub struct Frontend {
     /// Wipeout 2048's campaign map - see [`CampaignMap`]. Empty on every
     /// other title.
     campaign: CampaignMap,
+    /// Set when a title's own menus opened this as their campaign map - see
+    /// [`Self::hosted_map`].
+    map_host: Option<hosted_map::MapHost>,
     /// How much larger or smaller each font role's face is than the
     /// `Default` one this build draws every screen widget with, by the
     /// role's name in lower case - see [`Self::set_face_scales`]. Empty
@@ -593,6 +597,7 @@ impl Frontend {
             menu_skin: None,
             touch: TouchState::default(),
             campaign: CampaignMap::default(),
+            map_host: None,
             face_scales: Vec::new(),
             default_line_height: None,
             picker_line_height: None,

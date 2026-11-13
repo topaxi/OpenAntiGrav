@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [omega, 2048]
-updated: 2026-11-12
+updated: 2026-11-13
 summary: "Omega front end: load order and campaign pages open, emblem and Team Select undrawn; 2048 card titles wired, load card and no-event branch open"
 ---
 
@@ -34,6 +34,16 @@ thread opened the front-end files that census only named and diffed their
 content against `hd-frontend.md`.
 
 ## Open
+
+- **Omega's 2048 map opens from the chooser (2026-11-13, `omega-2048-map-host`, wired);
+  what is left:** Omega's `Cell Selection 2048` authors HD's `CellSelection` frame around
+  the canvas (`Flyer`, season logos, rank shield, `GridNum`, brackets: all
+  `Campaign2048`-type code in `eboot.bin`) and none of it is drawn; its authored
+  `Cell Mode Redirect Team` goes to HD's `Team Selection`, so Change craft is off on the
+  hosted map until that is routed; the event cards' track pictures
+  (`NewImages\trackscreens`) are in no Omega archive; how the original enters the map from
+  its chooser is untraced (confidence 40). Detail:
+  [`omega-frontend.md`](../../docs/formats/omega-frontend.md), "The 2048 map opens from the chooser".
 
 - **Thirteen textures Omega's front-end XML names and the package holds under no
   spelling** (2026-11-11, now a `debug` line from `Archives::read_texture`; list and

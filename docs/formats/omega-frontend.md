@@ -325,6 +325,48 @@ was. It is not reached from `Main Menu`'s own redirect (which only names
 so this looks like a companion-overlay or debug surface rather than the
 primary campaign flow - not chased further this pass.
 
+## The 2048 map opens from the chooser
+
+**Wired 2026-11-13** (`oag_ui::frontend::Frontend::hosted_map`, `oag_game::boot::map_seed`,
+`session/hosted_map.rs`; confidence 90 for what is drawn and launched, 40 for how the original
+enters the map, which is not traced in `eboot.bin`). Confirming 2048 at `Campaign Selection`
+parks the menus and shows the **same** `Frontend` map Vita 2048 boots into, in the front end's
+own stage, built from Omega's data:
+
+- `oag_omega::frontend::TOUCH` (`touch: Some(..)` beside HD's `menu`; ADR-0054 does not forbid
+  it): the canvas screen `Cell Selection 2048`, read by its own entry
+  (`Data\Plugins\Frontend\Gui\Campaign2048_Definition.xml`, `Skin.xml` does not include it), the
+  atlas `Data\FE\NewImages\canvasTexture.gnf` and 2048's cell-to-canvas projection. The projection
+  is **chosen, not measured** on Omega: no Omega executable readout of the quad exists, and the
+  events and canvas labels carry 2048's cells.
+- `Data\xml\SP.xml` (115 events with a cell) through the same `map_events` reader.
+- Back (circle, or the shell's home key) returns to the chooser with 2048 still selected; Launch
+  on an event card starts the race through `Session::follow_launch`, as 2048's own does
+  (`drive_ground_truth::omegas_chooser_opens_the_2048_map_and_back_returns_to_it` and
+  `an_event_launched_from_omegas_2048_map_starts_a_race`).
+
+**The canvas atlas is a `.gnf` here and decodes as the same picture** (a `--drive` capture of
+Omega's first map frame against Vita 2048's, 1440x816: mean absolute channel difference 2.6 of 255,
+2.3 % of channels past 24; the lattice and the logo sit at the same pixels).
+
+**Checked, differs - what Omega authors on the screen and this build does not draw.** The
+screen is HD's `CellSelection` frame around the 2048 canvas: a `Flyer`, `SeasonLogo2048/9/50`, a
+rank shield (`RankItem`, `TotalXPBg/Fill`), `GridNum`, `EPoints Title`, bars and brackets, all
+`transition`/`delay` widgets the `Campaign2048` screen type's code in `eboot.bin` drives. Nothing
+here draws them: the gating is unread. It also authors a `Cell Mode Redirect Team` whose `Default`
+goes to HD's `Team Selection` - Change craft on a card is therefore **off on a map hosted
+without a `team` screen** (open: route it to `Team Selection`).
+
+**Pad, focus and highlight: nothing authored.** The map is `TouchScroll` > `FE3DCanvas` +
+`TouchCampaign`, as Vita 2048's, with no focus, highlight or pad attribute anywhere in the file
+(grep over the 29,919 bytes), so there is no Omega behaviour to port back to 2048. The d-pad, the
+cursor and the key choices stay 2048's, labelled chosen, not measured.
+
+**Missing art, said in the loader report:** `Data\FE\NewImages\trackscreens\*.gtf` (the event
+cards' track pictures), `Data\FE\NewImages\Demo\*` and each 2048 circuit's
+`TrackSelectEmblem_Fury` are in no Omega archive (`no spelling is held on PS4`), so a card draws
+without its track picture.
+
 ## `mainmenu_definition.xml`: same redirect, new logo, new PlayGo tags
 
 `mainmenu_definition.xml`'s top-level `<Redirect>` is close to line-for-line
