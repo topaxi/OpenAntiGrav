@@ -2185,10 +2185,25 @@ lift of the deepest shadows, nothing else.
   +0.43, -0.04, -0.83 with mean grey 3.79 to 4.09, Chenghou 2.57 to 2.61, Metropia 5.68 to 5.79,
   the other eleven within 0.05. Not shipped: the mean bias and the mean grey disagree, and the
   adapted value was not read off the original in this lane.
-- **Three CPU-side encodes still use the power** and are shared with Omega and 2048:
+- **The three CPU-side encodes use the scene's own curve** (2026-11-13, `hd-srgb-leftovers`):
   `sky_cube::tint_in_texel_domain`, `rcs::picture_tint::tinted`, `rcs::skin::raw_to_texel`. Each
-  writes a value the shader's `decode` reads back. On HD the round trip is now off by under 1.5
-  levels above linear 0.05 and by up to +39 % in linear light under 0.01 (`raw_to_texel(0.01)`).
+  writes a value the shader's `decode` reads back, so each takes the race's `SceneStore`
+  (`oag_gpu::formats::SceneStore::texel_encode`/`texel_decode`, the CPU twin of `target.wesl`'s
+  `decode`: HD sRGB piecewise, 2048 the square, anything else the `2.2` power). The store is told
+  before the circuit's staging (`load::environment::scene_store`, one rule with
+  `bloom::for_title`). The picture tint now bakes `encode(decode(texel) * tint)`, which is what the
+  program does (`TEX` then `MUL`); the old `byte * tint^(1/2.2)` is exact only for a pure power.
+  The sky tint is still one factor on the encoded texel, so it is exact at a white texel only.
+  Live factors 0.736 at 128 and 0.765 at 140: sRGB gives 0.7366 and 0.7668, the power 0.7310 and
+  0.7614. Compare-page pairs, ours before to after (mean grey of the page's metric on the pair, and
+  the box where the change shows, mean grey against the original's): Vineta K sky box
+  `(239, 0)-(559, 100)` 192.41 to 193.68 against 194.37 (error 1.96 to 0.69); Tech de Ra panel box
+  `(100, 523)-(420, 723)` 112.60 to 112.26 against 111.51 (1.09 to 0.75); Sebenco Climb box
+  `(224, 461)-(544, 661)` 62.99 to 62.69 against 62.15 (0.84 to 0.53). Whole-frame |delta| 0.05 to
+  0.17 grey: noise, the boxes are the claim.
+  Cross-title: **ported**. Omega and 2048 build through `rcs::psp2`, which does not call these
+  three; `build`, `build_scene` and the livery take the store anyway (Omega `Computed`, 2048
+  `Squared`), with unit tests of all three curves in `oag_gpu::formats` and each function.
 - **Chenghou and the Assegai pair keep +0.4 to +0.7** of spread, and Metropia and Sebenco +1 to
   +2.3; not a shared curve any more (the transfer is flat), so per circuit.
 
