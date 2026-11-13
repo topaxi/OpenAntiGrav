@@ -872,3 +872,18 @@ pub(super) fn finish_vertical_fov(
     };
     oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::craft_scale;
+    use oag_race::Mode;
+
+    /// `0.7` in a Detonator race on a title that offers one, `0.75` in every other race.
+    #[test]
+    fn detonator_pulls_the_chase_rig_in_where_the_title_has_it() {
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_2048::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::TimeTrial), 0.75);
+        assert_eq!(craft_scale(oag_pulse::TITLE, Mode::Detonator), 0.75);
+    }
+}

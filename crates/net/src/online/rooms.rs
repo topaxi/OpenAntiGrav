@@ -375,8 +375,13 @@ impl Rooms {
         if !self.can_race(id, &settings.title) {
             return Err(self.content_refusal(id, &settings.title));
         }
-        if oag_race::Mode::from_name(&settings.mode).is_none() {
-            return Err(refuse(Refusal::BadSettings, "unknown race mode"));
+        match oag_race::Mode::from_name(&settings.mode) {
+            None => return Err(refuse(Refusal::BadSettings, "unknown race mode")),
+            // Detonator: "single player only" (`Mode::max_people`).
+            Some(mode) if mode.max_people() == Some(1) => {
+                return Err(refuse(Refusal::BadSettings, "a single-player race mode"));
+            }
+            Some(_) => {}
         }
         settings.max_players = settings
             .max_players

@@ -184,6 +184,18 @@ impl Mode {
     /// The stage a Detonator race opens on, before the first lap is completed.
     pub const DETONATOR_FIRST_STAGE: u32 = 1;
 
+    /// Whether this mode is on HD/Fury's Zone-modes mask, `0x206040` (game modes 6, 13, 14 and
+    /// 21: Zone, Zone Battle, Detonator and an unidentified PS4 id), which `Craft_Update`,
+    /// `Craft_UpdateHover` and `Team_LoadHandlingStats` test to read the Zone handling file,
+    /// fly the Zone hover rig with its trailing ray and no brakes, and wait on the grid at
+    /// the ray's height (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`, "Zone,
+    /// read live"; mode 6 read live, the mask static). Zone and Detonator here. A title's own
+    /// Zone data decides what each law is; this is only which modes reach it.
+    #[must_use]
+    pub const fn on_zone_mask(self) -> bool {
+        matches!(self, Self::Zone | Self::Detonator)
+    }
+
     /// The Detonator stage after `laps_completed` laps: one per completed lap from
     /// [`Self::DETONATOR_FIRST_STAGE`], held at [`Self::DETONATOR_END_STAGE`].
     #[must_use]

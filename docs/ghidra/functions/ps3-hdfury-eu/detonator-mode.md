@@ -60,6 +60,29 @@ and ever-increasing", the pulse cannon and its reload, the shot-chain bonus, and
 this engine flies a Detonator race on the player's own throttle: the auto-speed law is not read, and
 Zone's is not borrowed for it.
 
+## The Zone-modes mask carries Detonator
+
+HD tests one mask, `0x206040` (game modes 6, 13, 14 and 21), in `Craft_Update`,
+`Craft_UpdateHover` and `Team_LoadHandlingStats`, and mode 14 is Detonator. So a Detonator craft,
+like a Zone craft, flies `/data/ships/zone/handlingstats.xml`'s classless block, the Zone hover rig
+with its trailing ray, no brakes, and waits on the grid at the ray's height
+([hover-four-point.md](hover-four-point.md), "Zone, read live"; the mask static, the laws live for
+mode 6 only). Wired as `oag_race::Mode::on_zone_mask`; on 2048 and Omega those title fields are
+`None`, so nothing changes there. **Departure, named**: the same mask skips `Craft_RecordSplit`
+inside `Craft_UpdateLapProgress` (`0x000e50c4`-`0x000e50dc`), so the original keeps no split gaps in
+Detonator; this build's HUD still shows its lap times.
+
+## 2048's grade on its own circuits
+
+`Environment_Load` (`0x8102f6d0`, v1.04), inside its Zone-family gate, loads
+`<circuit>\ZoneMode2048.effectSettings` (and `ZoneMode2048default`) when the circuit has an
+`art\source\environments` or `art\published\environments` tree, with no mode test on that path;
+only the fallback for HD's ported circuits tests mode `0xe` and picks `DetonatorModeHDFury[DLC3]`.
+Read 2026-11-13 off the decompile. So a Detonator race on a native 2048 circuit grades with that
+circuit's Zone table, and on a ported circuit with HD/Fury's Detonator table: what
+`oag_2048::race::DETONATOR` loads (`palette`, then `fallback_palette` when the circuit's file is
+absent, which is the ported circuits). `detonator_ground_truth.rs` checks the `zone_1` case.
+
 ## The campaign's Detonator cells
 
 Every `mode="Detonator"` cell on `DATA00`'s eight Fury grids (`grid_08`..`grid_15`, 14 cells) authors
@@ -69,7 +92,8 @@ four Zone circuits. `laps="0"` agrees with the stage law ending the race rather 
 
 ## The same law on 2048 and Omega
 
-**Checked, applies, not wired.** Each title's Detonator update is found by its `EMPREADY` cue and has the
+**Ported**, with a load test each (`detonator_ground_truth.rs`: 2048 `zone_1`, Omega). Each
+title's Detonator update is found by its `EMPREADY` cue and has the
 same shape: a one-tick craft latch, a crossing count over `1`, a counter that starts at `1`, a placement
 call while the counter is under `15`, and the end at `15` or the out-of-race bit.
 

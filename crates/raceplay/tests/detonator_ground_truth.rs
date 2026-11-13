@@ -102,3 +102,84 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
     );
     assert_eq!(race.sim.world.race[LONE].laps_completed(), 14);
 }
+
+/// HD's Zone-modes mask covers Detonator: the race flies `/data/ships/zone`'s handling.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_race_flies_the_zone_handling_file() {
+    let Some(loaded) = load() else {
+        return;
+    };
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.starts_with("zone: flying /data/ships/zone/handlingstats.xml")),
+        "no Zone handling line in the report"
+    );
+}
+
+/// 2048 on one of HD's ported Zone circuits: its own circuit table is absent, so the HD/Fury
+/// DLC3 Detonator table out of the v1.04 patch grades it (`oag_2048::race::DETONATOR`).
+#[test]
+#[ignore = "needs the unpacked 2048 packages in data/extracted/"]
+fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/extracted/vita/PCSF00007");
+    if !path.join("patch-v104").exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: Some(r"data\art\published\DLC1\environments\zone_1\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading a 2048 Detonator race");
+    assert_eq!(
+        race::Race::start(loaded.setup.clone()).sim.world.race[0].laps_target,
+        Some(14)
+    );
+    let grade = loaded.zone_grade.as_ref().expect("a grade");
+    assert!(
+        grade
+            .describe()
+            .starts_with("data/ZoneEnvironmentHDFury/DetonatorModeHDFuryDLC3.effectSettings"),
+        "graded from {}",
+        grade.describe()
+    );
+    assert_eq!(grade.last_stage(), 14);
+}
+
+/// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
+    let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        ..race::Options::default()
+    })
+    .expect("loading an Omega Detonator race");
+    assert_eq!(
+        race::Race::start(loaded.setup.clone()).sim.world.race[0].laps_target,
+        Some(14)
+    );
+    assert!(loaded.zone_grade.is_none());
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
+    );
+}

@@ -559,3 +559,38 @@ fn a_circuit_grade_does_not_select_the_arena_shape() {
     grade.pin_stage(2);
     assert_eq!(grade.zone_uniform().shape[0], 0.0);
 }
+
+/// A Detonator grade opens on stage 1 shown whole, steps on the completed lap with the stage
+/// below swept out by HD's sphere, and holds at the file's last stage.
+#[test]
+fn a_lap_staged_grade_steps_on_the_lap_and_sweeps_out_the_stage_below() {
+    let mut grade = hd_grade().with_lap_stages();
+    let origin = [1.0, 2.0, 3.0];
+
+    assert!(
+        grade.follow_laps(0, 500, origin),
+        "opening onto stage 1 is a step"
+    );
+    assert_eq!(grade.blend().current, 1);
+    assert_eq!(grade.blend().weight, 1.0, "the opening stage is whole");
+    assert_eq!(grade.wavefront().frames, u32::MAX, "no sphere in flight");
+    assert!(
+        !grade.follow_laps(0, 900, origin),
+        "the same lap does not step again"
+    );
+
+    // Lap 1 completed 10 ticks ago: stage 2, Venom, the sphere 10 frames out of stage 1.
+    assert!(grade.follow_laps(1, 10, origin));
+    assert_eq!(grade.blend().current, 2);
+    let law = oag_hd::race::ZONE_TRANSITION;
+    assert_eq!(grade.wavefront().previous, 1);
+    assert_eq!(grade.wavefront().frames, 10);
+    assert_eq!(grade.wavefront().radius, law.radius_after(10));
+    assert_eq!(grade.blend().weight, law.weight_after(10));
+    assert_eq!(grade.wavefront().origin, origin);
+
+    // Past the file's last stage the grade holds there.
+    grade.follow_laps(14, 0, origin);
+    assert_eq!(grade.blend().current, grade.last_stage());
+    assert!(grade.describe().contains("one stage per completed lap"));
+}

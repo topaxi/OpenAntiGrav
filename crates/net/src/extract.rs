@@ -230,7 +230,11 @@ pub fn plan(offer: &Offer) -> Vec<Planned> {
     ];
     for track in crossed.into_iter().flatten() {
         for class in &offer.classes {
-            for mode in oag_race::Mode::ALL {
+            // A room cannot ask for a single-player mode (`rooms::validate`).
+            for mode in oag_race::Mode::ALL
+                .into_iter()
+                .filter(|m| m.max_people() != Some(1))
+            {
                 out.push(with(format!("{class} {} on {track}", mode.name()), &|p| {
                     p.track.clone_from(track);
                     p.class.clone_from(class);

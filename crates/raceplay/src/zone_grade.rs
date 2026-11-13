@@ -584,6 +584,16 @@ impl ZoneGrade {
         self.blend.weight = law.weight_after(frames);
     }
 
+    /// Drives a lap-staged grade (a Detonator race) for one frame: the stage after
+    /// `laps_completed` laps ([`oag_race::Mode::detonator_stage`]), stepped on the tick the
+    /// current lap began, `lap_ticks` ago. Answers whether the stage changed.
+    pub fn follow_laps(&mut self, laps_completed: u32, lap_ticks: u64, origin: [f32; 3]) -> bool {
+        let stepped = self.show_stage(oag_race::Mode::detonator_stage(laps_completed));
+        let frames = (laps_completed > 0).then(|| u32::try_from(lap_ticks).unwrap_or(u32::MAX));
+        self.follow_step(frames, origin);
+        stepped
+    }
+
     /// Which stage is showing, which is asked for, and at what weight.
     #[must_use]
     pub fn blend(&self) -> StageBlend {
@@ -964,7 +974,7 @@ impl ZoneGrade {
             .next_back()
             .map_or("?", |stage| stage.name.as_str());
         let ladder = match self.stages {
-            None if self.lap_stages => format!(
+            _ if self.lap_stages => format!(
                 "stepping one stage per completed lap from stage {} (Detonator's stage counter)",
                 self.blend.current,
             ),
