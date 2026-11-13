@@ -158,8 +158,14 @@ mod tests;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OwnCraftProbe {
     /// The firing craft's box blocks a probe that crosses it before the mesh does, seen through
-    /// the transposed rotation ([`own_box_blocks`]).
+    /// the transposed rotation ([`own_box_blocks`]), and the blocked probe falls (Pulse).
     CraftBox,
+    /// The same box, but a blocked probe runs neither the fall nor the ride: the projectile keeps
+    /// its velocity that update (Pure, `docs/ghidra/functions/psp-pure-usa/own-craft-box.md`).
+    CraftBoxHolds,
+    /// No box in the probe's query: every flyer probes the track from its first update (2048 and
+    /// Omega, `docs/ghidra/functions/vita-2048-eu-v104/own-craft-box.md`).
+    NoBox,
     /// No box: a Plasma does not probe for this many seconds after its release (chosen).
     PlasmaWindow(f32),
 }

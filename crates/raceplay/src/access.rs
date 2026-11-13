@@ -12,6 +12,22 @@ use super::*;
 /// riding one of Pulse's recorded bolts, so a tick of rounding cannot move it.
 const UNMEASURED_PLASMA_PROBE_WINDOW: f32 = 0.04;
 
+/// The flight's probe rule for a title's own-craft box. A title that has not measured it keeps a
+/// Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
+#[must_use]
+pub(crate) fn own_craft_probe_for(
+    own_box: oag_title::weapons::OwnCraftBox,
+) -> oag_weapons::projectile::OwnCraftProbe {
+    use oag_title::weapons::OwnCraftBox;
+    use oag_weapons::projectile::OwnCraftProbe;
+    match own_box {
+        OwnCraftBox::Falls => OwnCraftProbe::CraftBox,
+        OwnCraftBox::Holds => OwnCraftProbe::CraftBoxHolds,
+        OwnCraftBox::Absent => OwnCraftProbe::NoBox,
+        OwnCraftBox::PlasmaWindow => OwnCraftProbe::PlasmaWindow(UNMEASURED_PLASMA_PROBE_WINDOW),
+    }
+}
+
 impl Race {
     /// Chooses which control scheme maps the pilot's buttons.
     ///
@@ -496,15 +512,10 @@ impl Race {
     }
 
     /// How a projectile's first probes treat the firing craft,
-    /// `oag_title::weapons::Weapons::own_craft_box_hides_track`. A title without the measured box
-    /// keeps a Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
+    /// `oag_title::weapons::Weapons::own_craft_box_hides_track` ([`own_craft_probe_for`]).
     #[must_use]
     pub fn own_craft_probe(&self) -> oag_weapons::projectile::OwnCraftProbe {
-        if self.sim.own_craft_box_hides_track {
-            oag_weapons::projectile::OwnCraftProbe::CraftBox
-        } else {
-            oag_weapons::projectile::OwnCraftProbe::PlasmaWindow(UNMEASURED_PLASMA_PROBE_WINDOW)
-        }
+        own_craft_probe_for(self.sim.own_craft_box_hides_track)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
@@ -772,5 +783,28 @@ pub(super) fn chase_block_for(
     match view {
         oag_display::display::CameraView::Close => close,
         oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => far,
+    }
+}
+
+#[cfg(test)]
+mod own_craft_box_tests {
+    use super::own_craft_probe_for;
+    use oag_weapons::projectile::OwnCraftProbe;
+
+    /// Each title's measured own-craft box reaches the flight as the rule its executable runs
+    /// (`docs/gameplay/projectile-floor.md`, "The other titles").
+    #[test]
+    fn each_title_flies_its_own_measured_box() {
+        let probe = |title: &oag_title::Title| {
+            own_craft_probe_for(title.weapons.own_craft_box_hides_track.value)
+        };
+        assert_eq!(probe(oag_pulse::TITLE), OwnCraftProbe::CraftBox);
+        assert_eq!(probe(oag_pure::TITLE), OwnCraftProbe::CraftBoxHolds);
+        assert_eq!(probe(oag_2048::TITLE), OwnCraftProbe::NoBox);
+        assert_eq!(probe(oag_omega::TITLE), OwnCraftProbe::NoBox);
+        assert!(matches!(
+            probe(oag_hd::TITLE),
+            OwnCraftProbe::PlasmaWindow(_)
+        ));
     }
 }

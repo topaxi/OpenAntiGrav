@@ -423,9 +423,9 @@ pub struct RaceSim {
     /// Whether the projectiles' floor arms are Pulse's decompiled laws - see
     /// [`Setup::floor_arms_steer_to_ride_point`].
     pub(super) floor_arms_steer_to_ride_point: bool,
-    /// Whether the firing craft's box hides the track from its projectiles' first probes - see
+    /// What the firing craft's box does to its projectiles' first probes - see
     /// [`Setup::own_craft_box_hides_track`].
-    pub(super) own_craft_box_hides_track: bool,
+    pub(super) own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,
     /// Which ways a craft is put back are on, and their numbers - see
     /// [`Setup::reset_triggers`].
     pub(super) reset_triggers: oag_race::recovery::ResetTriggers,
