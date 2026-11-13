@@ -75,6 +75,40 @@ fn trail_hits_lent_on_pulse_a_craft_tucked_in_a_rivals_trail_plays_hds_burst() {
         race.stage().playing_count() > 0,
         "a craft eight units inside a rival's ribbon played no burst"
     );
+    assert_burst_is_in_the_ribbons_hue(&race);
+}
+
+/// The unit chroma (colour minus its Rec. 709 luma) of `rgb`, and its length.
+fn chroma(rgb: [f32; 3]) -> ([f32; 3], f32) {
+    let y = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+    let c = [rgb[0] - y, rgb[1] - y, rgb[2] - y];
+    let length = c.iter().map(|v| v * v).sum::<f32>().sqrt();
+    (c.map(|v| v / length.max(1e-9)), length)
+}
+
+/// **The lent burst is drawn in the colour of the Pulse ribbon it was struck in**, not HD's blue:
+/// every coloured vertex of the real `WO_TRAIL_HITSHIP` points the way the PSP ribbon's summed
+/// layers do (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour").
+fn assert_burst_is_in_the_ribbons_hue(race: &race::Race) {
+    let (additive, alpha) = race
+        .stage()
+        .vertices(oag_core::math::Vec3::X, oag_core::math::Vec3::Y);
+    let (target, _) = chroma(oag_fx::exhaust::TrailLaw::Ramped.ribbon_colour());
+    let mut coloured = 0;
+    for vertex in additive.iter().chain(alpha.iter()) {
+        let (direction, length) = chroma([vertex.colour[0], vertex.colour[1], vertex.colour[2]]);
+        if length < 0.02 {
+            continue;
+        }
+        coloured += 1;
+        let dot: f32 = (0..3).map(|c| direction[c] * target[c]).sum();
+        assert!(
+            dot > 0.999,
+            "{:?} is not the ribbon's hue (dot {dot})",
+            vertex.colour
+        );
+    }
+    assert!(coloured > 0, "the burst drew no coloured vertex to judge");
 }
 
 #[test]
