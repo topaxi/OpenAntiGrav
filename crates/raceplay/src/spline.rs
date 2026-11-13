@@ -9,10 +9,11 @@
 use super::*;
 use crate::spline_table::Positions;
 
-/// The mask bit of an authored section, [`oag_render::pvs::ALWAYS`] for one a mask cannot hold.
+/// The mask bit of an authored section, [`oag_vex::pvs::ALL_VISIBLE`] for one a mask cannot hold
+/// (an unnamed section included).
 pub(crate) fn section_bit(section: u8) -> u64 {
-    if section == oag_render::pvs::UNPLACED || u32::from(section) >= u64::BITS {
-        oag_render::pvs::ALWAYS
+    if usize::from(section) >= oag_vex::pvs::MAX_SECTIONS {
+        oag_vex::pvs::ALL_VISIBLE
     } else {
         1u64 << section
     }
@@ -394,7 +395,7 @@ impl Spline {
     }
 
     /// The authored sections of the samples within `radius` of `centre`, one bit each, and
-    /// [`oag_render::pvs::ALWAYS`] where one of them names none (or one a mask cannot hold):
+    /// [`oag_vex::pvs::ALL_VISIBLE`] where one of them names none (or one a mask cannot hold):
     /// the sections a sphere on the road reaches.
     #[must_use]
     pub fn sections_within(&self, centre: Vec3, radius: f32) -> u64 {
