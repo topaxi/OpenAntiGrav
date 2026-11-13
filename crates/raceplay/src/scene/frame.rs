@@ -113,6 +113,7 @@ impl Scene {
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
+        oag_gpu::perfprobe::mark("t-render-entry");
         let settings = ViewSettings {
             fov,
             cull,
@@ -132,6 +133,7 @@ impl Scene {
         // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
         // Before anything draws: whether this frame has a reader of the velocity buffer
         // decides which pipelines the track and the hulls draw with.
+        oag_gpu::perfprobe::mark("t-portal");
         self.gate_velocity(self.velocity_readers(motion_blur, camera_jitter));
         let uploads = Uploads::begin(
             queue,
@@ -139,6 +141,7 @@ impl Scene {
             SceneBlocks::view(race.viewed_slot()),
             std::mem::take(&mut *self.upload_staging.borrow_mut()),
         );
+        oag_gpu::perfprobe::mark("t-uploads-begin");
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
@@ -335,6 +338,7 @@ impl Scene {
         // Shaken and widened views, so the buffer stays true screen motion for
         // the temporal upscaler; the blur subtracts the lens itself, `blur_lens`
         // below.
+        oag_gpu::perfprobe::mark("t-pv-proj");
         if self.layer.get() == Layer::Whole {
             self.retire_split_histories();
             self.note_split_views(0, &[]);
@@ -357,6 +361,7 @@ impl Scene {
         // The same unjittered matrix, for the section boxes' view test.
         let section_view = view_projection;
         // Recorded before the offset is applied - see `Scene::record_frame`.
+        oag_gpu::perfprobe::mark("t-motion+flare");
         self.record_frame(
             camera_jitter,
             race.projection(aspect, self.far, fov),
@@ -376,6 +381,7 @@ impl Scene {
         // spline rather than from the section boxes: a control point's
         // `section_id` is what the artists wrote, while a point-in-box test is
         // something this project invented.
+        oag_gpu::perfprobe::mark("t-record-frame");
         let visible_set = self
             .visibility
             .as_ref()
@@ -387,6 +393,7 @@ impl Scene {
         // positions rather than from spline sample ids because `track.pvs`
         // carries its own cell positions and is not indexed by the `.vex`
         // spline at all.
+        oag_gpu::perfprobe::mark("t-visible-set");
         let chunk_set = self.chunk_set(race, pvs_cull);
         // The animation clock, in seconds, from the tick and never the wall
         // clock - so a replay of the same tick draws the same frame. The
@@ -410,6 +417,7 @@ impl Scene {
         // to cover trackside objects *moving* as well as surfaces scrolling. A
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
+        oag_gpu::perfprobe::mark("t-chunk-set");
         let seconds = anim_seconds.unwrap_or_else(|| race.world_clock_seconds());
         self.anim_clock.set(seconds);
         // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
@@ -435,6 +443,7 @@ impl Scene {
         // frame rather than folded in at load because the stage is a *runtime*
         // selection in the original, cross-faded against the stage before it
         // over the hundred frames after a step (`ZoneGrade::follow`).
+        oag_gpu::perfprobe::mark("t-pre-fog");
         let authored_fog = self
             .zone_grade
             .as_ref()
@@ -458,7 +467,9 @@ impl Scene {
         // casters in it, so a pass encoded after this block would leave the
         // first frame - which is the only frame a `--screenshot` capture
         // draws - reading an empty map at zero strength.
+        oag_gpu::perfprobe::mark("t-fog-light");
         self.render_shadow_passes(queue, encoder, race, shadows, frustum.as_ref());
+        oag_gpu::perfprobe::mark("t-shadow-passes");
         let scene = mesh_render::Scene {
             fog: fog
                 .with_texture_detail(race.texture_detail())
@@ -495,6 +506,7 @@ impl Scene {
         // same rule `zone_uniform` above already keeps for its own inputs.
         let zone_tint = self.zone_grade.as_ref().and_then(|grade| grade.eq_tint());
         // Cleared, not rebuilt: see `Scene::scratch`.
+        oag_gpu::perfprobe::mark("t-scene-struct");
         let mut scratch = self.scratch.borrow_mut();
         scratch.clear();
         let super::Scratch {
@@ -566,6 +578,7 @@ impl Scene {
                 ..w
             });
         }
+        oag_gpu::perfprobe::mark("t-scenery-clocks");
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
@@ -591,6 +604,7 @@ impl Scene {
                 ..w
             });
         }
+        oag_gpu::perfprobe::mark("t-gantry+adverts");
         let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
         let glass = (section_view, eye, seconds);
         let behind_glass = self.render_behind_glass(
@@ -1151,6 +1165,7 @@ impl Scene {
         uploads.flush();
         // What the pass draws, in its order. The sky draws inside the track, between the
         // circuit's solid and blended lists - see `Recorder::draw_track` for why there.
+        oag_gpu::perfprobe::mark("t-pre-drawlist");
         let mut draws = DrawList(Vec::with_capacity(64));
         draws.push(Draw::Track);
         // After the track, so a pad sitting flush on the surface wins the depth
