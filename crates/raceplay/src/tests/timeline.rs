@@ -220,6 +220,17 @@ fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
 /// hash after it disagrees, so the event is what the recording rests on.
 #[test]
 fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
+    // Several 112 KB `Race` values live on this frame at once and a debug build copies them, so
+    // the default 2 MiB test stack is passed or missed by a few KB.
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(a_seat_handed_to_the_driver_body)
+        .expect("spawns")
+        .join()
+        .expect("the body passes");
+}
+
+fn a_seat_handed_to_the_driver_body() {
     use oag_gameplay::Controller;
     let at = 330;
     let mut race = Race::start(fixture());

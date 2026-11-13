@@ -90,3 +90,21 @@ fn an_event_with_a_table_arms_the_tally_in_its_column_and_one_without_does_not()
     race.arm_event_xp(&progress(Awards::parse(XML)));
     assert!(race.xp_tally().is_some());
 }
+
+/// The HUD's `RaceXP` reads the tally: a kill raises the readout by the parsed award's value, and
+/// an unarmed race reads `None`. Fails if `Race::readout` drops the tally.
+#[test]
+fn a_kill_raises_the_readouts_xp_by_the_authored_amount() {
+    let mut race = armed_zone_race();
+    run_past_the_countdown(&mut race, 2);
+    assert_eq!(race.readout().race_xp, Some(0));
+    race.sim.world.ships[0].standing.kills = 1;
+    run_past_the_countdown(&mut race, 2);
+    let kill = Awards::parse(XML).expect("fixture").xp(6, Column::Zone);
+    assert_eq!(kill, 50);
+    assert_eq!(race.readout().race_xp, Some(kill));
+
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Zone;
+    assert_eq!(Race::start(setup).readout().race_xp, None);
+}
