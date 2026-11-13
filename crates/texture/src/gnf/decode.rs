@@ -331,7 +331,7 @@ fn row_major_blocks(
             let texels = decode_block(block);
             if (bx + 1) * 4 <= width && (by + 1) * 4 <= height {
                 // A block inside the picture: four rows of four.
-                for (ty, row) in texels.chunks_exact(4).enumerate() {
+                for (ty, row) in texels.as_chunks::<4>().0.iter().enumerate() {
                     let at = ((by * 4 + ty as u32) * width + bx * 4) as usize;
                     out[at..at + 4].copy_from_slice(row);
                 }
