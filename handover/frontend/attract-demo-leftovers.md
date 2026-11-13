@@ -32,15 +32,17 @@ difficulty: medium (45)
 - **The wallpaper's leftovers** (the desktop background per output, a camera each, landed:
   `docs/ui/attract-demo.md`, "A desktop background"):
   - **Not run on niri live**: the maintainer runs
-    `oag-game data/images/pulse-psp-eu.chd --no-audio --wallpaper` on the niri session and checks a
+    `cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd --no-audio --wallpaper` from the
+    main checkout on the niri session and checks a
     background on each output, distinct cameras, and that drawing stops while the screen is locked
     (CPU of the process near zero).
   - **Fractional scale** (`wp_fractional_scale_v1` plus `wp_viewporter`): drawn at the next integer
     scale up today.
   - **A desktop background on X11 (root window), Windows (WorkerW) and macOS (desktop-level
-    window)**: not built; there `--wallpaper --windows N` gives N ordinary windows, a camera each.
-  - **A hull drawn with garbage texels** was seen once on a 1920x1080 output's chase camera
-    (2026-11-13, Pulse PSP, second demo); not traced, not known to be the wallpaper's.
+    window)**: not built; there `--wallpaper --windows N` gives N ordinary windows, a camera each (checked on X11
+    under Xvfb).
+  - **A further output's chase camera stays on its craft once it is wrecked** (seen on sway: a
+    burnt `shipwreck.vex` hull filling a 1920x1080 output); moving it to a live craft is open.
   - Window 1's own camera is the spectator director, which can frame the craft a further output
     chases for a while; the further outputs never share a craft with each other.
 - **2048 and Omega read `DemoConfig.xml`'s circuit and timeouts but not its demo music

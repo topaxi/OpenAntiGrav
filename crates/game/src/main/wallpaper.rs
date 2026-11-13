@@ -7,7 +7,8 @@
 //! way `--drive` runs a session with no window (`crate::drive`). Each output's surface is a wgpu
 //! surface over the raw `wl_surface` ([`crate::gpu::RawTarget`]), drawn only when the
 //! compositor asks for a frame of it (its frame callback, [`Pacer`]) and at most
-//! `--wallpaper-fps` times a second, so a hidden output or a locked screen costs nothing.
+//! `--wallpaper-fps` times a second, so an output the compositor stops showing (and stops sending
+//! callbacks to) costs nothing.
 //!
 //! A background takes no input (no keyboard focus, an empty input region): it ends on SIGINT or
 //! SIGTERM, or when the compositor goes away. It holds no idle inhibitor: the screen still

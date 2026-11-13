@@ -77,7 +77,7 @@ Omega; Pure and Pulse PS2 share Pulse's code path, not driven).
 ```sh
 oag-game --demo                 # skip the front end, demo after demo; any input goes to the menu
 oag-game --wallpaper            # the same, input ignored; the desktop background on a layer-shell compositor
-oag-game --wallpaper --windows 3   # elsewhere: three windows, a camera each
+oag-game --wallpaper --windows 3   # elsewhere: three windows, a camera each (checked on X11, Xvfb)
 oag-game --demo --dry-run       # no window: two demos back to back, one line each
 oag-game --demo --screenshot demo.png --ticks 500
 ```
@@ -114,9 +114,10 @@ warning; `WINIT_UNIX_BACKEND=x11` asks for it.
   the way `--drive` runs a session with no window. Each surface is a wgpu surface over the raw
   `wl_surface` (`gpu::RawTarget`; the one `unsafe` is the surface's creation).
 - **Pacing.** An output is drawn only when the compositor answered its last frame callback
-  (`gpu::Pace`): a background a compositor stops asking frames of (a powered-off output, a
-  fullscreen window over it on some compositors, a locked screen) is not drawn, and is tried again
-  every 2 s. While no output wants a frame, the simulation does not tick. The present mode is a
+  (`gpu::Pace`): a background a compositor stops asking frames of is not drawn, and is tried again
+  every 2 s. Checked for a powered-off output (below); a locked screen and a fullscreen window over
+  the background are expected to behave the same where the compositor withholds callbacks, not
+  checked. While no output wants a frame, the simulation does not tick. The present mode is a
   further window's non-blocking one (Mailbox, else Immediate): a blocking FIFO on a surface the
   compositor stopped showing would hold every output's frame.
 - **Outputs come and go.** A new output gets a background and a camera; an unplugged one is
@@ -135,9 +136,10 @@ our device on Vulkan, RADV): three outputs of 1280x720, 1024x768 and 800x600 at 
 floating `foot` above output 1. Each output showed the demo behind the window, output 1 through the
 spectator director and outputs 2 and 3 chasing two other craft; no HUD. Unplugging output 2 and
 then output 1, and creating a 1920x1080 output, kept every remaining output drawing (window 1
-moved to the next output). With every output powered off (`swaymsg output X power off`) the process
-used 0.2 % of a core against 21 % drawing two outputs at 30 fps, and went back to 30 fps on
-power on. SIGTERM left through the normal exit. The recipe:
+moved to the next output). Powering off one output (`swaymsg output X power off`, window 1's or
+another's) left the other drawing (two captures 1 s apart differ) and the output drew again on
+power on. With every output powered off the process used 0.2 % of a core against 21 % drawing two
+outputs at 30 fps. SIGTERM left through the normal exit. The recipe:
 
 ```sh
 R=$PWD/rt; mkdir -p -m 700 "$R"
@@ -167,7 +169,8 @@ locked); none of the following was observed, it is what may differ from sway:
   niri's own background colour shows nowhere it covers.
 
 ```sh
-oag-game data/images/pulse-psp-eu.chd --no-audio --wallpaper    # on the niri session; Ctrl-C or kill to end
+cd ~/projects/OpenAntiGrav
+cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd --no-audio --wallpaper   # Ctrl-C or kill to end
 ```
 
 ## Tests

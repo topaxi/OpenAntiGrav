@@ -222,6 +222,9 @@ impl Session {
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(super) fn window_title(&self, window: usize) -> String {
         let table = strings::project_table(self.settings.language.as_deref());
+        if self.demo.cli == Some(true) {
+            return crate::hints::title(&table).to_string();
+        }
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
         format!(
             "{} - {}",
