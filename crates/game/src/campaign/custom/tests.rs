@@ -1088,6 +1088,27 @@ fn a_mod_with_no_campaigns_asks_for_its_art_on_every_campaign() {
     assert!(installed.medals_for(None).is_some());
 }
 
+/// A title-wide medals mod that loads first does not take the art of a campaign that has its own.
+#[test]
+fn a_campaigns_own_mods_atlas_wins_over_a_title_wide_mods_whatever_the_load_order() {
+    needs_examples!();
+    let (wide, own) = (medals_mod(), atlas_mod());
+    let mut open = example();
+    open.mod_id = "test.medal-atlas".to_string();
+    for order in [[&wide, &own], [&own, &wide]] {
+        let installed = Installed::for_title(order, &[], oag_pulse::TITLE, &|_| true);
+        assert_eq!(
+            installed.medals_for(Some(&open)).unwrap().mod_id,
+            "test.medal-atlas"
+        );
+        assert_eq!(
+            installed.medals_for(None).unwrap().mod_id,
+            "test.hd-medals",
+            "the disc's campaign takes the title-wide art"
+        );
+    }
+}
+
 #[test]
 fn an_atlas_that_does_not_cut_into_its_rows_keeps_the_swatch() {
     let ask = |height| MedalAsk {

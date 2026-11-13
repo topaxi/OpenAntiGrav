@@ -1067,18 +1067,22 @@ pub struct MedalAsk {
     pub atlas: Option<Vec<u8>>,
     /// The mod carries campaigns of its own: its art is theirs, and the disc's campaign and
     /// other mods' campaigns keep the title's swatches (a mod with none, like HD's medals on
-    /// Pulse, is title-wide). Chosen, not measured.
+    /// Pulse, is title-wide).
     pub own_campaigns: bool,
 }
 
 impl Installed {
-    /// The medal art the screens of the campaign `open` (`None`: the disc's own) draw: the
-    /// first mod whose art is title-wide or belongs to that campaign.
+    /// The medal art the screens of the campaign `open` (`None`: the disc's own) draw: the art
+    /// of a mod that carries that campaign, else the first title-wide art. A mod's own art wins
+    /// over a title-wide mod's whatever order the mods load in.
     #[must_use]
     pub fn medals_for(&self, open: Option<&Custom>) -> Option<&MedalAsk> {
-        self.medals.iter().find(|ask| {
-            !ask.own_campaigns || open.is_some_and(|custom| custom.mod_id == ask.mod_id)
+        open.and_then(|custom| {
+            self.medals
+                .iter()
+                .find(|ask| ask.own_campaigns && ask.mod_id == custom.mod_id)
         })
+        .or_else(|| self.medals.iter().find(|ask| !ask.own_campaigns))
     }
 
     /// Reads and compiles every campaign the mods carry for `title`: a mod or

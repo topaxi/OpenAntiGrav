@@ -246,3 +246,24 @@ fn an_atlas_that_is_not_whole_rows_is_refused_by_name() {
     assert!(Atlas::of_mod("a".into(), false, Vec::new(), (64, 64)).is_err());
     assert!(Atlas::of_mod("a".into(), true, rows(), (64, 384)).is_ok());
 }
+
+/// The disc's atlas through the shared row logic is `hd_medal_frame`'s crop, for the title's own
+/// row order (HD's, and Omega's bottom-up one) and every tier and difficulty.
+#[test]
+fn a_title_atlas_frames_are_hd_medal_frames_for_every_tier_and_difficulty() {
+    let tiers = MedalTiers::standard();
+    for tier_rows in [[0, 1, 2], [2, 1, 0]] {
+        let art = MedalArt::Atlas(Atlas::of_title(ATLAS.to_string(), true, tier_rows));
+        for medal in [Medal::Gold, Medal::Silver, Medal::Bronze] {
+            for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+                assert_eq!(
+                    art.frame(tiers, medal, difficulty),
+                    Some(crate::campaign::hd::medal::hd_medal_frame(
+                        medal, difficulty, tier_rows
+                    )),
+                    "{tier_rows:?} {medal:?} {difficulty:?}"
+                );
+            }
+        }
+    }
+}

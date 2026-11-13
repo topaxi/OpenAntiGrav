@@ -99,8 +99,8 @@ per-difficulty = true               # one block of three tiers per difficulty
 - **Whose campaigns**: a mod that carries campaigns of its own (`campaigns/*.toml`) has its
   `[campaign-medals]` drawn on those campaigns' screens only; the disc's own campaign and other
   mods' campaigns keep the title's swatches. A mod with no campaigns (`official/hd-medals`) is
-  title-wide. Chosen, not measured: the original has no mods, and a campaign mod's art
-  repainting the disc's own campaign would be a surprise.
+  title-wide. A campaign's own mod wins over a title-wide one whatever order they load in, and a
+  campaign mod's art never repaints the disc's own campaign.
 - **Placement**: a 60 px atlas frame is drawn scaled to the hexagon's own rect (Pulse's
   `Outline_x_y`, 32 x 32 layout units), untinted, the same rect the swatch fills. Frames are 60 px
   tall at a 61 px row pitch.
