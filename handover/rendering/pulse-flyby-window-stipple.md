@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [pulse]
-updated: 2026-11-09
-summary: "Pulse flyby leftovers: authored Batch::depth_bias unapplied, the fade-in from white, weather under the flyby's section"
+updated: 2026-11-13
+summary: "Pulse flyby leftovers: the fade-in from white, weather under the flyby's section, depth precision of coplanar copies"
 categories: [rendering, gameplay]
 difficulty: medium (35)
 ---
@@ -14,10 +14,9 @@ The stipple itself is fixed: the flyby is masked by the section under its camera
 
 ## Open
 
-- **The authored depth bias is read and not applied**: `Batch::depth_bias` (`0..=9`) is on 5,605 of
-  67,638 PSP Pulse batches (glows, additive cones, trees, `greenfade`); the original shifts the
-  batch's depth range by `6 * bias` (live: `minz = 1001 + 6 * bias`). Applying it orders those
-  batches against what they sit on; **first on-screen case found 2026-11-12**: Gemini Dam's tunnel ceiling light strips (bias 3 and 6) z-fight the ceiling in ours and are steady in the original (thread `gemini-dam-black-tunnel-ceiling-light-flickers`); otherwise unmeasured on screen, and `Mesh_InitBatch` is unread on Pure.
+- ~~**The authored depth bias is read and not applied**~~ landed 2026-11-13 (`gemini-depth-bias`): applied per vertex in
+  the original's depth units, Gemini Dam's tunnel light strip fixed, other circuits within 0.22 % of a frame
+  ([depth-bias.md](../../docs/rendering/depth-bias.md)). Unmeasured: `Mesh_InitBatch` on Pure.
 - **The opening second differs in a second way**: the original fades in from white over about 40
   frames (frames 6 to 45 of the capture are washed out; ours shows the full scene from tick 1).
   Not chased; it is visible on every circuit.
@@ -33,4 +32,3 @@ The stipple itself is fixed: the flyby is masked by the section under its camera
 ## Next Steps
 
 1. Run the blend probe over the later shots of each circuit, not only the opening.
-2. Decide separately whether `Batch::depth_bias` is applied.

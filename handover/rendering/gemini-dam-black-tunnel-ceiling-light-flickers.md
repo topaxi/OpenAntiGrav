@@ -1,10 +1,10 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
-updated: 2026-11-12
-summary: "Gemini Dam tunnel ceiling light z-fights ours only: the authored Batch::depth_bias (3, 6) is read, not applied; texture path matches"
-size: M (50)
-difficulty: medium (45)
+updated: 2026-11-13
+summary: "Gemini Dam tunnel strip: depth bias applied, ours continuous; owed: a side-by-side with the original, and the arch lights"
+size: S (25)
+difficulty: easy (20)
 ---
 
 # Gemini Dam Black: a tunnel ceiling light flickers rapidly
@@ -32,15 +32,17 @@ tunnel's ceiling strips; the measure lane (2026-11-12) found the cause at the lo
   `msroot:\PSP\GAME\UCES00465\`; Gemini Dam Black is Track Select entry 30 of 32 (`docs/formats/dlc-pack.md`).
   The grid state is `data/saves/pulse-psp/single-race-gemini-dam-black-grid.ppst` (USA serial).
 
+## Landed
+
+- **The authored `Batch::depth_bias` is applied** (2026-11-13, `gemini-depth-bias`): ours at spline row 1205 draws one
+  continuous strip at four camera offsets 0.05 units apart, where it was cut into changing dashes
+  ([`docs/rendering/depth-bias.md`](../../docs/rendering/depth-bias.md)). The other biased surfaces on 66 race frames
+  moved by at most 0.22 % of a frame.
+
 ## Open
 
-- **Applying the bias in `oag-mesh`**: the original's bias is `sceGuDepthRange(1001 + 6 * bias, 64946 + 6 * bias)` on a 16-bit
-  `GREATER` depth buffer with near 1.2 and far 2000, so it is a **constant in the original's depth units, not in world
-  units** (about 1.2 depth levels per unit at 250 units). It needs a per-batch constant offset in ours' depth encoding
-  (a per-batch uniform or vertex attribute added in the vertex shader after projection, or one pipeline per bias value `1..=9`
-  with `DepthBiasState`), and the two-pass opaque/cutout draw of a duplicated batch tied the same way. Not done here: the change
-  reaches every biased batch on the disc (5,605 of 67,638), so it wants a pass over the glow, additive-cone, tree and
-  `greenfade` surfaces, which is the open item of the flyby thread (`pulse-flyby-window-stipple`).
+- **Ours after the fix against the original's crop** at row 1205 and row 1427 (nodes 122, 123) was not laid side by
+  side: the fix was checked against ours before it, not against a new capture of the original.
 - **The arch ceiling lights** (`screen1_GLOW` 4 cells at 12.5 frames, `screen3` 60-frame loop; nodes 89, 181, 275, 393, 405)
   were measured in the original's texture updater only; their frames were not compared (they hang above the chase camera).
   They carry no depth bias in the header read here, so they are not this defect; if the maintainer's light is one of them,
@@ -48,11 +50,5 @@ tunnel's ceiling strips; the measure lane (2026-11-12) found the cause at the lo
 
 ## Next Steps
 
-1. Wire `Batch::depth_bias` into the mesh draw (address of the data: `oag_vex::vex::Batch::depth_bias`, `crates/vex/src/vex.rs`;
-   the original's setter `FUN_0891e988`, `mesh-draw.md`). Ship it as a render-profile setting only if it moves other circuits'
-   pictures; see `docs/rendering/batch-cull.md`.
-2. Acceptance: ours at spline row 1205 (`--pose=-653.037,-153.7,214.494`, `--anim-seconds 0.5`) shows the continuous strip at
-   four camera offsets of 0.05 units, the same crop of the original. A test pins the bias value fed to the draw for a
-   batch with `depth_bias 3` and `0`, red before.
-3. Re-run `oag-game --race` on `12_Track` with the DLC (`--dlc`) and check that the other biased surfaces
-   (`col_lights`, `greenfade`, additive cones) did not move for the worse.
+1. Ask the maintainer to fly Gemini Dam Black through the long tunnel and say whether the flicker is gone.
+2. If it is, delete this thread; if a light still flickers, it is the arch lights: capture a nose-up pose in the original.

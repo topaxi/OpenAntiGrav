@@ -9,7 +9,7 @@ import package::bindings::{uniforms};
 // depth is `C + 76,779 / w` (`w` the view distance; 76,779 = 63,945 / 2 * 2.4014, the
 // projection's `proj[14]`), larger being nearer under the `GREATER` test. Adding `6 * bias`
 // levels is therefore adding `6 * bias / 76,779` to `1 / w`: a shift in the **original's** depth
-// units, which is a different distance at each range (about 15 units at 250 for a bias of 3,
+// units, which is a different distance at each range (about 14 units at 250 for a bias of 3,
 // 0.1 units at 20).
 //
 // Ours is the same hyperbola, `d = alpha + beta / w`, with its own `alpha` and `beta` (any
