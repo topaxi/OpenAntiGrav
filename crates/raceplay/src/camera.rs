@@ -39,6 +39,30 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
     -from_disc
 }
 
+/// [`chase_params`] with the craft scale a `mode` race on `title` flies ([`craft_scale`]).
+#[must_use]
+pub fn chase_params_for(
+    block: handling::ExternalCamera,
+    title: &oag_title::Title,
+    mode: oag_race::Mode,
+) -> ChaseParams {
+    ChaseParams {
+        craft_scale: craft_scale(title, mode),
+        ..chase_params(block)
+    }
+}
+
+/// The chase rig's craft scale for a `mode` race on `title`: the title's Detonator
+/// scale in that mode, the `0.75` every racing title writes otherwise (see
+/// [`chase_params`]).
+#[must_use]
+pub fn craft_scale(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
+    match (mode, title.race.detonator) {
+        (oag_race::Mode::Detonator, Some(detonator)) => detonator.camera_scale,
+        _ => oag_physics::hover::TARGET_GLOBAL_SCALE,
+    }
+}
+
 /// One `<ExternalCamera*>` block as the renderer's [`ChaseParams`].
 ///
 /// Both external views go through this, so [`chase_pos_length`] is applied to
@@ -101,9 +125,9 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// Pulse's, run at `1.0`: their authored distance is *also* what the scale shrinks,
 /// so their eye sits 8.3 to 9.6 units back, as it does here.
 ///
-/// **One difference is not implemented.** HD's and 2048's constructors write `0.7`
-/// instead of `0.75` when the game mode is `14` (Detonator), and this crate has no
-/// Detonator mode to read it from. The Pulse and Pure scale does not vary by mode.
+/// **One mode differs.** HD's and 2048's constructors write `0.7` instead of `0.75` when
+/// the game mode is `14` (Detonator); [`craft_scale`] applies it from the title's
+/// `oag_title::Detonator::camera_scale`. The Pulse and Pure scale does not vary by mode.
 ///
 /// **`<InternalCamera>` is deliberately *not* scaled** - see
 /// `oag_render::camera::internal`. The original's internal rig reads this global
@@ -860,4 +884,19 @@ pub(super) fn finish_vertical_fov(
         2.0 * ((authored * 0.5).tan() * widen).atan()
     };
     oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::craft_scale;
+    use oag_race::Mode;
+
+    /// `0.7` in a Detonator race on a title that offers one, `0.75` in every other race.
+    #[test]
+    fn detonator_pulls_the_chase_rig_in_where_the_title_has_it() {
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_2048::TITLE, Mode::Detonator), 0.7);
+        assert_eq!(craft_scale(oag_hd::TITLE, Mode::TimeTrial), 0.75);
+        assert_eq!(craft_scale(oag_pulse::TITLE, Mode::Detonator), 0.75);
+    }
 }

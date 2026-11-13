@@ -528,6 +528,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         Mode::Eliminator => 4,
         Mode::Tournament => 5,
         Mode::Head2Head => 6,
+        Mode::Detonator => 7,
     });
     hasher.write_u32(*lap);
     write_option_u32(hasher, *laps_target);

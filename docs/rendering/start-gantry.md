@@ -2981,5 +2981,5 @@ panel on which the loop icon's light pieces assemble, as HD's Zone board is desc
 (`start_gantry_clock_inherit_ground_truth.rs`: the clock line and that `3`, `2`, `1` and `GO` light different vertices, on
 Omega's default circuit and Tech De Ra and on 2048's thirteen HD-ported circuits). **Open:** the Zone Battle, Detonator and
 2048 Combat boards (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_2048_Combat.vex`): their files build and
-the substitution is read, and `Adverts::mode_gantries` lists each (`every_omega_mode_board_resolves_to_an_authored_vex`, `every_2048_mode_board_resolves_to_an_authored_vex` read them off the disc), but this engine has no `Mode` for them, so only Zone is selected (`gantry_mode`); the digits' phase
+the substitution is read, and `Adverts::mode_gantries` lists each (`every_omega_mode_board_resolves_to_an_authored_vex`, `every_2048_mode_board_resolves_to_an_authored_vex` read them off the disc), but this engine has no `Mode` for Zone Battle or Combat, so only Zone and (since 2026-11-13, on HD too) Detonator are selected (`gantry_mode`); the digits' phase
 against the original on either title; FINAL LAP and the chequered flag on the node-driven `321Go_2048.vex`.

@@ -1467,6 +1467,9 @@ Zone's fifteen-stage speed-class ladder": it has its own fifteen-step
 escalation and consumes the table one row per step. The `Start` row is the
 pre-race state, never selected once the counter is constructed at `1`.
 
+**Settled later**: `+0x7001` is the player craft's one-tick forward line-crossing pulse, so the
+stage steps once per completed lap ([detonator-mode.md](detonator-mode.md)). The original note:
+
 **Not settled**: what sets `raceState->+0x7001`. Eleven instructions across
 the binary touch that offset and ten are `lbz`; the single `stb`
 (`0x000e4ac8`, in `FUN_000e4a30`) writes `0`, a clear. So the latch is set

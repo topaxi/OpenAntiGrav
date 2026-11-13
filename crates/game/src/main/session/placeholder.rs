@@ -198,7 +198,7 @@ impl Session {
             tracks,
             teams: team_choices,
             languages: Vec::new(),
-            modes: menu::mode_choices(&strings),
+            modes: menu::mode_choices(&strings, title),
             kill_targets: Vec::new(),
             score_targets: Vec::new(),
             weapons: Vec::new(),

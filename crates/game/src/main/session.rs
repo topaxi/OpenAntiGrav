@@ -1139,7 +1139,7 @@ impl Shell {
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
-            modes: menu::mode_choices(&boot_shell.strings),
+            modes: menu::mode_choices(&boot_shell.strings, title),
             kill_targets: (boot_shell.race_setup.kill_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),

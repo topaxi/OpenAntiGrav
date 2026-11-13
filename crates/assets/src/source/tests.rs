@@ -112,6 +112,7 @@ const TITLE: &Title = &Title {
         game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
+        detonator: None,
         // Unread here too: nothing in this crate resolves a team's variant.
         team_variants: None,
         guest_roster: None,

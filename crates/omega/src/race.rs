@@ -131,6 +131,16 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     },
     zone_stage_textures: None,
     zone_sky: None,
+    // The same stage law as HD's and 2048's (`FUN_012a0fc0`); Omega draws no Zone grade
+    // yet, so Detonator's (`Data/zoneenvironmenthdfury/DetonatorModeHDFury*.effectSettings`,
+    // shipped) is not drawn either. The camera scale is HD's, **inherited from HD**: Omega's
+    // craft constructor was not read for it.
+    detonator: Some(&oag_title::Detonator {
+        palette: None,
+        fallback_palette: None,
+        stage_textures: None,
+        camera_scale: 0.7,
+    }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
     hull_variants: None,

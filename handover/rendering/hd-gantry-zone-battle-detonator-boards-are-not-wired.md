@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-12
-summary: "Zone Battle and Detonator need Modes before their start boards draw; Zone release 210/190 tick question unmeasured"
+updated: 2026-11-13
+summary: "Detonator board wired with its Mode; Zone Battle still needs a Mode; Zone release 210/190 tick question unmeasured"
 categories: [rendering, gameplay]
 difficulty: medium (30)
 ---
@@ -16,8 +16,10 @@ panel was the Zone grade replacing the quad's albedo, not the model. See `docs/r
 
 ## Open
 
-- **`oag_race::Mode` has Zone only.** Zone Battle (`GetMode()` 13, and 21 on the PS4) and Detonator (14)
-  need modes before their boards can be chosen; the rule is `oag_title::adverts::Adverts::mode_gantries`, which is a
+- ~~Detonator (14) needs a mode~~: **wired 2026-11-13** (`Mode::Detonator`, `gantry_mode`; HD's
+  `321go_hd_detonator.vex` is the one `DATA00` copy). Its 210 assembly ticks are Zone's, chosen.
+- **Zone Battle has no `Mode`.** Zone Battle (`GetMode()` 13, and 21 on the PS4) needs one before its
+  board can be chosen; the rule is `oag_title::adverts::Adverts::mode_gantries`, which is a
   `Mode::Zone` rule today and would become a table by mode id. Files: `321Go_HD_Zone_Battle.vex`,
   `321Go_HD_Detonator.vex`; both are loaded as a card the same way, and each probably needs its own check
   of which `DATA0N` copy is live (the game's own load order is last-wins, `data00` last).
@@ -40,4 +42,4 @@ panel was the Zone grade replacing the quad's albedo, not the model. See `docs/r
 1. Capture the Zone release on a host where RPCS3 runs (`rpcs3-drive.py countdown --nav "Single
    Player=right,right,right,right,right,cross"`) and compare: the loop's brightness, the 210/190 tick
    question, what the board does after `GO`.
-2. When Zone Battle and Detonator gain `Mode`s, add them to the chooser and repeat the copy check.
+2. When Zone Battle gains a `Mode`, add it to the chooser and repeat the copy check.

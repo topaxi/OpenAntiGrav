@@ -45,6 +45,11 @@ pub(super) fn resolve(
     craft_title: &'static oag_title::Title,
     report: &mut Vec<String>,
 ) -> Result<Inputs> {
+    anyhow::ensure!(
+        options.mode != oag_race::Mode::Detonator || title.race.detonator.is_some(),
+        "{} has no Detonator mode",
+        title.name
+    );
     if let Some(path) = &options.foreign_track {
         return foreign(path, options, archives, title, craft_title, report);
     }

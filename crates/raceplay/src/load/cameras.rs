@@ -8,7 +8,9 @@
 use super::*;
 
 /// The far chase rig, the close one, and the cockpit, with their report lines.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn resolve(
+    title: &oag_title::Title,
     stats: &oag_tables::handling::Stats,
     stats_name: &str,
     options: &Options,
@@ -18,12 +20,13 @@ pub(super) fn resolve(
     report: &mut Vec<String>,
 ) -> (ChaseParams, ChaseParams, InternalParams) {
     let far = stats.external_camera_far;
-    let chase = chase_params(far);
+    let chase = crate::camera::chase_params_for(far, title, options.mode);
     // The other two views the player can cycle to, read from the same document
     // and through the same conversion - so the sign convention is reconciled in
     // exactly one place for both external blocks, which is what
     // `chase_pos_length` exists for.
-    let chase_close = chase_params(stats.external_camera_close);
+    let chase_close =
+        crate::camera::chase_params_for(stats.external_camera_close, title, options.mode);
     let internal = InternalParams {
         fov: stats.internal_camera.fov,
         headtilt: stats.internal_camera.headtilt,

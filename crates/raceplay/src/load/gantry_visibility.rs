@@ -9,11 +9,12 @@
 use super::super::*;
 
 /// The start-board mode of a race mode, for the modes this engine runs that a title
-/// gives a board of their own. Zone Battle, Detonator and Combat have no `Mode` yet,
-/// so their boards stay listed in the title's table and nothing selects them.
+/// gives a board of their own. Zone Battle and Combat have no `Mode` yet, so their
+/// boards stay listed in the title's table and nothing selects them.
 fn gantry_mode(mode: Mode) -> Option<oag_title::adverts::GantryMode> {
     match mode {
         Mode::Zone => Some(oag_title::adverts::GantryMode::Zone),
+        Mode::Detonator => Some(oag_title::adverts::GantryMode::Detonator),
         _ => None,
     }
 }

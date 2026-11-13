@@ -80,6 +80,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.
     zone_sky: None,
+    detonator: None,
     // Pulse authors one roster and no *second directory* for any team in it.
     team_variants: None,
     guest_roster: None,
