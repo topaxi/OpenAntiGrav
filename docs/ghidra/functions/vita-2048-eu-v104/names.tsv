@@ -387,3 +387,11 @@
 0x812b40ba	function	GameModeBase_MarkChain	82	xp-award.md
 0x812b4872	function	GameModeBase_OnRaceEnd	78	xp-award.md
 0x810f041e	function	TouchCampaign_BuildEventButtons	72	xp-award.md
+0x811c4a06	function	Pilot_TakeDamage	75	xp-award.md
+0x811c42d2	function	XpAward_WeaponHit	75	xp-award.md
+0x811bd214	function	Pilot_ApplyPendingHit	70	xp-award.md
+0x811c2ad6	function	Pilot_UpdateLapProgress	72	xp-award.md
+0x811c2800	function	Race_RecordSplit	72	xp-award.md
+0x812bbeb2	function	Race_SortPlaces	72	xp-award.md
+0x81175fc8	function	Race_UpdateLaunchGrade	80	xp-award.md
+0x811bf07e	function	Ship_UpdateStartBoost	78	xp-award.md

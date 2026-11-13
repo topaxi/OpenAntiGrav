@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-13
-summary: "2048 XP: tally banks 26 of 78 awards, rank gates reveals, end-race XP block draws; Omega --event banks too; Omega map, 52 awards, Omega rank UI open"
+summary: "2048 XP: tally banks 26 of 78 awards; the other 52 read (29 ready, 10 never paid); hidden-event promotion read; Omega map, rank UI open"
 ---
 
 # 2048 profile XP and rank
@@ -44,8 +44,12 @@ the query the campaign map calls.
   `Finished Nth` pays in every mode; the original's mode to column map (we use race for race and
   Speed Lap, elim, zone by `EventKind`). `FUN_812b4872` (the race-end hook) does not show them:
   the awards are issued before it, from the event objects.
-- **When the original promotes a hidden event to progress 1** is unread (`Campaign_UnlockEvents`
-  promoted none on map entry at rank 50).
+- **Hidden-event promotion, read (80)**: `Campaign_UnlockEvents` runs at race end (after the XP is
+  banked) and when the map builds its buttons; a non-chain event at progress 0 whose rank threshold
+  and required event pass goes to 1 if hidden, else 2 (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`,
+  "When a hidden event is promoted"). Ours asks at boot only; wire the race-end trigger by asking
+  `Store::rank_reveals` again after `Store::bank_event_xp`. Live confirmation open: write the XP total
+  before the first map entry of a Vita3K boot and read a side challenge's `+0x2d8` (expect 1).
 - **Omega events bank** (`oag_title::Campaign::event_track_dir`, `omega_event_xp_ground_truth`):
   `load_event` opens any title that ships `SP.xml` events (2048, Omega), so an Omega `--event`
   carries Omega's `XPAwards.xml` and banks into the shared total; ranks use Omega's own
@@ -64,9 +68,13 @@ the query the campaign map calls.
 ## Next Steps
 
 
-1. In-race awards: read the next unwired trigger (pilot flags `+0x60a4` bits `0x20` and
-   `0x1000000`, `+0x6128`, `+0x6f3c`'s initial value, the weapon-type case map of `0x811c42d2` /
-   `0x811bd214`) and add it to `XpTally`; Speed pad and Perfect lap are the cheapest.
+1. In-race awards, ready to wire into `XpTally` (laws and addresses on `xp-award.md`, "The other 52
+   award triggers"): Perfect lap (5, a lap with no damage), full health at the line (44), Taken
+   1st/2nd/3rd (21-23, once per race, best place starts at 99), N seconds ahead (45-47, single player,
+   first rival's gap at a split), Boost start (11, launch grade 2), Weapon pad (8), Hit with X (12-20,
+   AI victim of a human-fired weapon), Shielded against X (32-40). Note the gate differs: 11 and
+   45-47 skip `FUN_8100d2a6`. Never paid in v1.04, do not wire: 59-61, 65-70, 77.
+   Still unread (address and recipe on the page): 4, 7 (`+0x6128`), 58, 62, 63-64, 71-76.
 2b. The in-race `AwardXP` `+N` popup (HUD, `Hud_UpdateXpLines`), and the two readouts above once a host screen is found.
 2. Omega: read the map `Campaign2048_Definition.xml` (`FE3DCanvas`/`linkedevent`) into the campaign
    map, launch its events through `load_event`, and call `Store::rank_reveals` against Omega's ranks;

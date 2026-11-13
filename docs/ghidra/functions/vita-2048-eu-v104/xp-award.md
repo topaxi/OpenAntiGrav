@@ -124,26 +124,26 @@ tally and banks its total.
 | 1 | Event complete- ELITE | **wired** at the finish, `0x812b3f90` (flags 0,0, joins the chain); Pass or Elite by medal, **chosen** |
 | 2 | Finished multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
 | 3 | Won multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
-| 4 | Barrel roll | unwired (condition head unread, `0x811bf7aa`) |
-| 5 | Perfect lap | unwired (pilot flag `+0x60a4 & 0x20` unread, `0x811c2ad6`) |
+| 4 | Barrel roll | **read**, unwired: a completed roll (after the roll boost `+0x6104` is stored), human, gate, local slot `+0x7060 == 0`; `0x811c03d6` in `FUN_811bf7aa` (65) |
+| 5 | Perfect lap | **read, ready**: lap completed with the damage flag `+0x60a4 & 0x20` clear, human, gate; `Pilot_UpdateLapProgress` `0x811c38a0` (78) |
 | 6 | Opponent destroyed | **wired** (`0x812ccfe0`, `0x8123b5ea`, `0x811c4a06`: human killer, `FUN_8100d2a6`); fed from `Standing::kills` |
-| 7 | Speed pad hit | unwired (extra suppressor `pilot+0x6128 == 0` unread, 26 readers, `0x811ccdf4`) |
-| 8 | Weapon pad hit | unwired (condition head unread, `0x811c9c7a`) |
+| 7 | Speed pad hit | **read**, unwired: pad hit, human, gate, and `pilot+0x6128` byte 0 (that flag still unread); `0x811cd052` (60) |
+| 8 | Weapon pad hit | **read, ready**: weapon pickup from a pad, human, gate; `0x811c9ee8` (75) |
 | 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
 | 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
-| 11 | Boost start | unwired (flag `*(+0x5640)+0x595` unread, `0x81175fc8`) |
-| 12 | Hit with Rocket | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 13 | Hit with Missile | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 14 | Hit with Plasma | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 15 | Hit with Cannon | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 16 | Hit with Mine | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 17 | Hit with Quake | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 18 | Hit with Bomb | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 19 | Hit with Leach Beam | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 20 | Hit with Light Barrier | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
-| 21 | Taken 1st! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
-| 22 | Taken 2nd! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
-| 23 | Taken 3rd! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
+| 11 | Boost start | **read, ready**: the perfect launch: human first-thrust edge inside `[windowStart, windowEnd)`; no gate; `Race_UpdateLaunchGrade` `0x811760de` (80) |
+| 12 | Hit with Rocket | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 0; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 13 | Hit with Missile | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 1; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 14 | Hit with Plasma | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 2; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 15 | Hit with Cannon | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 3; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 16 | Hit with Mine | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 4; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 17 | Hit with Quake | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 5; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 18 | Hit with Bomb | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 6; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 19 | Hit with Leach Beam | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 7; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 20 | Hit with Light Barrier | **read, ready**: an AI victim takes a weapon hit (`kind == 2`) fired by the human, attacker != victim, gate; weapon type 10; `XpAward_WeaponHit` `0x811c42d2` (75) |
+| 21 | Taken 1st! | **read, ready**: first time the human's place reaches 1 (best place `+0x6f3c` starts at 99), after crossing the line once, rivals > 1, gate; `Race_SortPlaces` `0x812bc06c` (75) |
+| 22 | Taken 2nd! | **read, ready**: as 21 for place 2, rivals > 2; `0x812bc090` (75) |
+| 23 | Taken 3rd! | **read, ready**: as 21 for place 3, rivals > 3; `0x812bc0a6` (75) |
 | 24 | Finished 1st! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 25 | Finished 2nd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 26 | Finished 3rd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
@@ -152,22 +152,22 @@ tally and banks its total.
 | 29 | Finished 6th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 30 | Finished 7th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
 | 31 | Finished 8th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
-| 32 | Shielded against Rocket | unwired (weapon-type case to award map, `0x811bd214`) |
-| 33 | Shielded against Missile | unwired (weapon-type case to award map, `0x811bd214`) |
-| 34 | Shielded against Plasma | unwired (weapon-type case to award map, `0x811bd214`) |
-| 35 | Shielded against Cannon | unwired (weapon-type case to award map, `0x811bd214`) |
-| 36 | Shielded against Mine | unwired (weapon-type case to award map, `0x811bd214`) |
-| 37 | Shielded against Quake | unwired (weapon-type case to award map, `0x811bd214`) |
-| 38 | Shielded against Bomb | unwired (weapon-type case to award map, `0x811bd214`) |
-| 39 | Shielded against Leach Beam | unwired (weapon-type case to award map, `0x811bd214`) |
-| 40 | Shielded against Light Barrier | unwired (weapon-type case to award map, `0x811bd214`) |
+| 32 | Shielded against Rocket | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 0; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 33 | Shielded against Missile | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 1; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 34 | Shielded against Plasma | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 2; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 35 | Shielded against Cannon | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 3; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 36 | Shielded against Mine | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 4; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 37 | Shielded against Quake | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 5; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 38 | Shielded against Bomb | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 6; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 39 | Shielded against Leach Beam | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 7; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 40 | Shielded against Light Barrier | **read, ready**: the human's shield absorbs a hit (record `+0x1f4 & 0x10`, shield up), gate; weapon type 10; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 41 | Held 1st for 30sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 42 | Held 1st for 20sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
 | 43 | Held 1st for 10sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
-| 44 | Cross Start/Finish Line with full health | unwired (health test unread, `0x811c2ad6`) |
-| 45 | 5 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
-| 46 | 10 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
-| 47 | 15 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
+| 44 | Cross Start/Finish Line with full health | **read, ready**: lap completed with health `+0x5634` at or above the ship's maximum; human, gate; `Pilot_UpdateLapProgress` `0x811c39a4` (75) |
+| 45 | 5 seconds ahead | **read, ready**: single player, the first rival crosses a split 5 to 10 s after the human; no gate; `Race_RecordSplit` `0x811c2a80` (75) |
+| 46 | 10 seconds ahead | **read, ready**: as 45, 10 to 15 s; `0x811c2aa8` (75) |
+| 47 | 15 seconds ahead | **read, ready**: as 45, 15 s or more; `0x811c2acc` (75) |
 | 48 | Hit Zone 10 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 49 | Hit Zone 20 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 50 | Hit Zone 30 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
@@ -178,26 +178,26 @@ tally and banks its total.
 | 55 | Hit Zone 80 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 56 | Hit Zone 90 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
 | 57 | Hit Zone 100 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
-| 58 | Air Time | unwired (condition unread, `0x811d0370`) |
-| 59 | No wreck for 30 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 60 | No wreck for 60 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 61 | No wreck for 90 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 62 | No wreck for entire event | unwired (condition unread, `0x8100bfba`) |
-| 63 | Shoot/Destroy Mine | unwired (`FUN_8120fae0` test unread, `0x811dfa0e`, `0x811fe134`, `0x812060a4`, `0x811f89fa`) |
-| 64 | Shoot/Destroy Bomb | unwired (`FUN_8120fae0` test unread, `0x811dfa0e`, `0x811fe134`, `0x812060a4`, `0x811f89fa`) |
-| 65 | No hits for 10 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 66 | No hits for 20 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 67 | No hits for 30 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 68 | No hits for 40 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 69 | No hits for 50 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 70 | No hits for 60 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
-| 71 | Successful Turbo | unwired (condition unread, `0x811bf07e`) |
-| 72 | Hit with cannon full clip | unwired (condition unread, `0x811e0b56`) |
-| 73 | Hit with all 3 rockets | unwired (condition unread, `0x81206f6e`) |
-| 74 | Evade Mine | unwired (`piVar12[0x13]` flag unread, `0x811f453e`) |
-| 75 | Evade Bomb | unwired (flag unread, `0x811dbb5a`) |
-| 76 | Evade Missile | unwired (condition unread, `0x811f89fa`) |
-| 77 | Evade Zombie | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 58 | Air Time | **read**, unwired: landing after more than 1.5 s airborne (`ship+0x534`), human; no gate; bare site `0x811d0370` (65) |
+| 59 | No wreck for 30 seconds | **never paid**: no call site in v1.04 passes 59 (census of all 82 calls, below) (75) |
+| 60 | No wreck for 60 seconds | **never paid**: as 59 (75) |
+| 61 | No wreck for 90 seconds | **never paid**: as 59 (75) |
+| 62 | No wreck for entire event | **read in part**: race-end results `FUN_8100bfba` `0x8100c4a0`, paid when `(r8+4) == 0`; the field is unread (50) |
+| 63 | Shoot/Destroy Mine | **read in part**: a projectile or plasma destroys a mine; 13 sites in five weapon functions (below), per-site tests unread (60) |
+| 64 | Shoot/Destroy Bomb | **read in part**: a projectile destroys a bomb; sites below, per-site tests unread (60) |
+| 65 | No hits for 10 seconds | **never paid**: as 59 (75) |
+| 66 | No hits for 20 seconds | **never paid**: as 59 (75) |
+| 67 | No hits for 30 seconds | **never paid**: as 59 (75) |
+| 68 | No hits for 40 seconds | **never paid**: as 59 (75) |
+| 69 | No hits for 50 seconds | **never paid**: as 59 (75) |
+| 70 | No hits for 60 seconds | **never paid**: as 59 (75) |
+| 71 | Successful Turbo | **read**, unwired: turbo ended with time since the last hit (`+0x60f8`) above the turbo's duration (weapon table `+0xfc`), human; `Ship_UpdateStartBoost` `0x811bf29e` (60) |
+| 72 | Hit with cannon full clip | **read**, unwired: hits from one cannon clip reach the clip size (weapon table `+0xa8`); `0x811e0e0a` (60) |
+| 73 | Hit with all 3 rockets | **read**, unwired: rocket hits reach 3 and the ship's rocket count (`+0x4a0`); `0x81207164` (60) |
+| 74 | Evade Mine | **read in part**: a mine's near-pass latch `+0x4c` set inside a distance window, paid on leaving it; `0x811f480a` (55) |
+| 75 | Evade Bomb | unwired: head unread, `0x811dbde8` in `FUN_811dbb5a` (45) |
+| 76 | Evade Missile | **read in part**: missile state `+0x64 == 1` and a distance test; `0x811f9352` in `FUN_811f89fa` (50) |
+| 77 | Evade Zombie | **never paid**: as 59 (75) |
 
 Not wired by anything here, in the original: the rank bar and the `RaceXP` popups.
 
@@ -300,3 +300,101 @@ after `Store::bank_event_xp`.
 flag at `+0x3cd`, and 1 versus 2 by vtable `+0xe8` or `+0x22c & 8`. Its two callers are the same
 pair: `FUN_0159dea0` and the campaign map's button builder `0x014e32c0`. Only the offsets differ.
 Omega's map does not launch events yet, so no Omega reveal is wired.
+
+## The other 52 award triggers (2026-11-13, lane `w2048-xp-unlock-re`)
+
+Ghidra `/2048/eboot-vita-2048-eu-v104.elf`, decompile and disassembly only, no live run: every
+score is at or under the rubric's 84 ceiling. The table in "In-race awards" carries each award's
+result; this section is the evidence. "Gate" is `FUN_8100d2a6` (that section), "human" is
+`pilot+0x58dc == 0`. "Ready" means the trigger is read well enough to wire.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x811c4a06` | `Pilot_TakeDamage` | 75 |
+| `0x811c42d2` | `XpAward_WeaponHit` | 75 |
+| `0x811bd214` | `Pilot_ApplyPendingHit` | 70 |
+| `0x811c2ad6` | `Pilot_UpdateLapProgress` | 72 |
+| `0x811c2800` | `Race_RecordSplit` | 72 |
+| `0x812bbeb2` | `Race_SortPlaces` | 72 |
+| `0x81175fc8` | `Race_UpdateLaunchGrade` | 80 |
+| `0x811bf07e` | `Ship_UpdateStartBoost` | 78 |
+
+**The census (negative for 59-61, 65-70 and 77, confidence 75).** `Profile_AwardXP` has 82 direct
+calls and no other reference. Each call's index register was read off the instruction before it
+(a scan of 34 sites, with six of them re-read by hand, plus the sites the earlier lane read):
+every one is a literal except three bounded expressions: `Finished Nth` is `place + 0x17` (24 to
+31; `0x8100c33c`, `0x812bbdc2`) and `Hit Zone N` is `0x2f + zone/10` (48 to 57; `0x812c4310`).
+No call can pass 59, 60, 61, 65 to 70 or 77. **"No wreck for 30/60/90 seconds", "No hits for 10 to
+60 seconds" and "Evade Zombie" are authored in `XPAwards.xml` and never paid by this executable**;
+an indirect call through a pointer is the only way left open, and none was found. Omega agrees for
+the two indices checked: no caller of its `AwardXP` (`0x01667e30`, 51 calls) loads `ESI` with 0x3b
+or 0x41.
+
+**Damage and the perfect lap (78).** `Pilot_TakeDamage` (`0x811c4a06`, pilot, kind, weapon type,
+amount in `s0`; the decompiler gives up on it, read as disassembly) sets `+0x60a4 |= 0x20 | 0x400000`
+on any damage above 0 (`0x811c4ed2`), plus `0x1000000` when `FUN_810018d4` (a mode test) holds, and
+zeroes the time since the last hit `+0x60f8` (`0x811c4cca`). `Pilot_UpdateLapProgress`
+(`0x811c2ad6`, per pilot per frame) on a completed lap (the lap counter `+0x6e50` reaching the
+expected `+0x6e54`; the first crossing at the start only arms it) pays, for a human through the gate:
+`Perfect lap` when `0x20` is clear (`0x811c38a0`; it also counts a profile stat and fires trophy 0x36
+at ten), then `Cross Start/Finish Line with full health` when the ship's maximum health (ship table
+`+0x80`, class slot `+0x98`) is at or below the health `+0x5634` (`0x811c39a4`), and then clears
+`0x20`. So the earlier lane's open `+0x60a4 & 0x20` is "damaged this lap", and `0x1000000` is that
+same damage edge in the modes `FUN_810018d4` selects (the zone family, which our `zone_dirty`
+stands for).
+
+**Weapon hits (75).** `Pilot_TakeDamage` calls `XpAward_WeaponHit(victim, attacker index, kind,
+weapon type)` at `0x811c4cc0` only when the victim is not human (`+0x58dc` neither 0 nor 2); the
+attacker index is the hit record's `+0x12c`. It pays when `kind == 2`, the attacker is human, the
+attacker is not the victim (`+0x58d4`) and the gate passes. Weapon type to award: 0 Rocket (12), 1
+Missile, 2 Plasma, 3 Cannon, 4 Mine, 5 Quake, 6 Bomb, 7 Leach Beam (19), 10 Light Barrier (20); 8
+and 9 pay nothing. This is a third enum, neither `WeaponType`'s bits
+([weapon-type-bits.md](weapon-type-bits.md)) nor the held-weapon id: read off the case order against
+the award names, and Leach Beam = 7 is checked a second way (only type 7 copies the record's `+0x124`
+to the leech target, in `Pilot_ApplyPendingHit`).
+
+**Shield (72).** `Pilot_ApplyPendingHit` (`0x811bd214`, per frame) resolves the pending hit record
+`+0x557c` (amount `+0xf4`, type `+0x128`): unshielded it goes through the pilot's damage call (vtable
+`+0x30`); with record `+0x1f4 & 0x10` and the shield up (`pilot[0x196c]+0xf4`) it is absorbed, and a
+human through the gate gets `0x20 + type` (same type order as the hits).
+
+**Taken Nth (75).** `Race_SortPlaces` (`0x812bbeb2`, race phase above 1) bubble-sorts the pilots;
+then for each place `i` (1-based) a human pilot that has crossed the line once (`+0x6640`) and whose
+best place `+0x6f3c` is worse than `i` takes `i` as its best and, through the gate, is paid `Taken
+1st` (`i == 1`, more than one pilot), `2nd` (more than two) or `3rd` (more than three). The best place
+is set to 99 at pilot reset (`0x811b8c28`, `0x811baa0e`), so each pays at most once per race and the
+first evaluation after the start pays the place held then.
+
+**N seconds ahead (75).** `Race_RecordSplit(pilot, split)` keeps one record per lap and split (three
+splits a lap; the line is split 0) in the race object (`+0xfb7c`). Single player only
+(`DAT_8154135c == 0`). The human crossing first stores the race clock; when a rival is the first
+non-human to cross that split afterwards, the gap is the clock minus the human's time: 15 s or more
+pays 47, 10 to 15 s pays 46, 5 to 10 s pays 45. There is no gate here.
+
+**Boost start (80).** `Race_UpdateLaunchGrade` (`0x81175fc8`) is Pulse's launch grader
+([launch-boost.md](../../../physics/launch-boost.md)) with the same four windows, read from
+`windowStart`, `windowEnd`, `stallEnd` and `overallDuration` by `Handling_ReadGlobalSettings`
+(`0x811ad82c`, keys at `0x814901e4`): a human whose first-thrust edge (`ship+0x595`, the analogue of
+Pulse's `+0x2d5`) lands in `[windowStart, windowEnd)` gets grade 2 and award 11 (`0x811760de`). No
+gate. `Ship_UpdateStartBoost` (`0x811bf07e`) reads the grade `+0x58e0` into the multiplier
+`+0x548` exactly as Pulse's does, and also holds the turbo award (71).
+
+**Others.** Barrel roll, speed pad, weapon pad, air time, cannon clip, three rockets: the address
+and condition are in the table. `+0x6128` (speed pad) is reset at pilot init (`0x811ba22a`) and
+copied to the HUD (`0x811b21b4`); its writers `0x812cbbe8`, `0x812cbd20` (`FUN_812cb4da`) and
+`0x811920b6` are the next read. Mine and bomb destroyed: 63 at `0x811dfd1a`, `0x811dfdd0`,
+`0x811e02b4`, `0x811e0516`, `0x811fe416`, `0x811fe4d4`, `0x81206388`, `0x812063d8`, `0x811f9180`,
+`0x811f9196`; 64 at `0x811e01b0`, `0x811e038a`, `0x811e0412`, `0x811e05ec`, `0x811fe7c6`,
+`0x811fe894`, `0x812066e6`, `0x812067c6`, `0x811f8d20`, `0x811f8d36`, `0x811f8e36`, `0x811f8e4c`.
+Recipe for each "read in part" row: decompile the named function and follow the branch into the
+call site back to its first compare.
+
+**Ready to wire, in order of reach**: perfect lap (5), full health at the line (44), Taken 1st to
+3rd (21-23), N seconds ahead (45-47), boost start (11), weapon pad (8), weapon hits (12-20), shield
+(32-40). Ours already grades the launch (`crates/physics/src/launch.rs`); which of our signals stands for
+each other trigger is the wiring lane's check.
+
+**Omega: checked, applies, not wired.** Omega's `AwardXP` (`0x01667e30`, found through
+`AWARD_GROUP_CHAIN`) has 51 direct calls against 2048's 82. Spot checks use the same indices:
+`WeaponPads_TestCraft` pays 8 (`0x01305932`), `PlasmaManager_Update` pays 63 (`0x0135fae5`). Omega's
+event launch banks no in-race awards yet, so nothing is wired there.
