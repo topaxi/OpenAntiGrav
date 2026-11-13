@@ -17,7 +17,7 @@ use oag_pob::{Channel, ChannelMode};
 
 use super::{
     Atlas, Blend, ColourMode, ColourScale, Direction, Effect, EmitterSpec, FrameAdvance,
-    MAX_EMITTER_STATES, Render, Spawn, Sprite, StreakDraw, playback,
+    MAX_EMITTER_STATES, Playing, Render, Spawn, Sprite, Stage, StreakDraw, playback,
 };
 
 /// `[toml-schema]` kind and major.
@@ -41,6 +41,35 @@ pub enum Axis {
     Rear,
     /// Up out of the craft.
     Up,
+}
+
+impl Axis {
+    /// The world direction this axis names for a craft whose back end points along `rear`
+    /// and whose roof along `up`.
+    pub fn direction(self, rear: Vec3, up: Vec3) -> Vec3 {
+        match self {
+            Axis::Rear => rear,
+            Axis::Up => up,
+        }
+    }
+}
+
+impl Stage {
+    /// [`Self::play`] for a mod's `fire-effect`: the burst takes the direction its file's
+    /// [`Axis`] names (`rear` or `up` of the craft it is fired at). Title bursts keep to
+    /// `play` and [`Self::orient`], which addresses attached instances alone.
+    pub fn play_aimed(
+        &mut self,
+        effect: &std::sync::Arc<Effect>,
+        point: Vec3,
+        axis: Axis,
+        rear: Vec3,
+        up: Vec3,
+    ) -> Option<Playing> {
+        let playing = self.play(effect, point, 1.0)?;
+        self.orient_surface(playing, axis.direction(rear, up));
+        Some(playing)
+    }
 }
 
 /// A parsed effect file: the effect and how to aim it.

@@ -364,6 +364,46 @@ fn a_held_surface_takes_its_orientation() {
     );
 }
 
+/// A mod's `fire-effect` burst takes the direction its file's `axis` names: `play` then
+/// `orient` left it on world up, since `orient` addresses attached instances alone.
+#[test]
+fn a_fired_mod_effect_takes_the_axis_its_file_declares() {
+    use parametric::Axis;
+    let mut spec = (*effect("sputter", true, 10.0)).clone();
+    spec.emitters[0].speed_per_tick = (1.0, 0.0);
+    let aimed = std::sync::Arc::new(spec);
+    let centre_of = |stage: &mut Stage, rng: &mut Rng| {
+        for _ in 0..8 {
+            stage.advance(DT, rng);
+        }
+        let (additive, _) = stage.vertices(Vec3::Z, Vec3::Y);
+        assert!(!additive.is_empty(), "nothing was emitted");
+        additive
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / additive.len() as f32
+    };
+    let mut rng = Rng::new(5);
+    for (axis, along) in [(Axis::Rear, Vec3::X), (Axis::Up, Vec3::Z)] {
+        let mut stage = Stage::new();
+        stage
+            .play_aimed(&aimed, Vec3::ZERO, axis, Vec3::X, Vec3::Z)
+            .expect("play_aimed");
+        let centre = centre_of(&mut stage, &mut rng);
+        assert!(centre.dot(along) > 1.0, "{axis:?}: {centre:?}");
+        assert!(
+            (centre - along * centre.dot(along)).length() < 0.5,
+            "{axis:?} drifted off its axis: {centre:?}"
+        );
+    }
+
+    let mut stage = Stage::new();
+    let title = stage.play(&aimed, Vec3::ZERO, 1.0).expect("play");
+    stage.orient(title, Vec3::X);
+    let centre = centre_of(&mut stage, &mut rng);
+    assert!(centre.x.abs() < 0.5, "a title burst stays on its own up");
+}
+
 /// One live streak particle, head at `position` and tail at `origin`.
 fn streak_particle(position: Vec3, origin: Vec3) -> Particle {
     Particle {

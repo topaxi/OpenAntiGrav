@@ -192,10 +192,15 @@ Open from it, each small:
    `Stage::orient_surface` addresses a held surface by its generation
    (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself
    stays attached-only, on purpose: the wreck debris and smoke (`wreck_fx`) `play` then `orient`
-   and today ignore it, so widening `orient` would change a title visual nobody measured. Open,
-   small: a mod effect fired by `fire-effect` (`Fired::Own`, `play` + `orient`) still ignores
-   its `axis` (`wall-penalty`'s `sputter.toml` is `rear`); fix it on `orient_surface` and look
-   at a frame.
+   and today ignore it, so widening `orient` would change a title visual nobody measured. Landed
+   (lane mod-effect-axis): a mod effect fired by `fire-effect` (`Fired::Own`) takes the `axis`
+   its file declares through `Stage::play_aimed` (`play` + `orient_surface`; mod effects only,
+   a title's `Fired::Title` still plays unoriented)
+   (`psys::tests::a_fired_mod_effect_takes_the_axis_its_file_declares` and
+   `tests::extension_view::a_fired_mod_effect_leaves_its_craft_along_its_files_axis`, both red
+   before). Looked at: `wall-penalty`'s `sputter.toml` (`rear`) on Pulse PSP EU `16_Track`,
+   throttle held into the wall, far camera, tick 660: before, the smoke filled the whole view;
+   now a small dark puff sits behind the hull, on the rear side.
 4. ~~**A float target's values above 1 clamp in `engine_texture`**~~ Done for Omega and 2048
    (`mod_shader_draw::a_float_target_keeps_a_value_above_one`,
    `a_highlight_in_the_engine_texture_survives_a_pass_through`, each over Omega's and 2048's store); HD never had a value above 1 to
