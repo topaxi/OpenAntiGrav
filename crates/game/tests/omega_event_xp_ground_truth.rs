@@ -47,7 +47,10 @@ fn an_omega_event_launch_carries_omegas_award_table() {
 fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
     let Some(source) = source() else { return };
     let loaded = race::load_event(&options(&source), EVENT).expect("the event loads");
-    let progress = loaded.campaign_2048_event.clone().expect("an event fills this");
+    let progress = loaded
+        .campaign_2048_event
+        .clone()
+        .expect("an event fills this");
     let awards = progress.xp_awards.clone().expect("Omega's table");
     let mut run = race::Race::start(loaded.setup);
     run.arm_event_xp(&progress);
@@ -70,7 +73,10 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
         Some(place),
     );
     let pass = awards.xp(award::EVENT_PASS, progress.xp_column);
-    let nth = awards.xp(award::FINISHED_1ST + u32::from(place) - 1, progress.xp_column);
+    let nth = awards.xp(
+        award::FINISHED_1ST + u32::from(place) - 1,
+        progress.xp_column,
+    );
     assert!(pass > 0 && nth > 0, "the table authors both rows");
     assert_eq!(store.xp(), paid);
     assert!(paid >= pass + nth, "{paid} < {pass} + {nth}");
