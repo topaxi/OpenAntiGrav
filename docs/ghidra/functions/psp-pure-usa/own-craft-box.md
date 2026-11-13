@@ -7,8 +7,8 @@ surface probes on Pure, with which law and which box?
 
 **Answer: the box is there and the probe sees it, with Pulse's raycast, Pulse's transposed-frame
 gate and Pulse's box. What a box hit does to the projectile differs: on Pure it neither falls nor
-rides that update.** Confidence **85**, static (instruction-level identity with Pulse functions that
-were measured live, read 2026-11-13 on `/pure/BOOT-psp-pure-usa.BIN`). No live Pure capture.
+rides that update.** Confidence **84**, the rubric's ceiling for decompilation only (instruction-level
+identity with Pulse functions that were measured live, read 2026-11-13 on `/pure/BOOT-psp-pure-usa.BIN`). No live Pure capture.
 
 ## The probe goes through `Collision_RaycastWorld` with boxes in
 
@@ -23,7 +23,7 @@ FUN_08824a9c(world, from, &to, &hit, 0xffffffff, 0, 0)
 `0x08824a9c` is Pulse's `Collision_RaycastWorld` (`0x08816ac0`) line for line in the decompile:
 the step count `|to - from| * 0.01 + 1`, the broad-phase query on `world+0x444` (Pulse `+0x440`),
 the per-collider filter `index != skip && (collider+0x6c != 2 || flag)`, the shape-kind dispatch
-`1..2` mesh (`0x08823cc4`), `3` box (`0x08825aa4`), and the copy of the nearest hit to the caller's
+`1..2` mesh (`0x08823cc4`, Pulse's `Collision_RaycastMesh` by position; its body not read, so not named), `3` box (`0x08825aa4`), and the copy of the nearest hit to the caller's
 record. The fifth argument `0xffffffff` skips no collider and the seventh (`0`) leaves both mesh and
 box tests on: the same call Pulse's `Collision_SweepSegment` makes.
 
@@ -87,12 +87,11 @@ ride height is `6.0` (`0x40c00000`).
 
 | Address | Name | Confidence | Evidence |
 | --- | --- | ---: | --- |
-| `0x08824a9c` | `Collision_RaycastWorld` | 85 | Pulse `0x08816ac0` line for line |
-| `0x08825aa4` | `Collision_RaycastBox` | 85 | the table above |
-| `0x08823cc4` | `Collision_RaycastMesh` | 75 | the shape `1..2` arm of the dispatch, as Pulse `0x0881646c`; body not read |
-| `0x0885e348` | `Plasma_Update` | 85 | `+0xf0` velocity, `+0x110` carried normal, probe `12.0`, ride `6.0`, fall `50.0`, the `+0x124` ramp `min(0, x + 3 dt)` |
+| `0x08824a9c` | `Collision_RaycastWorld` | 84 | Pulse `0x08816ac0` line for line |
+| `0x08825aa4` | `Collision_RaycastBox` | 84 | the table above |
+| `0x0885e348` | `Plasma_Update` | 84 | `+0xf0` velocity, `+0x110` carried normal, probe `12.0`, ride `6.0`, fall `50.0`, the `+0x124` ramp `min(0, x + 3 dt)` |
 | `0x08822e28` | `Collision_AddBoxCollider` | 82 | sole caller of `0x08827038`; called from `0x08934b74`'s box arm as Pulse's |
-| `0x08827038` | `Collider_SetBoxDimensions` | 88 | three stores to `+0x1d0..+0x1d8`, Pulse `0x08818954` byte for byte |
+| `0x08827038` | `Collider_SetBoxDimensions` | 84 | three stores to `+0x1d0..+0x1d8`, Pulse `0x08818954` byte for byte |
 
 `Rocket_Update` (`0x0885f28c`) and `Missile_Update` (`0x0885cf30`) are named on their own pages.
 

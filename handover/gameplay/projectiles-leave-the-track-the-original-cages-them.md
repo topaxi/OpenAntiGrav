@@ -120,8 +120,8 @@ was not measured.
   page's seven records, reach 4.875 and 2.06, mag strip) and
   `projectile_cage_ground_truth::the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse`.
 - **The own-craft box on the other titles** (2026-11-13, `own-craft-box-other-titles`): each read on
-  its own executable, `OwnCraftBox` per title: Pure `Holds` (85, Pulse's box and gate, a box hit runs
-  no arm), 2048 and Omega `Absent` (85, mesh-only query, no window), HD left `PlasmaWindow` (65).
+  its own executable, `OwnCraftBox` per title: Pure `Holds` (84, Pulse's box and gate, a box hit runs
+  no arm), 2048 and Omega `Absent` (84, mesh-only query, no window), HD left `PlasmaWindow` (65).
   [projectile-floor.md](../../docs/gameplay/projectile-floor.md), "The other titles".
 
 ## Next Steps

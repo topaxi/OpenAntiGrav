@@ -458,10 +458,10 @@ title's own executable:
 | Title | Value | Confidence | What the executable does | Page |
 | --- | --- | ---: | --- | --- |
 | Pulse | `Falls` | 90 | the box hit is `0x7f`, the fall arm (live) | [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md) |
-| Pure | `Holds` | 85 | Pulse's raycast, gate and box, but the weapons branch on `kind == 1` themselves: a box hit runs neither the fall nor the ride, the bolt keeps its velocity | [own-craft-box.md](../ghidra/functions/psp-pure-usa/own-craft-box.md) |
+| Pure | `Holds` | 84 | Pulse's raycast, gate and box, but the weapons branch on `kind == 1` themselves: a box hit runs neither the fall nor the ride, the bolt keeps its velocity | [own-craft-box.md](../ghidra/functions/psp-pure-usa/own-craft-box.md) |
 | HD | `PlasmaWindow`, chosen | 65 | a box branch with Pulse's consequence, but the box's surface filter and row sign are open | [own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md) |
-| 2048 | `Absent` | 85 | the projectile query walks track meshes only | [own-craft-box.md](../ghidra/functions/vita-2048-eu-v104/own-craft-box.md) |
-| Omega | `Absent` | 85 | the same walk, read on its own binary | [own-craft-box.md](../ghidra/functions/ps4-omega-eu/own-craft-box.md) |
+| 2048 | `Absent` | 84 | the projectile query walks track meshes only | [own-craft-box.md](../ghidra/functions/vita-2048-eu-v104/own-craft-box.md) |
+| Omega | `Absent` | 84 | the same walk, read on its own binary | [own-craft-box.md](../ghidra/functions/ps4-omega-eu/own-craft-box.md) |
 
 `OwnCraftProbe::CraftBoxHolds` (Pure) skips the probe's arms and its cage question on an update the
 box blocks; `OwnCraftProbe::NoBox` (2048, Omega) lets every flyer, the Plasma included, probe from its

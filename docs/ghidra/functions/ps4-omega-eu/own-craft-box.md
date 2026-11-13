@@ -5,7 +5,7 @@ Question carried over from Pulse
 rotated frame"): does the firing craft's own box hide the track from a projectile's first probes?
 
 **Answer: no. Omega's projectile query tests track meshes only; a projectile probes the track from
-its first update.** Confidence **85**, static, read 2026-11-13 on `/omega/eboot-ps4-omega-eu.bin`
+its first update.** Confidence **84**, static (the rubric's ceiling for decompilation only), read 2026-11-13 on `/omega/eboot-ps4-omega-eu.bin`
 (clean x86-64 decompile).
 
 ## The query
@@ -43,7 +43,7 @@ attributed. No projectile query that includes boxes was found.
 
 | Address | Name | Confidence | Evidence |
 | --- | --- | ---: | --- |
-| `0x01257f00` | `Collision_SweepSegment` | 85 | the listing above |
+| `0x01257f00` | `Collision_SweepSegment` | 84 | the listing above |
 
 ## Cross-title (Omega and 2048)
 

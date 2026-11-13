@@ -6,7 +6,7 @@ rotated frame"): does the firing craft's own box hide the track from a projectil
 
 **Answer: no. 2048's projectile query tests track meshes only, so no craft box, the firer's or
 another's, can answer a probe; a projectile probes the track from its first update.** Confidence
-**85**, static, read 2026-11-13 on `/2048/eboot-vita-2048-eu-v104.elf`.
+**84**, static (the rubric's ceiling for decompilation only), read 2026-11-13 on `/2048/eboot-vita-2048-eu-v104.elf`.
 
 ## The query
 
