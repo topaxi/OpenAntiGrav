@@ -465,7 +465,7 @@ A mod may carry one WebAssembly rules module that runs in every race it is on fo
 simulation = true        # required with a rules module
 api = 1                  # the ABI the module was built against
 memory_pages = 2         # its maximum memory, 64 KiB pages (1 to 256; default 16)
-state_bytes = 16         # its state blob, at most 1,024 bytes
+state_bytes = 16         # optional: its state blob, at most 1,024 bytes; the module's `oag_state_len` is the default
 
 [extension.rules]
 module = "ext/wall_penalty.wasm"
@@ -556,7 +556,7 @@ whole interface a Rust mod needs: implement `oag_ext::Extension` (a `tick` readi
 state with `oag_ext::blob!`, and name the type in `oag_ext::export!`. No offsets, no
 codes, no `unsafe`; a command for an empty slot does not compile, and the common
 mistakes the host would fault on come back as `Err(Refused)`. The state's length is
-exported as `oag_state_len` and must equal `state_bytes` above. With the SDK's
+exported as `oag_state_len`: it is the length when `state_bytes` is left out, and must equal it when written. With the SDK's
 `test` feature as a dev-dependency, `oag_ext::test::Race` runs the mod's `tick`
 natively under `cargo test`, with no wasm toolchain. Build with
 `cargo build --release --target wasm32-unknown-unknown`, a 16 KiB stack

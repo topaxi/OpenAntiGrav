@@ -58,6 +58,13 @@ is `eye_ray(input.screen_uv) * d`, and the craft's frame is rigid (no scale, lea
 craft in a transit the frame is the line it is flown along ("A craft's own transit" below).
 `fx/wormhole.wgsl` of `oag.slipstream` draws a tunnel round the craft with the two.
 
+**At a cut.** A craft put elsewhere on a tick (a `transit`'s entry or exit) has its camera cut, not
+blended, while `between` still runs -1..0 for that tick's frames, so a scalar that counts ticks and
+is read as `param_x() + rate * input.between` is a tick behind the picture on them. A guest that
+must not show the far side early skips the count that would: `oag.slipstream`'s `Flight::Through`
+never takes the value one past the last tick of its tunnel. (The shader is not told a frame is a
+cut.)
+
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it
 gains a tick: `between` is the draw alpha less one, `0` on the tick itself and in a `--screenshot`,

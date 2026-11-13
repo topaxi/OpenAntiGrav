@@ -2,10 +2,10 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-13
-summary: "Mod API friction met building oag.slipstream's tunnel: places by name order, shader scalars, effects that cannot be stopped."
+summary: "Mod API friction left after names-by-key, held scalars, stop-mod-effect and state_bytes landed: a second fill, a picture age, a cut flag."
 kind: debt
-size: M (40)
-difficulty: easy (50)
+size: S (50)
+difficulty: easy (60)
 ---
 
 # What building a portal's tunnel cost in the mod API
@@ -25,66 +25,44 @@ Landed with this thread, small and not in doubt:
 - `oag_ext::test::Race::set_progress`: the guest's tests rebuilt the whole race to move a craft.
 - `just check-guests` (`scripts/check-mod-guests.py`): every guest's own tests, and each
   committed `ext/*.wasm` against a fresh build. Now in the gate.
+- ABI 1 revision 5 (`mod-api` lane): a guest names a shader, effect or sound by its key in the
+  manifest (the reply's string pool, as an icon always was), and a key the manifest lacks faults
+  the module naming it and the keys it declares; `set-shader-param` holds until sent again, until
+  the fill through its shader stops or the module faults (four values do not fit a 12-byte record,
+  so one command for all four is declined); `stop-mod-effect` (command 38) ends a mod's placed
+  surfaces for a slot; a manifest with no `state_bytes` takes the module's `oag_state_len`;
+  `view_aspect()` in mod shaders; a frozen transit craft's `progress()` is pinned by a test and
+  `hooks.md`; the cut frame is written up in `mod-shaders.md`. Every guest in `assets/mods` is
+  updated and rebuilt.
 
 ## Open
 
-1. ~~Six of the seven committed modules are not what their guests build~~ Closed: all seven
-   were rebuilt by 2026-11-13 (the examples submodule's "Rebuild the modules against the merged
-   SDK source" commits), `just rebuild-guests` regenerates them in one command and
-   `check-guests --strict` is in `just`, `gate-affected` and CI (`docs/architecture/wasm-extensions/README.md`,
-   "A committed module is its guest's build"). Cause of the staleness: SDK growth, not a
-   toolchain bump (the pinned toolchain has been 1.99.0 since 2026-10-02, before the oldest stale
-   module was built).
-2. **A guest names its shaders, effects, sounds and icons by their place in name order**
-   (`SHADER_WORMHOLE: u16 = 1`, effect indices 0 to 4 in `Look::of`, `SOUND_*`). Adding a file
-   whose name sorts earlier renumbers the rest and nothing fails: the wrong shader draws. Each
-   guest carries a test that parses its own manifest to pin the order (Slipstream has one for
-   its sounds, and a third kind for its shader's header).
-   A key resolved by the host, as `title!("wipeout-hd")` is, would end it: `shader!("wormhole")`
-   hashed at compile time, the host mapping key to place when the module loads and faulting on
-   one the manifest lacks. An ABI change (the commands carry a `u16` place today); v1 is edited
-   in place before release. Size M (50).
-3. **A shader has four scalars, each its own command, each re-sent every tick for every view.**
-   The tunnel sends `phase`, `transit` and `speed` (it had a fourth before it lost a use for it),
-   two of them constants for the whole flight, beside the fill and the field of view: five
-   commands a tick a craft for the tunnel, and two more for the portal's own view and scalar,
-   of `MAX_COMMANDS` 96. Two things, either alone helps:
-   a scalar that holds until it is sent again or the fill stops (most are constants), and one
-   command for all of a shader's scalars. The colour's alpha was pressed into service as a fifth
-   scalar for a while, which is the sign. Size S (50).
-4. **A fired mod effect cannot be stopped or given a life**: `lifetime` is in its TOML. The
-   portal's sprite stands for 60 ticks whatever happens: after a refused approach it outlives
-   the portal by up to 10 ticks, and after the craft goes in it stands for another 45. A
-   `stop-mod-effect` for a held surface (the stage already addresses one by generation,
-   `Stage::orient_surface`) or a life on `fire-mod-effect-ahead`. Size S (50).
-5. **One screen fill a slot a tick.** With the tunnel a backdrop, the same mod cannot also wash
+1. **One screen fill a slot a tick.** With the tunnel a backdrop, the same mod cannot also wash
    the view (a flash at the exit was dropped for this, and because a fill cannot be both). A
-   second fill a slot, or a backdrop and an overlay as two commands. Size S (40).
-6. **A shader cannot tell a view that has no engine picture from one that just lost it.**
+   second fill a slot, or a backdrop and an overlay as two commands. Size S (40). Declined for
+   now: the next visual mod that needs it asks.
+2. **A shader cannot tell a view that has no engine picture from one that just lost it.**
    `engine_texture_bound()` is false for PORTAL VIEW Low, for a split's second seat, and for
    every view the tick after the mod stops asking. So the light at the far end of a tunnel
    with no picture cannot fade across the exit: it would have to know the picture is gone for
    good, and Low cuts from light to the road. Keeping the last picture bound for a few frames
    after the request stops, with its age readable, would let a shader fade it. Size S (30).
-7. **`state_bytes` in the manifest repeats `Blob::BYTES`.** It changed three times in a day
-   (40, 48, 80) and each guest carries a test that parses its manifest to compare. `export!`
-   could export the size and the host read it from the module, the manifest's number becoming a
-   cap or going away. Size S (60).
-8. **A frame between two ticks at a cut.** `input.between` runs -1..0 on every tick, the one a
-   craft is put elsewhere on included, where the camera does not blend but a count of ticks a
-   shader reads still does: for that tick's frames the shader is a tick behind the picture. The
-   guest skips a count (`Flight::Through`: no tick is `LAST + 1`) so no frame shows the far side
-   early. It works and is written in the skill's terms nowhere but the guest; either say it in
-   `mod-shaders.md` or give a shader the view's cut (a `between` of 0 on a cut frame). Size XS (60).
-9. **No helper for the view's shape.** A fill's `uv` is 0..1 both ways; a circle needs the
-   aspect. The first tunnel took it from `dpdx`/`dpdy` of `uv`; `eye_ray`'s scale now has it
-   (`oag_frame.lens.x / lens.y`), one line as `view_aspect()`. Size XS (80).
-10. **`Craft::progress()` is last tick's and a transit's frozen craft keeps reporting it**, which
-    the guest relies on (the pair it asks for is from where the craft stands). Nothing says a
-    frozen craft's progress is stable; one line in `hooks.md` and a test. Size XS (70).
+   Declined for now, as above.
+3. **A shader is not told a frame is a cut.** Written up in `mod-shaders.md` ("At a cut"); a
+   `between` of 0 on a cut frame, or a flag, would remove the guest's workaround. Size XS (60).
+4. **`hud-icon` and `pickup-look` naming an icon the manifest lacks draw nothing and fault
+   nothing**, where `raise-warning` faults the module naming it. Their documented behaviour is
+   to draw nothing, so it was left; faulting is one arm in `named()` of
+   `crates/raceplay/src/extensions/on.rs`, and existing tests that send undeclared icon names
+   (`tests::extensions::on::a_mods_own_string_is_shown_in_the_games_language_...`) would declare them.
+   Size XS (70).
+5. **`oag.slipstream` does not use the new commands yet**: its constants (`transit`, `speed`) are
+   re-sent each tick, and its portal sprite outlives a refused approach by up to 10 ticks and a
+   transit by 45. `set_shader_param` held and `stop_mod_effect` cover both. A picture-checked
+   change to a shipped mod, so its own lane. Size S (60).
 
 ## Next Steps
 
-1. Items 2, 3 and 7 are ABI edits, so do them together and rebuild every guest once
-   (`just rebuild-guests`; the gate's `check-guests --strict` then says they are fresh). `oag-mod-author`'s skill changes with each.
-2. Items 4 to 6 are what the next visual mod will ask for; take them when one does.
+1. Item 5 is the one that makes the changes visible to a player; it needs a screenshot pair of a
+   portal flight (`docs/architecture/wasm-extensions/mod-shaders.md`).
+2. Items 1 and 2 are what the next visual mod will ask for; take them when one does.

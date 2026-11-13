@@ -25,8 +25,9 @@ truncated chunk) is refused by name. OGG/Vorbis is not read: the engine decodes 
 
 ## Playing it
 
-SDK `reply.play_mod_sound(&craft, index, mode)`, wire `play-mod-sound` (command 33): `index`
-is the sound's place in `[sounds]` in **name order** (the same rule as `[effects]`), `mode`:
+SDK `reply.play_mod_sound(&craft, "portal-open", mode)`, wire `play-mod-sound` (command 33): the
+sound is named by its key in `[sounds]`, carried in the reply's string pool (the same rule as
+`[effects]` and `[shaders]`); a key the manifest lacks faults the module, naming it. `mode`:
 
 | Mode | Does |
 | --- | --- |
