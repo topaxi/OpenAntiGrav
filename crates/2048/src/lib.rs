@@ -283,6 +283,7 @@ pub const TITLE: &Title = &Title {
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         custom_campaigns: false,
+        event_track_dir: Some(r"Data\art\published\environments"),
     },
     pressings: None,
     pre_race: None,

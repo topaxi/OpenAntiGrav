@@ -280,6 +280,7 @@ pub const TITLE: &Title = &Title {
         frontend_glow: None,
         origin: oag_title::Origin::Measured,
         custom_campaigns: false,
+        event_track_dir: None,
     },
     pressings: Some(frontend::PRESSINGS),
     pre_race: None,

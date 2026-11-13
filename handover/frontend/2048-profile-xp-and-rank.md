@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048, omega]
-updated: 2026-11-12
-summary: "2048 XP: a race tally banks 26 of 78 awards with the chain rule, the rank gates the hidden-event reveal; Omega events, 52 awards and the rank UI open"
+updated: 2026-11-13
+summary: "2048 XP: tally banks 26 of 78 awards, rank gates reveals; Omega --event banks too; Omega map, 52 awards, rank UI open"
 ---
 
 # 2048 profile XP and rank
@@ -35,10 +35,13 @@ the query the campaign map calls.
   the awards are issued before it, from the event objects.
 - **When the original promotes a hidden event to progress 1** is unread (`Campaign_UnlockEvents`
   promoted none on map entry at rank 50).
-- **Omega events do not bank**: `race::load_event` opens 2048 only, so Omega's campaign has no
-  `Campaign2048Progress`. The total is shared and Omega's tables parse (ground truth), so wiring
-  is the Omega event launch carrying the same progress fields. Omega ranks use Omega's own
-  `XPRanks.xml` (half thresholds) against the shared total.
+- **Omega events bank** (`oag_title::Campaign::event_track_dir`, `omega_event_xp_ground_truth`):
+  `load_event` opens any title that ships `SP.xml` events (2048, Omega), so an Omega `--event`
+  carries Omega's `XPAwards.xml` and banks into the shared total; ranks use Omega's own
+  `XPRanks.xml` (half thresholds). Paying XP there is chosen, not measured (dispatch unread).
+  Open: Omega's front end cannot launch an event (its 2048 map `Campaign2048_Definition.xml` is
+  unread, `RACE CAMPAIGN` stays on the chooser), so no Omega map gates a hidden event by rank and
+  only `--event` reaches this path.
 - **In-race awards** (`oag_raceplay::xp_tally`): kills, zone / perfect zone, Hit Zone N, held 1st
   and the race-end awards pay through one tally with the exact chain rule. The other awards stay
   unwired, each with its address and the unread condition, in the table on
@@ -55,4 +58,6 @@ the query the campaign map calls.
    `0x1000000`, `+0x6128`, `+0x6f3c`'s initial value, the weapon-type case map of `0x811c42d2` /
    `0x811bd214`) and add it to `XpTally`; Speed pad and Perfect lap are the cheapest.
 2b. The `RaceXP` popups and rank bar (HUD), `CO_RANK` / `CO_TOTAL_XP` on the EndRace screens.
-2. Omega: find the end-of-race function that banks the XP total (xref the rank-table global the loader fills) and diff its caller against `Race_ComputeLoyaltyAward`'s callers; then carry `xp_awards` / `xp_column` in its event launch.
+2. Omega: read the map `Campaign2048_Definition.xml` (`FE3DCanvas`/`linkedevent`) into the campaign
+   map, launch its events through `load_event`, and call `Store::rank_reveals` against Omega's ranks;
+   separately, xref the rank-table global the loader fills to find which Results block pays XP.

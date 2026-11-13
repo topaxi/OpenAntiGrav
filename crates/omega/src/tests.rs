@@ -194,3 +194,13 @@ fn omega_plays_hds_ship_select_settle_on_its_borrowed_pose() {
         Some(oag_hd::frontend::SHIP_FIT)
     );
 }
+
+/// Omega ships `SP.xml`'s event campaign under its own circuit directory; with the row gone
+/// `load_event` refuses the title and no event launch carries `xp_awards`.
+#[test]
+fn the_sp_event_campaign_resolves_circuits_under_environments_2048() {
+    assert_eq!(
+        TITLE.campaign.event_track_dir,
+        Some(r"Data\Environments2048")
+    );
+}
