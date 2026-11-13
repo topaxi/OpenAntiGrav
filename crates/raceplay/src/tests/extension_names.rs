@@ -192,6 +192,14 @@ fn a_key_the_manifest_lacks_faults_the_module_naming_it_and_the_table() {
             },
         ),
         (
+            "stop-mod-effect",
+            "[effects]",
+            Command::StopModEffect {
+                slot: slot(0),
+                effect: name("tagret"),
+            },
+        ),
+        (
             "play-mod-sound",
             "[sounds]",
             Command::PlayModSound {
