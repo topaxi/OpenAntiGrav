@@ -163,7 +163,7 @@ pub fn run(
             crate::ai_choice::AiChoice::default(),
             crate::ai_choice::Source::Free(difficulty),
         );
-        race.fly_as_demo(&demo);
+        super::hand_over(&mut race, &demo, 1);
         let craft = usize::from(race.sim.world.ship_count);
         let start: Vec<_> = (0..craft)
             .map(|slot| race.sim.world.ships[slot].physics.body.position)

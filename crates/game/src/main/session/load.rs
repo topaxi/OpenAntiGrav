@@ -797,15 +797,12 @@ impl Session {
                         ai_choice,
                         oag_game::ai_choice::Source::Free(ai_difficulty),
                     );
-                    if let Some(shell) = &self.shell {
-                        race_stage.race.fly_as_demo(&shell.title.demo);
-                    }
-                    race_stage.race.begin_speed_plans();
                     // Several windows (a wallpaper on several monitors): a camera each, on
                     // craft of its own, and nobody seated.
-                    if open_windows > 1 {
-                        race_stage.race.watch_in_windows(open_windows);
+                    if let Some(shell) = &self.shell {
+                        oag_game::demo::hand_over(&mut race_stage.race, &shell.title.demo, open_windows);
                     }
+                    race_stage.race.begin_speed_plans();
                     race_stage.demo = Some(run);
                     // Never the player's best-lap ghost.
                     race_stage.race.set_ghost_visible(false);

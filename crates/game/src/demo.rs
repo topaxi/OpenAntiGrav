@@ -271,6 +271,14 @@ pub fn offered_teams<'a>(demo: &Demo, teams: &[(&'a str, bool)]) -> Vec<&'a str>
         .collect()
 }
 
+/// Hands `race` to the demo: nobody in it (`Race::fly_as_demo`), and its `windows` windows each a
+/// camera on a craft of its own rather than a seat (`Race::watch_in_windows`; `1` is one window).
+/// The one hand-over every demo takes: the windowed session's, the capture's and the chain's.
+pub fn hand_over(race: &mut oag_raceplay::Race, demo: &Demo, windows: usize) {
+    race.fly_as_demo(demo);
+    race.watch_in_windows(windows);
+}
+
 /// The seed of demo `n` in a chain started from `base`, so one run seed names the whole chain.
 #[must_use]
 pub fn chain_seed(base: u64, n: u32) -> u64 {
