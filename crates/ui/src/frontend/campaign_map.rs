@@ -259,6 +259,11 @@ pub struct CampaignMap {
     pub(super) card: Option<super::event_card::CardState>,
     /// The pad's pointer on the map. See [`super::map_cursor`].
     pub(super) cursor: super::map_cursor::MapCursor,
+    /// The d-pad's focus. See [`super::map_focus`].
+    pub(super) focus: super::map_focus::PadFocus,
+    /// The one season the map shows, `0` to `2` for 2048, 2049, 2050; `None`
+    /// shows all three. See [`Frontend::set_map_season`].
+    pub(super) season: Option<u8>,
     /// The music wave round the current event. See [`super::campaign_wave`].
     pub(super) wave: super::canvas_wave::Wave,
     /// Seconds the wave has not stepped yet.
@@ -362,15 +367,16 @@ impl CampaignMap {
 
     /// Scrolls the selected event to the middle of the view the way a tap on
     /// its tile does on the original: one application of the canvas's centring
-    /// law from where the view is (`canvas_camera::centred_on`). The original
-    /// eases there; this arrives at once.
+    /// law from where the view is (`canvas_camera::centred_on`), eased there.
+    /// **Chosen, not measured**: the ease (`Kinetic::glide_to`); the original's
+    /// `TouchScroll` speed is 5.0 in units not yet read.
     pub(super) fn follow(&mut self) {
         let Some(event) = self.events.get(self.selected) else {
             return;
         };
         let to = canvas_camera::centred_on(Self::cell(event), self.scroll());
-        self.scroll[0].set(to.0);
-        self.scroll[1].set(to.1);
+        self.scroll[0].glide_to(to.0);
+        self.scroll[1].glide_to(to.1);
     }
 
     /// Puts the view where the map opens for the selected event
@@ -463,6 +469,12 @@ impl CampaignMap {
         if self.closed.get(index).copied().unwrap_or(false) {
             return ProgressState::Locked;
         }
+        // Another season's events read as status 1 (`TouchCampaign_UpdateEvent`).
+        if let (Some(shown), Some(own)) = (self.season, season_of(&event.name))
+            && shown != own
+        {
+            return ProgressState::Locked;
+        }
         let open = event.requires.as_deref().is_none_or(|gate| {
             self.events
                 .iter()
@@ -482,7 +494,32 @@ impl CampaignMap {
     }
 }
 
+/// The season an event's instance name puts it in: `"2049 - Event 3"` is
+/// season 1. Events whose name carries no year (speed laps, ship challenges)
+/// belong to no season of their own and show in every one. The original reads
+/// the season off the event (`event+0x308`, `CanvasButton_GetSeason`); where
+/// that field is authored is unread, the year in the name is the stand-in.
+fn season_of(name: &str) -> Option<u8> {
+    let year: u16 = name.get(..4)?.parse().ok()?;
+    name.get(4..)?
+        .starts_with(" - ")
+        .then(|| {
+            year.checked_sub(2048)
+                .and_then(|season| u8::try_from(season).ok())
+        })
+        .flatten()
+        .filter(|season| *season < 3)
+}
+
 impl Frontend {
+    /// Shows one season of the map (`0` to `2`), or all three with `None`.
+    /// Omega's map has a current season picked ahead of it; focus never leaves
+    /// it, the other seasons' events read as not reached. Vita 2048's map
+    /// shows all three.
+    pub fn set_map_season(&mut self, season: Option<u8>) {
+        self.campaign.season = season;
+    }
+
     /// Gives the map its events, in the order the file lists them. The
     /// cursor starts on the unlock graph's root: the first event with no
     /// [`MapEvent::requires`] that another event requires (2048's side
@@ -572,27 +609,19 @@ impl Frontend {
         self.machine.is(w2048::NEW_FE_SHELL) && self.campaign.card.is_none()
     }
 
-    /// The pad on the map: the d-pad moves to the nearest event that way,
-    /// cross or start opens the card of the one under the cursor.
-    pub(super) fn update_campaign_map(&mut self, input: &mut Input) {
+    /// The pad on the map: the d-pad moves the focus ([`super::map_focus`]),
+    /// cross or start opens the card of the focused event.
+    pub(super) fn update_campaign_map(&mut self, dt: f64, input: &mut Input) {
         if self.campaign.events.is_empty() {
             return;
         }
-        for (button, direction) in [
-            (Button::Right, (1.0, 0.0)),
-            (Button::Left, (-1.0, 0.0)),
-            (Button::Down, (0.0, 1.0)),
-            (Button::Up, (0.0, -1.0)),
-        ] {
-            if input.is_pressed(button) {
-                input.consume_press(button);
-                self.campaign.cursor.hide();
-                if let Some(next) = self.nearest_event(direction) {
-                    self.campaign.selected = next;
-                    self.campaign.follow();
-                }
-                return;
-            }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is a fraction of a second"
+        )]
+        let dt = dt as f32;
+        if self.step_pad_focus(dt, input) {
+            return;
         }
         if input.is_pressed(Button::Cross) || input.is_pressed(Button::Start) {
             input.consume_press(Button::Cross);
@@ -611,31 +640,6 @@ impl Frontend {
             }
             self.open_event_card();
         }
-    }
-
-    /// The event nearest the cursor in `direction`, by distance on the
-    /// lattice, among those that lie at least one unit that way (neighbouring
-    /// tiles are one and a half to two units apart).
-    fn nearest_event(&self, direction: (f32, f32)) -> Option<usize> {
-        let from = self.campaign.events.get(self.campaign.selected)?;
-        self.campaign
-            .events
-            .iter()
-            .enumerate()
-            .filter(|(at, _)| *at != self.campaign.selected && !self.campaign.hidden(*at))
-            .filter_map(|(at, event)| {
-                let dx = (event.x - from.x) * canvas_lattice::CELL_DX;
-                let dy = (event.y - from.y) * canvas_lattice::CELL_DY;
-                let along = dx * direction.0 + dy * direction.1;
-                if along < 1.0 {
-                    return None;
-                }
-                // Distance, weighted against drifting sideways.
-                let across = dx * direction.1 - dy * direction.0;
-                Some((at, along + 2.0 * across.abs()))
-            })
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(at, _)| at)
     }
 
     /// The current craft when `event` forbids it, `None` when it may fly.
@@ -728,6 +732,7 @@ impl Frontend {
             && let Some(hit) = hit
         {
             self.campaign.selected = hit;
+            self.campaign.focus.active = false;
         }
         if pointer.clicked
             && let Some(hit) = hit
@@ -736,6 +741,7 @@ impl Frontend {
                 self.open_event_card();
             } else {
                 self.campaign.selected = hit;
+                self.campaign.focus.active = false;
                 self.campaign.follow();
             }
         }
@@ -1051,11 +1057,15 @@ impl Frontend {
             let state = self.campaign.state_of(at);
             let reached = state != ProgressState::Locked;
             if reached {
-                let colour = match state {
+                let mut colour = match state {
                     ProgressState::Passed => canvas_prism::colours::PASSED,
                     ProgressState::Elite => canvas_prism::colours::ELITE,
                     ProgressState::Open | ProgressState::Locked => canvas_prism::colours::OPEN,
                 };
+                if at == self.campaign.selected && self.campaign.focus.active {
+                    let lift = super::map_focus::pulse(self.campaign.focus.phase) / 255.0;
+                    colour = colour.map(|channel| (channel + lift).min(1.0));
+                }
                 match self.placed(canvas_prism::TILE) {
                     Some(prism) => {
                         out.push(Self::prism_sprite(&camera, event, prism, colour, scale))
@@ -1089,7 +1099,7 @@ impl Frontend {
                     white,
                 ));
             }
-            if at == self.campaign.selected {
+            if at == self.campaign.selected && !self.campaign.focus.active {
                 match hex_select {
                     Some(select) => out.push(Self::sprite_at(rect, select, cursor)),
                     None => self.draw_cursor_ring(on_screen(face), cursor, out),

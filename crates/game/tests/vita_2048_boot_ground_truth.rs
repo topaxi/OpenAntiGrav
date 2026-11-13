@@ -340,8 +340,7 @@ fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
-    use oag_ui::frontend::EarnedTier;
-    use oag_ui::frontend::canvas_lattice;
+    use oag_ui::frontend::{EarnedTier, canvas_lattice};
     use oag_ui::pointer::Pointer;
 
     let Some(source) = source() else { return };
@@ -425,6 +424,7 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         frontend.selected_event().map(|event| event.name.as_str()),
         Some("2048 - Event 1")
     );
+    (0..120).for_each(|_| frontend.update(1.0 / 60.0, &mut Input::new(), None).clear());
     // Frame 12: Events 1, 2 and 3 down the diagonal.
     assert_tiles(
         &frontend,

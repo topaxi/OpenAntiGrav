@@ -242,8 +242,14 @@ fn a_save_and_a_lock_reach_a_map_that_is_not_on_screen() {
         frontend.campaign_event_state("grid0_1_2"),
         Some(ProgressState::Locked)
     );
-    // A locked cell refuses to launch, as a gated event does.
-    press(&mut frontend, &mut input, Button::Right);
+    // A locked cell refuses to launch, as a gated event does. The d-pad does
+    // not land on it, so the selection is put there.
+    let locked = frontend
+        .campaign_events()
+        .iter()
+        .position(|event| event.name == "grid0_1_2")
+        .unwrap();
+    frontend.campaign.selected = locked;
     press(&mut frontend, &mut input, Button::Cross);
     assert!(!frontend.is_finished());
     let notes = frontend.take_notes();
