@@ -158,7 +158,17 @@ pub(super) fn load(
     }
 
     if let Some(atlas) = lattice_atlas {
-        reversed.extend(canvas_pictures(archives, atlas, report));
+        let cards = front_end
+            .touch
+            .as_ref()
+            .and_then(|touch| {
+                sources
+                    .iter()
+                    .find_map(|screens| screens.by_name(touch.canvas_screen))
+            })
+            .map(|screen| oag_ui::frontend::canvas_cells::season_cards(&screen.canvas_labels))
+            .unwrap_or_default();
+        reversed.extend(canvas_pictures(archives, atlas, &cards, report));
     }
 
     let sheet = oag_hud::sprite::Sheet::build_replaced(&blobs, reversed, report);
@@ -299,6 +309,7 @@ pub(crate) fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
 fn canvas_pictures(
     archives: &mut oag_assets::Archives,
     atlas: &str,
+    cards: &[oag_ui::frontend::canvas_cells::Card],
     report: &mut Vec<String>,
 ) -> Vec<oag_hud::sprite::DecodedImage> {
     use oag_ui::frontend::{
@@ -322,7 +333,7 @@ fn canvas_pictures(
     };
     let rgba: Vec<u8> = rgba.into_iter().flatten().collect();
     let (width, height) = (u32::from(width), u32::from(height));
-    let image = |src: &str, size: (u32, u32), rgba| oag_hud::sprite::DecodedImage {
+    let image = |src: &str, size: (u32, u32), rgba: Vec<u8>| oag_hud::sprite::DecodedImage {
         src: src.to_string(),
         width: size.0,
         height: size.1,
@@ -361,12 +372,27 @@ fn canvas_pictures(
             pictures.extend(
                 baked
                     .into_iter()
-                    .map(|cell| image(cell.name, cell.size, cell.rgba)),
+                    .map(|cell| image(&cell.name, cell.size, cell.rgba)),
             );
         }
         None => report.push(format!(
             "lattice atlas {atlas}: {width}x{height} is too small for the ring cells"
         )),
+    }
+    for card in cards {
+        match cells::bake_card(&rgba, width, height, card) {
+            Some(picture) => {
+                report.push(format!(
+                    "canvas card {} baked off {atlas}: {}x{}",
+                    card.name, picture.size.0, picture.size.1
+                ));
+                pictures.push(image(&picture.name, picture.size, picture.rgba));
+            }
+            None => report.push(format!(
+                "canvas card {}: the crop is not inside {atlas} ({width}x{height})",
+                card.name
+            )),
+        }
     }
     let size = prism::layout().size;
     report.push(format!(

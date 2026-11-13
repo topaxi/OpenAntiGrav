@@ -51,7 +51,7 @@ pub use rects::{Bracket, Slot};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
-pub use touch::{Include, TouchButton};
+pub use touch::{CanvasLabel, Include, TouchButton};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -438,6 +438,10 @@ pub struct Screen {
     /// `TouchSlider` widgets in document order, see [`TouchSlider`]. Empty on
     /// every other title's screens.
     pub touch_sliders: Vec<TouchSlider>,
+    /// The `<CanvasLabel>`s of the `<FE3DCanvas>` a `<TouchScroll>` holds, in
+    /// document order - Wipeout 2048's campaign map. Empty on every other
+    /// title's screens.
+    pub canvas_labels: Vec<CanvasLabel>,
     /// Whether the screen has a `DisplayLanguages` widget, which is what makes
     /// it the language picker.
     pub display_languages: bool,
@@ -886,6 +890,17 @@ impl Screens {
             "touchslider" => screen
                 .touch_sliders
                 .push(self.touch_slider_from_node(child, inner)),
+            // Only the canvas's labels are read from a scroll: its other
+            // children are not walked (no reading of them is measured).
+            "touchscroll" => screen.canvas_labels.extend(
+                child
+                    .children
+                    .iter()
+                    .filter(|canvas| canvas.name.eq_ignore_ascii_case("fe3dcanvas"))
+                    .flat_map(|canvas| &canvas.children)
+                    .filter(|label| label.name.eq_ignore_ascii_case("canvaslabel"))
+                    .filter_map(|label| self.canvas_label_from_node(label)),
+            ),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
             "taginput" => screen.tag_inputs.push(self.tag_input_from_node(child)),
