@@ -458,8 +458,8 @@ const NOT_A_PICTURE: &[u32] = &[
     0x3528_1c78,
     0x994b_bcf1,
     0x94b2_b285,
-    0x2d5f_c6a6,
-    0x3a7e_591d,
+    NITRO_LOOKUPS[0],
+    NITRO_LOOKUPS[1],
     0x739a_786e,
     0x20c3_e476,
     0x48f3_7f5a,
@@ -467,6 +467,21 @@ const NOT_A_PICTURE: &[u32] = &[
     0xeddf_202a,
     0xb1f2_a176,
 ];
+
+/// The two sampler hashes of the Fury Nitro hull's lit materials that are
+/// lookups, not pictures: `0x2d5fc6a6` (`iridescence`, a facing ramp) and
+/// `0x3a7e591d` (`holographic_02_rich_glow`, a one-channel mask), both rows of
+/// [`NOT_A_PICTURE`]'s table. Wipeout HD binds the table by hash alone; the
+/// Vita and PS4 binder (`psp2`) applies these two only under
+/// [`NITRO_FAMILIES`], because 2048 and Omega bind the same hashes on a weapon
+/// and on wreck shards, where no role is measured
+/// (`docs/rendering/hd-ship-materials.md`, "The nitro hull's picture was a
+/// ramp and a mask").
+pub(super) const NITRO_LOOKUPS: [u32; 2] = [0x2d5f_c6a6, 0x3a7e_591d];
+
+/// The material families the Nitro hull is painted with, whose
+/// [`NITRO_LOOKUPS`] are not the picture.
+pub(super) const NITRO_FAMILIES: [&str; 3] = ["nitro_body", "nitro_body_new", "nitro_perspex_new"];
 
 /// Which of a material's sampler entries this renderer binds, out of however
 /// many it has.
