@@ -38,6 +38,7 @@ fn moving_quad(xform: u32) -> Model {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     // Two keys, one second apart: `z` runs 0 to 3 over 60 frames.
     let translation = vex::AnimChannel::new(
@@ -266,6 +267,7 @@ fn the_texture_table_scrolls_a_surface() {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     let mut model = moving_quad(0);
     model.vertices = vec![

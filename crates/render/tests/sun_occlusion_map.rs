@@ -34,6 +34,7 @@ fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots:
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 

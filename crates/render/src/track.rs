@@ -203,6 +203,7 @@ fn strip(
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         });
         vertices.push(GpuVertex {
             quake: 0.0,
@@ -220,6 +221,7 @@ fn strip(
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

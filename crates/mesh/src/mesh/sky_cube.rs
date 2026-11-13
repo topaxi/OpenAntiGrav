@@ -290,6 +290,7 @@ fn cube(
                     glow: mask,
                     texcoord2: [0.0, 0.0],
                     tangent: 0,
+                    depth_bias: 0.0,
                 });
             }
         }

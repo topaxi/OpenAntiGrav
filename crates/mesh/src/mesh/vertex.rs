@@ -165,6 +165,14 @@ pub struct GpuVertex {
     /// See `mesh::rcs::hull_normal`. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives.
     pub tangent: u32,
+    /// The batch's authored depth bias, `0.0..=9.0`: `oag_vex::vex::Batch::depth_bias` on a
+    /// `.vex` batch, `0.0` on every other vertex.
+    ///
+    /// `depth_bias.wesl` pulls the vertex toward the camera by `6 * bias` of the original's
+    /// depth units, as `sceGuDepthRange(1001 + 6 * bias, 64946 + 6 * bias)` does. A float like
+    /// [`Self::quake`], so a draw that never sets it costs nothing. Last, for the reason
+    /// [`Self::lightmap_texcoord`] gives. See `docs/rendering/depth-bias.md`.
+    pub depth_bias: f32,
 }
 
 /// Whether a material's chunks carry their authored `tangent`, and how its vertex program
