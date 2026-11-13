@@ -9,10 +9,12 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
+use oag_core::math::Mat4;
+
 use crate::mesh::Model;
 use crate::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowMaps, TRANSPARENT_BLEND,
-    TexAnims, UNIFORMS_SIZE, Velocity, build, write_uniforms,
+    TexAnims, UNIFORMS_SIZE, Velocity, build, write_uniforms, write_uniforms_raw,
 };
 use crate::orbit::Orbit;
 
@@ -105,6 +107,55 @@ pub fn capture_pixels_from(
     height: u32,
     yaw: f32,
     pitch: f32,
+    anisotropy: Anisotropy,
+    seconds: f32,
+) -> Result<Vec<u8>> {
+    capture_pixels(
+        model,
+        width,
+        height,
+        Camera::Orbit { yaw, pitch },
+        anisotropy,
+        seconds,
+    )
+}
+
+/// [`capture_pixels_from`] through a caller's own view-projection matrix (world space is the
+/// model's own recentred space, as in the orbit capture) instead of the orbit that frames the
+/// model: what a test needs to draw under a portal view's oblique projection.
+///
+/// # Errors
+///
+/// No GPU adapter, or a failed device request or readback.
+pub fn capture_pixels_through(
+    model: &Model,
+    width: u32,
+    height: u32,
+    view_projection: Mat4,
+    anisotropy: Anisotropy,
+    seconds: f32,
+) -> Result<Vec<u8>> {
+    capture_pixels(
+        model,
+        width,
+        height,
+        Camera::Matrix(view_projection),
+        anisotropy,
+        seconds,
+    )
+}
+
+/// Where a capture looks from.
+enum Camera {
+    Orbit { yaw: f32, pitch: f32 },
+    Matrix(Mat4),
+}
+
+fn capture_pixels(
+    model: &Model,
+    width: u32,
+    height: u32,
+    camera: Camera,
     anisotropy: Anisotropy,
     seconds: f32,
 ) -> Result<Vec<u8>> {
@@ -215,19 +266,29 @@ pub fn capture_pixels_from(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    write_uniforms(
-        &queue,
-        &uniform_buffer,
-        model,
-        width as f32 / height as f32,
-        // The capture path frames the whole model from its centre; panning is
-        // an interactive affordance and there is no cursor here.
-        Orbit {
-            yaw,
-            pitch,
-            ..Orbit::default()
-        },
-    );
+    match camera {
+        Camera::Orbit { yaw, pitch } => {
+            write_uniforms(
+                &queue,
+                &uniform_buffer,
+                model,
+                width as f32 / height as f32,
+                // The capture path frames the whole model from its centre; panning is
+                // an interactive affordance and there is no cursor here.
+                Orbit {
+                    yaw,
+                    pitch,
+                    ..Orbit::default()
+                },
+            );
+        }
+        Camera::Matrix(view_projection) => write_uniforms_raw(
+            &queue,
+            &uniform_buffer,
+            view_projection,
+            Mat4::from_translation(-oag_core::math::Vec3::from_array(model.centre)),
+        ),
+    }
 
     queue.write_buffer(
         &anim_buffer,
