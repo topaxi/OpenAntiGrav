@@ -425,6 +425,12 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         frontend.selected_event().map(|event| event.name.as_str()),
         Some("2048 - Event 1")
     );
+    // The tap scrolls the view to the tile by easing; let it arrive.
+    let mut idle = Input::new();
+    for _ in 0..120 {
+        idle.begin_frame(0);
+        frontend.update(1.0 / 60.0, &mut idle, None);
+    }
     // Frame 12: Events 1, 2 and 3 down the diagonal.
     assert_tiles(
         &frontend,

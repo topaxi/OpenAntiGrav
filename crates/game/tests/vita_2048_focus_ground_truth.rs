@@ -319,6 +319,11 @@ fn the_campaign_map_moves_its_selection_and_leaves_on_circle_and_triangle() {
     }
     let first = frontend.selected_event().map(|event| event.name.clone());
     assert!(first.is_some());
+    // The d-pad only lands on reached events: open the first three.
+    frontend.refresh_campaign_progress(|name| {
+        matches!(name, "2048 - Event 1" | "2048 - Event 2" | "2048 - Event 3")
+            .then_some(oag_ui::frontend::EarnedTier::Pass)
+    });
     for button in [Button::Right, Button::Down, Button::Left, Button::Up] {
         presses(&mut frontend, &mut input, &[button]);
     }
