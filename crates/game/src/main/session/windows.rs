@@ -931,6 +931,12 @@ impl Session {
         let surface = screen.output.size();
         let space = perf::grid(surface);
         self.overlay.set_space(space);
+        // A wallpaper's window waits for its camera in black: nobody sits at it.
+        let label = if self.demo.cli == Some(true) {
+            String::new()
+        } else {
+            windows::label(word, &seats)
+        };
         let list = [Draw::Text {
             x: space.size.0 * 0.5,
             y: space.size.1 * 0.5 - 12.0,
@@ -938,7 +944,7 @@ impl Session {
             color: HOLD_TEXT,
             border: None,
             align: Align::Centre,
-            text: windows::label(word, &seats),
+            text: label,
             wrap_width: None,
         }];
         self.overlay.render(

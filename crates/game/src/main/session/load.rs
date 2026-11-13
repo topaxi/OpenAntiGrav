@@ -554,7 +554,9 @@ impl Session {
             );
         }
         oag_game::texture_pack::attach(&mut options, &self.settings.mods);
-        self.seat_the_windows(&mut options);
+        if !options.demo {
+            self.seat_the_windows(&mut options);
+        }
         options.people = 0;
         if let Some(seats) = self
             .split_lobby
@@ -799,6 +801,11 @@ impl Session {
                         race_stage.race.fly_as_demo(&shell.title.demo);
                     }
                     race_stage.race.begin_speed_plans();
+                    // Several windows (a wallpaper on several monitors): a camera each, on
+                    // craft of its own, and nobody seated.
+                    if open_windows > 1 {
+                        race_stage.race.watch_in_windows(open_windows);
+                    }
                     race_stage.demo = Some(run);
                     // Never the player's best-lap ghost.
                     race_stage.race.set_ghost_visible(false);

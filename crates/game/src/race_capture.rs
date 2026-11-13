@@ -491,6 +491,9 @@ pub fn capture(
     if options.net.is_some() {
     } else if options.window_layout.is_empty() {
         crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
+    } else if options.demo {
+        // A demo's windows are cameras, not seats ([`Race::watch_in_windows`], after the
+        // hand-over below).
     } else {
         crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
@@ -531,7 +534,10 @@ pub fn capture(
     campaign_2048_event
         .iter()
         .for_each(|event| race.arm_event_xp(event));
-    options.demo.then(|| race.fly_as_demo(&title.demo));
+    if options.demo {
+        race.fly_as_demo(&title.demo);
+        race.watch_in_windows(options.window_layout.len());
+    }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
