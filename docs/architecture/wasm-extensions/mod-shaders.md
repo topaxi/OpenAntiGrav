@@ -66,8 +66,14 @@ count this way.
 
 Both textures sample at level 0 with a repeating linear sampler, so they may be read anywhere,
 inside an `if` too. `mod_fragment` returns straight alpha in gamma space, like every colour a mod
-hands the engine: the engine clamps it and converts it to whatever the title's scene target holds
+hands the engine: the engine converts it to whatever the title's scene target holds
 (`oag_shaders::target`), so one file looks alike on Pulse's 8-bit target and HD's float target.
+A value is clamped to 0..1 on an 8-bit target; on a linear float target (Omega's, 2048's) only
+below 0, and above 1 it is kept up to the half float's ceiling (65504) for the bloom and the
+tonemap, as the frame's own draws are. HD's scene stores what the console's packer wrote,
+encoded and clamped to 1 (`SceneStore::Encoded`, `oag_shaders::target::target_out`), so nothing
+on HD holds a value above 1 and a shader's output there stops at white as the rest of the frame
+does (`mod_shader.wesl`, `scene_rgb`).
 It writes colour only: no depth, no glow mask, no velocity, as a particle does.
 
 `uv` by surface: an effect's quad, its corners; a beam, `x` along it from `slot` to `to` and `y`
@@ -189,7 +195,13 @@ the entrance's surface lands on the texel it covers on the screen. With `update`
 `screen_uv`; under a snapshot only `engine_uv` stays on the surface, so use it. `engine_texture` reads
 what the scene target holds, turned back into gamma-authored colour (HD stores encoded linear, 2048
 gamma 2), so a shader that returns it writes the scene's own value through `fs_main`, and is opaque:
-the stored alpha is the bloom's glow mask. A value above 1 on a float target clamps there.
+the stored alpha is the bloom's glow mask. A value above 1 survives the round trip on Omega's and
+2048's float scene (the portal's 960x540 target is the scene's own format, so it stores one;
+`a_highlight_in_the_engine_texture_survives_a_pass_through`); it was lost in `fs_main`'s clamp,
+not in the target or the sampling. On HD there is none to keep. Seen on Omega at tick 725
+(Talon's Junction on HD is byte-identical): the portal's whites were already at the tonemap's
+white, so the change is in the bloom halo and the adaptive exposure, about 1 to 3 levels of 255
+across the frame, darker by a level or so as the exposure adapts to the brighter average.
 
 **The camera.** `virtual = exit * rotation_180 * entrance^-1 * main`, the turn about the portal's
 local up, with each portal's `+z` out of the face a craft sees: back along the road at the entrance,
