@@ -13,8 +13,8 @@ license=('MIT' 'Apache-2.0')
 # libpipewire is a hard link-time dependency (cpal's PipeWire host) and
 # alsa-lib its fallback. Vulkan, Wayland and X11 are loaded at run time.
 depends=('alsa-lib' 'glibc' 'libpipewire' 'systemd-libs' 'vulkan-icd-loader')
-# Distro `cargo`, not rustup: the repository's rust-toolchain.toml pins 1.99.0
-# for CI reproducibility, but Arch's `rust` is newer than the 1.97.1 MSRV
+# Distro `cargo`, not rustup: the repository's rust-toolchain.toml pins 1.100.0
+# for CI reproducibility, but Arch's `rust` is newer than the 1.100 MSRV
 # (Cargo.toml rust-version) and a package must build with the packaged
 # toolchain. clang provides libclang for the bindgen run in libspa-sys.
 makedepends=('cargo' 'clang' 'git' 'pkgconf')

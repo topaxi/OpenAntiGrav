@@ -804,9 +804,9 @@ content, and both `provide`/`conflict` with `openantigrav`.
 | `openantigrav-bin` | nothing: repackages `OpenAntiGrav-<pkgver>-linux-x86_64.tar.gz` from the GitHub Release ([releases](releases.md)) | `pkgver` is the tag without `v`. `sha256sums` is `SKIP` until a release exists: copy the tarball's line from the release's `SHA256SUMS` or run `updpkgsums`. |
 | `openantigrav-git` | `cargo build --frozen --release -p oag-game` from `main` | `pkgver()` is `git describe --long --tags --match 'v*'`, falling back to `r<count>.<hash>` while no tag exists. `.SRCINFO` carries a placeholder `pkgver`; regenerate it. |
 
-**Why distro `cargo`, not rustup.** `rust-toolchain.toml` pins 1.99.0 for CI
+**Why distro `cargo`, not rustup.** `rust-toolchain.toml` pins 1.100.0 for CI
 reproducibility, but a package builds with the packaged toolchain and Arch's
-`rust` is newer than the 1.97.1 MSRV (`Cargo.toml` `rust-version`). `rustup`
+`rust` is newer than the 1.100 MSRV (`Cargo.toml` `rust-version`). `rustup`
 conflicts with `rust` in a chroot, so `makedepends` names `cargo`;
 `RUSTUP_TOOLCHAIN=stable` keeps a build on a machine that has rustup working.
 `clang` is for `libspa-sys`' bindgen. `options=(!lto)` is required: with makepkg's default `-flto` the link fails with `undefined symbol: spa_format_parse_libspa_rs`, because `libspa-sys`'s C shim becomes LTO bitcode that `rust-lld` cannot link (observed 2026-10-07). `libpipewire` is a hard dependency (see [what is bundled](#what-is-bundled)); the

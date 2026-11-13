@@ -292,7 +292,7 @@ Everything from here down is the technical detail the steps above stand on.
 ## Build it yourself
 
 You need a Rust toolchain. The repository pins one in `rust-toolchain.toml`
-(1.99.0 on 2026-10-07), and `rustup` fetches it on the first build by itself.
+(1.100.0 on 2026-11-13), and `rustup` fetches it on the first build by itself.
 
 ```sh
 git clone <this repo> && cd OpenAntiGrav
