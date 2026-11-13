@@ -6,8 +6,10 @@
 use anyhow::{Context, Result};
 use oag_2048::campaign::{EventObjectives, Tier};
 use oag_hud::sprite::Sheet;
+use oag_tables::xp::Ranks;
 use oag_ui::language::StringTable;
 use oag_ui::screen::Screens;
+use oag_ui_screens::endrace::touch::xp::{XpResult, XpWords};
 use oag_ui_screens::endrace::touch::{Layouts, ObjectiveRow, Summary, Tone};
 use oag_ui_screens::picker::FaceScales;
 
@@ -161,20 +163,38 @@ fn oag_game_ticks(ticks: u64) -> i64 {
     crate::medal_watch::ticks_to_centiseconds(ticks)
 }
 
+/// A raced event's result and what banking it paid.
+#[derive(Debug)]
+pub struct FinishedEvent {
+    /// What the race came to.
+    pub facts: Facts,
+    /// What banking its tally into a profile at `prior_xp` paid; `None` when the event carries no
+    /// XP table.
+    pub xp: Option<(XpBanked, Ranks)>,
+}
+
 /// Races a 2048 campaign event to its end under the autopilot and returns what
 /// it came to - the real result a `--menu-page endrace-summary --event` still
-/// and the disc-backed ground truth are fed from.
+/// and the disc-backed ground truth are fed from. The race's XP tally is armed
+/// as the session arms it and banked, through [`crate::records::Store::bank_event_xp`], into a
+/// profile that already held `prior_xp`.
 ///
 /// # Errors
 ///
 /// The event does not load, or the race is still running after `cap` ticks.
-pub fn finished_event(options: &oag_raceplay::Options, name: &str, cap: u64) -> Result<Facts> {
+pub fn finished_event(
+    options: &oag_raceplay::Options,
+    name: &str,
+    cap: u64,
+    prior_xp: u32,
+) -> Result<FinishedEvent> {
     let loaded = oag_raceplay::load_event(options, name)?;
-    let objectives = loaded
+    let progress = loaded
         .campaign_2048_event
-        .as_ref()
-        .and_then(|progress| progress.objectives);
+        .clone()
+        .context("the event carries no progress")?;
     let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.arm_event_xp(&progress);
     race.set_autopilot(true);
     while !race.finished() && race.sim.world.tick < cap {
         race.tick(&oag_gameplay::PlayerInputs::none());
@@ -183,7 +203,33 @@ pub fn finished_event(options: &oag_raceplay::Options, name: &str, cap: u64) -> 
         race.finished(),
         "{name} was still running after {cap} ticks"
     );
-    Ok(Facts::from_race(&race, objectives))
+    let facts = Facts::from_race(&race, progress.objectives);
+    let medal = match facts.tier {
+        Some(Tier::Elite) => Some(crate::records::Medal::Gold),
+        Some(Tier::Pass) => Some(crate::records::Medal::Bronze),
+        None => None,
+    };
+    let mut profile = crate::records::Store::default();
+    profile.bank_xp(prior_xp);
+    let place = Some(race.player_place());
+    let banked = race.xp_tally_mut().map(|tally| {
+        let earned = profile.bank_event_xp(tally, medal, place);
+        XpBanked {
+            earned,
+            bonus: progress.xp_awards.as_ref().map_or(0, |awards| {
+                awards.race_end(
+                    progress.xp_column,
+                    medal.map(|m| m == crate::records::Medal::Gold),
+                    None,
+                )
+            }),
+            total_after: profile.xp(),
+        }
+    });
+    Ok(FinishedEvent {
+        facts,
+        xp: banked.zip(progress.xp_ranks),
+    })
 }
 
 /// The page title's string id: Measured, `FUN_810cf5fe`.
@@ -240,10 +286,40 @@ fn typedef_of(kind: oag_2048::campaign::EventKind) -> i64 {
     }
 }
 
+/// What a finish banked into the profile's XP total, as the page needs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct XpBanked {
+    /// What the race paid in all: its tally, the completion and finish awards included.
+    pub earned: u32,
+    /// The completion award among it (`PassBonusXP`), `0` for none.
+    pub bonus: u32,
+    /// The profile's total after banking.
+    pub total_after: u32,
+}
+
+/// The XP block of a finished race, worded from the disc's own strings. `None` when a string does
+/// not resolve: the block then draws nothing rather than a stand-in.
+#[must_use]
+pub fn xp_result(banked: XpBanked, ranks: &Ranks, strings: &StringTable) -> Option<XpResult> {
+    let word = |id: &str| strings.get(id).map(str::to_string);
+    Some(XpResult {
+        race_xp: banked.earned.saturating_sub(banked.bonus),
+        bonus_xp: banked.bonus,
+        event_total: banked.earned,
+        total_after: banked.total_after,
+        ranks: ranks.clone(),
+        words: XpWords {
+            event_total: word("RESULTS_EVENT_TOTAL")?,
+            profile_total: word("TOTAL_NUMBER_XP")?,
+            new_rank: word("RESULTS_NEW_RANK")?,
+        },
+    })
+}
+
 /// Words a finished race for the pages. Strings that do not resolve are left
 /// out rather than shown as ids.
 #[must_use]
-pub fn summary(facts: &Facts, strings: &StringTable) -> Summary {
+pub fn summary(facts: &Facts, strings: &StringTable, xp: Option<XpResult>) -> Summary {
     let speed_shape = facts.mode == oag_race::Mode::SpeedLap;
     let word = |id: &str| strings.get(id).map(str::to_string);
     let tone = match (facts.objectives, facts.tier) {
@@ -302,5 +378,6 @@ pub fn summary(facts: &Facts, strings: &StringTable) -> Summary {
         tone,
         medal_label,
         rows,
+        xp,
     }
 }

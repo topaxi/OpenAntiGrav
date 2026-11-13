@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-13
-summary: "2048 XP: tally banks 26 of 78 awards, rank gates reveals; Omega --event banks too; Omega map, 52 awards, rank UI open"
+summary: "2048 XP: tally banks 26 of 78 awards, rank gates reveals, end-race XP block draws; Omega --event banks too; Omega map, 52 awards, Omega rank UI open"
 ---
 
 # 2048 profile XP and rank
@@ -22,7 +22,18 @@ the query the campaign map calls.
 ## Open
 
 - **Omega's dispatch** between its loyalty block and its XP block on `EndRace Results` is not traced (50): `FUN_0153ebf0` builds the loyalty ticker, `FUN_0149f910` the XP blocks; no caller found for either (`docs/ghidra/functions/ps4-omega-eu/xp-and-loyalty.md`).
-- The rank bar and `RaceXP` / `TotalXP` widgets are not drawn on 2048 or Omega.
+- **Landed on 2048**: the end-of-race XP block (`RaceXP`, `PassBonusXP`, `TotalXP`, rank badge and
+  bar, the count-up and the rank-up flip) draws off the race's banked tally and `XPRanks.xml`
+  (`docs/ghidra/functions/vita-2048-eu-v104/endrace-summary.md`, "The XP block";
+  `a_finished_event_shows_what_it_paid_and_the_rank_bar`). Omega's own `EndRace Results` authors the
+  same widgets in HD's layout and is not wired (`endrace_entry` is `None`; `FUN_0149f910` unread).
+- **The original pays the completion award on improvement only**: the page's `PassBonusXP` shows when
+  the result state beat the best before, an elite on a first pass pays both awards. `bank_event_xp`
+  still pays on every finish and Elite instead of Pass; the page shows what was banked. Align the
+  banking (needs the event's previous best at the finish site, `Store::record_campaign`'s old row).
+- `FUN_81131100` (`xprank`/`xpbartext`/`xpbar`, bar `* 300`) and `FUN_810c8286` (rank card with
+  `CO_RANK`/`CO_NEXT_RANK`/`CO_TOTAL_XP`) are not the end-race page; their host screens are not
+  found (no `xprank` in the seven `NEWGUI` definitions read). Wire them once a host screen is.
 - The two rank trophies (rank 25 and 50, fired from `Profile_BankRaceXP`) are not awarded.
 - 2048 still pays inherited HD loyalty and Omega loyalty only; neither is replaced by XP.
 
@@ -49,7 +60,6 @@ the query the campaign map calls.
   `FUN_8100d2a6`'s mode ids (`DAT_8153fd24 == 2`, `DAT_8151d438`); whether `GameMode`'s vfunc
   `+0x80` (XP enabled) is true for every campaign event; whether our `zone_dirty` is the original's
   `0x60a4 & 0x1000000`; the elimination test for held 1st is our column, not `IsEliminatorFamily`.
-- The EndRace screens' `CO_RANK` / `CO_TOTAL_XP` widgets and the rank-up overlay.
 
 ## Next Steps
 
@@ -57,7 +67,7 @@ the query the campaign map calls.
 1. In-race awards: read the next unwired trigger (pilot flags `+0x60a4` bits `0x20` and
    `0x1000000`, `+0x6128`, `+0x6f3c`'s initial value, the weapon-type case map of `0x811c42d2` /
    `0x811bd214`) and add it to `XpTally`; Speed pad and Perfect lap are the cheapest.
-2b. The `RaceXP` popups and rank bar (HUD), `CO_RANK` / `CO_TOTAL_XP` on the EndRace screens.
+2b. The in-race `AwardXP` `+N` popup (HUD, `Hud_UpdateXpLines`), and the two readouts above once a host screen is found.
 2. Omega: read the map `Campaign2048_Definition.xml` (`FE3DCanvas`/`linkedevent`) into the campaign
    map, launch its events through `load_event`, and call `Store::rank_reveals` against Omega's ranks;
    separately, xref the rank-table global the loader fills to find which Results block pays XP.

@@ -30,9 +30,8 @@ the tile strip is clipped there; the `--menu-page` stills show it whole.
 - **The result line's wording.** `RaceResultText`/`SpeedResultText` take the
   string at `event+0x250`, written by game-mode code not traced. This build
   words a place, a time (`M:SS.CC`), a zone count or a kill count: **chosen**.
-- **XP and rank.** `RaceXP`, `PassBonusXP`, `TotalXP`, `RankText` and the rank bar
-  are counted up from a per-event award and a profile total this build does not
-  keep. Not drawn. If a progression system lands, the widgets are authored.
+- **XP and rank**: landed (`docs/ui/endrace-2048.md`). Open: what arms the count at the start
+  (`+0xe8`), and the pass bonus on first-earn only (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`).
 - **The way back to the campaign map.** Exit goes to this build's own menus (the
   built-in results table's destination); the original returns to the map. A
   finished race cannot reopen `Stage::Frontend` today.

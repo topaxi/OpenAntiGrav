@@ -149,6 +149,9 @@ pub(crate) struct RaceStage {
     /// see that field's own doc for why this rides on `Loaded` rather than
     /// through `Session` the way [`Self::campaign_cell`] does.
     pub(crate) campaign_2048_event: Option<race::Campaign2048Progress>,
+    /// What the finish banked into the profile's XP total, for the EndRace page: `None` until the
+    /// finish banks, and for a race that armed no tally.
+    pub(crate) xp_banked: Option<oag_game::endrace::touch::XpBanked>,
     /// The EndRace flow (`Results` -> `Rewards`/`Menu`) once the race has
     /// finished and this title carries `EndRace_Definition.xml` - `None`
     /// until then, and forever `None` on a title that does not (or on an

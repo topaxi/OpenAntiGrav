@@ -5,7 +5,7 @@
 
 use log::warn;
 
-use oag_game::endrace::touch::{Facts, load, summary};
+use oag_game::endrace::touch::{Facts, load, summary, xp_result};
 use oag_gameplay::input::Button;
 use oag_ui_screens::endrace::touch::Hit;
 
@@ -58,7 +58,16 @@ impl Session {
                 .and_then(|progress| progress.objectives),
         );
         let strings = shell.strings.clone();
-        let model = summary(&facts, &strings);
+        let xp = stage
+            .xp_banked
+            .zip(
+                stage
+                    .campaign_2048_event
+                    .as_ref()
+                    .and_then(|progress| progress.xp_ranks.as_ref()),
+            )
+            .and_then(|(banked, ranks)| xp_result(banked, ranks, &strings));
+        let model = summary(&facts, &strings, xp);
         let faces = oag_ui_screens::picker::FaceScales::default();
         let grid = [shell.space.size.0, shell.space.size.1];
         let globals: Vec<(String, String)> = shell

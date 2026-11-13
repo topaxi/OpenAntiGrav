@@ -48,9 +48,20 @@ trophies `0x18` when the rank first exceeds 24 and `0x19` when it exceeds 49. Th
 also shows the per-event unlock cards (`Post_Race_Speed_Laps_Unlocked`,
 `Prototype_Challenge_Unlocked`, `A_Plus_Challenge_Unlocked`, `Unlock_Chrome_Skins`), and
 those key on the **event's own unlock flags (`FUN_812b5c98(.., 4|5|6|8)`), not on XP**.
-Read by the EndRace screens (`FUN_81131100`, `FUN_810c8286`: `CO_RANK`, `CO_NEXT_RANK`,
-`CO_TOTAL_XP`, the `xprank`/`xpbar` widgets, `RESULTS_NEW_RANK`/`Tut_Rank_FE_Overlay` on a
-rank-up) and by a Vita activity-feed string (`FUN_81013c8e`, the rank is the payload).
+Read by `RaceSummary`'s populate and update (`FUN_810cf5fe`, `EndRaceSummary_UpdateXpBlock`: `RaceXP`,
+`PassBonusXP`, `TotalXP`, `RankText`, `TotalXPFill`, `RESULTS_NEW_RANK` on a rank-up;
+[endrace-summary.md](endrace-summary.md), "The XP block"), by two readouts that are not the end-race
+page (`FUN_81131100`: `xprank`, `xpbartext`, `xpbar`; `FUN_810c8286`: `CO_RANK`, `CO_NEXT_RANK`,
+`CO_TOTAL_XP`; host screens not found) and by a Vita activity-feed string (`FUN_81013c8e`, the rank
+is the payload).
+
+**The end-race page reads the completion award as a first-earn bonus.** `PassBonusXP` shows only
+when the event's result state improved on the best before (`+0x2d8 != +0x2dc`), and is `Event
+complete- ELITE` (plus `PASS` when the old best was below a pass) or `PASS`. That points at the
+completion awards paying on improvement, not on every finish, and at an elite on a first pass paying
+both. `Store::bank_event_xp` still pays one completion award on every finish and Elite instead of
+Pass (chosen, above); the page shows the bonus that was banked, so the numbers add up. Aligning the
+banking with the page is open.
 
 ## Verdict on "2048's XP is its loyalty"
 

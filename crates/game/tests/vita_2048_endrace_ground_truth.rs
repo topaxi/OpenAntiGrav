@@ -84,11 +84,22 @@ fn open(source: &Path) -> Opened {
 }
 
 fn draws(opened: &Opened, facts: &Facts, page: Page) -> (Vec<Draw>, touch::Summary) {
-    let model = summary(facts, &opened.shell.strings);
+    draws_with(opened, facts, None, page, 0)
+}
+
+fn draws_with(
+    opened: &Opened,
+    facts: &Facts,
+    xp: Option<oag_ui_screens::endrace::touch::xp::XpResult>,
+    page: Page,
+    ticks: u32,
+) -> (Vec<Draw>, touch::Summary) {
+    let model = summary(facts, &opened.shell.strings, xp);
     let sprites = &opened.screens.sprites;
     let list = touch::draw_list(
         &model,
         page,
+        ticks,
         Button::Exit,
         &opened.screens.layouts,
         &|src| sprites.get(src),
@@ -201,7 +212,9 @@ fn a_real_event_says_what_it_came_to() {
     };
     // "FinishRaceAnyPosition" for the pass bar, a win for the elite one: the
     // autopilot finishes, so the event is at least passed.
-    let facts = finished_event(&race_options, "2048 - Event 1", 30_000).expect("the event races");
+    let facts = finished_event(&race_options, "2048 - Event 1", 30_000, 0)
+        .expect("the event races")
+        .facts;
     let tier = facts.tier.expect("finishing passes `2048 - Event 1`");
     let (list, model) = draws(&opened, &facts, Page::Summary);
     assert_eq!(
@@ -280,4 +293,96 @@ fn the_objective_page_lists_the_chain_that_was_earned() {
     assert_eq!(elite.rows[0].state, Tone::Elite);
     assert_eq!(pass.rows[0].state, Tone::Pass);
     assert_ne!(elite.rows[0].text, pass.rows[0].text, "two different bars");
+}
+
+/// The XP block of a real finished event: the race's own tally banked into a profile that sat
+/// 100 points under rank 1, the numbers it shows at the end of the count, the rank it ranks the
+/// total at and the bar the parsed thresholds put it at. Fails if the page drops the banked
+/// numbers, the rank table or the bar law.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_finished_event_shows_what_it_paid_and_the_rank_bar() {
+    let Some(source) = source() else { return };
+    let opened = open(&source);
+    let race_options = oag_raceplay::Options {
+        source: source.display().to_string(),
+        ..oag_raceplay::Options::default()
+    };
+    let ranks = {
+        let mut archives =
+            oag_source::title::open_source(&race_options.source, Vec::new(), Vec::new())
+                .expect("opens")
+                .archives;
+        oag_2048::campaign::xp_tables(&mut archives)
+            .expect("both tables")
+            .1
+    };
+    let prior = ranks.thresholds[0] - 100;
+    let finished =
+        finished_event(&race_options, "2048 - Event 1", 30_000, prior).expect("the event races");
+    let (banked, ranks) = finished.xp.expect("the event pays XP");
+    assert!(banked.bonus > 0, "an autopilot finish passes the event");
+    assert_eq!(banked.total_after, prior + banked.earned);
+    let result = oag_game::endrace::touch::xp_result(banked, &ranks, &opened.shell.strings)
+        .expect("the strings resolve");
+    let strings = &opened.shell.strings;
+    let counted = 60 * 60;
+    let (list, model) = draws_with(
+        &opened,
+        &finished.facts,
+        Some(result),
+        Page::Summary,
+        counted,
+    );
+    let shown = texts(&list);
+
+    let rank = ranks.rank(banked.total_after);
+    assert!(rank >= 1, "the race carried the profile past rank 1");
+    let race_xp = (banked.earned - banked.bonus).to_string();
+    assert!(
+        shown.contains(&race_xp.as_str()),
+        "RaceXP {race_xp} in {shown:?}"
+    );
+    assert!(
+        shown.contains(&banked.bonus.to_string().as_str()),
+        "the bonus in {shown:?}"
+    );
+    let event_total = strings
+        .get("RESULTS_EVENT_TOTAL")
+        .expect("authored")
+        .replace("%d", &banked.earned.to_string());
+    let profile_total = strings
+        .get("TOTAL_NUMBER_XP")
+        .expect("authored")
+        .replace("%d", &banked.total_after.to_string());
+    assert!(
+        shown.contains(&event_total.as_str()) || shown.contains(&profile_total.as_str()),
+        "the total line in {shown:?}"
+    );
+    assert!(
+        shown.contains(&rank.to_string().as_str()),
+        "rank {rank} in {shown:?}"
+    );
+
+    // The bar: (total - threshold(rank)) / (threshold(rank + 1) - threshold(rank)), in 48ths.
+    let low = ranks.threshold_xp(rank, banked.total_after);
+    let high = ranks.threshold_xp(rank + 1, banked.total_after);
+    let fraction = (banked.total_after - low) as f32 / (high - low) as f32;
+    let width = (fraction * 48.0) as u32;
+    assert_eq!(model.xp.as_ref().expect("xp").at(counted).fill_px, width);
+    assert!(
+        list.iter().any(|d| matches!(d, Draw::Fill { rect, .. }
+            if rect[2] == width as f32 && rect[3] == 8.0)),
+        "no 8 px bar of {width} px in the draw list"
+    );
+
+    // The count-up: the first frame reads zero race XP and the pre-race rank.
+    let (early, _) = draws_with(
+        &opened,
+        &finished.facts,
+        oag_game::endrace::touch::xp_result(banked, &ranks, &opened.shell.strings),
+        Page::Summary,
+        0,
+    );
+    assert!(texts(&early).contains(&"0"), "{:?}", texts(&early));
 }

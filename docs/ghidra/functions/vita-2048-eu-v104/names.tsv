@@ -378,3 +378,4 @@
 0x81074da4	function	CanvasLabel_SetShown	80	campaign-map-projection.md
 0x81070670	function	CanvasLabel_Paint	85	campaign-map-projection.md
 0x813c5ca0	function	CanvasLabel_BuildCellList	80	campaign-map-projection.md
+0x810d056c	function	EndRaceSummary_UpdateXpBlock	80	endrace-summary.md

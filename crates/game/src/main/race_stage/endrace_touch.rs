@@ -23,6 +23,9 @@ const PAGE_TICKS: u32 = (touch::PAGE_SECONDS * 60.0) as u32;
 /// player has not seen.
 const CONFIRM_AFTER_TICKS: u32 = 60;
 
+/// Ticks (two minutes) past every count-up of the XP block.
+const SETTLED_TICKS: u32 = 2 * 60 * 60;
+
 /// What a confirmed tile asks the session to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Action {
@@ -54,6 +57,8 @@ pub(crate) struct Flow {
     selected: Button,
     on_page: u32,
     since_finish: u32,
+    /// A page has been left once, so the summary comes back with its numbers counted.
+    turned: bool,
 }
 
 impl Flow {
@@ -65,6 +70,7 @@ impl Flow {
             selected: Button::Exit,
             on_page: 0,
             since_finish: 0,
+            turned: false,
         }
     }
 
@@ -91,8 +97,20 @@ impl Flow {
     }
 
     fn go(&mut self, page: u8) {
+        self.turned |= page != self.page;
         self.page = page;
         self.on_page = 0;
+    }
+
+    /// The ticks the XP block counts from. Coming back to the summary after a
+    /// page turn shows it counted: the original's tap sets every counter to its
+    /// end (`FUN_810d056c`); a turn by any means doing so is **chosen**.
+    pub(crate) fn xp_ticks(&self) -> u32 {
+        if self.turned {
+            self.on_page.saturating_add(SETTLED_TICKS)
+        } else {
+            self.on_page
+        }
     }
 
     /// Whether a confirm may leave yet.
@@ -214,6 +232,7 @@ impl TouchRuntime {
         let list = touch::draw_list(
             &self.model,
             self.flow.page(),
+            self.flow.xp_ticks(),
             self.flow.selected(),
             &self.layouts,
             &|src| sprites.get(src),

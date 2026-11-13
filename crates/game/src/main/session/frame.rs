@@ -1106,14 +1106,27 @@ impl Session {
                         observation.campaign_medal,
                         None,
                     );
-                    let xp = stage.race.xp_tally_mut().map_or(0, |tally| {
+                    let banked = stage.race.xp_tally_mut().map(|tally| {
                         self.records.bank_event_xp(
                             tally,
                             observation.campaign_medal,
                             observation.place,
                         )
                     });
+                    let xp = banked.unwrap_or(0);
                     log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
+                    // What the EndRace page shows, read before `take` empties the tally.
+                    stage.xp_banked = banked.map(|earned| oag_game::endrace::touch::XpBanked {
+                        earned,
+                        bonus: progress.xp_awards.as_ref().map_or(0, |awards| {
+                            awards.race_end(
+                                progress.xp_column,
+                                observation.campaign_medal.map(|m| m == records::Medal::Gold),
+                                None,
+                            )
+                        }),
+                        total_after: self.records.xp(),
+                    });
                 }
                 // A title whose EndRace screens do not bank the award (Pure, 2048
                 // and Omega read none of Pulse's or HD's) is paid here, under the

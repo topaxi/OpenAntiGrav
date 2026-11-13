@@ -107,6 +107,10 @@ FORBIDDEN = (
 # decision about determinism**, not a formality - it says this call cannot reach
 # a state hash, or that it is the wrapper everything else goes through.
 ALLOWED = {
+    "crates/ui-screens/src/endrace/touch/xp.rs": (
+        "the rank badge's flip width is a `cos` of the seconds on a page; it "
+        "reaches a pixel and no simulation crate depends on `oag-ui-screens`"
+    ),
     "crates/core/src/math.rs": (
         "the wrappers themselves - `acos` here is our own libm, which is what "
         "every simulation caller is required to use instead of the platform's"

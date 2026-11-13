@@ -71,9 +71,77 @@ pass state is inferred from `FUN_810cf5fe`'s use of `3`/`4` as pass/elite.
 - **The result line** (`RaceResultText`/`SpeedResultText`) is `event+0x250`, a
   string some game-mode code wrote. **Not traced**; this build words a place, a
   time, a zone count or a kill count instead (chosen, not measured).
-- **XP**: `RaceXP`, `PassBonusXP`, `SpeedRaceXP`, `TotalXP`, `RankText` and the
-  rank bar are counted up from `event+0x1e8` and a profile total this build
-  does not keep. Not drawn.
+- **XP**: the widgets are filled by the populate below and counted up by
+  `EndRaceSummary_UpdateXpBlock`, in "The XP block".
+
+## The XP block - `FUN_810cf5fe` (populate) and `EndRaceSummary_UpdateXpBlock` (`0x810d056c`)
+
+**Confidence 80** (decompile and disassembly of both; no Vita run backs a number). The update
+function is the fourth word of `RaceSummary`'s vtable at `0x8150dd98` (`FUN_810d0ea0` builds the
+screen object). Ghidra had no function at its entry; one was created there and named
+`EndRaceSummary_UpdateXpBlock` (row in [names.tsv](names.tsv)).
+
+**What the populate sets** (single player, `event+0x1a0 & 4 == 0`). `E` is the event's tally
+`event+0x1e8`, `T` the profile total `+0x3257c` read *after* banking, `B` the pass bonus:
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| `+0xc8` | `B` | the completion bonus |
+| `+0xd4` | `E` | the whole tally |
+| `+0xcc` | `E - B` | `RaceXP`'s end value |
+| `+0xd8` | `T` | the rank counter's end value |
+| `+0xdc` | `T - E` | the rank counter's start (the total before the race) |
+| `+0xd0` | `B` | the `TotalXP` count's start |
+| `+0xe0` | `0` | `RaceXP`'s start |
+
+With `+0xe8 == 0` (a tap has already snapped it) every count starts at its end. A speed lap hides
+`RaceXPBox` and shows `SpeedRaceXPBox`, `RaceXP` then being the `SpeedRaceXP` text, and shows no
+bonus box. **`PassBonusXP` and its box show only when the event's state improved**: `+0x2d8` (this
+result, 3 pass or 4 elite) is not `+0x2dc` (the best before). The bonus is `row1[mode]` for an
+elite (plus `row0[mode]` when the old best was below a pass) and `row0[mode]` for a pass, the
+`Event complete` rows of `XPAwards.xml` (`DAT_81577764 + row * 0x1c + mode * 4`), printed `"%d"`
+(`0x8144daa4`). When the box shows, `ResultBox` ends 4 px above it (`height = box.y - result.y -
+4`) and `RaceResultText` sits at half that height; otherwise `ResultBox` ends 4 px above
+`RaceXPBox`, which is its authored height.
+
+**The per-frame count** (`dt` the frame's seconds, every value a float):
+
+- `RaceXP` text `"%d"` of `+0xe0`, which climbs `200 * dt` a frame to `+0xcc`.
+- `TotalXP` text (also written to `ObjectiveSummary`'s `TotalXP`, `+0x1c8`): while `+0xd0` (from
+  `B` toward `E`, `200 * dt` a frame) has not reached `E`, `RESULTS_EVENT_TOTAL` with `+0xd0`. Once
+  it has, a timer `DAT_8151d838` (a global, wrapping at `6.0`) picks `RESULTS_EVENT_TOTAL` with
+  `E` while it is `3.0` or less and `TOTAL_NUMBER_XP` with `T` above `3.0`. The strings are the
+  disc's (`EVENT TOTAL %d XP`, `TOTAL %d XP`).
+- `RankText` `"%d"` of `Profile_GetXPRank(+0xdc)`; `+0xdc` climbs `8000 * dt` a frame from
+  `T - E` to `T` (`0x45fa0000`).
+- **The bar**: `TotalXPFill`'s width (`+0xa8`) is `trunc(f * 48.0)` with `f = (c - thr(r)) /
+  (thr(r + 1) - thr(r))`, `r = Profile_GetXPRank(c)`, `c = +0xdc`, and `f = 1.0` when the span is
+  not above zero; a result of `48` with `f < 1` is `47`. The authored `45` is overwritten. This is
+  the law `crates/game/tests/vita_2048_endrace_ground_truth.rs` checks against the parsed
+  `XPRanks.xml`.
+- **A rank-up** is detected when the rank of the counter's value this frame differs from last
+  frame's (`DAT_81777f34`, `DAT_81777f38` start at `0`; `DAT_81777f34` rests at `1.25`). For
+  `1.25` s `RankItem`'s width is `64 * s`, `x = 518 + (1 - s) * 32`, `RankText`'s scale `0.65 * s`,
+  `s = (cos(3.2 * pi * t) + 1) / 2`; the text is the old rank for `t < 0.3125`, empty to
+  `0.9375`, then the new rank. For `3.0` s `TotalXP` says `RESULTS_NEW_RANK`. (The decompile
+  hides whether `SceLibm_4A496BC0` is `sin` or `cos`; `cos` makes the text swap land on `s = 0`,
+  which is the reading used, confidence 65.)
+- **A tap** on the panel rect (`180, 77`, `600 x 347`; `FUN_8110d0d0`, which also plays
+  `newGUI_confirm`) sets `+0xe8 = 0` and every count to its end.
+
+**Unread.** What sets `+0xe8` to `1` (the constructor is not read): this build starts the count
+armed and snaps it on any page turn (chosen). `DAT_8151d838` is a global, so the first cycle's phase
+depends on the last screen that ran it; this build starts the cycle when the count ends.
+
+**Not what the page reads.** `FUN_81131100` (`rank:%d` on `xprank`, `%d / %d XP` on `xpbartext`,
+`xpbar`'s width `(c - thr(r)) / (thr(r + 1) - thr(r)) * 300.0`) and `FUN_810c8286` (an
+immediate-mode card: `%s %d` with `CO_RANK`, `%s = +%d %s` with `CO_NEXT_RANK` and `FE_XP`,
+`CO_TOTAL_XP`, a `222` px bar, the player's craft by `CampaignEventCard_DrawForcedCraft`) are not
+`RaceSummary`'s. Neither has a direct caller; they are reached through vtables. No `xprank` or
+`xpbar` is authored in any of `NEWGUI/Definition.xml`, `Options_Definition.xml`,
+`Team_Definition.xml`, `Skin.xml`, `Intro_Definition.xml`, `Bootup_Definition_EU.xml` or
+`Profile_Definition.xml`, so the host screen of `FUN_81131100` is not found and nothing is wired
+from either.
 
 ## `ObjectiveSummary`'s rows - `FUN_810d0e6e`, `FUN_810d0c46`
 

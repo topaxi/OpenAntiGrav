@@ -73,6 +73,7 @@ fn model(tone: Tone) -> Summary {
         tone,
         medal_label: Some("PASS".into()),
         rows: Vec::new(),
+        xp: None,
     }
 }
 
@@ -98,6 +99,7 @@ fn draws(model: &Summary) -> Vec<Draw> {
     draw_list(
         model,
         Page::Summary,
+        0,
         Button::Exit,
         &layouts(),
         &sprites,
@@ -278,4 +280,128 @@ fn a_click_on_a_tile_or_the_panel_is_a_hit_and_off_them_is_none() {
         None,
         "a hover is not a tap"
     );
+}
+
+fn xp_result() -> xp::XpResult {
+    xp::XpResult {
+        race_xp: 150,
+        bonus_xp: 10_000,
+        event_total: 10_150,
+        // 29_900 before the race, so the 100 XP threshold below is crossed at once.
+        total_after: 40_050,
+        ranks: oag_tables::xp::Ranks::parse(
+            r#"<XPRanks><MaximumRank value="2"/><Rank index="1" value="30000"/><Rank index="2" value="60000"/></XPRanks>"#,
+        )
+        .expect("ranks"),
+        words: xp::XpWords {
+            event_total: "EVENT TOTAL %d XP".into(),
+            profile_total: "TOTAL %d XP".into(),
+            new_rank: "NEW RANK!".into(),
+        },
+    }
+}
+
+/// A race that paid nothing keeps the whole XP block off the page; one that paid draws the
+/// race's XP and the total in the disc's words in the widgets the XML authors for them, and
+/// never the XML's placeholder.
+#[test]
+fn the_xp_block_draws_only_a_race_that_paid() {
+    let bare = draws(&model(Tone::Pass));
+    assert!(
+        !texts(&bare).iter().any(|t| t.contains("XP")),
+        "{:?}",
+        texts(&bare)
+    );
+
+    let mut paid = model(Tone::Pass);
+    paid.xp = Some(xp_result());
+    let list = {
+        let counted = 60 * 60;
+        draw_list(
+            &paid,
+            Page::Summary,
+            counted,
+            Button::Exit,
+            &layouts(),
+            &sprites,
+            &[],
+            37.0,
+        )
+    };
+    let shown = texts(&list);
+    assert!(shown.contains(&"150"), "{shown:?}");
+    assert!(
+        shown.contains(&"EVENT TOTAL 10150 XP") || shown.contains(&"TOTAL 40050 XP"),
+        "{shown:?}"
+    );
+    assert!(
+        !shown.contains(&"XP_TEST") && !shown.contains(&"TOTAL_4325_XP_TEST"),
+        "{shown:?}"
+    );
+}
+
+/// The bar is the counter's distance from this rank's threshold over the span to the next, in
+/// 48ths, a full bar only when it is full.
+#[test]
+fn the_bar_is_the_fraction_between_two_thresholds_in_48ths() {
+    let result = xp_result();
+    let settled = result.at(60 * 600);
+    assert_eq!(result.ranks.rank(40_050), 1);
+    // (40_050 - 30_000) / 30_000 = 0.335
+    assert_eq!(settled.fill_px, 16);
+    assert_eq!(settled.rank_text, "1");
+
+    let mut top = xp_result();
+    top.total_after = 61_000;
+    top.event_total = 100;
+    top.bonus_xp = 0;
+    top.race_xp = 100;
+    // past the last rank the span is the total itself: a full bar.
+    assert_eq!(top.at(60 * 600).fill_px, 48);
+}
+
+/// The numbers count up at 200 a second, the event total through the bonus; the rank counter
+/// at 8000 a second; and once the count is done the total line alternates every three seconds.
+#[test]
+fn the_numbers_count_up_and_the_total_line_alternates() {
+    let result = xp_result();
+    let one_second = result.at(60);
+    assert_eq!(
+        one_second.race_xp, 150,
+        "200 a second reaches 150 within a second"
+    );
+    assert_eq!(result.at(30).race_xp, 100);
+    assert_eq!(result.at(0).race_xp, 0);
+    assert_eq!(
+        result.at(1).label,
+        "NEW RANK!",
+        "the rank counter crosses in 100/8000 s"
+    );
+    assert_eq!(result.at(60 * 3 + 30).label, "EVENT TOTAL 10150 XP");
+    assert_eq!(result.at(60 * 4).label, "TOTAL 40050 XP");
+    assert_eq!(result.at(60 * 8).label, "EVENT TOTAL 10150 XP");
+    assert_eq!(
+        result.at(60 * 11).label,
+        "TOTAL 40050 XP",
+        "the six second cycle"
+    );
+}
+
+/// A rank-up flips the badge about its centre and swaps the text at its narrowest.
+#[test]
+fn a_rank_up_flips_the_badge_and_says_new_rank_for_three_seconds() {
+    let result = xp_result();
+    // The counter starts 100 short and reaches 30_000 in 100/8000 s.
+    let early = result.at(0);
+    assert!(early.flip > 0.99);
+    let mid = result.at(20); // 0.333 s in: the flip is near its first narrowest point
+    assert!(mid.flip < 0.1, "{}", mid.flip);
+    assert_eq!(mid.rank_text, "");
+    assert_eq!(result.at(70).label, "NEW RANK!");
+    assert_ne!(
+        result.at(60 * 4).label,
+        "NEW RANK!",
+        "the banner holds three seconds"
+    );
+    assert_eq!(result.at(60 * 3 + 30).flip, 1.0);
 }

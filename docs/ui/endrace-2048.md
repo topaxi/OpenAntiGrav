@@ -1,6 +1,6 @@
 # Wipeout 2048's race-ending pages
 
-**Status: two of the five pages draw**, off the disc's own
+**Status: two of the five pages draw, XP block included**, off the disc's own
 `NEWGUI/EndRace_Definition.xml`, after a real race through the front-end flow.
 `RaceSummary` and `ObjectiveSummary` are read and drawn; `Results`, `Podium`,
 `Badges` and `ParadeLaps` are named gaps (below). This is the picture half; the
@@ -53,6 +53,11 @@ tile strip) under `RaceSummary`, then `ObjectiveSummary` five seconds later.
 | `ResultBox` + `RaceResultText` / `SpeedResultText` | the result line, in a box (a speed lap: bare) | box and shape measured; **the wording is chosen** |
 | `PostRaceMedal` + `PostRaceMedalText` | the medal cell (`128`/`256`/`0` texels in `Post_Race_Medals`) and `FE_PASS`/`FE_ELITE_PASS`/`FE_FAIL` | measured |
 | `Objective1`, `Pass0`/`ElitePass0`/`Fail0` | the one row of the chain earned and its tick or cross | measured, `FUN_810d0c46` |
+| `PassBonusXPBox` + `PassBonusXP` | the completion award banked (`PASS_BONUS_XP`, a number), when there is one | measured box and format; **shown on every finish that banks one, the original only when the result improved on the best** (departure, see [`xp-award.md`](../ghidra/functions/vita-2048-eu-v104/xp-award.md)) |
+| `RaceXPBox` + `RaceXP` (`SpeedRaceXPBox` + `SpeedRaceXP` on a speed lap) | `FE_EVENT_XP` and the race's tally less the bonus, counted up from `0` at `200`/s | measured, `EndRaceSummary_UpdateXpBlock` |
+| `TotalXP` (both pages) | `RESULTS_EVENT_TOTAL` with the tally while it counts, then `RESULTS_EVENT_TOTAL` and `TOTAL_NUMBER_XP` (the profile's total) every 3 s, `RESULTS_NEW_RANK` for 3 s on a rank-up; the disc's English | measured |
+| `RankItem` + `RankText` + `TotalXPBg`/`TotalXPFill` | the rank of the counting total (title's own `XPRanks.xml`), the shield flipping on a rank-up, the bar `trunc(48 * (total - thr(rank)) / (thr(rank + 1) - thr(rank)))` px | measured; the flip's `cos` is confidence 65 |
+| `ResultBox` | shortened to end 4 px above the topmost XP box when the bonus shows | measured |
 | `RestartRaceTouchButton`, `QuitTouchButton` / `QuitTouchButtonPass` | a `Blue2048` box and its icon, the tick once the event is passed | measured; the box and cursor ring are the touch front end's own idiom (`oag_ui::frontend::cursor_ring`) |
 
 **Fills fold their own offset.** The disc authors every box as an `Image` with
@@ -64,12 +69,13 @@ where the default reader does not. The default is kept for Pulse, whose
 
 ## What does not draw, by name
 
-- **Every XP widget** (`RaceXPBox`, `PassBonusXPBox`, `SpeedRaceXPBox`, their
-  texts, `RankItem`, `RankText`, the rank bar): this build keeps no XP and no
-  rank. The XML's own text for them is development placeholder
-  (`TOTAL_4325_XP_TEST`, `99`), and so is `PASS_TEST`, `LAALA` and
-  `THE OBJECTIVE`; a code-filled widget never shows its authored string
-  (`placeholder_text_never_draws`).
+- **The XP block of a race that armed no tally** (a `--race` launch, an event with no
+  `XPAwards.xml`): hidden, as are the XML's development placeholders for it
+  (`TOTAL_4325_XP_TEST`, `99`; a code-filled widget never shows its authored string,
+  `placeholder_text_never_draws`).
+- **The tap that snaps the count** to its end is any page turn here (**chosen**); the original's
+  tap on the panel also plays `newGUI_confirm`. What arms the count at the start (`+0xe8`) is not
+  read, so it starts armed (**chosen**).
 - **`Results`' table** (`<RaceResults>`, native code not decompiled), **`Podium`**
   and **`Badges`** (online), **`ParadeLaps`** (a free camera this build does not
   have, so its tile is not drawn), **`NearWait`/`NearUpload`** (online), and
@@ -111,7 +117,10 @@ come from the XML and the decompile, not from a comparison against an original f
   and checks the fail and elite paths against the disc's own strings.
 - Stills: `oag-game <2048 source> --menu-page endrace-summary --event "2048 - Event 1"`
   races the event and draws what it came to (about 55 s in a debug build);
-  `endrace-summary-pass`/`-elite`/`-fail` and `endrace-objectives-*` draw
+  `endrace-summary@SECONDS+PRIOR` raises the race's tally into a profile that already held
+  `PRIOR` XP and draws the page `SECONDS` into its count (`@0.5` mid rank flip, `@2` the new-rank
+  line, `@7` the event total, `@30` the profile total); `endrace-summary-pass`/`-elite`/`-fail`
+  and `endrace-objectives-*` draw
   **chosen** facts (a third place against "finish at least 3rd") so each tone
   can be looked at without racing to it.
 - Live: one windowed run in a private Xvfb with software Vulkan, walked
@@ -122,7 +131,7 @@ come from the XML and the decompile, not from a comparison against an original f
 
 ## Omega
 
-**Checked, applies, not wired.** Omega's `data09.psarc` ships
+**Checked, applies, not wired; its own page differs.** Omega's `data09.psarc` ships
 `data/plugins/frontend/gui/vita/vita_EndRace_Definition.xml`, **byte-identical**
 (22,098 bytes, `cmp`) to 2048's v1.04 `NEWGUI/EndRace_Definition.xml`, next to
 its own HD-lineage `endrace_definition.xml` (49,368 bytes) and
@@ -132,6 +141,14 @@ front-end XML nor `campaign2048_definition.xml` names the `vita/` file, so
 nothing in Omega's own front end reaches it. Omega keeps `endrace_entry: None`
 and `endrace_style: None`: its HD-lineage screens stay the read-and-not-wired
 item in [omega-status.md](../formats/omega-status.md), and racing is out of
-scope. If Omega races its 2048 events, these pages are the ones its own data
+scope. **The XP block, checked against Omega's own page: differs.** Omega's HD-lineage
+`endrace_definition.xml` (`EndRace Results`, `data08`/`data09`, 49,368 bytes) authors the same widget
+vocabulary in HD's 1920 layout: `eventxp_block` (`PassBonusXPText`/`PassBonusXP`,
+`RaceXPText`/`RaceXP`, `RaceTotalXPText`/`RaceTotalXPNum`) and `totalxp_block` (`CO_TOTAL_XP`,
+`TotalXP`, `TotalXPNum`, `RankItem` at 96 px with `RankText`, `TotalXPBg`, `TotalXPFill`) at
+`(1180, 368)`, plus a `RankingBlock`. It is a different layout (three lines, not two) of the same
+numbers, built by `FUN_0149f910`, which this lane did not read, so the count law above is not
+assumed for it; the `vita/vita_EndRace_Definition.xml` copy is 2048's page and would carry this
+block unchanged if Omega drew it. If Omega races its 2048 events, these pages are the ones its own data
 brings for them; wiring would be a `Touch` style on Omega and a loader for the
 `.gnf` spellings, and is left open.
