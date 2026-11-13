@@ -17,7 +17,6 @@ mod boost_flare;
 mod clouds;
 mod craft_cull;
 mod frame;
-mod frame_arena;
 mod ghost;
 mod hd_chain;
 mod lens_flare;
@@ -85,8 +84,6 @@ pub struct Scene {
     /// The buffer behind every shared drawable's matrices, and the memory a view stages them in.
     uniform_blocks: UniformBlocks,
     upload_staging: std::cell::RefCell<Staging>,
-    /// The bytes every view's draw list is built in.
-    draw_arena: frame_arena::FrameArena,
     /// The circuit's own light rig, where it authors one.
     ///
     /// [`mesh_render::Light::stand_in`] for every title whose rig has not been
@@ -1122,7 +1119,6 @@ impl Scene {
             scene_blocks: SceneBlocks::new(device, queue),
             uniform_blocks: UniformBlocks::new(device),
             upload_staging: std::cell::RefCell::default(),
-            draw_arena: frame_arena::FrameArena::new(16 * 1024),
             build_cache,
             bloom,
             ps2_bloom,

@@ -61,7 +61,7 @@ pub(super) enum Draw<'a> {
 pub(super) const NEAR_SLICE: (f32, f32) = (0.0, 0.001);
 
 /// The draws one view decided, built by its prepare.
-pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>, &'a super::frame_arena::FrameArena>);
+pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>>);
 
 impl<'a> DrawList<'a> {
     pub(super) fn mark(&mut self, label: &'static str) {
@@ -717,8 +717,7 @@ mod tests {
     /// circuit's own draw must leave that list out, or it draws twice and over the ribbon.
     #[test]
     fn the_ribbons_are_drawn_before_the_blended_list() {
-        let arena = crate::scene::frame_arena::FrameArena::new(0);
-        let mut list = DrawList(Vec::new_in(&arena));
+        let mut list = DrawList(Vec::new());
         list.blended_after_craft(true, true);
         assert!(matches!(
             list.0.as_slice(),
@@ -732,8 +731,7 @@ mod tests {
     /// drawn after it would show through), and no ribbon draw is recorded ahead of it.
     #[test]
     fn over_floors_keeps_the_blended_list_after_the_craft() {
-        let arena = crate::scene::frame_arena::FrameArena::new(0);
-        let mut list = DrawList(Vec::new_in(&arena));
+        let mut list = DrawList(Vec::new());
         list.blended_after_craft(false, true);
         assert!(matches!(list.0.as_slice(), [Draw::TrackBlended]));
         assert_eq!(BlendedList::after_craft(true), BlendedList::Without);
@@ -743,8 +741,7 @@ mod tests {
     /// draw is pushed.
     #[test]
     fn without_a_psp_ribbon_the_circuit_draws_whole() {
-        let arena = crate::scene::frame_arena::FrameArena::new(0);
-        let mut list = DrawList(Vec::new_in(&arena));
+        let mut list = DrawList(Vec::new());
         list.blended_after_craft(false, false);
         assert!(list.0.is_empty());
         assert_eq!(BlendedList::after_craft(false), BlendedList::With);
