@@ -39,6 +39,19 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
     -from_disc
 }
 
+/// [`chase_params`] with the craft scale a `mode` race on `title` flies ([`craft_scale`]).
+#[must_use]
+pub fn chase_params_for(
+    block: handling::ExternalCamera,
+    title: &oag_title::Title,
+    mode: oag_race::Mode,
+) -> ChaseParams {
+    ChaseParams {
+        craft_scale: craft_scale(title, mode),
+        ..chase_params(block)
+    }
+}
+
 /// The chase rig's craft scale for a `mode` race on `title`: the title's Detonator
 /// scale in that mode, the `0.75` every racing title writes otherwise (see
 /// [`chase_params`]).
