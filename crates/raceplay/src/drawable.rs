@@ -501,6 +501,28 @@ impl Drawable {
         *last_bound = Some(slot);
     }
 
+    /// The model's draws whose bounds meet the sphere `centre`, `radius`, across all three
+    /// lists. A moving draw is left out: its bounds describe where it was at time zero.
+    pub(super) fn draws_within(
+        &self,
+        centre: Vec3,
+        radius: f32,
+    ) -> impl Iterator<Item = &DrawCall> {
+        let model = &self.model;
+        [
+            &model.draws,
+            &model.alpha_tested_draws,
+            &model.transparent_draws,
+        ]
+        .into_iter()
+        .flatten()
+        .filter(move |draw| {
+            !draw.moving
+                && Vec3::from_array(draw.bounds.centre).distance(centre)
+                    <= radius + draw.bounds.radius
+        })
+    }
+
     /// The bytes of vertex data this drawable's model holds.
     #[cfg(test)]
     pub(super) fn model_vertex_bytes(&self) -> usize {

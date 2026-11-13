@@ -9,6 +9,16 @@
 use super::*;
 use crate::spline_table::Positions;
 
+/// The mask bit of an authored section, [`oag_vex::pvs::ALL_VISIBLE`] for one a mask cannot hold
+/// (an unnamed section included).
+pub(crate) fn section_bit(section: u8) -> u64 {
+    if usize::from(section) >= oag_vex::pvs::MAX_SECTIONS {
+        oag_vex::pvs::ALL_VISIBLE
+    } else {
+        1u64 << section
+    }
+}
+
 /// The authored racing line and the corridor around it, one entry per spline
 /// sample.
 ///
@@ -382,6 +392,22 @@ impl Spline {
     #[must_use]
     pub fn distance_to(&self, position: Vec3) -> Option<f32> {
         self.nearest(position).map(|(_, _, distance)| distance)
+    }
+
+    /// The authored sections of the samples within `radius` of `centre`, one bit each, and
+    /// [`oag_vex::pvs::ALL_VISIBLE`] where one of them names none (or one a mask cannot hold):
+    /// the sections a sphere on the road reaches.
+    #[must_use]
+    pub fn sections_within(&self, centre: Vec3, radius: f32) -> u64 {
+        let reach = radius * radius;
+        let mut sections = 0u64;
+        for sample in &self.samples {
+            if (Vec3::from_array(sample.pos) - centre).length_squared() > reach {
+                continue;
+            }
+            sections |= section_bit(sample.section_id);
+        }
+        sections
     }
 
     /// The sample at `index`, in table order.

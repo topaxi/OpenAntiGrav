@@ -314,6 +314,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

@@ -7,6 +7,7 @@ use oag_core::math::Vec3;
 use oag_display::display::{Fov, MotionBlur, Msaa, Shadows};
 use oag_ext_abi::{Command, Slot, ViewUpdate};
 use oag_gameplay::PlayerInputs;
+use oag_mesh::mesh::{Bounds, DrawCall, Model};
 
 use super::extension_faults::scripted;
 use super::extensions::grid;
@@ -32,13 +33,24 @@ fn progress_near(race: &Race, at: Vec3) -> f32 {
 /// The fixture's camera-side and far-side points: the entrance a little ahead of the player's
 /// camera, so its face looks at it, and the exit further on.
 fn pair_ahead(race: &Race) -> (f32, f32) {
+    pair_ahead_by(race, 20.0)
+}
+
+/// [`pair_ahead`] with the entrance `distance` units ahead of the camera and the exit 25 on.
+fn pair_ahead_by(race: &Race, distance: f32) -> (f32, f32) {
     let camera = race.view().inverse();
     let eye = camera.w_axis.truncate();
     let forward = -camera.z_axis.truncate();
     (
-        progress_near(race, eye + forward * 20.0),
-        progress_near(race, eye + forward * 45.0),
+        progress_near(race, eye + forward * distance),
+        progress_near(race, eye + forward * (distance + 25.0)),
     )
+}
+
+/// The sectioned fixture's pair, far enough ahead that the entrance's sphere (radius 8) stands
+/// in sections other than the craft's and the camera's.
+fn pair_in_other_sections(race: &Race) -> (f32, f32) {
+    pair_ahead_by(race, 40.0)
 }
 
 /// The ring exit a progress names.
@@ -49,17 +61,23 @@ fn ring_exit(race: &Race, progress: f32) -> Option<crate::transit::Exit> {
         .map(crate::transit::Exit::ring)
 }
 
-fn portal_view(
+fn portal_view(slot: usize, pair: (f32, f32), update: ViewUpdate, generation: u8) -> Command {
+    portal_view_reaching(slot, pair, update, generation, 8)
+}
+
+/// [`portal_view`] whose surface reaches `radius` world units from the entrance.
+fn portal_view_reaching(
     slot: usize,
     (entrance, exit): (f32, f32),
     update: ViewUpdate,
     generation: u8,
+    radius: u8,
 ) -> Command {
     Command::PortalView {
         slot: Slot::new(slot).unwrap(),
         entrance,
         exit: oag_ext_abi::Distance::Progress(exit),
-        radius: 8,
+        radius,
         update,
         generation,
     }
@@ -80,9 +98,13 @@ fn race(commands: &[Command]) -> Race {
 /// [`race`] with `text` for the mod's shader.
 fn race_with(commands: &[Command], text: &'static str) -> Race {
     let source = shaded(commands, text);
-    let mut race = grid(prepared(std::slice::from_ref(&source)));
+    settled(grid(prepared(std::slice::from_ref(&source))), &source)
+}
+
+/// `race` with `source`'s shaders loaded and its chase camera settled.
+fn settled(mut race: Race, source: &Source) -> Race {
     let shaders = crate::extension_shaders::load(
-        std::slice::from_ref(&source),
+        std::slice::from_ref(source),
         "wipeout-pulse",
         None,
         &mut Vec::new(),
@@ -92,6 +114,46 @@ fn race_with(commands: &[Command], text: &'static str) -> Race {
         race.tick(&PlayerInputs::none());
     }
     race
+}
+
+/// [`race`] on a straight whose control points each author their own section (1, 2, ...), so
+/// the entrance ahead of the camera is in another section than the craft and the camera.
+fn sectioned_race(commands: &[Command]) -> Race {
+    let source = shaded(commands, GOOD);
+    let mut setup = setup(hulled_handling());
+    let ai = straight_track_in_sections(12.0, 12.0, |k| u8::try_from(k + 1).unwrap_or(u8::MAX));
+    setup.spline = Spline::from_track(&ai);
+    setup.course = Course::from_track(&ai, None);
+    setup.ai = ai;
+    setup.mode = Mode::SingleRace;
+    setup.extensions = prepared(std::slice::from_ref(&source));
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    settled(Race::start(setup), &source)
+}
+
+/// Sections 1 to 8, each seeing only itself: a wall between any two of them.
+fn walled_sections() -> crate::visibility::TrackVisibility {
+    let pvs = oag_vex::pvs::TrackPvs::from_sections((1u8..=8).map(|index| oag_vex::pvs::Section {
+        index,
+        visible: 1u64 << index,
+        bounds: None,
+    }));
+    crate::visibility::TrackVisibility::declaring(pvs)
+}
+
+/// Sections 1 to 8, each seeing all the others: no wall anywhere.
+fn open_sections() -> crate::visibility::TrackVisibility {
+    let pvs = oag_vex::pvs::TrackPvs::from_sections((1u8..=8).map(|index| oag_vex::pvs::Section {
+        index,
+        visible: u64::MAX,
+        bounds: None,
+    }));
+    crate::visibility::TrackVisibility::declaring(pvs)
 }
 
 /// The far plane comes off the track's radius, and the fixture's portals are tens of units on.
@@ -382,6 +444,269 @@ fn a_portal_behind_the_camera_draws_nothing() {
     assert!(eye.x > 30.0, "the camera followed: {eye}");
     let scene = scene_for(&gpu, &race);
     assert_eq!(frames(&gpu, &scene, &mut race, 3), 0);
+}
+
+/// A scene over `visibility` on the sectioned fixture.
+fn sectioned_scene(
+    gpu: &Gpu,
+    race: &Race,
+    visibility: crate::visibility::TrackVisibility,
+) -> Scene {
+    scene_for(gpu, race).with_visibility(visibility)
+}
+
+/// Whether the main view's visible set takes any section the portal's surface reaches in.
+fn entrance_is_in_the_pvs(
+    race: &Race,
+    visibility: &crate::visibility::TrackVisibility,
+    request: &crate::extensions::PortalRequest,
+) -> bool {
+    let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
+    let shot = race.portal_shot(request, projection).expect("in the view");
+    let set = race.visible_set(visibility, &(projection * race.view()));
+    set.allows(shot.reach.sections)
+}
+
+/// A wall between the camera and the portal: the entrance's section is outside the main view's
+/// PVS, so the view is not drawn (no pass, no target, no texture for the shader to read).
+#[test]
+fn a_portal_behind_a_wall_draws_nothing() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_in_other_sections(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
+    let mut race = sectioned_race(&commands);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    assert!(
+        !entrance_is_in_the_pvs(&race, &walled_sections(), &request),
+        "the fixture puts a wall between them"
+    );
+    let scene = sectioned_scene(&gpu, &race, walled_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 0);
+    assert!(!scene.has_portal_target(), "no target either");
+    assert!(scene.portal_engine_of(&race).is_none(), "no texture bound");
+}
+
+/// The same portal with the entrance's section in the main view's PVS draws as before.
+#[test]
+fn a_portal_in_the_main_views_pvs_still_draws() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_in_other_sections(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
+    let mut race = sectioned_race(&commands);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    assert!(entrance_is_in_the_pvs(&race, &open_sections(), &request));
+    let scene = sectioned_scene(&gpu, &race, open_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
+    assert!(
+        scene.portal_engine_of(&race).is_some(),
+        "the texture is bound"
+    );
+}
+
+/// A snapshot is taken on the first frame its entrance is in view, not spent on a frame where a
+/// wall hides it: the skipped frames leave the one snapshot for later.
+#[test]
+fn a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_in_other_sections(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Once, 1)];
+    let mut race = sectioned_race(&commands);
+    let scene = sectioned_scene(&gpu, &race, walled_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 4), 0, "behind the wall");
+    assert!(!scene.has_portal_target());
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    let at = race
+        .portal_frame(
+            ring_exit(&race, request.entrance).expect("on the lap"),
+            oag_render::camera::portal::Face::Oncoming,
+        )
+        .expect("a frame")
+        .w_axis
+        .truncate();
+    race.sim.world.ships[0].physics.body.position.x = at.x - 1.0;
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(
+        entrance_is_in_the_pvs(&race, &walled_sections(), &request),
+        "the craft stands in the entrance's section"
+    );
+    assert_eq!(frames(&gpu, &scene, &mut race, 4), 1, "taken once, held");
+}
+
+/// The entrance's section is hidden, but the surface's radius reaches the craft's own section,
+/// which the main view draws: the portal is on the screen, so the view is drawn.
+#[test]
+fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_in_other_sections(&sectioned_race(&[]));
+    let commands = [portal_view_reaching(
+        0,
+        portals,
+        ViewUpdate::Continuous,
+        0,
+        40,
+    )];
+    let mut race = sectioned_race(&commands);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
+    let shot = race.portal_shot(&request, projection).expect("in the view");
+    let set = race.visible_set(&walled_sections(), &(projection * race.view()));
+    assert!(
+        !set.allows(1u64 << sample_section_at(&race, request.entrance)),
+        "the entrance's own section is behind a wall"
+    );
+    assert!(set.allows(shot.reach.sections), "its reach is not");
+    let scene = sectioned_scene(&gpu, &race, walled_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
+    assert!(scene.portal_engine_of(&race).is_some());
+}
+
+/// The section of the road sample under a progress.
+fn sample_section_at(race: &Race, progress: f32) -> u8 {
+    race.road_sample(ring_exit(race, progress).expect("on the lap"))
+        .expect("a road sample")
+        .section_id
+}
+
+/// A `.pvs` of `chunks` chunks over cells at `positions`, every cell seeing the `sees` chunks.
+fn chunk_partition(positions: &[[f32; 3]], chunks: usize, sees: &[usize]) -> oag_rcs::hd_pvs::Pvs {
+    let width = chunks / 8 + 1;
+    let mut blob = Vec::new();
+    for word in [positions.len() as u32, chunks as u32, 0x10, 0] {
+        blob.extend_from_slice(&word.to_be_bytes());
+    }
+    for position in positions {
+        for axis in position {
+            blob.extend_from_slice(&axis.to_be_bytes());
+        }
+        blob.extend_from_slice(&position[2].to_be_bytes());
+    }
+    for _ in positions {
+        let mut map = vec![0u8; width];
+        for chunk in sees {
+            map[chunk >> 3] |= 1 << (chunk & 7);
+        }
+        blob.extend_from_slice(&map);
+    }
+    oag_rcs::hd_pvs::Pvs::parse(&blob).expect("a partition")
+}
+
+/// A track of one tiny draw per `(chunk, place)`.
+fn chunked_track(draws: &[(u32, Vec3)]) -> Model {
+    let mut track = triangle();
+    track.radius = 500.0;
+    let template = track.draws[0].clone();
+    track.draws = draws
+        .iter()
+        .map(|&(chunk, at)| DrawCall {
+            chunk: Some(chunk),
+            bounds: Bounds {
+                centre: at.to_array(),
+                radius: 2.0,
+            },
+            ..template.clone()
+        })
+        .collect();
+    track
+}
+
+/// A scene over `track`, the chunk partition a cell at the craft sees `sees` of.
+fn chunked_scene(gpu: &Gpu, race: &Race, track: Model, sees: &[usize]) -> Scene {
+    let liveries: Vec<_> = (0..race.ship_count()).map(|_| livery()).collect();
+    let scene = scene_over_post(
+        &gpu.0,
+        &gpu.1,
+        track,
+        &liveries,
+        Msaa::Off,
+        None,
+        None,
+        None,
+    );
+    scene.attach_mod_shaders(&gpu.0, &gpu.1, race.mod_shaders());
+    let cell = race.sim.world.ships[0].physics.body.position.to_array();
+    scene.with_visibility(crate::visibility::TrackVisibility::declaring_chunks(
+        chunk_partition(&[cell], 16, sees),
+    ))
+}
+
+/// Where the fixture's entrance stands.
+fn entrance_centre(race: &Race, request: &crate::extensions::PortalRequest) -> Vec3 {
+    race.portal_frame(
+        ring_exit(race, request.entrance).expect("on the lap"),
+        oag_render::camera::portal::Face::Oncoming,
+    )
+    .expect("a frame")
+    .w_axis
+    .truncate()
+}
+
+/// What `frames` counts of a race over a chunk partition, with the portal's draws as given
+/// relative to its entrance: `(chunk, offset from the entrance)`.
+fn chunked_frames(near: &[(u32, Vec3)], far: &[(u32, Vec3)], sees: &[usize]) -> (u32, bool) {
+    let Some(gpu) = test_gpu() else {
+        return (u32::MAX, false);
+    };
+    let portals = pair_ahead(&race(&[]));
+    let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    let entrance = entrance_centre(&race, &request);
+    let draws: Vec<_> = near
+        .iter()
+        .map(|&(chunk, offset)| (chunk, entrance + offset))
+        .chain(far.iter().copied())
+        .collect();
+    let scene = chunked_scene(&gpu, &race, chunked_track(&draws), sees);
+    let drawn = frames(&gpu, &scene, &mut race, 5);
+    (drawn, scene.portal_engine_of(&race).is_some())
+}
+
+/// A chunk partition where everything the surface reaches is hidden: no pass, no texture. A
+/// visible chunk far from the surface does not bring the view back.
+#[test]
+fn a_portal_among_hidden_chunks_draws_nothing() {
+    let far = (0, Vec3::new(-900.0, 0.0, 0.0));
+    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO), (1, Vec3::X * 3.0)], &[far], &[0]);
+    assert_eq!(drawn, 0);
+    assert!(!bound, "no texture bound");
+}
+
+/// The entrance's own chunk is hidden but a neighbour the radius reaches is visible.
+#[test]
+fn a_portal_whose_radius_reaches_a_visible_chunk_still_draws() {
+    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO), (0, Vec3::X * 6.0)], &[], &[0]);
+    assert_eq!(drawn, 5);
+    assert!(bound);
+}
+
+/// The control for the two above: the entrance's chunk is visible.
+#[test]
+fn a_portal_in_a_visible_chunk_draws() {
+    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO)], &[], &[1]);
+    assert_eq!(drawn, 5);
+    assert!(bound);
+}
+
+/// A draw with no chunk index is never excluded, so the surface reaching one keeps drawing.
+#[test]
+fn a_portal_reaching_an_unplaced_draw_still_draws() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_ahead(&race(&[]));
+    let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    let at = entrance_centre(&race, &request);
+    let mut track = chunked_track(&[(1, at), (1, at)]);
+    track.draws[1].chunk = None;
+    let scene = chunked_scene(&gpu, &race, track, &[0]);
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
+}
+
+/// A track with no draw in reach has nothing to hide: the view is drawn.
+#[test]
+fn a_portal_reaching_no_draw_still_draws() {
+    let (drawn, _) = chunked_frames(&[], &[(1, Vec3::new(-900.0, 0.0, 0.0))], &[0]);
+    assert_eq!(drawn, 5);
 }
 
 /// Off the lap: a request for nothing, not a fault.

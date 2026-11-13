@@ -106,4 +106,4 @@ than "better" pixels in a 100 by 70 region, and the frames show a stray speckle 
 
 - The two coplanar front copies (868, 929) are drawn twice in the original too (the mask names both
   sections); harmless, the same picture to one or two ULP. The original's 16-bit depth would tie them exactly.
-- `Batch::depth_bias` is still read and not applied (an open item of the Pulse flyby thread).
+- `Batch::depth_bias` is applied now ([`depth-bias.md`](depth-bias.md)); it does not move the two coplanar front copies above, which carry `0`.

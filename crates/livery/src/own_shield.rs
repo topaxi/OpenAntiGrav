@@ -110,6 +110,7 @@ fn vertex(position: Vec3, normal: Vec3) -> GpuVertex {
         glow: 0.0,
         texcoord2: [0.0; 2],
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 

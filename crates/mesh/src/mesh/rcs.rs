@@ -532,6 +532,7 @@ fn emit(
             .unwrap_or([0.0, 0.0, 0.0]);
         let light = vertex_light.and_then(|c| c.get(k));
         out.vertices.push(GpuVertex {
+            depth_bias: 0.0,
             position: p.to_array(),
             // Zero means the file gave none, and `face_normals` derives it.
             normal,

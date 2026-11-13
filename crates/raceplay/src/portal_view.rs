@@ -6,6 +6,7 @@
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Vec3, Vec4};
 use oag_render::camera::portal::{self, Face};
+use oag_render::pvs::UNPLACED;
 
 use crate::Race;
 use crate::extensions::PortalRequest;
@@ -14,6 +15,8 @@ use crate::transit::Exit;
 /// A portal pair as the view being drawn sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PortalShot {
+    /// What the surface reaches, which the main view's visible sets are asked about.
+    pub(crate) reach: Reach,
     /// The view matrix of the camera through the pair.
     pub(crate) view: Mat4,
     /// The exit's plane in [`Self::view`]'s eye space.
@@ -21,6 +24,17 @@ pub(crate) struct PortalShot {
     /// What takes a world point at the entrance to `engine_uv`'s clip space: the secondary
     /// camera after [`portal::through`], so the surface reads the picture where it stands.
     pub(crate) engine_view_projection: Mat4,
+}
+
+/// The part of the track a portal's surface reaches: a sphere of the request's radius about the
+/// entrance's centre.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Reach {
+    /// The authored sections of the road inside the sphere, one bit each, and [`ALWAYS`] where
+    /// one of them is not named: a section partition masks nothing it cannot place.
+    pub(crate) sections: u64,
+    pub(crate) centre: Vec3,
+    pub(crate) radius: f32,
 }
 
 impl Race {
@@ -48,6 +62,9 @@ impl Race {
     ) -> Option<PortalShot> {
         let course = self.sim.course.as_ref()?;
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
+        let entrance_section = self
+            .road_sample(entrance)
+            .map_or(UNPLACED, |sample| sample.section_id);
         let entrance = self.portal_frame(entrance, Face::Oncoming)?;
         let exit = self.portal_frame(request.exit?, Face::Departing)?;
         // A craft in a transit has flown on past its entrance; its pair is seen from its seat.
@@ -60,9 +77,16 @@ impl Race {
         if !facing || !in_view {
             return None;
         }
+        let reach = Reach {
+            sections: crate::spline::section_bit(entrance_section)
+                | self.sim.spline.sections_within(centre, request.radius),
+            centre,
+            radius: request.radius,
+        };
         let through = portal::through(entrance, exit);
         let view = portal::view(main, through);
         Some(PortalShot {
+            reach,
             view,
             exit_plane: portal::eye_plane(view, exit),
             engine_view_projection: projection * view * through,

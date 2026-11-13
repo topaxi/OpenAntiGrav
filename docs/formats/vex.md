@@ -982,7 +982,7 @@ otherwise leaves the authored byte, which is the batch's depth bias,
 [`Batch::depth_bias`](../../crates/vex/src/vex.rs). A live GE list confirms the use:
 `DEPTHRANGE` `minz` reads `1001 + 6 * bias` (1007, 1019, 1025, 1049, 1055 seen).
 Which batches carry it: glow, additive and tree batches (`greenfade`, `newtree2`,
-`*_GLOW`, `*_ADD`), not window panes or walls. Nothing draws with it yet; see
+`*_GLOW`, `*_ADD`), not window panes or walls. The renderer applies it ([depth-bias.md](../rendering/depth-bias.md)); see
 [mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-per-batch-depth-bias-is-file-data-2026-11-07).
 PS2: a VIF batch holds a float bound at that offset and reads `0`; a non-VIF PS2
 batch's byte is read the same way and its meaning is not established (the PS2

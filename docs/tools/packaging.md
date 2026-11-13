@@ -724,14 +724,14 @@ RACE REMIX at all, because `oag-extras` no longer carries it.
 `scripts/stage-official-mods.sh <dest>` copies each mod folder (`remix/`) into
 `<dest>` and fails when the submodule is not checked out. Each target puts the
 result in a `mods` folder that `oag_mod::mods_search_path` reaches by
-`current_exe`:
+`current_exe` (the macOS app's is `Contents/Resources/mods`, see below):
 
 | Build | Where | Recipe |
 | --- | --- | --- |
 | Linux AppImage (both flavours, the Deck's included) | **inside the image**, `usr/bin/mods/remix` | `build-appimage.sh` |
 | Linux tarball | `mods/remix` beside `oag-game` | `release.yml`, "Cut the tarball" |
 | Windows zip | `mods/remix` beside `oag-game.exe` | `release.yml`, "Stage the zip" |
-| macOS app | `Contents/MacOS/mods/remix`, beside the bundle's executable | `build-mac-app.sh` |
+| macOS app | `Contents/Resources/mods/remix`; `packaged_mods` adds it for a program at `<name>.app/Contents/MacOS/<program>` | `build-mac-app.sh` |
 | iOS app | `OpenAntiGrav.app/mods/remix`, beside the bundle's executable | `build-ios-app.sh` |
 | Android APK | `assets/official-mods/` plus `assets/official-mods.index`, unpacked on first launch to `<files dir>/assets/mods/official` | `build-apk.sh` |
 
@@ -752,10 +752,27 @@ no change; the `android:` and `ios:` jobs check out with `submodules: true` too
 (the stage script fails without them). Not covered, named open in the Remix handover
 thread: the AUR PKGBUILDs and the web build.
 
-**Phones.** iOS needs nothing new: the bundle's executable sits in
-`OpenAntiGrav.app/`, so `packaged_mods` already searches `OpenAntiGrav.app/mods`, and the
-build script stages there like the macOS one (not run on a Mac: the recipe is the
-macOS one, read only). Android has no folder beside an executable and the mod loader
+**macOS: `Contents/Resources`, not `Contents/MacOS`.** `codesign` treats everything under
+`Contents/MacOS` as code to seal; data belongs in `Contents/Resources`. The first
+nightly that staged the `slipstream` mod there (a nested tree with executable-bit
+files, `guest/.cargo`, a Cargo project and a wasm) failed `codesign --force --deep -s -`
+with "bundle format unrecognized, invalid, or unsuitable", and `macos` has failed every
+nightly since (publish is skipped when any build fails). The two mods before it
+(`remix`, `hd-medals`) signed there. Which of slipstream's traits trips `codesign` is
+not pinned (no macOS to run it on); the build now stages under `Resources/mods`, clears
+the executable bits on the staged copy (mod files are read, never run) and seals
+without `--deep` (the bundle's only code is `Contents/MacOS/oag-game`; the verify
+still runs `--deep --strict`). `packaged_mods` recognises `Contents/MacOS/<program>`
+by path shape and adds `Contents/Resources/mods`; the shape test runs on Linux
+(`a_program_in_a_macos_bundle_also_searches_the_resources_folder`). Unverified on
+macOS until a nightly signs.
+
+**Phones.** iOS is unchanged: the bundle's executable sits in `OpenAntiGrav.app/`, so
+`packaged_mods` already searches `OpenAntiGrav.app/mods`, and the build script stages
+there (not run on a Mac: the recipe is the macOS one, read only). The iOS job signs
+the same three mods with the same `codesign --force --deep -s -` at the bundle root
+and passed on the nightlies where macOS failed, so the failure is specific to
+`Contents/MacOS`. Android has no folder beside an executable and the mod loader
 (`Mod::open`, the wasm host, the shader and fx loaders) reads file paths, so reading
 through the NDK `AssetManager` would be a second `Container` backend. Instead
 `build-apk.sh` writes the staged mods into the APK's `assets/` and an index of

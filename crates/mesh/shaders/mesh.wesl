@@ -7,6 +7,7 @@
 
 import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
+import package::depth_bias::{biased_clip};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
@@ -37,7 +38,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     if in.quake > 0.5 {
         world = vec4<f32>(quake_lifted(world.xyz), world.w);
     }
-    out.clip = uniforms.view_projection * world;
+    out.clip = biased_clip(uniforms.view_projection * world, in.depth_bias);
     // **The normal goes through the node matrix's inverse transpose**, not the
     // matrix itself: a per-axis scale skews a normal turned by the plain
     // matrix. The model matrix is uniform-scale, so it needs none. The cofactor

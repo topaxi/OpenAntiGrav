@@ -236,14 +236,30 @@ spline alone; a strip of frames of each read (2026-11-10), no test of its own.
 draws one snapshot, the first frame it is, and again when `generation` changes. The transform,
 clipping and scene are the same; only the rate differs. No draw at all, `engine_texture_bound()`
 false, while the entrance's face is turned from the camera or its sphere (`radius`, whole units) is
-outside the view, or for a progress off the lap. A wall in between does not count: a portal behind
-one still costs its scene.
+outside the view, for a progress off the lap, or where the main view's own visible set leaves out
+everything the surface's sphere (`radius` about the entrance's centre) reaches: a wall or terrain in
+between. On a section partition (Pulse) that is every authored `section_id` of a spline sample
+inside the sphere (an unnamed section counts as visible); on a chunk partition (HD, 2048, Omega) it is
+every non-moving draw of the circuit whose bounds the sphere meets, tested against the seat's chunk
+set (`ChunkSet::allows`, the set the scene pass is masked with; a draw with no chunk index is never
+excluded). A sphere that meets no draw, a track with no partition, and a view that does not cull by
+partition keep drawing. The test is per seat (a split's seat that does not see it falls to the next
+one), and a `Once` snapshot is not spent on a skipped frame: it is taken on the first frame the
+sphere is visible
+(`tests::portal_view::a_portal_behind_a_wall_draws_nothing`;
+`a_portal_whose_radius_reaches_a_visible_section_still_draws`; on chunks
+`a_portal_among_hidden_chunks_draws_nothing`, `a_portal_whose_radius_reaches_a_visible_chunk_still_draws`,
+`a_portal_reaching_an_unplaced_draw_still_draws`, `a_portal_reaching_no_draw_still_draws`). A moving
+draw is left out of the reach: its bounds are where it stood at time zero. Checked on a disc with
+`oag.slipstream` fired at tick 700 (the portal draws in view): HD (Talon's Junction, 621 cells over
+983 chunks) and Omega (882 cells over 2659 chunks); 2048 loads the same `from_hd_pvs` path as Omega and
+**was not run** (checked, applies; only a PFS-encrypted `.pkg` is held, which is not read in place).
 
 **What it costs.** One scene a frame, or one for a snapshot; a race that asks for nothing draws no
 pass and builds no target (`tests::portal_view`, counted in passes). The view is a scene pass of its
 own at 960x540, in a submission of its own ahead of the view that shows it, with no shadows, post
 chain, jitter or PVS: both PVS sets are keyed to the craft and camera on this side of the portal, so
-the frustum alone culls it and a long view draws more of the circuit than the main one. No mod
+the frustum alone culls it (the main view's sets only decide whether to draw it at all) and a long view draws more of the circuit than the main one. No mod
 shader draws in it: that would bind the texture to its own pass, and a portal would show itself. The
 scene blocks, a uniform region and a camera history are held for it in every race.
 

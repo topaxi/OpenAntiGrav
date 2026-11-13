@@ -39,6 +39,7 @@ fn vertex(position: [f32; 3], dirt_uv: [f32; 2], markings_uv: [f32; 2]) -> GpuVe
         glow: 0.0,
         texcoord2: markings_uv,
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 

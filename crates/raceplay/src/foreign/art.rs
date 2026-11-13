@@ -322,6 +322,7 @@ fn vertex(mesh: &ArtMesh, i: usize, glow: f32) -> GpuVertex {
         texcoord2: [0.0, 0.0],
         quake: 0.0,
         tangent: 0,
+        depth_bias: 0.0,
     }
 }
 

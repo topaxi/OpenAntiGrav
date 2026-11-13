@@ -58,6 +58,9 @@
   `moa-ad-flicker`): a front copy and a back copy of a trackside board share a plane; two-sided they z-fight
   frame to frame, the original shows one clean side; wired per title rule, 13 of 29 Pulse pairs closer, 1 worse by 0.0001 - see
   [`batch-cull.md`](batch-cull.md)
+- **A batch's authored depth bias is applied** (2026-11-13, `gemini-depth-bias`): the original moves a glow, cone or
+  tree batch `6 * bias` levels of its 16-bit depth toward the eye; ours does the same in its own depth through a vertex
+  lane, and Gemini Dam's tunnel light strip no longer z-fights its ceiling - see [`depth-bias.md`](depth-bias.md)
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
   fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)

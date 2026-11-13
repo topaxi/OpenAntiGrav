@@ -13,7 +13,10 @@
 //! - **It reads the frame's work, it does not do it**: last frame's animation tables and cards,
 //!   except for the very first frame of a race, which has none to read (a `--screenshot`
 //!   draws only that one). No post chain, no shadows, no jitter, and no PVS: both sets are keyed
-//!   to the craft and the camera on this side of the portal.
+//!   to the craft and the camera on this side of the portal. The main view's set decides only
+//!   whether the view is drawn at all: it is skipped where those sets leave out every section
+//!   (or, on a chunk partition, every draw) the portal's surface reaches, which is how a wall
+//!   in between counts.
 //! - **No mod shader draws in it**, or the texture it fills would be bound while it is a target,
 //!   and a portal would show itself: that is the recursion the design leaves out.
 //!
@@ -108,6 +111,9 @@ impl Scene {
             let aspect = rect.2.max(1.0) / rect.3.max(1.0);
             let projection = race.projection(aspect, self.far, settings.fov);
             let shot = race.portal_shot(&request, projection)?;
+            if self.reach_masked_out(race, &shot.reach, projection, settings) {
+                return None;
+            }
             let pass = PortalPass {
                 aspect,
                 projection,
@@ -131,6 +137,39 @@ impl Scene {
             }
         }
         race.set_viewpoint(drawing);
+    }
+
+    /// Whether the viewed seat's own visible sets (the ones its scene pass is masked with) leave
+    /// out all of the track the portal's surface reaches: a wall or terrain stands between the
+    /// camera and the portal, so nothing of it can be on the screen. Where the circuit
+    /// partitions by section, the sections of the road inside the surface's sphere; where it
+    /// partitions by chunk, the track's draws that sphere meets. A track with no partition, a
+    /// section the spline does not name, a sphere that meets no draw and a view that does not
+    /// cull by partition never mask.
+    fn reach_masked_out(
+        &self,
+        race: &Race,
+        reach: &crate::portal_view::Reach,
+        projection: Mat4,
+        settings: &ViewSettings<'_>,
+    ) -> bool {
+        let Some(visibility) = self.visibility.as_ref().filter(|_| settings.pvs_cull) else {
+            return false;
+        };
+        if visibility.has_sections() {
+            let visible = race.visible_set(visibility, &(projection * race.view()));
+            if !visible.allows(reach.sections) {
+                return true;
+            }
+        }
+        let Some(chunks) = self.chunk_set(race, settings.pvs_cull) else {
+            return false;
+        };
+        let mut draws = self
+            .track
+            .draws_within(reach.centre, reach.radius)
+            .peekable();
+        draws.peek().is_some() && !draws.any(|draw| chunks.allows(draw))
     }
 
     /// The matrix of the snapshot that answers `request`, if the target holds it.
@@ -217,6 +256,13 @@ impl Scene {
             portal_views: w.portal_views + 1,
             ..w
         });
+    }
+
+    /// This scene over `visibility` instead of the one it was built with.
+    #[cfg(test)]
+    pub(crate) fn with_visibility(mut self, visibility: crate::TrackVisibility) -> Self {
+        self.visibility = Some(visibility);
+        self
     }
 
     /// Whether a target was ever built.

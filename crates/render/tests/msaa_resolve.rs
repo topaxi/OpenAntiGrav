@@ -49,6 +49,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
         GpuVertex {
             quake: 0.0,
@@ -66,6 +67,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
         GpuVertex {
             quake: 0.0,
@@ -83,6 +85,7 @@ fn triangle_model() -> Model {
             glow: 0.0,
             texcoord2: [0.0, 0.0],
             tangent: 0,
+            depth_bias: 0.0,
         },
     ];
     Model {

@@ -510,8 +510,8 @@ lifted sample, 150 frames, the world clock logged per frame) against ours render
 (`--anim-seconds`, same pose): the ceiling band's mean luma follows one 60-frame sawtooth in both (a slow fall over 30
 frames, a rise over 2 to 3 frames, then steady; ours leads by 1 to 2 frames), and no frame-to-frame change above 3.5 grey
 levels in either. At a **fixed camera** neither changes with time faster than that sawtooth; the flicker the maintainer
-saw at this tunnel is not the texture path but ours' strip z-fighting the ceiling under camera motion (the unapplied
-`Batch::depth_bias`, [mesh-draw.md](mesh-draw.md), "The per-batch depth bias is file data").
+saw at this tunnel is not the texture path but ours' strip z-fighting the ceiling under camera motion (the then-unapplied
+`Batch::depth_bias`, now applied: [mesh-draw.md](mesh-draw.md), "The per-batch depth bias is file data").
 
 ## Open
 
