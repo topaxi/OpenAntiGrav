@@ -55,9 +55,7 @@ Values for `Demo::PULSE`, each measured unless marked:
    state** (the `demo_logo.mip` mark, two sliding cyan rules, pulsing
    `BOOT_PRESS_ANY2`), and hide the race HUD entirely (live frames). Do not
    hand-copy its coordinates.
-8. **Camera (75):** mode 2 builds its own camera object (`FUN_08886320`, shared
-   with AI Race) that cuts between trackside views; the cutting law is not
-   read. Until it is, any chase or replay camera is a stand-in, labelled so.
+8. **Camera (88): read, it is the spectator director** (`attract-demo.md`, "The demo camera is the spectator director"). Wired in the `demo-follow` lane.
 
 ## Next Steps
 
