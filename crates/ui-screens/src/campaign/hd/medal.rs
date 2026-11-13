@@ -113,10 +113,30 @@ use oag_ui::screen::Image;
 /// (`oag_title::Campaign::medal_tier_rows`, `docs/formats/omega-status.md`, "The medal atlas").
 /// The block order and `difficulty` mapping are the same on both.
 pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) -> [f32; 4] {
-    const FRAME: f32 = 60.0;
-    const ROW_PITCH: f32 = 61.0;
-    const BLOCK_PITCH: f32 = 183.0;
     let tier_row = tier_rows[medal.index().min(2)];
+    atlas_frame(
+        difficulty,
+        3,
+        usize::from(tier_row),
+        [HD_FRAME, HD_FRAME],
+        HD_ROW_PITCH,
+    )
+}
+
+/// The title atlases' frame size and row pitch (a 1 px gap under each 60 px frame).
+pub(in crate::campaign) const HD_FRAME: f32 = 60.0;
+pub(in crate::campaign) const HD_ROW_PITCH: f32 = 61.0;
+
+/// One frame of a medal atlas laid out as a column of blocks, one block per difficulty (easy,
+/// medium, hard from the top), `rows` frames to a block, `row_pitch` px apart:
+/// `[u, v, width, height]`. A single-block atlas passes [`Difficulty::Easy`].
+pub(in crate::campaign) fn atlas_frame(
+    difficulty: Difficulty,
+    rows: usize,
+    row: usize,
+    frame: [f32; 2],
+    row_pitch: f32,
+) -> [f32; 4] {
     let block = match difficulty {
         Difficulty::Easy => 0.0,
         Difficulty::Medium => 1.0,
@@ -124,9 +144,9 @@ pub fn hd_medal_frame(medal: Medal, difficulty: Difficulty, tier_rows: [u8; 3]) 
     };
     [
         0.0,
-        block * BLOCK_PITCH + f32::from(tier_row) * ROW_PITCH,
-        FRAME,
-        FRAME,
+        (block * rows as f32 + row as f32) * row_pitch,
+        frame[0],
+        frame[1],
     ]
 }
 

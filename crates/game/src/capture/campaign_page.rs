@@ -252,6 +252,7 @@ pub(super) fn campaign_page(
     // The medal art a mod asks for, as `Session::open_campaign` resolves it live.
     let medal_art = crate::campaign::medal_art::apply(
         &crate::mods::Mods::load_for_profile()?.installed_for(title, &|_| true),
+        custom.as_ref(),
         || crate::launcher::survey(&oag_source::source::candidates()),
         &mut campaign.sprites,
     );

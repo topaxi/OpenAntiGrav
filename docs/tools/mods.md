@@ -77,7 +77,8 @@ per-difficulty = true               # one block of three tiers per difficulty
   mod runs wherever its `titles` allow and shows the swatches when that disc is not on the search
   path (the load log says why, and `needs-titles = ["wipeout-hd"]` puts a NEEDS line on the MODS
   page). The frames are read off the player's disc at run time; the mod ships none of them. `mod`
-  names a key of `[icons]`; a mod's own atlas is parsed and checked, and not drawn yet.
+  names a key of `[icons]`: the mod's own atlas, a PNG (an SVG atlas is refused by name and the
+  swatches stay), cut into equal rows (below).
 - **`per-difficulty`**: a cell draws the block of the difficulty its best medal was earned on
   (`best_difficulty`: easy, medium, hard from the top, 183 px apart); a medal with no saved
   difficulty draws the middle block (`CellSelection::medal_block_at`, the rule HD's Cell Selection
@@ -85,10 +86,21 @@ per-difficulty = true               # one block of three tiers per difficulty
   HD's Grid Selection has no tier medal hexagons. Without it, the first block.
 - **`tiers`**: names the tier of each atlas row, top to bottom, by the names a campaign's tiers
   carry (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of a campaign's own,
-  [custom-campaign.md](../formats/custom-campaign.md)), each once. A tier no row names draws its
-  declared colour as a swatch. A `title` source uses the title's own row order
-  (`oag_title::Campaign::medal_rows`, gold, silver, bronze) and ignores it, so a campaign tier
-  other than those three draws its colour there.
+  [custom-campaign.md](../formats/custom-campaign.md)), each once; absent, gold, silver, bronze. A
+  tier no row names draws its declared colour as a swatch. A `title` source uses the title's own
+  row order (`oag_title::Campaign::medal_rows`, gold, silver, bronze) and ignores it, so a campaign
+  tier other than those three draws its colour there.
+- **A `mod` atlas's layout**: one column of equal frames, no gaps. The image is `tiers` rows tall
+  (3 when absent) in each block, and three blocks (easy, medium, hard from the top) when
+  `per-difficulty`, so a frame is the image's width by its height divided by `rows x blocks`; any
+  resolution works, and an image that does not divide into whole rows is refused by name. The
+  frame is drawn scaled to the hexagon (Pulse's hexagons are flat-topped; the example's frames
+  are drawn to fit). A title's atlas is the one fixed layout above (60 px frames, 61 px pitch).
+- **Whose campaigns**: a mod that carries campaigns of its own (`campaigns/*.toml`) has its
+  `[campaign-medals]` drawn on those campaigns' screens only; the disc's own campaign and other
+  mods' campaigns keep the title's swatches. A mod with no campaigns (`official/hd-medals`) is
+  title-wide. A campaign's own mod wins over a title-wide one whatever order they load in, and a
+  campaign mod's art never repaints the disc's own campaign.
 - **Placement**: a 60 px atlas frame is drawn scaled to the hexagon's own rect (Pulse's
   `Outline_x_y`, 32 x 32 layout units), untinted, the same rect the swatch fills. Frames are 60 px
   tall at a 61 px row pitch.

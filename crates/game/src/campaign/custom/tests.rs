@@ -405,12 +405,13 @@ fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
     let source = examples().join("example-campaign");
     let dir = std::env::temp_dir().join(format!("oag-custom-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    for sub in ["campaigns", "pilots", "tracks"] {
+    for sub in ["campaigns", "pilots", "tracks", "ui"] {
         std::fs::create_dir_all(dir.join(sub)).unwrap();
     }
     for file in [
         "oag-mod.toml",
         "pilots/rival.toml",
+        "ui/medals.png",
         "tracks/practice-octagon.track.toml",
         "tracks/practice-octagon.glb",
     ] {
@@ -449,6 +450,14 @@ fn a_track_file_in_a_zipped_mod_is_refused_by_name() {
             read("example-campaign/oag-mod.toml").as_bytes(),
         ),
         ("campaigns/night-run.toml", example_text().as_bytes()),
+        (
+            "ui/medals.png",
+            Box::leak(
+                std::fs::read(examples().join("example-campaign/ui/medals.png"))
+                    .unwrap()
+                    .into_boxed_slice(),
+            ),
+        ),
     ]));
     let module = oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap();
     let installed = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
@@ -719,9 +728,9 @@ per-difficulty = true
 fn a_medals_mod_is_asked_for_on_its_title_and_names_the_disc_it_lacks() {
     let module = medals_mod();
     let without = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| false);
-    let (id, medals) = without.medals.as_ref().expect("asks for medal art");
-    assert_eq!(id, "test.hd-medals");
-    assert!(medals.per_difficulty);
+    let ask = without.medals_for(None).expect("asks for medal art");
+    assert_eq!(ask.mod_id, "test.hd-medals");
+    assert!(ask.medals.per_difficulty && !ask.own_campaigns);
     assert_eq!(
         without.needs_discs,
         [("test.hd-medals".to_string(), "Wipeout HD".to_string())]
@@ -729,9 +738,9 @@ fn a_medals_mod_is_asked_for_on_its_title_and_names_the_disc_it_lacks() {
     let with = Installed::for_title([&module], &[], oag_pulse::TITLE, &|slug| {
         slug == "wipeout-hd"
     });
-    assert!(with.medals.is_some() && with.needs_discs.is_empty());
+    assert!(with.medals_for(None).is_some() && with.needs_discs.is_empty());
     let pure = Installed::for_title([&module], &[], oag_pure::TITLE, &|_| false);
-    assert!(pure.medals.is_none() && pure.needs_discs.is_empty());
+    assert!(pure.medals.is_empty() && pure.needs_discs.is_empty());
 }
 
 #[test]
@@ -978,5 +987,154 @@ fn a_launch_keeps_a_tier_by_name_and_names_the_tiers_the_title_has_no_phrase_for
     assert!(
         launch.own_phrase_tier("gold").is_none(),
         "the title's own phrase"
+    );
+}
+
+/// A mod with campaigns of its own and a 8x96 PNG atlas: four rows (platinum, gold, silver,
+/// bronze) in each of three difficulty blocks, `[campaign-medals] source = { mod = "atlas" }`.
+fn atlas_mod() -> oag_mod::Mod {
+    let manifest = r#"toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "test.medal-atlas"
+name = "Medal atlas"
+version = "1.0.0"
+authors = ["A"]
+description = "x"
+titles = ["wipeout-pulse"]
+
+[icons]
+atlas = "ui/medals.png"
+
+[campaign-medals]
+source = { mod = "atlas" }
+per-difficulty = true
+tiers = ["platinum", "gold", "silver", "bronze"]
+"#;
+    let pixels: Vec<u8> = (0..8 * 96).flat_map(|_| [200, 60, 60, 255]).collect();
+    let png: &'static [u8] = Box::leak(oag_texture::png::encode_rgba(8, 96, &pixels).into());
+    let files: &'static [(&'static str, &'static [u8])] = Box::leak(Box::new([
+        ("oag-mod.toml", manifest.as_bytes()),
+        ("ui/medals.png", png),
+        ("campaigns/placeholder.toml", b"[campaign]\n".as_slice()),
+    ]));
+    oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap()
+}
+
+fn blank_sheet() -> oag_hud::sprite::Sheet {
+    oag_hud::sprite::Sheet::build(&[], &mut Vec::new())
+}
+
+/// A mod's own atlas is read, cut into its tiers' rows, put on the sprite sheet under a key of
+/// the mod's own and handed to the mod's own campaign's screens. Dropping any of the reading,
+/// the cutting or the sheet entry fails this.
+#[test]
+fn a_mod_with_its_own_atlas_draws_it_on_its_own_campaigns_screens() {
+    needs_examples!();
+    let module = atlas_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| true);
+    let mut own = example();
+    own.mod_id = "test.medal-atlas".to_string();
+    let mut sheet = blank_sheet();
+    let art = crate::campaign::medal_art::apply(
+        &installed,
+        Some(&own),
+        || panic!("a mod's own atlas needs no disc"),
+        &mut sheet,
+    );
+    let oag_ui_screens::campaign::MedalArt::Atlas(atlas) = &art else {
+        panic!("the mod's atlas is not drawn: {art:?}");
+    };
+    assert_eq!(atlas.image, "mod:test.medal-atlas/atlas");
+    assert!(sheet.get(&atlas.image).is_some(), "not on the sprite sheet");
+    let tiers = oag_tables::race_campaign::MedalTiers::standard();
+    assert_eq!(
+        art.frame(
+            tiers,
+            oag_tables::race_campaign::Medal::Gold,
+            oag_tables::race_campaign::Difficulty::Hard
+        ),
+        Some([0.0, 2.0 * 32.0 + 8.0, 8.0, 8.0]),
+        "gold is the second of four 8 px rows, in the hard block"
+    );
+}
+
+/// The disc's own campaign, and another mod's, keep the title's swatches although a mod with an
+/// atlas of its own is installed.
+#[test]
+fn a_mods_atlas_is_not_drawn_on_the_discs_campaign_or_another_mods() {
+    needs_examples!();
+    let module = atlas_mod();
+    let installed = Installed::for_title([&module], &[], oag_pulse::TITLE, &|_| true);
+    let mut other = example();
+    other.mod_id = "test.somebody-else".to_string();
+    for open in [None, Some(&other)] {
+        let mut sheet = blank_sheet();
+        let art = crate::campaign::medal_art::apply(
+            &installed,
+            open,
+            || panic!("no disc is asked for"),
+            &mut sheet,
+        );
+        assert_eq!(art, oag_ui_screens::campaign::MedalArt::Swatch);
+        assert!(sheet.get("mod:test.medal-atlas/atlas").is_none());
+    }
+}
+
+/// A mod with no campaigns (HD's medals on Pulse) stays title-wide: the disc's campaign gets it.
+#[test]
+fn a_mod_with_no_campaigns_asks_for_its_art_on_every_campaign() {
+    let installed = Installed::for_title([&medals_mod()], &[], oag_pulse::TITLE, &|_| true);
+    assert!(installed.medals_for(None).is_some());
+}
+
+/// A title-wide medals mod that loads first does not take the art of a campaign that has its own.
+#[test]
+fn a_campaigns_own_mods_atlas_wins_over_a_title_wide_mods_whatever_the_load_order() {
+    needs_examples!();
+    let (wide, own) = (medals_mod(), atlas_mod());
+    let mut open = example();
+    open.mod_id = "test.medal-atlas".to_string();
+    for order in [[&wide, &own], [&own, &wide]] {
+        let installed = Installed::for_title(order, &[], oag_pulse::TITLE, &|_| true);
+        assert_eq!(
+            installed.medals_for(Some(&open)).unwrap().mod_id,
+            "test.medal-atlas"
+        );
+        assert_eq!(
+            installed.medals_for(None).unwrap().mod_id,
+            "test.hd-medals",
+            "the disc's campaign takes the title-wide art"
+        );
+    }
+}
+
+#[test]
+fn an_atlas_that_does_not_cut_into_its_rows_keeps_the_swatch() {
+    let ask = |height| MedalAsk {
+        mod_id: "t".to_string(),
+        medals: oag_mod::CampaignMedals {
+            source: oag_mod::MedalSource::Mod("atlas".to_string()),
+            per_difficulty: true,
+            tiers: vec!["gold".to_string(), "silver".to_string()],
+        },
+        atlas: Some(oag_texture::png::encode_rgba(
+            4,
+            height,
+            &vec![255; 4 * height as usize * 4],
+        )),
+        own_campaigns: true,
+    };
+    let error = crate::campaign::medal_art::resolve(&ask(10), &[]).unwrap_err();
+    assert!(error.contains("6 equal rows"), "{error}");
+    assert!(crate::campaign::medal_art::resolve(&ask(12), &[]).is_ok());
+    let svg = MedalAsk {
+        atlas: Some(b"<svg/>".to_vec()),
+        ..ask(12)
+    };
+    assert!(
+        crate::campaign::medal_art::resolve(&svg, &[])
+            .unwrap_err()
+            .contains("not a PNG")
     );
 }

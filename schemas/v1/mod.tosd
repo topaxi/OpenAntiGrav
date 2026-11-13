@@ -273,7 +273,8 @@ optional = true
 # `per-difficulty` says the atlas holds one block of tiers per difficulty. `tiers` names the
 # tier of each atlas row, top to bottom (the names of the campaign's tiers: gold, silver, bronze
 # or a `[[medal-tier]]` of its own, each once); a `title` source
-# uses the title's own row order and ignores it. The loader checks that exactly one source
+# uses the title's own row order and ignores it. A `mod` source is a PNG cut into equal frames:
+# `tiers` rows per block, three blocks (easy, medium, hard from the top) when `per-difficulty`. The loader checks that exactly one source
 # key is given, that a `mod` is a key of [icons] and the tier names.
 
 [types.campaign-medals]
