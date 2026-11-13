@@ -870,6 +870,7 @@ impl Race {
                 hull_shake: std::array::from_fn(|_| None),
                 hull_shake_law: hull_shake,
                 hull_shake_on: true,
+                camera_shake_on: true,
                 player_tags_on: false,
                 seat: None,
                 person_names: Vec::new(),

@@ -156,10 +156,34 @@ impl Run {
     }
 }
 
-/// The laps a demo's race is set to, so it never ends on them: with its timer held off the
-/// original's demo ran 376 s and never finished, and only the length ends one (measured on Pulse
-/// PSP, `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`).
-pub const LAPS: u32 = 99;
+/// The lap count a demo that does not end on laps is set to: no demo reaches it. The original's
+/// demo is set to three laps and was seen racing 376 s without finishing (measured on Pulse PSP,
+/// `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`); ours finishes a race that has run its
+/// laps, so a demo that must not end on them is given more than it can fly.
+pub const UNENDING_LAPS: u32 = 99;
+
+/// Sets `options` to the race `title`'s demo flies, apart from the circuit and the team: the
+/// speed class (when the title's ladder has it), the laps, and the pickups.
+pub fn apply_rules(options: &mut oag_raceplay::Options, title: &oag_title::Title) {
+    let rules = &title.demo.rules;
+    let known = title.race.speed_classes.is_none_or(|ladder| {
+        ladder
+            .names
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(rules.class.value))
+    });
+    if known {
+        options.class = rules.class.value.to_string();
+    }
+    options.laps_override = Some(if rules.ends_on_laps.value {
+        rules.laps.value
+    } else {
+        UNENDING_LAPS
+    });
+    options.weapons_override = Some(rules.weapons.value);
+    options.eliminator_kill_target = None;
+    options.eliminator_score_target = None;
+}
 
 /// What follows a demo that ran out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

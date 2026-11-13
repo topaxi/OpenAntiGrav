@@ -38,6 +38,86 @@ pub enum Exit {
     AnyInput,
 }
 
+/// How a demo's race is set up, apart from which circuit and team.
+///
+/// Pulse's are measured: `Demo_Construct` and the tests of the game mode in the executable
+/// (`docs/ghidra/functions/psp-pulse-usa/attract-demo.md`, "The rest of the set-up" and
+/// "What else mode 2 changes").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rules {
+    /// The speed class every demo flies, by the name the disc spells it.
+    pub class: Sourced<&'static str>,
+    /// Craft on the grid.
+    pub craft: Sourced<u32>,
+    /// The laps the race is set to. A demo that is not [`Self::ends_on_laps`] runs them out and
+    /// races on.
+    pub laps: Sourced<u32>,
+    /// Whether finishing the laps ends the demo. The original's does not: only the timeout does.
+    pub ends_on_laps: Sourced<bool>,
+    /// Whether pickups are on.
+    pub weapons: Sourced<bool>,
+    /// What the opponents' weapon-use odds are multiplied by.
+    pub ai_weapon_use: Sourced<f32>,
+    /// Whether the pre-race flyby plays, and the track description with it. The original skips
+    /// the flyby as soon as it has started and shows no description. The Now Playing caption is
+    /// part of the race HUD, which a demo hides whole.
+    pub intro: Sourced<bool>,
+    /// Whether hits shake the camera.
+    pub camera_shake: Sourced<bool>,
+    /// Whether the race writes statistics to the player's profile.
+    pub records_profile: Sourced<bool>,
+}
+
+impl Rules {
+    /// Pulse PSP's, all measured.
+    pub const PULSE: Self = Self {
+        class: Sourced::measured("Flash"),
+        craft: Sourced::measured(8),
+        laps: Sourced::measured(3),
+        ends_on_laps: Sourced::measured(false),
+        weapons: Sourced::measured(true),
+        ai_weapon_use: Sourced::measured(2.0),
+        intro: Sourced::measured(false),
+        camera_shake: Sourced::measured(false),
+        records_profile: Sourced::measured(false),
+    };
+
+    /// `from`'s rules, not re-measured on this title.
+    #[must_use]
+    pub const fn inherited(from: &'static str) -> Self {
+        Self {
+            class: Sourced::inherited("Flash", from),
+            craft: Sourced::inherited(8, from),
+            laps: Sourced::inherited(3, from),
+            ends_on_laps: Sourced::inherited(false, from),
+            weapons: Sourced::inherited(true, from),
+            ai_weapon_use: Sourced::inherited(2.0, from),
+            intro: Sourced::inherited(false, from),
+            camera_shake: Sourced::inherited(false, from),
+            records_profile: Sourced::inherited(false, from),
+        }
+    }
+}
+
+/// The front-end screen a demo shows over its race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Screen {
+    /// The XML entry that authors it, by name.
+    pub entry: &'static str,
+    /// The state in that file.
+    pub state: &'static str,
+}
+
+/// Which camera a demo watches its race through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Camera {
+    /// The title's usual race camera, on the craft the camera slot follows.
+    Chase,
+    /// The spectator director that runs after the player's finish: a subject craft, trackside
+    /// stations and cuts between them (`oag_raceplay::finish_camera`). Pulse PSP, measured.
+    Spectator,
+}
+
 /// One title's attract demo.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Demo {
@@ -56,6 +136,12 @@ pub struct Demo {
     /// [`Self::idle_seconds`] and [`Self::duration_seconds`] and its circuit list is the cycle
     /// (`oag_tables::demo_config`). 2048 and Omega ship one; Pulse and HD do not.
     pub config: Option<&'static str>,
+    /// How the race is set up.
+    pub rules: Rules,
+    /// The screen drawn over the race, when the title authors one.
+    pub screen: Option<Sourced<Screen>>,
+    /// Which camera the race is watched through.
+    pub camera: Sourced<Camera>,
 }
 
 impl Demo {
@@ -68,6 +154,12 @@ impl Demo {
         after_end: Sourced::measured(AfterEnd::NextDemo),
         selection: Sourced::measured(Selection::AnyCircuitMultiplayerTeam),
         config: None,
+        rules: Rules::PULSE,
+        screen: Some(Sourced::measured(Screen {
+            entry: "Data\\Plugins\\PI001\\GUI\\Demo_Definition.xml",
+            state: "Demo InGame",
+        })),
+        camera: Sourced::measured(Camera::Spectator),
     };
 
     /// A title that takes the two durations from `from` (Pulse's, by way of HD where `from` is
@@ -81,6 +173,9 @@ impl Demo {
             after_end: Sourced::inherited(AfterEnd::NextDemo, from),
             selection: Sourced::inherited(Selection::AnyCircuitMultiplayerTeam, from),
             config: None,
+            rules: Rules::inherited(from),
+            screen: None,
+            camera: Sourced::chosen(Camera::Chase),
         }
     }
 

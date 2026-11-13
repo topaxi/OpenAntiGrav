@@ -172,6 +172,10 @@ pub struct Law {
     pub all_weapons: Odds,
     /// The Eliminator's terms.
     pub eliminator: EliminatorTerms,
+    /// Multiplies the fire odds picked from the weapon's `useAgainst*` row, before the
+    /// Eliminator's term. `1.0` in an ordinary race; the attract demo doubles it
+    /// (`docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`, "The decision").
+    pub use_scale: f32,
 }
 
 impl Law {
@@ -180,6 +184,7 @@ impl Law {
         step_scale: 1.0,
         all_weapons: Odds::IDENTITY,
         eliminator: EliminatorTerms::Pulse,
+        use_scale: 1.0,
     };
 }
 
@@ -299,6 +304,7 @@ impl Situation {
         } else {
             self.odds.use_against_ai * self.law.all_weapons.use_against_ai
         };
+        odds *= self.law.use_scale;
         if self.eliminator {
             odds *= match self.law.eliminator {
                 EliminatorTerms::Pulse => ELIMINATOR_USE,

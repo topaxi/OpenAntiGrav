@@ -795,7 +795,9 @@ impl Session {
                         ai_choice,
                         oag_game::ai_choice::Source::Free(ai_difficulty),
                     );
-                    race_stage.race.fly_as_demo();
+                    if let Some(shell) = &self.shell {
+                        race_stage.race.fly_as_demo(&shell.title.demo);
+                    }
                     race_stage.race.begin_speed_plans();
                     race_stage.demo = Some(run);
                     // Never the player's best-lap ghost.
@@ -1063,7 +1065,7 @@ impl Session {
                 if !self.no_intro
                     && self.net.is_none()
                     && self.viewer.is_none()
-                    && race_stage.demo.is_none()
+                    && (race_stage.demo.is_none() || self.demo_plays_intro())
                     && race_stage.race.begin_intro()
                 {
                     oag_game::sound::prepare_intro_voice(

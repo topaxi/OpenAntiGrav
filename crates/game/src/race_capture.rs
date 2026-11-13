@@ -528,7 +528,7 @@ pub fn capture(
     campaign_2048_event
         .iter()
         .for_each(|event| race.arm_event_xp(event));
-    options.demo.then(|| race.fly_as_demo());
+    options.demo.then(|| race.fly_as_demo(&title.demo));
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {

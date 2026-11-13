@@ -65,6 +65,8 @@ pub struct RaceView {
     pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
     /// Whether the shake runs ([`super::Race::set_hull_shake`]).
     pub(super) hull_shake_on: bool,
+    /// Whether an impact shakes the camera; a demo's does not ([`super::Race::fly_as_demo`]).
+    pub(super) camera_shake_on: bool,
     /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
     pub(super) player_tags_on: bool,
     /// The grid slot this machine's person flies in a network race, set by

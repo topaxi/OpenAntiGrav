@@ -16,11 +16,18 @@ impl Race {
     /// the controllers are in the state hash, so a race handed over later than that would not
     /// reproduce.
     ///
+    /// The title's demo rules that reach the simulation are laid over the race too: the
+    /// opponents' weapon-use odds are multiplied by [`oag_title::demo::Rules::ai_weapon_use`]
+    /// (`oag_ai::weapon_ai::Law::use_scale`), and an impact shakes the camera only if
+    /// [`oag_title::demo::Rules::camera_shake`] says so.
+    ///
     /// Not a recorded controller change ([`Race::set_controller`] writes one): a demo records
     /// nothing.
-    pub fn fly_as_demo(&mut self) {
+    pub fn fly_as_demo(&mut self, demo: &oag_title::demo::Demo) {
         self.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
         self.set_autopilot(true);
+        self.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
+        self.view.camera_shake_on = demo.rules.camera_shake.value;
     }
 }
 
@@ -38,7 +45,7 @@ mod tests {
             1,
             "the default grid has a person"
         );
-        race.fly_as_demo();
+        race.fly_as_demo(&oag_title::demo::Demo::PULSE);
         assert_eq!(race.sim.world.human_slots().count(), 0);
         let camera_slot = race.sim.world.primary_slot();
         assert!(
@@ -51,5 +58,25 @@ mod tests {
                 "slot {slot} is flown by a person"
             );
         }
+    }
+
+    #[cfg(feature = "view")]
+    #[test]
+    fn a_demo_camera_does_not_shake_and_a_race_camera_does() {
+        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
+        race.force_shake(1.0);
+        assert!(race.view.contact.shake.active());
+        race.fly_as_demo(&oag_title::demo::Demo::PULSE);
+        race.force_shake(1.0);
+        race.tick(&oag_gameplay::PlayerInputs::default());
+        assert!(!race.view.contact.shake.active());
+    }
+
+    #[test]
+    fn a_demo_doubles_the_opponents_weapon_use_and_a_race_does_not() {
+        let mut race = Race::start(Setup::headless(Mode::SingleRace, 1));
+        assert_eq!(race.sim.fire_terms.use_scale, 1.0);
+        race.fly_as_demo(&oag_title::demo::Demo::PULSE);
+        assert_eq!(race.sim.fire_terms.use_scale, 2.0);
     }
 }

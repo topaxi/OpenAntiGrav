@@ -71,9 +71,9 @@ pub fn run(
     demos: u32,
     length: u32,
 ) -> Result<Vec<Report>> {
-    let rule = oag_source::title::identify(&base.source)
-        .with_context(|| format!("{} is not a title this build knows", base.source))?
-        .demo;
+    let title = oag_source::title::identify(&base.source)
+        .with_context(|| format!("{} is not a title this build knows", base.source))?;
+    let rule = title.demo;
     let tracks: Vec<_> = catalogue
         .tracks
         .iter()
@@ -116,20 +116,18 @@ pub fn run(
         options.track = Some(tracks[chosen.track].entry_name());
         options.team = Some(teams[chosen.team].to_string());
         options.seed = Some(chain_seed(seed, n));
-        options.laps_override = Some(super::LAPS);
+        super::apply_rules(&mut options, title);
         let loaded = race::load(&options)
             .with_context(|| format!("loading demo {} on {}", n + 1, tracks[chosen.track].id))?;
-        let (timing, difficulty) = (
-            Timing::of(&loaded.title.demo, config),
-            loaded.setup.difficulty,
-        );
+        let demo = loaded.title.demo;
+        let (timing, difficulty) = (Timing::of(&demo, config), loaded.setup.difficulty);
         let mut race = Race::start(loaded.setup);
         crate::ai_choice::apply(
             &mut race,
             crate::ai_choice::AiChoice::default(),
             crate::ai_choice::Source::Free(difficulty),
         );
-        race.fly_as_demo();
+        race.fly_as_demo(&demo);
         let craft = usize::from(race.sim.world.ship_count);
         let start: Vec<_> = (0..craft)
             .map(|slot| race.sim.world.ships[slot].physics.body.position)

@@ -231,6 +231,7 @@ fn hd_law() -> Law {
             use_scale: 12.5,
             absorb_scale: 2.6,
         },
+        use_scale: 1.0,
     }
 }
 
@@ -295,4 +296,20 @@ fn an_authored_eliminator_scales_use_and_absorb_and_keeps_the_absorb_index() {
         s.absorb_chance(0),
         long_way(0.5 * RATE_ELIMINATOR[4], 1.0 * 1.0 * 2.6)
     );
+}
+
+#[test]
+fn the_demos_doubled_use_doubles_the_fire_odds_and_leaves_the_absorb_odds() {
+    let mut s = situation();
+    s.eliminator = false;
+    s.gap_ahead = Some(50.0);
+    let fire = s.fire_chance();
+    let absorb = s.absorb_chance(0);
+    s.law.use_scale = 2.0;
+    assert_eq!(
+        s.fire_chance(),
+        long_way(s.rates()[s.fire_index()], 1.2 * 2.0)
+    );
+    assert!(s.fire_chance() > fire);
+    assert_eq!(s.absorb_chance(0), absorb);
 }

@@ -237,3 +237,43 @@ fn a_race_held_still_does_not_run_down_the_demos_length() {
     }
     assert_eq!(run.tick(5, false, true), Some(Leave::Over));
 }
+
+#[test]
+fn the_titles_rules_become_the_races_options() {
+    let mut options = oag_raceplay::Options {
+        class: "Venom".to_string(),
+        weapons_override: Some(false),
+        eliminator_kill_target: Some(3),
+        ..oag_raceplay::Options::default()
+    };
+    apply_rules(&mut options, &oag_pulse::TITLE);
+    assert_eq!(options.class, "Flash");
+    assert_eq!(options.weapons_override, Some(true));
+    assert_eq!(options.eliminator_kill_target, None);
+    assert_eq!(
+        options.laps_override,
+        Some(UNENDING_LAPS),
+        "a demo that does not end on laps is given more than it can fly"
+    );
+}
+
+#[test]
+fn a_title_whose_demo_ends_on_laps_is_set_to_its_laps() {
+    let mut title = oag_pulse::TITLE.clone();
+    title.demo.rules.ends_on_laps = oag_title::pre_race::Sourced::chosen(true);
+    let mut options = oag_raceplay::Options::default();
+    apply_rules(&mut options, &title);
+    assert_eq!(options.laps_override, Some(3));
+}
+
+#[test]
+fn a_class_the_titles_ladder_does_not_author_leaves_the_players() {
+    let mut title = oag_pure::TITLE.clone();
+    title.demo.rules.class = oag_title::pre_race::Sourced::chosen("Warp");
+    let mut options = oag_raceplay::Options {
+        class: "Venom".to_string(),
+        ..oag_raceplay::Options::default()
+    };
+    apply_rules(&mut options, &title);
+    assert_eq!(options.class, "Venom");
+}
