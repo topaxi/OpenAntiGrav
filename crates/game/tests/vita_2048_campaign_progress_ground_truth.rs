@@ -312,9 +312,10 @@ fn load_event_wires_2048_event_6s_own_weapon_set_onto_setup() {
 }
 
 /// One finished 2048 event raises the stored XP by what `XPAwards.xml` authors for it: the
-/// completion award of its tier plus `Finished Nth`, in the event's mode column. Expected values
-/// come from the parsed disc table, through the same `Store::bank_event_xp` the session's finish
-/// site calls.
+/// race's in-race tally (a kill, a perfect zone) plus the completion award of its tier plus
+/// `Finished Nth`, in the event's mode column, each counted once. Expected values come from the
+/// parsed disc table, through the same `Store::bank_event_xp` the session's finish site calls,
+/// and the tally the race itself arms (`Race::arm_xp`).
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
@@ -331,21 +332,32 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
     let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
     let column = oag_tables::xp::Column::Race;
     assert_eq!(progress.xp_column, column);
+    assert_eq!(progress.xp_awards.as_ref(), Some(&awards));
+    let tally = || oag_raceplay::xp_tally::XpTally::new(awards.clone(), column);
 
     let (mut store, _) = records::parse("").expect("an empty file parses");
     assert_eq!(store.xp(), 0);
 
-    // Third place clears the pass bar only.
-    let paid = store.bank_event_xp(&progress, Some(records::Medal::Bronze), Some(3));
+    // Third place clears the pass bar only, after one kill in the race.
+    let mut gathered = tally();
+    gathered.observe_kills(1);
+    let kill = awards.xp(6, column);
+    assert!(kill > 0, "the table authors Opponent destroyed");
+    let paid = store.bank_event_xp(&mut gathered, Some(records::Medal::Bronze), Some(3));
     let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
     let third = awards.xp(oag_tables::xp::award::FINISHED_1ST + 2, column);
     assert!(pass > 0 && third > 0, "the table authors both rows");
-    assert_eq!(paid, pass + third);
-    assert_eq!(store.xp(), pass + third);
+    assert_eq!(paid, kill + pass + third);
+    assert_eq!(store.xp(), kill + pass + third);
+    assert_eq!(
+        gathered.total(),
+        0,
+        "banking empties the tally, so a second call adds nothing"
+    );
 
     // First place is elite; the stored total accumulates.
     let before = store.xp();
-    let paid = store.bank_event_xp(&progress, Some(records::Medal::Gold), Some(1));
+    let paid = store.bank_event_xp(&mut tally(), Some(records::Medal::Gold), Some(1));
     let expected = awards.xp(oag_tables::xp::award::EVENT_ELITE, column)
         + awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
     assert_eq!(paid, expected);

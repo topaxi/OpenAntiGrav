@@ -441,6 +441,12 @@ impl Race {
         // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
         // same clamp against the stat block's maximum, so a full ship gains
         // nothing and the bar cannot overfill.
+        if primary
+            && outcome.zone_advanced
+            && let Some(xp) = self.sim.xp.as_mut()
+        {
+            xp.zone_cleared(self.sim.world.race[slot].zone, outcome.perfect_zone);
+        }
         if primary && outcome.perfect_zone && self.draws() {
             self.view.run_stats.perfect_zones += 1;
         }

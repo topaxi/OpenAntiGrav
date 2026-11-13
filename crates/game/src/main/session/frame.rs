@@ -1106,11 +1106,13 @@ impl Session {
                         observation.campaign_medal,
                         None,
                     );
-                    let xp = self.records.bank_event_xp(
-                        progress,
-                        observation.campaign_medal,
-                        observation.place,
-                    );
+                    let xp = stage.race.xp_tally_mut().map_or(0, |tally| {
+                        self.records.bank_event_xp(
+                            tally,
+                            observation.campaign_medal,
+                            observation.place,
+                        )
+                    });
                     log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
                 }
                 // A title whose EndRace screens do not bank the award (Pure, 2048

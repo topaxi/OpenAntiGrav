@@ -44,7 +44,11 @@ impl Race {
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         #[cfg(feature = "view")]
         let queued = self.sim.cues.len();
+        if let Some(xp) = self.sim.xp.as_mut() {
+            xp.advance_window();
+        }
         let evaluations = self.tick_body(inputs);
+        self.observe_xp();
         #[cfg(feature = "view")]
         self.note_cues(queued);
         evaluations

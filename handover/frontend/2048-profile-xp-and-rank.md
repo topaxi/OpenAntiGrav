@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048, omega]
 updated: 2026-11-12
-summary: "2048 XP total kept, race-end awards banked, rank gates the hidden-event reveal; Omega events and ~30 in-race awards open"
+summary: "2048 XP: a race tally banks 26 of 78 awards with the chain rule, the rank gates the hidden-event reveal; Omega events, 52 awards and the rank UI open"
 ---
 
 # 2048 profile XP and rank
@@ -39,11 +39,20 @@ the query the campaign map calls.
   `Campaign2048Progress`. The total is shared and Omega's tables parse (ground truth), so wiring
   is the Omega event launch carrying the same progress fields. Omega ranks use Omega's own
   `XPRanks.xml` (half thresholds) against the shared total.
-- The ~30 in-race award sites (barrel roll, perfect lap, kills, pads, zones, chains, air time,
-  evading, held 1st) pay nothing yet.
+- **In-race awards** (`oag_raceplay::xp_tally`): kills, zone / perfect zone, Hit Zone N, held 1st
+  and the race-end awards pay through one tally with the exact chain rule. The other awards stay
+  unwired, each with its address and the unread condition, in the table on
+  `docs/ghidra/functions/vita-2048-eu-v104/xp-award.md` ("In-race awards"). Unread: the gate
+  `FUN_8100d2a6`'s mode ids (`DAT_8153fd24 == 2`, `DAT_8151d438`); whether `GameMode`'s vfunc
+  `+0x80` (XP enabled) is true for every campaign event; whether our `zone_dirty` is the original's
+  `0x60a4 & 0x1000000`; the elimination test for held 1st is our column, not `IsEliminatorFamily`.
 - The EndRace screens' `CO_RANK` / `CO_TOTAL_XP` widgets and the rank-up overlay.
 
 ## Next Steps
 
-1. In-race awards: add trigger sites in the tally, summed into `bank_event_xp`'s award.
+
+1. In-race awards: read the next unwired trigger (pilot flags `+0x60a4` bits `0x20` and
+   `0x1000000`, `+0x6128`, `+0x6f3c`'s initial value, the weapon-type case map of `0x811c42d2` /
+   `0x811bd214`) and add it to `XpTally`; Speed pad and Perfect lap are the cheapest.
+2b. The `RaceXP` popups and rank bar (HUD), `CO_RANK` / `CO_TOTAL_XP` on the EndRace screens.
 2. Omega: find the end-of-race function that banks the XP total (xref the rank-table global the loader fills) and diff its caller against `Race_ComputeLoyaltyAward`'s callers; then carry `xp_awards` / `xp_column` in its event launch.

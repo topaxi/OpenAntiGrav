@@ -78,6 +78,122 @@ an unlock. `GameModeBase_IsUnlockable` (`0x812b3a76`) compares the XP total `+0x
 `Campaign_UnlockEvents` (`0x812b5b6c`) holds the fifteen side challenges until it passes. The gate
 lives in the event objects, not in `Unlocks_Definition.xml`, which is why the XML census missed it.
 
+## In-race awards (2026-11-12, lane `w2048-race-xp`)
+
+Ghidra `/2048/eboot-vita-2048-eu-v104.elf`, 70 xrefs to `Profile_AwardXP` from 31 functions and
+two bare call sites. Confidence 75 for the chain rule (decompile of `0x810134ce` plus the
+per-frame decrement at `0x81013708`), 70 for each wired site's condition. No live run.
+
+**The chain rule, exact.** `Profile_AwardXP` drops an award whose column value is 0 (nothing
+paid, the chain untouched). Otherwise it adds the value to the pilot's race tally
+(`FUN_812b3a3c`, `pilot+0x1e8`), and then: if the chain timer `+0x32668` is above 0, the chain
+counter `+0x32674` rises by one; the timer is set to 2.0; if the counter is 5, the tally gets
+`counter << 1` (10) as `AWARD_GROUP_CHAIN` and the counter resets to 0. So the first award
+of a chain does not count: **six awards** inside the window reach 5. A bonus pays once per
+five, not on every award after. Per frame (`0x81013708`) the timer runs down by the frame time
+and, when it reaches 0 or less, the counter is zeroed. The race-end awards go through the same
+function (flags 0,0) and chain like any other. The class and skill multipliers are 1.0 on this
+disc and are not applied.
+
+**The shared gate** `FUN_8100d2a6` is false when `DAT_8151f0e4 == 0`, when mode id
+`DAT_8153fd24 == 2`, when `GameMode_Current()` is the mode object `DAT_8151d438`, or unless the
+race object's phase `+0x11d50 == 2` (racing). Which modes `2` and `DAT_8151d438` are is unread.
+Almost every site also needs the pilot to be human (`pilot+0x58dc == 0`).
+
+**Ours.** `oag_raceplay::xp_tally::XpTally` is armed from the event's `XPAwards.xml` and column
+and fed from the simulation's edges, outside the state hash: the zone step in
+`advance_player_rules`, and kills and place each tick in `Race::tick` while the player is
+racing. The 2.0 s window is 120 fixed ticks, standing for the original's variable timestep.
+At the finish `Store::bank_event_xp` runs the completion and `Finished Nth` awards through the
+tally and banks its total.
+
+| Index | Award | Status |
+| --- | --- | --- |
+| 0 | Event complete- PASS | **wired** at the finish, `0x812b3f90` (flags 0,0, joins the chain); Pass or Elite by medal, **chosen** |
+| 1 | Event complete- ELITE | **wired** at the finish, `0x812b3f90` (flags 0,0, joins the chain); Pass or Elite by medal, **chosen** |
+| 2 | Finished multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
+| 3 | Won multiplayer race | n/a: multiplayer (`0x81166252`, `0x812bbac6`, `0x812beb48`); no online 2048 |
+| 4 | Barrel roll | unwired (condition head unread, `0x811bf7aa`) |
+| 5 | Perfect lap | unwired (pilot flag `+0x60a4 & 0x20` unread, `0x811c2ad6`) |
+| 6 | Opponent destroyed | **wired** (`0x812ccfe0`, `0x8123b5ea`, `0x811c4a06`: human killer, `FUN_8100d2a6`); fed from `Standing::kills` |
+| 7 | Speed pad hit | unwired (extra suppressor `pilot+0x6128 == 0` unread, 26 readers, `0x811ccdf4`) |
+| 8 | Weapon pad hit | unwired (condition head unread, `0x811c9c7a`) |
+| 9 | Zone | **wired** (`0x812c4052`, `0x81186862`): a zone step with a wall contact |
+| 10 | Perfect Zone | **wired** (same sites): a clean zone step; our `zone_dirty` stands for flag `+0x60a4 & 0x1000000`, **chosen** |
+| 11 | Boost start | unwired (flag `*(+0x5640)+0x595` unread, `0x81175fc8`) |
+| 12 | Hit with Rocket | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 13 | Hit with Missile | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 14 | Hit with Plasma | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 15 | Hit with Cannon | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 16 | Hit with Mine | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 17 | Hit with Quake | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 18 | Hit with Bomb | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 19 | Hit with Leach Beam | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 20 | Hit with Light Barrier | unwired (weapon-type case to award map, cases 0-7 and 10, not tied to our weapon ids, `0x811c42d2`) |
+| 21 | Taken 1st! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
+| 22 | Taken 2nd! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
+| 23 | Taken 3rd! | unwired (initial value of the best-place field `+0x6f3c` unread, `0x812bbeb2`) |
+| 24 | Finished 1st! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 25 | Finished 2nd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 26 | Finished 3rd! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 27 | Finished 4th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 28 | Finished 5th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 29 | Finished 6th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 30 | Finished 7th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 31 | Finished 8th! | **wired** at the finish (`0x812bbc5c`, `0x8100bfba`); paid once, through the tally |
+| 32 | Shielded against Rocket | unwired (weapon-type case to award map, `0x811bd214`) |
+| 33 | Shielded against Missile | unwired (weapon-type case to award map, `0x811bd214`) |
+| 34 | Shielded against Plasma | unwired (weapon-type case to award map, `0x811bd214`) |
+| 35 | Shielded against Cannon | unwired (weapon-type case to award map, `0x811bd214`) |
+| 36 | Shielded against Mine | unwired (weapon-type case to award map, `0x811bd214`) |
+| 37 | Shielded against Quake | unwired (weapon-type case to award map, `0x811bd214`) |
+| 38 | Shielded against Bomb | unwired (weapon-type case to award map, `0x811bd214`) |
+| 39 | Shielded against Leach Beam | unwired (weapon-type case to award map, `0x811bd214`) |
+| 40 | Shielded against Light Barrier | unwired (weapon-type case to award map, `0x811bd214`) |
+| 41 | Held 1st for 30sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
+| 42 | Held 1st for 20sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
+| 43 | Held 1st for 10sec | **wired** (`0x811712aa`): first place held, human, rivals present, not elimination; our place is `oag_race::places` |
+| 44 | Cross Start/Finish Line with full health | unwired (health test unread, `0x811c2ad6`) |
+| 45 | 5 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
+| 46 | 10 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
+| 47 | 15 seconds ahead | unwired (lap-time lead test only partly read, `0x811c2800`) |
+| 48 | Hit Zone 10 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 49 | Hit Zone 20 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 50 | Hit Zone 30 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 51 | Hit Zone 40 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 52 | Hit Zone 50 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 53 | Hit Zone 60 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 54 | Hit Zone 70 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 55 | Hit Zone 80 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 56 | Hit Zone 90 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 57 | Hit Zone 100 | **wired** (`0x812c4052`): zone number a multiple of 10 up to 100, index `0x2f + zone/10` |
+| 58 | Air Time | unwired (condition unread, `0x811d0370`) |
+| 59 | No wreck for 30 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 60 | No wreck for 60 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 61 | No wreck for 90 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 62 | No wreck for entire event | unwired (condition unread, `0x8100bfba`) |
+| 63 | Shoot/Destroy Mine | unwired (`FUN_8120fae0` test unread, `0x811dfa0e`, `0x811fe134`, `0x812060a4`, `0x811f89fa`) |
+| 64 | Shoot/Destroy Bomb | unwired (`FUN_8120fae0` test unread, `0x811dfa0e`, `0x811fe134`, `0x812060a4`, `0x811f89fa`) |
+| 65 | No hits for 10 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 66 | No hits for 20 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 67 | No hits for 30 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 68 | No hits for 40 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 69 | No hits for 50 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 70 | No hits for 60 seconds | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+| 71 | Successful Turbo | unwired (condition unread, `0x811bf07e`) |
+| 72 | Hit with cannon full clip | unwired (condition unread, `0x811e0b56`) |
+| 73 | Hit with all 3 rockets | unwired (condition unread, `0x81206f6e`) |
+| 74 | Evade Mine | unwired (`piVar12[0x13]` flag unread, `0x811f453e`) |
+| 75 | Evade Bomb | unwired (flag unread, `0x811dbb5a`) |
+| 76 | Evade Missile | unwired (condition unread, `0x811f89fa`) |
+| 77 | Evade Zombie | unwired (no call site found among the 70 xrefs; the index is not a literal) |
+
+Not wired by anything here, in the original: the rank bar and the `RaceXP` popups.
+
+**Omega check.** Omega ships a byte-identical `XPAwards.xml` and the same loader: **checked,
+applies, not wired** (Omega's event launch banks nothing yet; the tally takes any
+`Awards`, so the wiring is arming it from Omega's event progress).
+
 ## Cross-check
 
 - **Omega**: XP - checked, applies, not wired for events (`oag_tables::xp` parses Omega's `XPAwards.xml` and `XPRanks.xml`, ground truth in `crates/omega/tests/omega_title_ground_truth.rs`; the profile total is shared, Omega's event launch does not bank yet); ranks - checked, differs. Omega's `eboot.bin` carries the same

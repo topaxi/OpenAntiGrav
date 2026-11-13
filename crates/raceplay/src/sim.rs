@@ -541,6 +541,9 @@ pub struct RaceSim {
     /// position" case in `Pads_TestCraft` and takes the single-point path. One
     /// per racer.
     pub(super) pad_previous_position: [Option<Vec3>; MAX_SHIPS],
+    /// The player's in-race XP, when the event pays any. Fed from edges this state already
+    /// reports and never read back into it, so, like the cue queue, absent from the state hash.
+    pub(super) xp: Option<Box<crate::xp_tally::XpTally>>,
     /// Whether the primary slot is being driven by its own [`oag_ai::Driver`] instead of
     /// by the input snapshot. See [`Race::set_autopilot`].
     pub(super) autopilot: bool,
