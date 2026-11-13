@@ -82,5 +82,5 @@ filter = 'package(oag-render) & test(/^(collision_capture|pad_alpha_test_ground_
 test-group = 'gpu-vram'
 
 [[profile.default.overrides]]
-filter = 'package(oag-mesh) & test(/^(cutout_then_transparent|hd_emissive_glow_ground_truth|hd_emissive_lit_path|hd_pad_ne_ground_truth|hd_pad_ne_lit_path|hd_scenery_animation_ground_truth|hd_vertex_scroll_ground_truth|moving_normal_inverse_transpose|node_anim_pipeline)::/)'
+filter = 'package(oag-mesh) & test(/^(cutout_then_transparent|depth_bias_coplanar|hd_emissive_glow_ground_truth|hd_emissive_lit_path|hd_pad_ne_ground_truth|hd_pad_ne_lit_path|hd_scenery_animation_ground_truth|hd_vertex_scroll_ground_truth|moving_normal_inverse_transpose|node_anim_pipeline)::/)'
 test-group = 'gpu-vram'

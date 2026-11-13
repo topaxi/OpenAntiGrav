@@ -40,6 +40,7 @@ fn tangent(w: u8) -> u32 {
 
 fn vertex(position: [f32; 3], tangent: u32) -> GpuVertex {
     GpuVertex {
+        depth_bias: 0.0,
         quake: 0.0,
         position,
         normal: [0.0, 0.0, 1.0],

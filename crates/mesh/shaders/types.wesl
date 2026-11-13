@@ -331,6 +331,8 @@ struct VertexInput {
     // `xyz` is `2b - 1`, `w` the factor on the binormal; all zero where the
     // material reads no normal map.
     @location(14) tangent: vec4<f32>,
+    // The batch's authored depth bias, `0..9` - see `depth_bias.wesl`.
+    @location(15) depth_bias: f32,
 };
 
 struct VertexOutput {

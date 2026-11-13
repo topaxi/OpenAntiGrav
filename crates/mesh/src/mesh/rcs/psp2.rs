@@ -910,6 +910,7 @@ fn build_planned(
                 glow: 0.0,
                 texcoord2,
                 tangent: normals.tangent(submesh.material, submesh.tangents.get(i), &to_world),
+                depth_bias: 0.0,
             });
         }
         if !place.hidden {

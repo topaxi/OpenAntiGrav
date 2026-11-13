@@ -882,6 +882,7 @@ fn build_class(
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
                         texcoord2: [if road { ROAD_MARK } else { 0.0 }, 0.0],
                         tangent: 0,
+                        depth_bias: f32::from(batch.depth_bias),
                     });
                 }
                 for tri in batch.triangles() {
@@ -1199,6 +1200,7 @@ mod tests {
             glow: 0.0,
             texcoord2: [0.0; 2],
             tangent: 0,
+            depth_bias: 0.0,
         }
     }
 

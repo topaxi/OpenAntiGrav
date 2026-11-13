@@ -117,6 +117,7 @@ fn two_draws(a: f32, b: f32) -> Model {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     let mut model = Model::none("two draws");
     model.vertices = vec![
@@ -229,6 +230,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         glow: 0.0,
         texcoord2: [0.0, 0.0],
         tangent: 0,
+        depth_bias: 0.0,
     };
     let mut model = Model::none("placeholder + art");
     model.vertices = vec![vertex(), vertex(), vertex(), vertex(), vertex(), vertex()];

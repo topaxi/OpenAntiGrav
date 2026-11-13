@@ -208,6 +208,7 @@ mod tests {
             glow: 0.0,
             texcoord2: [0.0; 2],
             tangent: 0,
+            depth_bias: 0.0,
         }
     }
 

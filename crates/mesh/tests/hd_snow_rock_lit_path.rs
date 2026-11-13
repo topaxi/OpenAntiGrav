@@ -39,6 +39,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         glow: 0.0,
         texcoord2: [0.5, 0.5],
         tangent: TANGENT,
+        depth_bias: 0.0,
     }
 }
 
