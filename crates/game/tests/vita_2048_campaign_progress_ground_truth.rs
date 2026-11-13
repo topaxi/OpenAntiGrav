@@ -483,3 +483,41 @@ fn the_xp_total_decides_which_hidden_events_are_revealable() {
     boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
     assert_eq!(loaded.frontend.campaign_reveal(feisar), Some(Reveal::Found));
 }
+
+/// The race-end sequence on a map that is already built: the finish banks the event's XP through
+/// `Store::bank_event_xp`, and asking the map again (`boot::reveals2048::refresh`, which
+/// `MapSeed::open` runs on every opening) reveals the challenges the new total reaches, with no
+/// restart. Fails if the refresh stops reading the live total.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_rank_reached_by_a_finish_reveals_its_events_on_the_next_map_build() {
+    use oag_ui::frontend::Reveal;
+    let Some(source) = source() else { return };
+    let text = source.display().to_string();
+    let mut loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut archives = oag_2048::open(&text).expect("this is 2048");
+    let (awards, ranks) = oag_2048::campaign::xp_tables(&mut archives).expect("both XP tables");
+    let column = oag_tables::xp::Column::Race;
+    let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
+    let rank_10 = ranks.threshold_xp(10, 0);
+    let feisar = "Feisar - P Ship Challenge";
+    let (mut store, _) = records::parse("").expect("an empty file parses");
+    store.bank_xp(rank_10 - pass);
+
+    boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
+    assert_eq!(
+        loaded.frontend.campaign_reveal(feisar),
+        Some(Reveal::Hidden)
+    );
+
+    let mut tally = oag_raceplay::xp_tally::XpTally::new(awards, column);
+    let paid = store.bank_event_xp(&mut tally, None, Some(records::Medal::Bronze), None);
+    assert_eq!(paid, pass, "a first pass pays the pass award alone");
+    assert_eq!(ranks.rank(store.xp()), 10);
+
+    boot::reveals2048::refresh(&mut loaded.frontend, &text, &store, "wipeout 2048");
+    assert_eq!(
+        loaded.frontend.campaign_reveal(feisar),
+        Some(Reveal::Revealable)
+    );
+}

@@ -478,7 +478,10 @@ impl Race {
             if !hit.landed || hit.amount <= 0.0 {
                 continue;
             }
-            if let Some(owner) = self.impact_reaching(impacts, slot).map(|impact| impact.owner) {
+            if let Some(owner) = self
+                .impact_reaching(impacts, slot)
+                .map(|impact| impact.owner)
+            {
                 self.credit_hit_points(slot, owner, hit.amount);
             }
         }

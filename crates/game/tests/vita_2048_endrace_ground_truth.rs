@@ -318,8 +318,8 @@ fn a_finished_event_shows_what_it_paid_and_the_rank_bar() {
             .1
     };
     let prior = ranks.thresholds[0] - 100;
-    let finished =
-        finished_event(&race_options, "2048 - Event 1", 30_000, prior, None).expect("the event races");
+    let finished = finished_event(&race_options, "2048 - Event 1", 30_000, prior, None)
+        .expect("the event races");
     let (banked, ranks) = finished.xp.expect("the event pays XP");
     assert!(banked.bonus > 0, "an autopilot finish passes the event");
     assert_eq!(banked.total_after, prior + banked.earned);

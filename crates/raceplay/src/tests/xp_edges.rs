@@ -42,7 +42,11 @@ fn a_perfect_launch_pays_boost_start() {
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 40 {
         let press = tick >= oag_race::COUNTDOWN_TICKS + 12;
-        race.tick(&PlayerInputs::single(buttons.tick(if press { CROSS } else { 0 })));
+        race.tick(&PlayerInputs::single(buttons.tick(if press {
+            CROSS
+        } else {
+            0
+        })));
     }
     assert_eq!(paid(&race, 11), 1);
 }
@@ -50,9 +54,16 @@ fn a_perfect_launch_pays_boost_start() {
 /// Fails if the grant stops feeding the tally, or the countdown stops gating it.
 #[test]
 fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
-    let mut race = armed(race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0));
+    let mut race = armed(race_with_weapon_pads(
+        Mode::SingleRace,
+        enveloping_pad(),
+        1.0,
+    ));
     race.tick(&PlayerInputs::none());
-    assert!(race.ship_pickup().is_some(), "sanity: the pad granted on the grid");
+    assert!(
+        race.ship_pickup().is_some(),
+        "sanity: the pad granted on the grid"
+    );
     assert_eq!(paid(&race, 8), 0, "the grid is not racing");
 
     past_the_countdown(&mut race, 2);
@@ -61,7 +72,10 @@ fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
     race.sim.weapon_pad_distance[0].fill(0.0);
     race.sim.weapon_pad_refresh_left.fill(0.0);
     race.tick(&PlayerInputs::none());
-    assert!(race.ship_pickup().is_some(), "sanity: the pad granted again");
+    assert!(
+        race.ship_pickup().is_some(),
+        "sanity: the pad granted again"
+    );
     assert_eq!(paid(&race, 8), 1);
 }
 
@@ -78,7 +92,11 @@ fn the_places_the_player_takes_pay_once_each() {
     race.sim.world.ships[me].standing.lap_start_tick = Some(0);
     race.sim.world.ships[1].standing.lap_start_tick = Some(0);
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.sim.places()[me], 1, "sanity: the player leads the pair");
+    assert_eq!(
+        race.sim.places()[me],
+        1,
+        "sanity: the player leads the pair"
+    );
     assert_eq!(paid(&race, 21), 1, "Taken 1st!");
     race.tick(&PlayerInputs::none());
     assert_eq!(paid(&race, 21), 1, "held, not paid again");
@@ -132,7 +150,11 @@ fn a_rocket_the_player_lands_pays_hit_with_rocket_and_one_that_lands_on_the_play
     for _ in 0..4 {
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(paid(&race, 12), 1, "a hit on the player is not the player's hit");
+    assert_eq!(
+        paid(&race, 12),
+        1,
+        "a hit on the player is not the player's hit"
+    );
 }
 
 /// A missile the player's shield swallows pays `Shielded against Missile`.
@@ -167,7 +189,11 @@ fn a_quake_the_player_fires_pays_hit_with_quake() {
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS + 30 {
         let press = tick == oag_race::COUNTDOWN_TICKS + 1;
-        race.tick(&PlayerInputs::single(buttons.tick(if press { SQUARE } else { 0 })));
+        race.tick(&PlayerInputs::single(buttons.tick(if press {
+            SQUARE
+        } else {
+            0
+        })));
     }
     assert_eq!(paid(&race, 17), 1);
 }

@@ -191,12 +191,20 @@ fn the_completion_awards_pay_on_improvement_only() {
         (c.pass, c.elite)
     };
     assert_eq!(pays(None, pass), (true, false));
-    assert_eq!(pays(None, elite), (true, true), "an elite first pass pays both");
+    assert_eq!(
+        pays(None, elite),
+        (true, true),
+        "an elite first pass pays both"
+    );
     assert_eq!(pays(pass, elite), (false, true));
     assert_eq!(pays(None, None), (false, false));
     assert_eq!(pays(pass, pass), (false, false));
     assert_eq!(pays(elite, elite), (false, false));
-    assert_eq!(pays(elite, pass), (false, false), "a worse result pays nothing");
+    assert_eq!(
+        pays(elite, pass),
+        (false, false),
+        "a worse result pays nothing"
+    );
 }
 
 #[test]
@@ -211,7 +219,11 @@ fn the_completion_xp_is_the_authored_value_without_the_chain() {
     );
     assert_eq!(t.completion_xp(), awards().xp(0, Column::Race));
     t.take();
-    assert_eq!(t.completion_xp(), awards().xp(0, Column::Race), "kept past take");
+    assert_eq!(
+        t.completion_xp(),
+        awards().xp(0, Column::Race),
+        "kept past take"
+    );
 }
 
 #[test]
@@ -232,7 +244,11 @@ fn a_lap_is_perfect_until_health_drops_and_full_only_at_the_maximum() {
     assert_eq!(t.times_paid(5), 2, "the damage is forgotten at the line");
     t.observe_health(70.0);
     t.lap_completed(70.0, 100.0);
-    assert_eq!((t.times_paid(5), t.times_paid(44)), (2, 3), "a damaged lap below the maximum pays neither");
+    assert_eq!(
+        (t.times_paid(5), t.times_paid(44)),
+        (2, 3),
+        "a damaged lap below the maximum pays neither"
+    );
 }
 
 #[test]
@@ -266,5 +282,9 @@ fn a_weapon_pays_its_own_row_in_the_originals_type_order() {
     t.weapon_hit(Weapon::Turbo);
     t.shielded_against(Weapon::Repulser);
     assert_eq!([12, 19, 32, 39].map(|i| t.times_paid(i)), [1; 4]);
-    assert_eq!(t.total(), 12 + 19 + 32 + 39, "a turbo and a repulser pay nothing");
+    assert_eq!(
+        t.total(),
+        12 + 19 + 32 + 39,
+        "a turbo and a repulser pay nothing"
+    );
 }
