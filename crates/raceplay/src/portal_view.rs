@@ -6,6 +6,7 @@
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Vec3, Vec4};
 use oag_render::camera::portal::{self, Face};
+use oag_render::pvs::UNPLACED;
 
 use crate::Race;
 use crate::extensions::PortalRequest;
@@ -14,6 +15,9 @@ use crate::transit::Exit;
 /// A portal pair as the view being drawn sees it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PortalShot {
+    /// The authored track section the entrance stands in, [`UNPLACED`] where the spline does
+    /// not say: what the main view's visible set is asked about.
+    pub(crate) entrance_section: u8,
     /// The view matrix of the camera through the pair.
     pub(crate) view: Mat4,
     /// The exit's plane in [`Self::view`]'s eye space.
@@ -48,6 +52,9 @@ impl Race {
     ) -> Option<PortalShot> {
         let course = self.sim.course.as_ref()?;
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
+        let entrance_section = self
+            .road_sample(entrance)
+            .map_or(UNPLACED, |sample| sample.section_id);
         let entrance = self.portal_frame(entrance, Face::Oncoming)?;
         let exit = self.portal_frame(request.exit?, Face::Departing)?;
         // A craft in a transit has flown on past its entrance; its pair is seen from its seat.
@@ -63,6 +70,7 @@ impl Race {
         let through = portal::through(entrance, exit);
         let view = portal::view(main, through);
         Some(PortalShot {
+            entrance_section,
             view,
             exit_plane: portal::eye_plane(view, exit),
             engine_view_projection: projection * view * through,
