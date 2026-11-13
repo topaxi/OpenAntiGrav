@@ -69,6 +69,15 @@ The engine never names the mod.
    covered by the `route_point` check, no transit or portal-view test on them). Open from it,
    small: the entrance is still a ring progress, so a firer already on a route frames its portal
    from the ring; the official `oag.slipstream` exits by progress and does not use the trigger form.
+2a. ~~**The oblique near plane drops the TAA jitter** (lane portal-taa-jitter).~~ Not a bug: negative result.
+   `prepare_view` replaces the jittered matrix with the unjittered oblique one only when
+   `ViewSettings::portal` is `Some`, and that is set in exactly one place, `Scene::encode_portal_view`
+   (the 960x540 secondary scene pass into the portal's texture), which builds its settings with
+   `camera_jitter: None` (and `Scene::render`/`render_window` build `portal: None`). So the
+   replaced matrix never carried a jitter, and `prev_vp` is unjittered in that pass too. A craft
+   in a transit is framed by the ordinary view (`portal: None`), so the transit camera frames take
+   the normal jittered path. Not open; a fence for a future jittered portal pass: it would need the jitter
+   applied after `oblique_near` (it rewrites the depth row only, the jitter is an x/y clip offset).
 2b. **Incoming warning for a person the portal passes (lane mod-warnings-api).** Landed: a `raise-warning`
    command (37, `WarningIcon`, SDK `raise_warning`) raises the viewer's incoming-weapon warning through
    `Warnings::raise`; `oag.slipstream` raises the rear Repulser icon once, on the transit, for a person it
