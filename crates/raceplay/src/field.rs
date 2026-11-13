@@ -1151,11 +1151,11 @@ impl Race {
         let (mut best_ahead, mut best_behind, mut best_alongside) =
             (f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
-        for other in 0..self.sim.world.ship_count as usize {
-            if other == slot || !self.sim.world.ships[other].in_world() {
+        let ship_count = self.sim.world.ship_count as usize;
+        for (other, them) in self.sim.world.ships.iter().enumerate().take(ship_count) {
+            if other == slot || !them.in_world() {
                 continue;
             }
-            let them = &self.sim.world.ships[other];
             let gap = them.standing.distance(course) - my_distance;
             if gap.abs() >= oag_ai::AWARENESS_RANGE {
                 continue;

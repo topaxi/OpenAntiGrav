@@ -1,5 +1,8 @@
 //! What [`super`] is asserted to do. Its own file for the 200-line rule.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use crate::test_craft::Ship;
 use oag_tables::weapons::{DisruptorEffect, DisruptorEffectKind as Kind};

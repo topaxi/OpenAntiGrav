@@ -12,6 +12,9 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 mod hd_behind_glass_frame_ground_truth;
 mod hd_bomb_blast_ground_truth;
 mod hd_boot_ground_truth;

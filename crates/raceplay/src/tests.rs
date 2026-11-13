@@ -11,6 +11,9 @@
 //! `race/` split - loading and its report, the race itself, the scene
 //! composition. The capture seam has no tests here at all.
 
+// Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 use oag_vex::track;
 

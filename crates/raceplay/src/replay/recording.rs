@@ -250,11 +250,11 @@ impl Race {
     /// has them folded in, and the craft's velocity is zero.
     pub fn show_poses(&mut self, track: &oag_replay::PoseTrack, at: f64) {
         let count = usize::from(self.ship_count()).min(track.crafts());
-        for slot in 0..count {
+        for (slot, ship) in self.sim.world.ships.iter_mut().enumerate().take(count) {
             let Some(pose) = track.pose(slot, at) else {
                 continue;
             };
-            let physics = &mut self.sim.world.ships[slot].physics;
+            let physics = &mut ship.physics;
             physics.body.position = pose.position;
             physics.body.orientation = pose.rotation;
             physics.roll_phase = 0.0;
