@@ -43,7 +43,7 @@ pub fn event_progress(
     event: &Event,
 ) -> (
     Option<EventObjectives>,
-    Option<oag_tables::xp::Awards>,
+    Option<(oag_tables::xp::Awards, oag_tables::xp::Ranks)>,
     oag_tables::xp::Column,
 ) {
     use oag_tables::xp::Column;
@@ -52,8 +52,7 @@ pub fn event_progress(
         EventKind::Elimination => Column::Elim,
         EventKind::Zone => Column::Zone,
     };
-    let awards = xp_tables(archives).map(|(awards, _)| awards);
-    (event_objectives(doc, event), awards, column)
+    (event_objectives(doc, event), xp_tables(archives), column)
 }
 
 /// Both XP tables from the package, or `None` when either is absent or unreadable.

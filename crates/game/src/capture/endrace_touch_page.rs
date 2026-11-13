@@ -16,18 +16,30 @@ use oag_2048::campaign::{EventKind, EventObjectives, ObjectiveRule, Tier, object
 use oag_ui::frontend::Draw;
 use oag_ui_screens::endrace::touch::{self, Button, Page};
 
-use crate::endrace::touch::{Facts, Standing, finished_event, load, summary};
+use crate::endrace::touch::{Facts, Standing, finished_event, load, summary, xp_result};
 
 /// What a `--menu-page` name asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct TouchPage {
     page: Page,
+    /// Ticks the page has been up, from a `@SECONDS` suffix: the XP block counts up with it.
+    ticks: u32,
+    /// The profile's XP before the race banked, from a `+TOTAL` suffix.
+    prior_xp: u32,
     /// The verdict a synthetic still shows; `None` asks for a real race.
     tier: Option<Option<Tier>>,
 }
 
 pub(super) fn touch_kind(page: &str) -> Option<TouchPage> {
     let page = page.replace('_', "-");
+    let (page, prior) = match page.split_once('+') {
+        Some((page, prior)) => (page, prior.parse().ok()?),
+        None => (page.as_str(), 0),
+    };
+    let (page, seconds) = match page.split_once('@') {
+        Some((page, seconds)) => (page, seconds.parse::<f32>().ok()?),
+        None => (page, 0.0),
+    };
     let (page, tail) = match page.strip_prefix("endrace-summary") {
         Some(tail) => (Page::Summary, tail),
         None => (Page::Objectives, page.strip_prefix("endrace-objectives")?),
@@ -39,7 +51,12 @@ pub(super) fn touch_kind(page: &str) -> Option<TouchPage> {
         "-fail" => Some(None),
         _ => return None,
     };
-    Some(TouchPage { page, tier })
+    Some(TouchPage {
+        page,
+        ticks: (seconds * 60.0) as u32,
+        prior_xp: prior,
+        tier,
+    })
 }
 
 /// The chosen facts of a synthetic still.
@@ -90,20 +107,29 @@ pub(super) fn draw(
         base,
         globals,
     )?;
-    let facts = match (kind.tier, event) {
-        (None, Some(name)) => finished_event(race, name, 30_000)?,
-        (Some(tier), _) => chosen(tier),
+    let (facts, xp) = match (kind.tier, event) {
+        (None, Some(name)) => {
+            let finished = finished_event(race, name, 30_000, kind.prior_xp)?;
+            (
+                finished.facts,
+                finished
+                    .xp
+                    .and_then(|(banked, ranks)| xp_result(banked, &ranks, strings)),
+            )
+        }
+        (Some(tier), _) => (chosen(tier), None),
         (None, None) => anyhow::bail!(
             "--menu-page endrace-summary needs --event NAME to race, or one of \
              endrace-summary-pass / -elite / -fail for a chosen result"
         ),
     };
-    let model = summary(&facts, strings);
+    let model = summary(&facts, strings, xp);
     *base = screens.sprites;
     let sprites = &*base;
     Ok(touch::draw_list(
         &model,
         kind.page,
+        kind.ticks,
         Button::Exit,
         &screens.layouts,
         &|src| sprites.get(src),

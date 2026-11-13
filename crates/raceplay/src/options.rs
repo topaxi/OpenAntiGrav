@@ -1331,6 +1331,8 @@ pub struct Campaign2048Progress {
     pub ai: Option<oag_title::original_driver::EventAi>,
     /// The disc's `XPAwards.xml`, read where `SP.xml` is; `None` when the package lacks it.
     pub xp_awards: Option<oag_tables::xp::Awards>,
+    /// The title's own `XPRanks.xml`, which ranks the profile's total on the end-of-race page.
+    pub xp_ranks: Option<oag_tables::xp::Ranks>,
     /// Which `XPAwards.xml` column this event's kind pays: race and Speed Lap events the `race`
     /// column, Elimination `elim`, Zone `zone`. **Chosen, not measured**: the original's mode to
     /// column map is unread.

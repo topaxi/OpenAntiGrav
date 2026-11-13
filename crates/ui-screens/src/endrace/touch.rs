@@ -24,10 +24,10 @@
 //!
 //! # What is not drawn, by name
 //!
-//! - **Every XP widget** (`RaceXPBox`, `PassBonusXPBox`, `SpeedRaceXPBox`, the
-//!   rank badge and its bar): this build keeps no XP and no rank, and the XML's
-//!   own text for them is a development placeholder (`TOTAL_4325_XP_TEST`, `99`).
-//!   `TotalXPBox` keeps its coloured bar and an empty label.
+//! - **The XP block** draws only when the race paid XP (`Summary::xp`); a race
+//!   with no tally armed keeps the widgets hidden, and the XML's own text for
+//!   them is a development placeholder (`TOTAL_4325_XP_TEST`, `99`) that never
+//!   reaches the screen. The count-up law is [`xp`].
 //! - **`Results`' table** (`<RaceResults>`, filled by native code this lane did
 //!   not decompile), `Podium` and `Badges` (multiplayer only in the original),
 //!   `ParadeLaps` (a free camera this build does not have) and the `Near`
@@ -47,6 +47,8 @@ use oag_ui::screen::{Image, Screens, Text, argb_to_rgba, parse_argb};
 use super::Layout;
 use super::draw::fill_draw;
 use crate::picker::FaceScales;
+
+pub mod xp;
 
 /// The shell screen the pages sit in: the translucent top bar, the panel's
 /// background image and the button strip.
@@ -72,9 +74,8 @@ const PASS_CELL: f32 = 128.0;
 const ELITE_CELL: f32 = 256.0;
 const FAIL_CELL: f32 = 0.0;
 
-/// The widgets the end-of-race pages hide because this build holds nothing to
-/// put in them. See the module docs.
-const UNFILLED: &[&str] = &[
+/// The widgets of the XP block: shown only when the race paid XP.
+const XP_WIDGETS: &[&str] = &[
     "PassBonusXPBox",
     "PassBonusXPNumberBox",
     "RaceXPBox",
@@ -137,6 +138,9 @@ pub struct Summary {
     pub medal_label: Option<String>,
     /// [`OBJECTIVES`]' rows, empty when the event authors no objective.
     pub rows: Vec<ObjectiveRow>,
+    /// What the race paid and the rank it left the profile at; `None` when the
+    /// race paid no XP, which hides the XP block.
+    pub xp: Option<xp::XpResult>,
 }
 
 impl Summary {
@@ -314,8 +318,8 @@ fn text_at(
 /// Whether a widget by this name is drawn at all on `page` of `model`.
 fn shown(name: Option<&str>, model: &Summary, page: Page) -> bool {
     let Some(name) = name else { return true };
-    if UNFILLED.contains(&name) {
-        return false;
+    if XP_WIDGETS.contains(&name) {
+        return xp_shown(name, model);
     }
     match name {
         // The two result shapes are alternatives.
@@ -328,6 +332,40 @@ fn shown(name: Option<&str>, model: &Summary, page: Page) -> bool {
         }
         _ => true,
     }
+}
+
+/// Whether an XP-block widget draws: the race paid XP, a speed lap uses the
+/// `SpeedRaceXP` pair where every other mode uses `RaceXP`, and the completion
+/// bonus box only when there is a bonus. Measured, `FUN_810cf5fe`.
+fn xp_shown(name: &str, model: &Summary) -> bool {
+    let Some(xp) = &model.xp else { return false };
+    match name {
+        n if n.starts_with("SpeedRaceXP") => model.speed_shape,
+        n if n.starts_with("RaceXP") => !model.speed_shape,
+        n if n.starts_with("PassBonusXP") => !model.speed_shape && xp.bonus_xp > 0,
+        _ => true,
+    }
+}
+
+/// `ResultBox`'s height once the XP boxes stand under it: it ends four pixels
+/// above the topmost visible XP box, and its text sits at half that height.
+/// Measured, `FUN_810cf5fe`. `None` leaves the authored box.
+fn result_box_height(layouts: &Layouts, model: &Summary) -> Option<f32> {
+    let xp = model.xp.as_ref().filter(|_| !model.speed_shape)?;
+    let screen = &layouts.summary.screen;
+    let top = |name: &str| {
+        screen
+            .fills
+            .iter()
+            .find(|f| f.name.as_deref() == Some(name))
+    };
+    let result = top("ResultBox")?;
+    let box_top = if xp.bonus_xp > 0 {
+        top("PassBonusXPBox")?.y
+    } else {
+        top("RaceXPBox")?.y
+    };
+    Some(box_top - result.y - 4.0)
 }
 
 /// The index digit a `Pass0`/`ElitePass1`/`Fail2` widget name ends in.
@@ -348,15 +386,23 @@ fn row_of(name: &str) -> Option<(usize, Tone)> {
 /// The text a named widget carries on `page`, or `None` to keep the
 /// disc's own. A widget whose value is filled by code is never left showing the
 /// XML's development placeholder.
-fn content_of(name: &str, model: &Summary, page: Page) -> Option<Option<String>> {
+fn content_of(
+    name: &str,
+    model: &Summary,
+    page: Page,
+    xp: Option<&xp::XpFrame>,
+) -> Option<Option<String>> {
     let some = |s: &Option<String>| Some(s.clone());
     match name {
+        "RaceXP" | "SpeedRaceXP" => Some(xp.map(|f| f.race_xp.to_string())),
+        "PassBonusXP" => Some(model.xp.as_ref().map(|x| x.bonus_xp.to_string())),
+        "RankText" => Some(xp.map(|f| f.rank_text.clone())),
         "RaceSummaryTitle" => Some(model.title.clone()),
         "Message" => Some(model.message.clone()),
         "Objective" => Some(model.objective.clone()),
         "RaceResultText" | "SpeedResultText" => some(&model.result),
         "PostRaceMedalText" => some(&model.medal_label),
-        "TotalXP" => Some(None),
+        "TotalXP" => Some(xp.map(|f| f.label.clone())),
         "Objective1" | "Objective2" | "Objective3" if page == Page::Objectives => {
             let at = usize::from(name.as_bytes()[name.len() - 1] - b'1');
             Some(model.rows.get(at).map(|row| row.text.clone()))
@@ -372,6 +418,7 @@ fn content_of(name: &str, model: &Summary, page: Page) -> Option<Option<String>>
 pub fn draw_list(
     model: &Summary,
     page: Page,
+    ticks: u32,
     selected: Button,
     layouts: &Layouts,
     sprites: &dyn Fn(&str) -> Option<Placed>,
@@ -379,6 +426,8 @@ pub fn draw_list(
     line: f32,
 ) -> Vec<Draw> {
     let mut out = Vec::new();
+    let xp = model.xp.as_ref().map(|result| result.at(ticks));
+    let result_height = result_box_height(layouts, model);
     let body = match page {
         Page::Objectives => layouts.objectives.as_ref().unwrap_or(&layouts.summary),
         Page::Summary => &layouts.summary,
@@ -392,13 +441,18 @@ pub fn draw_list(
             if matches!(fill.name.as_deref(), Some("MessageBox" | "TotalXPBox")) {
                 fill.color = layouts.tone_fill(model.tone);
             }
+            match (fill.name.as_deref(), &xp, result_height) {
+                (Some("TotalXPFill"), Some(frame), _) => fill.width = Some(frame.fill_px as f32),
+                (Some("ResultBox"), _, Some(height)) => fill.height = Some(height),
+                _ => {}
+            }
             out.push(fill_draw(&fill));
         }
         for image in &layout.screen.images {
             if !shown(image.name.as_deref(), model, page) {
                 continue;
             }
-            if let Some(draw) = image_draw(image, model, sprites) {
+            if let Some(draw) = image_draw(image, model, xp.as_ref(), sprites) {
                 out.push(draw);
             }
         }
@@ -412,7 +466,7 @@ pub fn draw_list(
             } else {
                 None
             };
-            let content = match content_of(name, model, page) {
+            let content = match content_of(name, model, page, xp.as_ref()) {
                 Some(Some(content)) => content,
                 Some(None) => continue,
                 None => match &text.string {
@@ -420,7 +474,13 @@ pub fn draw_list(
                     _ => continue,
                 },
             };
-            out.push(text_at(text, &content, ink, scales, line));
+            let mut text = text.clone();
+            match (name, &xp, result_height) {
+                ("RankText", Some(frame), _) => text.scale *= frame.flip,
+                ("RaceResultText", _, Some(height)) => text.y -= (122.0 - height) * 0.5,
+                _ => {}
+            }
+            out.push(text_at(&text, &content, ink, scales, line));
         }
     }
     out.extend(tile_draws(model, selected, layouts, sprites));
@@ -436,6 +496,7 @@ fn is_placeholder(text: &Text) -> bool {
 fn image_draw(
     image: &Image,
     model: &Summary,
+    xp: Option<&xp::XpFrame>,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Option<Draw> {
     let placed = sprites(&image.src)?;
@@ -447,6 +508,12 @@ fn image_draw(
             Tone::Pass => PASS_CELL,
             Tone::Fail | Tone::Unjudged => FAIL_CELL,
         });
+    }
+    if let (Some("RankItem"), Some(frame)) = (name, xp) {
+        // The badge flips about its centre: the width scales and `x` follows.
+        let full = xp::RANK_ITEM_WIDTH;
+        image.x += (1.0 - frame.flip) * full * 0.5;
+        image.width = Some(full * frame.flip);
     }
     if let Some((row, tone)) = name.and_then(row_of)
         && model.rows.get(row).map(|r| r.state) != Some(tone)

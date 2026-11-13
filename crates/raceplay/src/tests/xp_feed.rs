@@ -78,6 +78,7 @@ fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
         objectives: None,
         ai: None,
         xp_awards: awards,
+        xp_ranks: None,
         xp_column: Column::Zone,
     }
 }
