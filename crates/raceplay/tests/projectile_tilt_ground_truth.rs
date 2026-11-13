@@ -51,7 +51,7 @@ const HD: (&str, &str) = (
 /// How far above the floor a projectile rides, and how far off it may be.
 const RIDE_HEIGHT: f32 = oag_weapons::projectile::RIDE_HEIGHT;
 const HEIGHT_TOLERANCE: f32 = 2.0;
-/// The release tick and the three updates after it, in which a Plasma does not ride; see `plasma::UNPINNED_SECONDS`.
+/// The release tick and the three updates after it, in which a Plasma does not ride.
 const PLASMA_UNRIDDEN_UPDATES: u32 = 4;
 const ANGLE_TOLERANCE_DEGREES: f32 = 20.0;
 /// The reattach update and the four after it, in which a Plasma's ride overshoots and decays.
@@ -99,6 +99,7 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
 /// judging each tick it is in the air.
 fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut race = start(title.0, title.1)?;
+    let craft_box = race.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
     let mut input: Option<Input> = None;
     let mut next_shot = 200;
     let mut out = Ride::default();
@@ -124,6 +125,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
         let mut flown = 0_u32;
         let mut was_airborne = false;
         let mut reattach_ripple = 0_u32;
+        let mut hidden = false;
         for k in 0..span {
             let bits = if k == 0 {
                 Button::Cross.bit() | Button::Square.bit()
@@ -155,6 +157,18 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             } else {
                 oag_weapons::projectile::missile::SURFACE_PROBE_LENGTH
             };
+            let ship = &race.sim.world.ships[0];
+            let was_hidden = std::mem::replace(
+                &mut hidden,
+                craft_box
+                    && oag_weapons::projectile::own_box_blocks(
+                        &ship.physics.body,
+                        &oag_weapons::Craft::dimensions(ship),
+                        shot.position,
+                        shot.position - shot.surface * reach,
+                        None,
+                    ),
+            );
             let Some(floor) = race.collision().raycast(
                 Ray::new(shot.position, -shot.surface, reach),
                 None,
@@ -195,6 +209,12 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             // angle and the height are judged from the fourth update on, and
             // against the Plasma's own ride height.
             if weapon == Weapon::Plasma && flown <= PLASMA_UNRIDDEN_UPDATES {
+                continue;
+            }
+            // A shot the firing craft's box hides from the probe falls this update and the
+            // next (`Weapons::own_craft_box_hides_track`): a craft keeping pace with its own
+            // rocket stays inside that reach for many updates.
+            if hidden || was_hidden {
                 continue;
             }
             out.worst_angle = out.worst_angle.max(
