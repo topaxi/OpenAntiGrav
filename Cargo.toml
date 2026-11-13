@@ -276,6 +276,12 @@ glam = { version = "0.34", default-features = false, features = [
 unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
+[workspace.lints.cargo]
+# Cargo's own check for a normal dependency nothing names. It does not look at
+# dev-dependencies or at a dependency only tests use, so `just check-unused-deps`
+# (cargo shear) stays.
+unused_dependencies = "warn"
+
 [workspace.lints.clippy]
 # Float lints, all off: the simulation is float arithmetic by design, and the
 # float *methods* it may not call (libm, `mul_add`, the wall clock, `HashMap`)
