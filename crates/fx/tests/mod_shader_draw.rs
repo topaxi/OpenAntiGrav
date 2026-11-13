@@ -444,7 +444,8 @@ fn an_encoded_scene_target_still_stops_at_white() {
         SceneStore::Encoded,
         &[shader(OVER_RANGE)],
     );
-    let stored = render_scene(&gpu, &mut encoded, &frame(fill, &[], &[]))[(32 * SIZE + 32) as usize];
+    let stored =
+        render_scene(&gpu, &mut encoded, &frame(fill, &[], &[]))[(32 * SIZE + 32) as usize];
     assert!((0.999..=1.0).contains(&stored[1]), "{stored:?}");
     assert_eq!(stored[2], 0.0, "{stored:?}");
 }
