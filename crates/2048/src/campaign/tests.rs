@@ -96,7 +96,13 @@ fn track_vex_entry_matches_default_tracks_own_spelling() {
         display_name: "ALTIMA".to_string(),
     };
     assert_eq!(
-        track_vex_entry(&altima),
+        track_vex_entry(
+            crate::TITLE
+                .campaign
+                .event_track_dir
+                .expect("2048 ships SP.xml events"),
+            &altima
+        ),
         crate::race::DEFAULT_TRACK,
         "must match oag_2048::race::DEFAULT_TRACK's own spelling exactly"
     );

@@ -193,6 +193,7 @@ const TITLE: &Title = &Title {
         frontend_glow: None,
         origin: oag_title::Origin::Chosen,
         custom_campaigns: false,
+        event_track_dir: None,
     },
     pressings: None,
     pre_race: None,

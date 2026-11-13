@@ -195,6 +195,11 @@ pub struct Campaign {
     /// **Chosen**: Pulse, HD/Fury and Omega; Pure draws a list and 2048 has no
     /// hex screens to draw them on yet.
     pub custom_campaigns: bool,
+    /// Where an `SP.xml` event campaign's circuits live, as the directory holding one
+    /// `<track_name>\track.vex` per `TrackDefinition`; `None` on a title that ships no such
+    /// campaign. 2048: `Data\art\published\environments`; Omega: `Data\Environments2048`
+    /// (10 of 10 `SP.xml` tracks resolve there, none under 2048's spelling).
+    pub event_track_dir: Option<&'static str>,
 }
 
 impl Campaign {

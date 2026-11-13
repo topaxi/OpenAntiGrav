@@ -31,6 +31,17 @@ the two Results blocks (both big constructors, 14 KB for `FUN_0149f910`), and wh
 Omega's loyalty-gated unlocks and its XP rank are both user-visible. **Not wired** in this
 project: Omega races pay loyalty only; XP is not kept.
 
-Cross-check: 2048 - checked, applies, not wired (XP award table byte-identical,
+**Wired 2026-11-13 (`omega-banks-xp`)**: a 2048-mode `SP.xml` event launched on Omega
+(`--event "2048 - Event 1"`, `oag_raceplay::load_event`) carries Omega's own `XPAwards.xml` and the
+event's mode column, arms the race tally and banks into the profile's shared XP total at the
+finish, and loyalty keeps paying beside it. Omega ships `Data\xml\SP.xml` (141 events) and its ten
+circuits resolve under `Data\Environments2048\<name>\track.vex` (10 of 10; none under 2048's
+`Data\art\published\environments`), carried as `oag_title::Campaign::event_track_dir`. Paying XP
+in Omega's 2048 mode is **chosen, not measured**: the dispatch between the two Results blocks is
+still unread. An Omega event runs to its finish under the autopilot
+(`omega_event_xp_ground_truth`). Omega's front end cannot launch an event yet (its 2048 map,
+`Campaign2048_Definition.xml`, is unread), so no map gates a hidden event by rank on Omega.
+
+Cross-check: 2048 - **ported** (XP award table byte-identical,
 `vita-2048-eu-v104/xp-award.md`); ranks - checked, differs (half the thresholds); HD - checked,
 differs (HD has no XP). Wiring left open in a handover thread.

@@ -432,8 +432,9 @@ pub mod craft {
     }
 }
 
-/// The circuit `Event::track` resolves to, as `oag_2048::race::DEFAULT_TRACK`
-/// spells one: `Data\art\published\environments\<stem>\track.vex`, `<stem>`
+/// The circuit `Event::track` resolves to, under `dir` (`oag_title::Campaign::event_track_dir`;
+/// 2048's is the spelling `oag_2048::race::DEFAULT_TRACK` uses):
+/// `<dir>\<stem>\track.vex`, `<stem>`
 /// being [`Track::track_name`] lower-cased (every measured `track_name` is
 /// already lower-case; the call is defensive, not corrective). Confidence 90:
 /// [`Track::track_name`] matches `data/plugins/tracks/Definition.xml`'s own
@@ -447,11 +448,8 @@ pub mod craft {
 ///
 /// [`DEFAULT_TRACK`]: crate::race::DEFAULT_TRACK
 #[must_use]
-pub fn track_vex_entry(track: &Track) -> String {
-    format!(
-        r"Data\art\published\environments\{}\track.vex",
-        track.track_name.to_lowercase()
-    )
+pub fn track_vex_entry(dir: &str, track: &Track) -> String {
+    format!(r"{dir}\{}\track.vex", track.track_name.to_lowercase())
 }
 
 /// The mode token [`oag_race::Mode::from_name`] (`crates/race/src/mode.rs`)

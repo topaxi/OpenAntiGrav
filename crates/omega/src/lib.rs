@@ -271,6 +271,7 @@ pub const TITLE: &Title = &Title {
         frontend_glow: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         custom_campaigns: true,
+        event_track_dir: Some(r"Data\Environments2048"),
     },
     pressings: None,
     pre_race: None,

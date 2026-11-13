@@ -117,7 +117,10 @@ fn event_3_is_park_flash_two_laps() {
     );
     assert_eq!(oag_2048::campaign::engine_mode(&event), Some("single_race"));
     assert_eq!(
-        oag_2048::campaign::track_vex_entry(&track),
+        oag_2048::campaign::track_vex_entry(
+            oag_2048::TITLE.campaign.event_track_dir.expect("events"),
+            &track
+        ),
         r"Data\art\published\environments\park\track.vex"
     );
 }

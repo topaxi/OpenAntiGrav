@@ -174,6 +174,7 @@ pub const TITLE: &Title = &Title {
         frontend_glow: Some(oag_title::Origin::Measured),
         origin: oag_title::Origin::Measured,
         custom_campaigns: true,
+        event_track_dir: None,
     },
     pressings: None,
     pre_race: Some(&pre_race::PRE_RACE),
