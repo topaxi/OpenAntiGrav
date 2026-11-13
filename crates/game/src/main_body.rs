@@ -36,6 +36,9 @@ mod cli;
 mod drive;
 #[path = "main/frontend_stage.rs"]
 mod frontend_stage;
+#[cfg(target_os = "linux")]
+#[path = "main/wallpaper.rs"]
+mod wallpaper;
 #[path = "main/gpu.rs"]
 mod gpu;
 #[path = "main/headless.rs"]
@@ -794,6 +797,7 @@ fn run(cli: Cli) -> Result<()> {
         pick_language,
         measure_race_load: cli.measure.measure_race_load,
         demo: cli.demo.mode(),
+        demo_limit: cli.demo.limit(),
         give,
         no_intro: cli.intro.no_intro,
         dev: cli.dev.dev(cli.driver.people())?,
@@ -843,6 +847,16 @@ fn run(cli: Cli) -> Result<()> {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (drive, state_log);
+    // A wallpaper on a compositor with a layer shell is the desktop background, with no window.
+    #[cfg(target_os = "linux")]
+    if app.demo == Some(true) {
+        oag_sound::probe::mark_frame_thread();
+        if crate::wallpaper::run(&mut app)? {
+            app.finish_audio()?;
+            app.finish_prefetch();
+            return Ok(());
+        }
+    }
     let event_loop = new_event_loop()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);

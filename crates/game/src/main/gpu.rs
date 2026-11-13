@@ -51,6 +51,53 @@ pub(crate) struct Output {
     /// How many times the surface has been configured, so a reader that holds state about the
     /// swapchain (`oag_present::refresh`) can tell it was rebuilt without every call site saying so.
     pub(crate) configures: u64,
+    /// What a frame waits for besides a swapchain image: a desktop-background surface's
+    /// compositor frame callback ([`Pace`]). `None` for a window.
+    pace: Option<Box<dyn Pace>>,
+    /// What the surface was made over, when the surface does not own it: a raw target's
+    /// platform objects ([`RawTarget::keep`]). **Declared after [`Self::surface`]**, so it
+    /// outlives it.
+    keep: Option<Box<dyn std::any::Any>>,
+}
+
+/// Whether an output may draw a frame now, beyond having a swapchain image: a background
+/// surface the compositor stopped asking frames of (hidden, or on an output that is off) is
+/// left alone.
+pub(crate) trait Pace {
+    /// Whether to draw now; a yes is a frame the output then expects to present.
+    fn ready(&mut self) -> bool;
+}
+
+/// A surface made over raw platform handles rather than a winit window: a desktop-background
+/// layer surface (`crate::wallpaper`).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) struct RawTarget {
+    pub(crate) display: winit::raw_window_handle::RawDisplayHandle,
+    pub(crate) window: winit::raw_window_handle::RawWindowHandle,
+    /// The surface's size in pixels.
+    pub(crate) size: winit::dpi::PhysicalSize<u32>,
+    /// Owns what both handles point at, kept until the wgpu surface is gone.
+    pub(crate) keep: Box<dyn std::any::Any>,
+    pub(crate) pace: Box<dyn Pace>,
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+impl RawTarget {
+    /// A surface over the raw handles, on `instance`.
+    fn surface(&self, instance: &wgpu::Instance) -> Result<wgpu::Surface<'static>> {
+        // SAFETY: `keep` owns the objects both handles point at (the display connection and
+        // the platform surface), and the `Output` this surface goes into drops its `surface`
+        // before its `keep`. The one unsafe of a raw target: wgpu makes no surface over
+        // objects winit did not create without it.
+        #[allow(unsafe_code)]
+        let surface = unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: Some(self.display),
+                raw_window_handle: self.window,
+            })
+        };
+        surface.context("creating a surface over raw handles")
+    }
 }
 
 /// The window of an [`Output`], or nothing in a headless session.
@@ -67,8 +114,12 @@ pub(crate) struct Host {
     /// stale after window creation.
     #[cfg(target_os = "linux")]
     live: Option<crate::x11_refresh::LiveRefresh>,
-    /// A headless session's size, which no window reports.
+    /// A headless session's size, which no window reports; a background surface's, which
+    /// the compositor configures.
     size: winit::dpi::PhysicalSize<u32>,
+    /// A surface that covers its whole output (a desktop background): fullscreen to every
+    /// reader, with no window to ask.
+    fills_output: bool,
 }
 
 impl Host {
@@ -78,6 +129,7 @@ impl Host {
             live: crate::x11_refresh::LiveRefresh::start(&window),
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
+            fills_output: false,
         }
     }
 
@@ -100,6 +152,7 @@ impl Host {
             live: None,
             window: Some(window),
             size: winit::dpi::PhysicalSize::new(0, 0),
+            fills_output: false,
         }
     }
 
@@ -110,7 +163,30 @@ impl Host {
             #[cfg(target_os = "linux")]
             live: None,
             size,
+            fills_output: false,
         }
+    }
+
+    /// A desktop-background surface of `size` pixels, covering its output.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn background(size: winit::dpi::PhysicalSize<u32>) -> Self {
+        Self {
+            window: None,
+            #[cfg(target_os = "linux")]
+            live: None,
+            size,
+            fills_output: true,
+        }
+    }
+
+    /// Whether this covers its whole output with no window (a desktop background).
+    pub(crate) fn fills_output(&self) -> bool {
+        self.fills_output
+    }
+
+    /// A background surface's new size, from its compositor.
+    pub(crate) fn set_size(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        self.size = size;
     }
 
     pub(crate) fn current_monitor(&self) -> Option<winit::monitor::MonitorHandle> {
@@ -433,7 +509,50 @@ impl Gpu {
             .create_surface(window.clone())
             .context("creating the surface")?;
         let size = crate::window::surface_size(&window);
+        let mut gpu = Self::assemble(instance, surface, size, renderer, Host::window(window))?;
+        gpu.output.apply_vsync(settings.vsync);
+        gpu.output.configure(&gpu.device);
+        Ok(gpu)
+    }
 
+    /// The device on a desktop-background surface over raw handles (`crate::wallpaper`): window
+    /// 1 of a wallpaper. Its present mode is a further window's, one that does not block
+    /// ([`crate::window::seat_present_modes`]): the compositor's frame callbacks pace it
+    /// ([`Pace`]), and a blocking mode on a surface the compositor stopped showing would hold
+    /// every output's frame.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn on_raw(target: RawTarget, renderer: &display::Renderer) -> Result<Self> {
+        let instance = adapter::instance();
+        let surface = target.surface(&instance)?;
+        let mut gpu = Self::assemble(instance, surface, target.size, renderer, Host::background(target.size))?;
+        gpu.output.pace = Some(target.pace);
+        gpu.output.keep = Some(target.keep);
+        gpu.output.apply_modes(crate::window::seat_present_modes(), 1);
+        gpu.output.configure(&gpu.device);
+        Ok(gpu)
+    }
+
+    /// A further desktop-background surface on this device: a wallpaper's next output.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn open_raw_output(&self, target: RawTarget) -> Result<Output> {
+        let surface = target.surface(&self.instance)?;
+        let mut output = self.output_on(surface, target.size, Host::background(target.size))?;
+        output.pace = Some(target.pace);
+        output.keep = Some(target.keep);
+        output.apply_modes(crate::window::seat_present_modes(), 1);
+        output.configure(&self.device);
+        Ok(output)
+    }
+
+    /// Brings the device up on `surface` (falling back to the default renderer when a named one
+    /// will not serve) and puts the surface, unconfigured, in window 1's [`Output`].
+    fn assemble(
+        instance: wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        renderer: &display::Renderer,
+        host: Host,
+    ) -> Result<Self> {
         let brought = match Self::bring_up(&instance, Some(&surface), size, renderer) {
             Ok(brought) => brought,
             // A *named* adapter that will not serve is recoverable, and the
@@ -467,12 +586,12 @@ impl Gpu {
             temporal,
         } = brought;
 
-        let mut gpu = Self {
+        Ok(Self {
             temporal,
             preview_pipelines: std::cell::RefCell::default(),
             reaper: oag_gpu::reaper::Reaper::begin(&device),
             output: Output {
-                window: Host::window(window),
+                window: host,
                 held: None,
                 surface: Some(surface),
                 offscreen: None,
@@ -482,6 +601,8 @@ impl Gpu {
                 latency: 1,
                 logged: None,
                 configures: 0,
+                pace: None,
+                keep: None,
             },
             instance,
             adapter,
@@ -489,10 +610,7 @@ impl Gpu {
             queue,
             adapters,
             in_use,
-        };
-        gpu.output.apply_vsync(settings.vsync);
-        gpu.output.configure(&gpu.device);
-        Ok(gpu)
+        })
     }
 
     /// The device and queue with no window, no surface and no event loop: what a
@@ -534,6 +652,8 @@ impl Gpu {
                 latency: 1,
                 logged: None,
                 configures: 0,
+                pace: None,
+                keep: None,
             },
             instance,
             adapter,
@@ -602,15 +722,30 @@ impl Gpu {
             .create_surface(window.clone())
             .context("creating a further surface")?;
         let inner = crate::window::surface_size(&window);
+        let mut output = self.output_on(surface, inner, Host::seat_window(window))?;
+        output.apply_modes(modes, 1);
+        output.configure(&self.device);
+        Ok(output)
+    }
+
+    /// A further [`Output`] over `surface` of `size` pixels, configured against this adapter's
+    /// defaults with window 1's format rule, its present mode not yet chosen.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    fn output_on(
+        &self,
+        surface: wgpu::Surface<'static>,
+        size: winit::dpi::PhysicalSize<u32>,
+        host: Host,
+    ) -> Result<Output> {
         let mut config = surface
-            .get_default_config(&self.adapter, inner.width.max(1), inner.height.max(1))
+            .get_default_config(&self.adapter, size.width.max(1), size.height.max(1))
             .context("the surface is not supported by this adapter")?;
         // The same format rule as window 1's: see `Gpu::bring_up`.
         config.format = config.format.remove_srgb_suffix();
         config.view_formats = vec![config.format];
         let offered = surface.get_capabilities(&self.adapter).present_modes;
-        let mut output = Output {
-            window: Host::seat_window(window),
+        Ok(Output {
+            window: host,
             held: None,
             surface: Some(surface),
             offscreen: None,
@@ -620,10 +755,9 @@ impl Gpu {
             latency: 1,
             logged: None,
             configures: 0,
-        };
-        output.apply_modes(modes, 1);
-        output.configure(&self.device);
-        Ok(output)
+            pace: None,
+            keep: None,
+        })
     }
 }
 
@@ -653,6 +787,11 @@ impl Output {
             }
             return false;
         };
+        if let Some(pace) = &mut self.pace
+            && !pace.ready()
+        {
+            return false;
+        }
         match surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
@@ -668,6 +807,15 @@ impl Output {
                 false
             }
         }
+    }
+
+    /// The platform surface under this output is gone (its monitor was unplugged): the
+    /// swapchain goes first, then what it was made over, and the output draws nothing.
+    pub(crate) fn lose(&mut self) {
+        self.held = None;
+        self.surface = None;
+        self.pace = None;
+        self.keep = None;
     }
 
     /// The image [`Self::acquire`] took for this frame, `None` when it got

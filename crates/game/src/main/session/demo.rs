@@ -35,6 +35,8 @@ pub(crate) struct State {
     seed: Option<u64>,
     /// A key went down since the last tick: any key, bound or not.
     pub(crate) key: bool,
+    /// `--wallpaper-fps`: the frame limit of the whole run, over the settings'.
+    pub(crate) limit: Option<oag_present::perf::FrameLimit>,
 }
 
 impl Session {
@@ -317,9 +319,10 @@ impl Session {
 
 impl State {
     /// The state of a run started with `--demo` (`wallpaper`: `--wallpaper` too), or of a plain one.
-    pub(crate) fn with_cli(cli: Option<bool>) -> Self {
+    pub(crate) fn with_cli(cli: Option<bool>, limit: Option<oag_present::perf::FrameLimit>) -> Self {
         Self {
             cli,
+            limit,
             ..Self::default()
         }
     }

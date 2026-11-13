@@ -55,6 +55,8 @@ pub(crate) struct App {
     pub(crate) measure_race_load: Option<u32>,
     /// `--demo`: `Some(wallpaper)`. See `session::demo`.
     pub(crate) demo: Option<bool>,
+    /// `--wallpaper-fps`, when the run is a wallpaper.
+    pub(crate) demo_limit: Option<oag_present::perf::FrameLimit>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
@@ -529,7 +531,7 @@ impl App {
             replay_list: Vec::new(),
             replay_refused: std::collections::BTreeMap::new(),
             watching: None,
-            demo: crate::session::DemoState::with_cli(self.demo),
+            demo: crate::session::DemoState::with_cli(self.demo, self.demo_limit),
             viewer: None,
             return_to_replays: false,
             rumbler: None,
@@ -1084,13 +1086,10 @@ impl ApplicationHandler for App {
         // Every way out of the run ends here (window close, a menu's quit, a
         // quit from the race), so the playlist's place is saved once, whichever.
         if let Some(session) = self.state.as_mut() {
-            session.stop_rumble();
-            session.controls.silence_motors();
-            session.save_race_music();
-            session.keep_campaign_position();
-            session.keep_replays();
+            session.wind_down();
+        } else {
+            oag_game::records::finish_background_saves();
         }
-        oag_game::records::finish_background_saves();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

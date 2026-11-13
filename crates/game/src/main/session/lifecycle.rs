@@ -64,6 +64,17 @@ pub(crate) fn silences(away: Away) -> bool {
 }
 
 impl Session {
+    /// The run is ending, whichever way: the rumble stops, the playlist's place, the campaign
+    /// position and the replays are kept, and the background saves are finished.
+    pub(crate) fn wind_down(&mut self) {
+        self.stop_rumble();
+        self.controls.silence_motors();
+        self.save_race_music();
+        self.keep_campaign_position();
+        self.keep_replays();
+        oag_game::records::finish_background_saves();
+    }
+
     /// A race that is neither finished nor held by the pause menu.
     pub(crate) fn race_running(&self) -> bool {
         matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())

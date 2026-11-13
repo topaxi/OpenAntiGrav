@@ -130,6 +130,9 @@ mod pointer;
 pub(crate) mod timing;
 #[path = "session/windows.rs"]
 mod windows;
+#[cfg(target_os = "linux")]
+#[path = "session/wallpaper.rs"]
+mod wallpaper;
 #[path = "session/tournament.rs"]
 mod tournament;
 #[path = "session/stutter.rs"]

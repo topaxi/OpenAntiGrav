@@ -25,6 +25,10 @@ impl Session {
         let Some(shell) = &self.shell else {
             return;
         };
+        // A wallpaper takes no input, so a prompt over it would stand there for good.
+        if self.demo.cli == Some(true) {
+            return;
+        }
         let ask = player::what_to_ask(
             &shell.title.profile,
             &self.settings.player,

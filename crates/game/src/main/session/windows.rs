@@ -727,6 +727,8 @@ impl Session {
         view: &wgpu::TextureView,
     ) {
         let profile = self.governed_profile();
+        // A demo's HUD is hidden in every window, as in window 1 (`Session::race_hud_hidden`).
+        let hud_hidden = self.race_hud_hidden();
         let surface = screen.output.size();
         let fullscreen = crate::window::is_fullscreen(&screen.output.window);
         let rect = display::viewport(surface, crate::window::scene_aspect(&self.settings.display, fullscreen));
@@ -854,14 +856,16 @@ impl Session {
                 rect,
                 window,
             );
-            stage.draw_window_hud(
-                &self.gpu,
-                encoder,
-                screen.framebuffer.output(),
-                rect,
-                screen.framebuffer.output_size(),
-                window,
-            );
+            if !hud_hidden {
+                stage.draw_window_hud(
+                    &self.gpu,
+                    encoder,
+                    screen.framebuffer.output(),
+                    rect,
+                    screen.framebuffer.output_size(),
+                    window,
+                );
+            }
         }
         stage
             .scene

@@ -118,6 +118,11 @@ web-time = "1.1.0"
 wayland-backend.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
+# `--wallpaper`'s desktop background: the wlr-layer-shell surfaces and their loop
+# (`crate::wallpaper`). Already built for winit's Wayland backend; no further features.
+smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
+# `--wallpaper`'s SIGINT/SIGTERM handler.
+libc = "0.2"
 x11rb.workspace = true
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the

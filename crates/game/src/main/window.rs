@@ -126,9 +126,9 @@ pub(crate) fn native_size(host: &crate::gpu::Host) -> Option<display::Size> {
 /// gamescope, which opens every window borderless whatever the saved mode says
 /// ([`effective_mode`]). The saved `window_mode` alone misses both gamescope and an F11 toggle.
 pub(crate) fn is_fullscreen(host: &crate::gpu::Host) -> bool {
-    // A headless session has no compositor to ask.
+    // A headless session has no compositor to ask; a desktop background covers its output.
     let Some(window) = host.get() else {
-        return false;
+        return host.fills_output();
     };
     // winit's Android backend answers `None` to `fullscreen()` whatever the window is (it cannot
     // set one), which left `display.fullscreen_resolution` unread there.
