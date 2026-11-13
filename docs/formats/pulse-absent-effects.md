@@ -235,18 +235,41 @@ ribbon; this applies HD's rule to it.
 target hue at equal luminance, no negative channel), `psys::carried::tests` (a tint recolours
 its own instance only and a recycled slot forgets it), `tests::trail_hits` (a lent burst is the
 ribbon's hue at the authored luminance; the PS2 law gives another hue; an authored burst is
-byte-identical to its effect's own draw) and, on the discs,
+drawn in the same colours as its effect draws it) and, on the discs,
 `trail_hits_lent_ground_truth` (every coloured vertex of HD's real burst on a Pulse race points
 within 0.999 of the ribbon's chroma direction).
 
-**The change is small on the PSP.** HD's burst palette ends at (0.79, 0.43, 1.0), chroma direction
-(0.46, -0.22, 0.86) (`engine-trail.md`, "The two emitters"): the PSP ribbon's summed hue to two
-places. The burst was already the ribbon's violet there, so the tint mostly removes the cyan
-cast the over-life ramp and the additive stacking give the fringe (hundreds of overlapping soft
-quads clip white; only the rim shows a hue). Seed 7, `--trail-sparks`, tick 200, 1440x816: 4,617
-of the frame's pixels move by more than 8 levels, the moved pixels' mean going from
-(144, 207, 246) to (171, 202, 244): cyan-white to lilac-white. On the PS2 the ribbon is
-pink-white and the shift is larger. A probe with the tint forced to red recolours every spark red
-and thins the cloud, so no draw path escapes it. Checked against HD, 2048 and Omega: not
-applicable, they author the burst and are never lent it; Pure draws Pulse's ribbon law
-(`oag_pure::race`), not measured separately.
+**The change is small on the PSP, because the burst's vertex colours already point the
+ribbon's way.** Measured on the discs (`trail_hits_lent_ground_truth`'s scene, a craft tucked
+eight units into a rival's ribbon, the tint switched off for the measurement): of 792 vertices
+with any chroma, the mean chroma direction is (0.42, -0.21, 0.87) against the PSP ribbon's
+(0.44, -0.22, 0.87), and 756 sit within 0.99 of it; 36 do not (not inspected further). HD's palette ends (0.79, 0.43, 1.0), direction (0.46, -0.22, 0.86)
+(`engine-trail.md`, "The two emitters"). The burst is violet at the vertex, and only the
+display pipeline (additive stacking of hundreds of soft quads, bloom, clipping) makes its rim
+read cyan. So on the PSP the tint moves the outliers and the rim, and the PS2's pink-white
+ribbon is where it shows.
+
+Frames, Pulse PSP EU, seed 7, `--trail-sparks`, tick 200, 1440x816, HD as lender; the burst is
+74,597 pixels (frame with the setting off against on); a pixel counts when a channel moves by
+more than 8 levels:
+
+| pressing | pixels moved by the tint | share of the burst |
+| --- | --- | --- |
+| Pulse PSP | 4,617 | 6 % |
+| Pure PSP | 4,156 | 6 % |
+| Pulse PS2 | 24,433 | 33 % |
+| Pulse PSP, tint forced red (probe) | 60,370 | 81 % |
+
+On the PSP the moved pixels' mean goes from (144, 207, 246) to (171, 202, 244): cyan-white to
+lilac-white. On the PS2 the cyan-white rim and sparks turn pink-violet, to match its pink-white
+ribbon. The red probe recolours most of the burst (the rest is clipped to white), so no draw
+path escapes the tint; it is a probe, not shipped.
+
+**Open: which hue is "the ribbon".** The summed layers are a derivation from the authored
+colours. In a PSP frame at 700 ticks the plume around the hull reads blue overall (chroma
+direction (-0.14, -0.06, 0.99), the outer layer's own (-0.13, -0.06, 0.99)), though that sample
+includes the hull and the bloom, and the strip below the hull reads (0.16, -0.15, 0.98). If a
+player judges the ribbon blue, the outer layer is the other candidate; it is a one-line change in
+`TrailLaw::ribbon_colour`. Checked against HD, 2048 and Omega: not applicable, they author the
+burst and are never lent it; Pure draws Pulse's ribbon law (`oag_pure::race`), not measured
+separately.
