@@ -29,6 +29,7 @@ behaviour is in code: Omega's `TouchCampaign` item reads the d-pad, which Vita
 | `0x01749330` | `Pad_ActionPressed` | 84 | pad vtable (`0x0192cba0`) slot `+0x60`: `pad+0xe70+action`, a press edge |
 | `0x01749310` | `Pad_ActionHeld` | 84 | slot `+0x58`: `pad+0xe10+action`, held |
 | `0x017494d0` | `Pad_ActionByName` | 84 | action names to indices |
+| `0x014e5c70` | `TouchCampaign_CommitEvent` | 55 | vtable slot 12: commits the selected event as the race to run (lead for Cross) |
 | `0x0151d530` | `Campaign2048Screen_Update` | 72 | the `Campaign2048` screen class's update (vtable `0x01922398` slot 3, registered by `0x0151ec20`) |
 
 ## Pad actions (confidence 84)
@@ -60,10 +61,20 @@ canvas's 700-slot table `canvas+0x5e148` (`canvas` = `DAT_01aeb330`, the
 | --- | --- |
 | `+0x10`, `+0x18` | callback `TouchCampaign_OnEventFocused` and its owner, the `TouchCampaign` |
 | `+0x20` | the event |
-| `+0x34`, `+0x38` | lattice column and row of the button's corner |
-| `+0x3c`, `+0x40` | its width and height in lattice cells: 3 x 2 by default, 7 x 4 for event types 1, 2, 9, 10, 2 x 2 or 2 x 1 for others, 11 x 6 for type 11 |
-| `+0x50` | float size, 8.0 by default (5.0, 7.0, 10.0 for others): the ripple radius below is half of it |
+| `+0x34`, `+0x38` | canvas tile column and row of the button's corner: `(int)(DAT_01e0a76c * M_X + DAT_01e0a778 + tweak_x)`, likewise for the row; the measured lattice law `col = 55 + 4 M_X`, `row = 25 + 2 M_Y` ([campaign-map-projection.md](../vita-2048-eu-v104/campaign-map-projection.md)), inside the 401 x 120 tile grid |
+| `+0x3c`, `+0x40` | footprint in tiles, per event type (`event+0x228`), table below |
+| `+0x50` | float size; the ripple radius below is half of it |
+| `+0x58..+0x5a` | the button's colour bytes, drawn into its tiles (`0x013d7f00`) |
 | `+0x5c` | state; only state 2 can take focus |
+
+| Event type | Footprint | Corner column | Size `+0x50` | Centre offset (w/2, h/2) |
+| --- | --- | --- | --- | --- |
+| 0 and default | 3 x 2 | col | 7.0 (`0x40e00000`) | (1.5, 1) |
+| 1, 2, 3, 9, 10 | 7 x 4 | col - 1 | 8.0 | (2.5, 2) from col |
+| 4 | 2 x 2 | col | 5.5 (`0x40b00000`) | (1, 1) |
+| 5, 6 | 2 x 1 | col | 5.0 | (1, 0.5) |
+| 8 | 2 x 2 | col | 5.0 | (1, 1) |
+| 11 | 11 x 6 | col | 10.0 | (5.5, 3) |
 
 The focused button is `canvas+0x5e138`. `CanvasLabel`s also get a button
 (`"Dummy label button"`, `0x013e0250`) but with no event (`+0x20` = 0), and the
@@ -73,7 +84,11 @@ pick skips those: labels never hold focus.
 
 For every registered button that has an event, is not the current one, is in
 state 2, and whose event's season (`CanvasButton_GetSeason`) equals
-`canvas+0x5f880` (the season on show; so **focus never crosses seasons**):
+`canvas+0x5f880` (the season on show, written `0x800`/`0x801`/`0x802` by the canvas
+load `0x013db460` at `0x013db4da..0x013db4f4`; so **focus never crosses
+seasons**: Omega shows one season per visit, picked by the flyer `flyer2048/9/50`
+on `Grid Selection 2048`, and `TouchCampaign_UpdateEvent` forces other seasons'
+events to status 1):
 
 ```
 dx = (b.x - cur.x) + (b.w - cur.w) * 0.5        // centre to centre, lattice cells
@@ -89,8 +104,10 @@ Evidence: at `0x013de480` the call is `atan2f` with `XMM0` = the column delta an
 `0x01803114..0x0180314c` read `FLT_MAX, 0.5, 57.29578, 360, 155, 25, 245, 115,
 335, 205, 295, 65`. Each cone is 130 degrees wide, so neighbouring cones overlap
 by 40 degrees; the score is plain Euclidean distance with no sideways penalty.
-"Up" is the smaller row. The fields are integer lattice cells, so a port uses
-the lattice column and row, not screen pixels.
+"Up" is the smaller row. The fields are raw tile indices, an anisotropic space (an
+event step is 4 tiles across and 2 down), so a port computes the angle and the
+distance on those indices, centre = corner + the offset in the table above, not
+on screen pixels or a rescaled lattice.
 
 `TouchCampaign_Update` asks the pad in the order left (2), right (3), up (0),
 down (1) and takes the first press, so at most one step per frame. The pad is
@@ -123,9 +140,12 @@ The same sequence runs after the d-pad pick (`0x014df9a8`), after a touch
 Two effects, both on the canvas lattice, no sprite and no cursor:
 
 - **The focused event pulses** (`TouchCampaign_UpdateEvent`, `0x014e1c2f`): while
-  its button is `canvas+0x5e138`, each of the button's three colour bytes is
-  `clamp(base + sin(phase) * 32.5 + 32.5, 0, 255)`, `base` the low byte of
-  `DAT_01aeb688` (unread at rest, read recipe below). `phase` is
+  every reachable (status 2) event's button first gets `+0x58 = DAT_01aeb688`,
+  then its three colour bytes `+0x58..+0x5a` are all set to one value,
+  `clamp(b + pulse, 0, 255)` with `b` the low byte of `DAT_01aeb688` (unread, read
+  recipe below) and `pulse = sin(phase) * 32.5 + 32.5` on the focused button, 0
+  on the others. So reachable events are a grey of level `b` and the focused one
+  pulses up to `b + 65`. `phase` is
   `campaign+0x208`, advanced by `dt * 5` and wrapped at 2 pi in
   `TouchCampaign_Update`'s default state: a period of 1.257 s, brightening by up
   to 65 levels. Its lattice tiles (`button+0x68`, count `+0x60`) get alpha 0xff.
@@ -144,8 +164,11 @@ Two effects, both on the canvas lattice, no sprite and no cursor:
   decays each frame by `floor(acc * 690)` levels (`DAT_01aeb6d8`), so the wave
   fades behind itself.
 
-Neither effect names `Orange2048`; the colour is the event's own canvas colour,
-brightened.
+Neither effect names `Orange2048`, and there is no separate program, sprite or
+scale change: both write the canvas's tile colour and alpha buffer, which the
+`FE3DCanvas`'s own `Canvas3D_vp`/`Canvas3D_fp` programs draw (confidence 65:
+the buffer upload `DAT_01aeb338` was followed to its fill in `Canvas3D_Update`,
+not to the draw call).
 
 ## Where focus starts (confidence 72)
 
@@ -172,12 +195,18 @@ focuses it and scrolls the view to centre it.
   142 x 116 (960 x 544 space) are hit-tested by `0x013b8ef0` (taps) and
   `0x013b8ca0` (holds); the 812 rect checks `PlayerLivery`, sets `InGame2048`'s
   `PreRaceCallout`, plays `newGUI_confirm` and follows the item's redirect
-  `Launch 2048`; the 552 rect writes the event to `DAT_02039628+0x4e8` and
-  redirects. Both tests read only the pad manager's touch lists
+  `Launch 2048`; the 552 rect (skipped when `event+0x80` is set, the forced-craft
+  case) writes the event to `DAT_02039628+0x4e8` and redirects to `team`
+  (string `0x0182f4be`): **Change craft** (65). Both tests read only the pad manager's touch lists
   (`mgr+0x968`/`+0x96c` and `mgr+0xa70`/`+0xa74`, i.e. pad 0's `+0x8e8` and `+0x9f0`),
   and no non-zero writer of those lists was found statically. No `Pad_ActionPressed(6)`
   or `(4)` call sits in any `TouchCampaign` function (the four `+0x60` calls in
-  `0x014d0000..0x014f0000` are the directions). Next: the HD screen base's
+  `0x014d0000..0x014f0000` are the directions). A lead: `TouchCampaign`'s
+  vtable slot 12, `0x014e5c70` (`TouchCampaign_CommitEvent`, 55), makes the selected
+  event the current game mode, prepares it (`0x0159d360`, the launch path's own
+  call) and remembers it per season (`DAT_01e06780`): it looks like the hook the
+  screen base calls when it follows the item's redirect on Cross; its caller is
+  unread. Next: the HD screen base's
   forward handling (`0x013c5e70`, called at the end of `TouchCampaign_Update`),
   and the writer of `pad+0x8e8` (`Game_Main`'s five `LEA RBX,[R12+0x8e8]` at
   `0x0163f108..0x0163f2e8`). A live check needs a shadPS4 frame sequence: press
@@ -200,9 +229,9 @@ focuses it and scrolls the view to centre it.
 - `canvas+0x5f88c`/`+0x5f890` (zoom limits) and the default zoom: same recipe on
   those offsets in `0x013db460` (the canvas constructor writes `DAT_01aeb330`).
 
-## 2048 delta
+## 2048 delta: checked, differs
 
-Vita 2048's `TouchCampaign` update (`0x810f2f04`) answers touch only
+**Checked, differs.** Vita 2048's `TouchCampaign` update (`0x810f2f04`) answers touch only
 ([pad-focus.md](../vita-2048-eu-v104/pad-focus.md)); Omega's adds the d-pad
 focus, the scroll-to-focus, the pulse and the ripple. The XML is not the place
 either title authors it. The maintainer's rule (one shared map, Omega's

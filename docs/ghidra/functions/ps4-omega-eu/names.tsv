@@ -229,3 +229,4 @@
 0x01749310	function	Pad_ActionHeld	84	campaign-map-pad.md
 0x017494d0	function	Pad_ActionByName	84	campaign-map-pad.md
 0x0151d530	function	Campaign2048Screen_Update	72	campaign-map-pad.md
+0x014e5c70	function	TouchCampaign_CommitEvent	55	campaign-map-pad.md
