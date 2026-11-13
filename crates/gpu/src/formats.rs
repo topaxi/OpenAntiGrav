@@ -91,6 +91,11 @@ impl SceneStore {
     #[must_use]
     pub fn texel_encode(self, light: f32) -> f32 {
         let c = light.clamp(0.0, 1.0);
+        // White stays exactly 1.0: the sRGB arm computes 0.99999994 there, and a neutral tint must not
+        // read as a tint.
+        if c >= 1.0 {
+            return 1.0;
+        }
         match self {
             Self::Encoded => {
                 if c <= 0.003_130_8 {
