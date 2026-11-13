@@ -7,13 +7,16 @@
 //!     -E 'test(/^omega_2048_map_ground_truth::/)'
 //! ```
 
-
 use oag_ui::frontend::canvas_cells;
 
 const OMEGA_SCREEN: &str = "Cell Selection 2048";
 const OMEGA_ENTRY: &str = r"Data\Plugins\Frontend\Gui\Campaign2048_Definition.xml";
 
-fn labels(archives: &mut oag_assets::Archives, entry: &str, screen: &str) -> Vec<oag_ui::screen::CanvasLabel> {
+fn labels(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    screen: &str,
+) -> Vec<oag_ui::screen::CanvasLabel> {
     let blob = archives.read_name(entry).expect("the definition");
     let xml = if oag_tables::fexml::is_fexml(&blob) {
         oag_tables::fexml::expand(&blob).expect("expands")
