@@ -336,7 +336,9 @@ impl Session {
             }
             self.idle.update_window(
                 self.gpu.output.window.get(),
-                self.race_running(),
+                // An attract demo is not somebody playing: a menu left alone may still blank the
+                // screen. A wallpaper is meant to stay up.
+                self.race_running() && (!self.in_demo() || self.demo_is_wallpaper()),
                 self.controls.pad_spoke(),
                 web_time::Instant::now(),
             );

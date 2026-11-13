@@ -161,6 +161,8 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--trace-out <file.csv>` | Simulation only, no window: write our per-tick state to a CSV in the capture's own columns, for `oag-trace compare` against one from `scripts/psp-trace.py`. Refused together with `--screenshot`. |
 | `--input-script <file.inputs>` | With `--screenshot` or `--trace-out`: drive the run from a committed `.inputs` file instead of `--hold`/`--press` - see [the verification protocol](../reverse-engineering/verification-protocol.md). |
 | `--dry-run` | Report what was loaded and exit. |
+| `--demo` | Start in an all-AI demo race and chain the next when one ends; any input returns to the menu. With `--dry-run` it flies two demos back to back with no window and prints one line each (`--ticks N` shortens them); with `--screenshot` it captures one. See [the attract demo](../ui/attract-demo.md). |
+| `--wallpaper` | `--demo` as a wallpaper: input is ignored, Escape quits, the machine is kept awake. |
 | `--probe-pad` | Print every connected pad's button presses and releases with the value `[controls.music]` takes for them (a button name or `raw:CODE`), until Ctrl-C. Opens no window and no audio; refused with `--race`, `--screenshot`, `--dry-run`, `--trace-out`, `--launcher` and `--drive`. See "Music controls in a race". |
 | `--drive <steps>` / `--drive-file <file>` | Run our own menus with no window, driven by a script, and exit non-zero when a step times out or a row is not there. See [Driving the menus with no window](#driving-the-menus-with-no-window). |
 | `--state-log <file>` | With `--drive`, write the game's state as one JSON line per change to this file (stderr when absent). |
@@ -207,6 +209,8 @@ sends the state lines to a file, stderr otherwise. `--drive` needs one disc imag
 | `hold <button> ... N` | Hold every named button down together for N ticks, then let go: `hold left 60` turns photo mode's camera, `hold select up 30` zooms it. |
 | `rstick <x> <y> N`, `lstick <x> <y> N` | A pad that is not there: its right (or left) stick held at `x y` (`-1` to `1`, up positive) for N ticks, then let go. The right stick is view-side only (photo mode zooms and tilts with it, the viewer jogs); the left is the snapshot stick, as a real pad's. |
 | `pull <l2\|r2> <amount> N` | A trigger pulled `amount` (`0` to `1`) for N ticks. It raises its shoulder's (or, under `thrust_brake`, CROSS's) button in the race's snapshot as a real trigger does, and the replay viewer and photo mode read it apart from the buttons: L2 and R2 scrub, a full R2 is PLAY in photo mode. |
+| `key` | A key no button is bound to went down (what the attract demo counts as somebody being there). |
+| `mouse <x> <y>`, `click` | The mouse moved to a window pixel; the primary button went down and up. |
 | `ticks N` | Let N ticks pass. |
 | `screenshot <path>` | Draw the next frame offscreen through the window's own draw and write a PNG. The only step that draws. |
 | `quit` | End the run. Reaching the end of the script does too. |
@@ -216,7 +220,7 @@ Conditions are `key=value` or `key!=value`, case-insensitive: `stage` (`launcher
 whatever is open over it), `screen` (`page`, `picker`, `campaign`, `prompt`, ...), `screen.id`
 (the page id, or `track-select`/`ship-select`), `title`, `focus` (the focused row's id, setting
 or label - any of them holds), `opening_reads` (`landed` once what the next selection screen
-opens on is read, else `reading`; `stage=menu` only), `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `replay` (the replay viewer while a recording is watched on `stage=race`: `opening`, `playing`, `paused`, `ended` or `stopped`, the last when the build stops matching the recording) `replay_at` (`at/length/built` in ticks, `-` before the first keyframe), `replay_follow` (the grid slot the viewer's picture follows) and `replay_hud` (`on` or `off`), `photo_fx` (photo mode's picture controls, the rewind row's tick, `orbit`, `pan`, `fov`, `subject` and `hud`) and `photo_job` (`drawn/frames` of a photo shot of several frames under way, else `none`; a drive draws only the frames it is asked for, and asks for one each frame while such a shot runs), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source|target` (only once a race is loading; `target` is the Eliminator's kills or points to win, on `stage=race` in that mode). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
+opens on is read, else `reading`; `stage=menu` only), `photo` (photo mode's lens, `internal`, `close` or `track`, or `none`, on `stage=race`), `demo` (`loading` while an attract demo's race loads, `running` once it is live), `humans` (slots a person flies, on `stage=race`: `0` in a demo), `replay` (the replay viewer while a recording is watched on `stage=race`: `opening`, `playing`, `paused`, `ended` or `stopped`, the last when the build stops matching the recording) `replay_at` (`at/length/built` in ticks, `-` before the first keyframe), `replay_follow` (the grid slot the viewer's picture follows) and `replay_hud` (`on` or `off`), `photo_fx` (photo mode's picture controls, the rewind row's tick, `orbit`, `pan`, `fov`, `subject` and `hud`) and `photo_job` (`drawn/frames` of a photo shot of several frames under way, else `none`; a drive draws only the frames it is asked for, and asks for one each frame while such a shot runs), `endrace` (`photo` while `Race End Photo` is up, `other` for the rest of the end screens) and `race.title|track|track_file|team|variant|mode|source|craft_source|target` (only once a race is loading; `target` is the Eliminator's kills or points to win, on `stage=race` in that mode). On `stage=race` the state lines also carry `hash` (the race's state hash) and `sim_tick`, so a line is written for every tick the race steps and none while it stands still (photo mode, the pause menu).
 
 **What the game reports.** One JSON line whenever anything but the tick changed. A menu state:
 
@@ -856,7 +860,7 @@ someone is playing, so a controller-only session is not locked or blanked mid-ra
 compositor counts only input it handles itself, and the pad is read straight from the
 device, so without this a pad player looks idle to swayidle or a screen saver.
 
-It is held while **a race is running and not paused, or a pad was touched in the last
+It is held while **a race is running and not paused (an attract demo is not, a `--wallpaper` is), or a pad was touched in the last
 60 seconds** (`oag_game::idle::Rule`). A paused race, a finished one and a menu nobody
 touches let the machine idle; navigating a menu with the pad does not. A minimised or hidden
 window releases it, because the protocol is per surface. Only the first window holds it in
