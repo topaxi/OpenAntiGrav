@@ -93,6 +93,46 @@ impl Wave {
             .retain(|_, cell| cell.alpha > 0 || cell.shown >= 0.5);
     }
 
+    /// Writes the focus ripple at `t` seconds: every cell within `radius` of
+    /// `centre` whose priority is below [`STILL_PRIORITY`] takes
+    /// [`super::map_focus::ripple_alpha`] as its alpha, as `Canvas3D_Update`
+    /// writes the tile alpha. The decay and the ease in [`Self::step`] fade it.
+    pub fn ripple(
+        &mut self,
+        centre: (f32, f32),
+        radius: f32,
+        t: f32,
+        priority: &dyn Fn((i32, i32)) -> u8,
+    ) {
+        let cols = ((centre.0 - radius) / CELL_DX).floor() as i32
+            ..=((centre.0 + radius) / CELL_DX).ceil() as i32;
+        let rows = ((centre.1 - radius) / CELL_DY).floor() as i32
+            ..=((centre.1 + radius) / CELL_DY).ceil() as i32;
+        for row in rows {
+            for col in cols.clone() {
+                if priority((col, row)) >= STILL_PRIORITY {
+                    continue;
+                }
+                let dx = col as f32 * CELL_DX - centre.0;
+                let dy = row as f32 * CELL_DY - centre.1;
+                let d2 = dx * dx + dy * dy;
+                if d2 >= radius * radius {
+                    continue;
+                }
+                let alpha = super::map_focus::ripple_alpha(t, d2, radius) as i32;
+                if alpha > 0 {
+                    self.cells.entry((col, row)).or_default().alpha = alpha;
+                }
+            }
+        }
+    }
+
+    /// Whether no cell is raised or rising.
+    #[must_use]
+    pub fn is_calm(&self) -> bool {
+        self.cells.is_empty()
+    }
+
     fn lift(&mut self, centre: (f32, f32), priority: &dyn Fn((i32, i32)) -> u8) {
         let r2 = RADIUS * RADIUS;
         let cols = ((centre.0 - RADIUS) / CELL_DX).floor() as i32

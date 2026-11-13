@@ -108,6 +108,7 @@ mod event_card;
 mod faces;
 mod hosted_map;
 mod map_cursor;
+mod map_focus;
 mod mode_grid;
 mod options2048;
 mod team;

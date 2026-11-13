@@ -21,6 +21,7 @@ mod event_card;
 mod focus;
 mod hosted_map;
 mod intro;
+mod map_focus;
 mod navs;
 mod pointer;
 mod screens;

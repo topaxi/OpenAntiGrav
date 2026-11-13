@@ -375,6 +375,18 @@ impl Kinetic {
         *self = Self::new(offset);
     }
 
+    /// Carries the content to `offset` on the critically damped [`SPRING`],
+    /// from where it is and at the speed it has: a view that follows a pad's
+    /// focus rather than jumping to it.
+    pub fn glide_to(&mut self, offset: f32) {
+        if (self.offset - offset).abs() < 1e-3 {
+            self.set(offset);
+            return;
+        }
+        self.phase = Phase::Settle { target: offset };
+        self.swallow = false;
+    }
+
     /// Moves the content and everything it is aiming at by `by` units
     /// without changing its motion: how a wrapping caller folds a whole
     /// item it has consumed back out of the offset.

@@ -111,7 +111,7 @@ impl Frontend {
             | w2048::OPTIONS_AUDIO
             | w2048::OPTIONS_CONTROLS
             | w2048::OPTIONS_PILOT => self.update_options_panel(input, &current),
-            _ => self.update_touch(input),
+            _ => self.update_touch(dt, input),
         }
     }
 
