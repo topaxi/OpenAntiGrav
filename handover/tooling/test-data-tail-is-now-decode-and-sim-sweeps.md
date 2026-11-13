@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-11
+updated: 2026-11-13
 summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, 2048 sweeps, fewer speed plan learns"
 difficulty: medium (35)
 ---
@@ -31,6 +31,8 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 - **2026-11-03 `test-data-tail-2`.** Done: the Autopilot class/difficulty test, the HD opponent-variant test and (for track art) nothing else load with `ribbon: true` where only a rule or handling is read (47 to 18 s and 35 to 13 s CPU); the Omega extraction tests write under `/var/tmp` (Omega first circuit 12.2 to 9.4 s CPU). Numbers in `workspace-layout.md`. `test-data --full`: 423 s, slowest test 93 s. Still open: the Omega extraction tests keep the view half of their loads (texture decode, `bc7`, `untile_level`) and `sha256` of the extraction (7% of one); a run-time sim-only load switch in `oag-raceplay::load` would take both. Any other test that loads a race to read a rule or a table (`rg 'oag_raceplay::load' crates/*/tests`) is a candidate for `ribbon: true`; measure it alone, twice, before and after.
 
 - **2026-11-11 `speed-plan`.** Done: a speed-plan build reads back the stretch of each run from the grid that the run before it already drove (`crates/ai/src/plan/driven.rs`); Pulse `07_Track` RAPIER 1.07 to 0.91 s CPU per learn, 2048 `altima` 1.18 to 0.97 s, three more fields 23 to 28 % less, plans byte-identical. Measured and not done: the `pad` closure's allocation (0.2 % of the profile) and a cache for the clearance test (the test is 9 to 11 % of what remains).
+
+- **2026-11-13 `test-tail-3`.** Done: the texture decoders. `gxt_ground_truth` 27.8-29.6 to 13.7 s user CPU alone (`PVRTII4BPP` 51 to 145 M texel/s, BC1-3 about 2x, the GXT twiddle built once per surface), an `omega_gnf` slice 11.7 to 8.1 s (BC7 index reads, one multiply for RGBA, whole-block copies; `gnf` untile walks tiles in file order), `omega_normal_map` 18.4 to 16.2 s; all decoded bytes identical (numbers and proofs in `workspace-layout.md`, "What the `test-tail-3` pass measured"). Player-side: the same decoders run at 2048 and Omega load. Measured and not done: `hd_eliminator_hud_ground_truth` is 106 s of user CPU of pure simulation (12 races, 4 threads), nothing to remove without changing the sim; the hard-transition `PVRTII4BPP` quads (7 % of quads, a third of the remaining decode); `omega_wem` (310 s summed in the 2026-11-13 gate log, `atrac9dec`) and `omega_transparency` (259 s) were not touched, and a load average above 40 inflates a test's wall time by 2 to 4 times (`omega_normal_map` 81 s in the lead's gate, 62 s at load 58 and 22 s at load 7 alone), so judge by user CPU at a quiet load.
 
 ## Next Steps
 
