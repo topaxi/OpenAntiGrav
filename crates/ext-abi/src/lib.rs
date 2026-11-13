@@ -23,7 +23,7 @@
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
-//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text`, `hud-icon`, `pickup-look` or `raise-warning` command |
+//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or mod-asset command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
@@ -192,7 +192,7 @@ const EVENT_MOD: u8 = 10;
 const EVENT_TRANSIT_END: u8 = 11;
 const EVENT_CLEARANCE: u8 = 12;
 /// Bit 15 of a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or `fire-effect`
-/// argument: the string, icon or effect is the sending mod's own, not the title's. The pool offset or effect index is the rest.
+/// argument: the string, icon or effect is the sending mod's own, not the title's. The rest is the name's pool offset.
 const OWN_FLAG: u16 = 1 << 15;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;

@@ -68,7 +68,7 @@ use oag_ext_abi::Sections;
 ///   tick it is called for.
 pub trait Extension {
     /// What survives between ticks: a [`blob!`] struct. Its length is the module's
-    /// `oag_state_len` and must equal the manifest's `state_bytes`.
+    /// `oag_state_len`; a manifest `state_bytes`, if written, must equal it.
     type State: Blob;
 
     /// One tick: read `obs`, update `state`, send commands through `reply`.
