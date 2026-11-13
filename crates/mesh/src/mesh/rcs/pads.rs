@@ -28,6 +28,7 @@
 //! stay lined up one entry each.
 
 use anyhow::{Context, Result, bail};
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
@@ -206,8 +207,9 @@ pub fn build_pads(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
 ) -> Result<(Model, Report)> {
-    build_pad_class(label, data, model_blob, textures, |c| c.speedup_pad)
+    build_pad_class(label, data, model_blob, textures, store, |c| c.speedup_pad)
 }
 
 /// The track's `Weapon Pad` geometry, the same way as [`build_pads`] - the
@@ -248,8 +250,10 @@ pub fn build_weapon_pads(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
 ) -> Result<(Model, Report)> {
-    let (mut model, report) = build_pad_class(label, data, model_blob, textures, |c| c.weapon_pad)?;
+    let (mut model, report) =
+        build_pad_class(label, data, model_blob, textures, store, |c| c.weapon_pad)?;
     each_node_its_own_glow(&mut model);
     Ok((model, report))
 }
@@ -299,6 +303,7 @@ pub(super) fn build_pad_class(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<(Model, Report)> {
     if !vex::has_magic(data) {
@@ -327,7 +332,7 @@ pub(super) fn build_pad_class(
         material_anim,
         anim_tracks,
         ..
-    } = material_setup(&model, model_blob, textures, &mut report);
+    } = material_setup(&model, model_blob, textures, store, &mut report);
     out.textures = skins;
     out.lightmaps = seconds;
     out.material_slots = material_slots;

@@ -341,6 +341,7 @@ pub(super) fn grid(
     team: &str,
     available: &[String],
     hull_variant: Option<&str>,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> anyhow::Result<Grid> {
     let skin = super::skin::resolve(
@@ -382,6 +383,7 @@ pub(super) fn grid(
         archives,
         &slot_teams,
         &oag_livery::LoadContext {
+            store,
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,

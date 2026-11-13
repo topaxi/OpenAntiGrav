@@ -117,6 +117,7 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
             archives,
             &[team.to_string()],
             &oag_livery::LoadContext {
+                store: Default::default(),
                 race: oag_omega::TITLE.race,
                 mode: Mode::Zone,
                 flare: oag_omega::TITLE.flare,

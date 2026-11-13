@@ -62,11 +62,14 @@ fn track_model(image: &std::path::Path) -> oag_mesh::mesh::Model {
     let geometry = archives
         .read_name(&sibling)
         .expect("the sibling .rcsmodel reads");
-    let (model, _report) =
-        oag_mesh::mesh::rcs::build_scene(TRACK, &track_blob, &geometry, &mut |path| {
-            archives.read_name(path).ok()
-        })
-        .expect("the track model builds");
+    let (model, _report) = oag_mesh::mesh::rcs::build_scene(
+        TRACK,
+        &track_blob,
+        &geometry,
+        &mut |path| archives.read_name(path).ok(),
+        Default::default(),
+    )
+    .expect("the track model builds");
     model
 }
 
@@ -229,6 +232,7 @@ fn the_digit_board_teleports_through_this_projects_own_pipeline() {
         &blob,
         &geometry,
         &mut |p| archives.read_name(p).ok(),
+        Default::default(),
         |c| c.mesh,
     )
     .expect("the gantry model builds");

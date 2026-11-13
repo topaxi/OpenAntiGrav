@@ -12,6 +12,7 @@ autotests = false
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-fx.workspace = true
+oag-gpu.workspace = true
 oag-mesh.workspace = true
 oag-pulse.workspace = true
 oag-race.workspace = true

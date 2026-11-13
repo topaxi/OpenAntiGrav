@@ -59,6 +59,7 @@ fn every_hd_and_fury_flare_draws_every_spike_it_authors() {
                 &mut archives,
                 std::slice::from_ref(&dir),
                 &oag_livery::LoadContext {
+                    store: Default::default(),
                     race: oag_hd::TITLE.race,
                     mode: oag_race::Mode::SingleRace,
                     flare: oag_hd::TITLE.flare,

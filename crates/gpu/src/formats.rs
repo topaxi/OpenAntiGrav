@@ -62,3 +62,93 @@ pub enum SceneStore {
     /// (`docs/rendering/start-gantry.md`, "Pulse's card is 5-6-5, truncated").
     Packed565Gamma,
 }
+
+impl SceneStore {
+    /// A gamma-authored texel value on `0..=1` as the light the scene's shaders
+    /// compute with: the CPU twin of `target.wesl`'s `decode`, which is the
+    /// piecewise sRGB curve when the target stores encoded values, the square
+    /// in 2048's gamma-2 space, and the `2.2` power everywhere else.
+    #[must_use]
+    pub fn texel_decode(self, v: f32) -> f32 {
+        let v = v.clamp(0.0, 1.0);
+        match self {
+            Self::Encoded => {
+                if v <= 0.04045 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            }
+            Self::Squared => v * v,
+            _ => v.powf(2.2),
+        }
+    }
+
+    /// The inverse of [`Self::texel_decode`]: the texel value a program-computed
+    /// colour has to be baked as so that the shader's `decode` reads it back as
+    /// that colour. A bake that used another curve than the shader reads
+    /// tints the darks, which is where the curves differ most.
+    #[must_use]
+    pub fn texel_encode(self, light: f32) -> f32 {
+        let c = light.clamp(0.0, 1.0);
+        match self {
+            Self::Encoded => {
+                if c <= 0.003_130_8 {
+                    c * 12.92
+                } else {
+                    1.055 * c.powf(1.0 / 2.4) - 0.055
+                }
+            }
+            Self::Squared => c.sqrt(),
+            _ => c.powf(1.0 / 2.2),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SceneStore;
+
+    const STORES: [SceneStore; 3] = [
+        SceneStore::Encoded,
+        SceneStore::Computed,
+        SceneStore::Squared,
+    ];
+
+    /// The piecewise sRGB EOTF written out here independently of the code under test.
+    fn srgb_to_light(v: f32) -> f32 {
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// A texel byte decoded and encoded again comes back within one level on
+    /// every title's curve. Measured in the byte domain: the decode's slope near
+    /// white turns half a level of rounding into more than 1/255 of light.
+    #[test]
+    fn a_texel_round_trips_on_every_titles_curve() {
+        for store in STORES {
+            for byte in 0..=255u32 {
+                let light = store.texel_decode(byte as f32 / 255.0);
+                let back = (store.texel_encode(light) * 255.0).round();
+                assert!(
+                    (back - byte as f32).abs() <= 1.0,
+                    "{store:?}: {byte} -> {back}"
+                );
+            }
+        }
+    }
+
+    /// HD decodes with the sRGB curve, so the `2.2` power re-encode the CPU bakes used
+    /// to apply lands several levels off in the darks. Fails with the power encode.
+    #[test]
+    fn hds_encode_is_the_srgb_curve_not_the_power() {
+        let light = srgb_to_light(10.0 / 255.0);
+        let power = (light.powf(1.0 / 2.2) * 255.0).round();
+        let encoded = (SceneStore::Encoded.texel_encode(light) * 255.0).round();
+        assert!((power - 10.0).abs() > 4.0, "the power lands at {power}");
+        assert_eq!(encoded, 10.0);
+    }
+}

@@ -44,6 +44,7 @@ fn load(shine: bool) -> Option<Vec<livery::Livery>> {
         &mut archives,
         &teams,
         &LoadContext {
+            store: Default::default(),
             race: oag_pulse::TITLE.race,
             mode: Mode::SingleRace,
             flare: oag_pulse::TITLE.flare,

@@ -198,8 +198,13 @@ fn every_wipeout_hd_circuit_is_one_buffer() {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &path, &data) else {
                 continue;
             };
-            let Ok((model, _)) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |_| None)
-            else {
+            let Ok((model, _)) = mesh::rcs::build_scene(
+                &path,
+                &data,
+                &geometry,
+                &mut |_| None,
+                oag_gpu::formats::SceneStore::default(),
+            ) else {
                 continue;
             };
             rows.push(row(&path, &model));

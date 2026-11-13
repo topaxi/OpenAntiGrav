@@ -110,6 +110,25 @@ pub fn hd_bloom_params(
     })
 }
 
+/// What the race's scene target stores for `title`, told before the circuit's staging is read
+/// (a model's baked colours depend on it): HD's chain stores encoded values where the title
+/// blends them so and the circuit has a `.rcsmodel` to feed it, 2048's `wo_*` chain its
+/// gamma-2 space, and anything else the value as computed. The same answer
+/// `scene::hd_chain::store` gives once the chains are built.
+pub(in crate::load) fn scene_store(
+    title: &oag_title::Title,
+    has_rcsmodel: bool,
+) -> oag_gpu::formats::SceneStore {
+    use oag_gpu::formats::SceneStore;
+    if title.looks.wo_composite.applies_everywhere() {
+        SceneStore::Squared
+    } else if has_rcsmodel && title.looks.blends_encoded.applies_everywhere() {
+        SceneStore::Encoded
+    } else {
+        SceneStore::Computed
+    }
+}
+
 /// `params` with what the title decides: its zoom ring, what its scene target stores and
 /// whether its final composite reads half a texel off.
 pub(in crate::load) fn for_title(
@@ -119,11 +138,7 @@ pub(in crate::load) fn for_title(
     oag_post::hd_bloom::Params {
         zoom: title.race.zoom_ring.map(crate::zoom::tuning),
         final_half_texel: title.looks.final_composite_half_texel.applies_everywhere(),
-        store: if title.looks.blends_encoded.applies_everywhere() {
-            oag_gpu::formats::SceneStore::Encoded
-        } else {
-            oag_gpu::formats::SceneStore::Computed
-        },
+        store: scene_store(title, true),
         ..params
     }
 }

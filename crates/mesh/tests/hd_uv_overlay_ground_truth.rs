@@ -24,9 +24,13 @@ fn build(path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     Some(
-        mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-            archive_cache::read(&spec, name)
-        })
+        mesh::rcs::build_scene(
+            path,
+            &data,
+            &geometry,
+            &mut |name| archive_cache::read(&spec, name),
+            oag_gpu::formats::SceneStore::default(),
+        )
         .expect("the scene builds"),
     )
 }

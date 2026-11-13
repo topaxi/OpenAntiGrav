@@ -29,9 +29,13 @@ fn a_tinted_lambert_spec_mult_binds_the_product_and_a_white_one_its_own_picture(
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Tech de Ra builds");
 
     let (mut tinted, mut plain) = (0, 0);

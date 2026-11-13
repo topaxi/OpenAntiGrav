@@ -600,16 +600,22 @@ fn ps3_model(
     // The `.gtf` requests come in texture-slot order, which is how a draw
     // names its texture.
     let mut textures = Vec::new();
-    let (mut model, report) =
-        oag_mesh::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
+    let (mut model, report) = oag_mesh::mesh::rcs::build_scene(
+        entry,
+        blob,
+        &geometry,
+        &mut |path| {
             if oag_texture::decode::Container::of_name(path)
                 == Some(oag_texture::decode::Container::Gtf)
             {
                 textures.push(path.to_string());
             }
             archives.read_name(path).ok()
-        })
-        .with_context(|| format!("decoding the preview mesh {entry}"))?;
+        },
+        // A menu preview draws into a gamma target, whose shaders decode with the plain power.
+        Default::default(),
+    )
+    .with_context(|| format!("decoding the preview mesh {entry}"))?;
     log::debug!("preview {entry}: {}", report.describe());
     model.keep_nearest();
     Ok((model, textures))

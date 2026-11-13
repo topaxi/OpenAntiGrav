@@ -62,9 +62,13 @@ fn build(image: &Path, archive: &str, path: &str) -> Option<mesh::Model> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
     let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("the scene builds");
     Some(model)
 }

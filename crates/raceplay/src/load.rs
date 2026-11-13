@@ -314,6 +314,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
 
+    // What the race's scene target stores, which every colour baked into a model is encoded
+    // for (`oag_gpu::formats::SceneStore`). Told here, before the circuit's staging is read.
+    #[cfg(feature = "view")]
+    let store = environment::scene_store(
+        title,
+        oag_vex::vex::geometry_is_external(&track_blob) && !options.ribbon,
+    );
     stages::checkpoint()?;
     // The grid's roster - see `roster::available`.
     let available = roster::available(
@@ -334,6 +341,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &team,
         &available,
         hull_variant,
+        store,
         &mut report,
     )?;
     #[cfg(not(feature = "view"))]
@@ -372,13 +380,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         plasma_blast_models,
         bomb_blast_models,
         leach_ball_model,
-    ) = weapon_models::load_bodies(&mut archives, wm, &mut report);
+    ) = weapon_models::load_bodies(&mut archives, wm, store, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
     #[cfg(feature = "view")]
     let (shield_cockpit, shield_cockpit_alpha) =
-        oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
+        oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), store, &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
@@ -428,6 +436,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         geometry_name.as_deref(),
         title.looks,
         options.mode == Mode::Zone,
+        store,
         &mut report,
     );
     stages::checkpoint()?;
@@ -452,9 +461,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // source stays `(None, None)`, as `sky_model`'s own HD/2048 split just past it.
     #[cfg(feature = "view")]
     let (ps3_pad_model, ps3_weapon_pad_model) = match &ps3_geometry {
-        Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => {
-            pads::ps3_pad_models(&mut archives, &track, &track_blob, geometry, &mut report)?
-        }
+        Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => pads::ps3_pad_models(
+            &mut archives,
+            &track,
+            &track_blob,
+            geometry,
+            store,
+            &mut report,
+        )?,
         _ => (None, None),
     };
 
@@ -590,15 +604,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
         if mesh::rcs::psp2::is_psp2(geometry) {
             psp2_sky_model(&mut archives, &track, &mut report)
         } else {
-            hd_sky_model(&mut archives, &track, title.race, options.mode, &mut report)
+            hd_sky_model(
+                &mut archives,
+                &track,
+                title.race,
+                options.mode,
+                store,
+                &mut report,
+            )
         }
     } else if let Some(sky) = foreign_art.own_sky.take() {
         Some(sky)
     } else if let Some(entry) = &foreign_art.sky {
         track_inputs::foreign_sky(&mut archives, entry, &mut report)
-    } else if let Some(sky) =
-        track_inputs::host_zone_sky(&mut archives, &track, title, options.mode, &mut report)
-    {
+    } else if let Some(sky) = track_inputs::host_zone_sky(
+        &mut archives,
+        &track,
+        title,
+        options.mode,
+        store,
+        &mut report,
+    ) {
         Some(sky)
     } else if !vex_geometry {
         None

@@ -39,6 +39,7 @@ pub(super) fn load(
     entry: &str,
     fallback: &str,
     cull: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     let blob = match archives.read_name(entry) {
@@ -103,6 +104,7 @@ pub(super) fn load(
             &blob,
             &geometry,
             &mut crate::stages::reader(archives),
+            store,
             |c| c.mesh,
         ) {
             Ok((mut model, built)) => {
@@ -220,9 +222,10 @@ fn load_optional(
     entry: Option<&str>,
     fallback: &str,
     cull: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    load(archives, entry?, fallback, cull, report)
+    load(archives, entry?, fallback, cull, store, report)
 }
 
 /// Every weapon's own body model, on [`load`]'s own terms - the Rocket's,
@@ -327,12 +330,14 @@ pub(super) fn cannon_quads(
 pub(super) fn load_bodies(
     archives: &mut oag_assets::Archives,
     models: &oag_title::weapons::WeaponModels,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> WeaponBodies {
     // `cull` is `true` for every model a rotation places - every HD body and
     // the HD explosion trio - and only takes effect on a PS3 model whose
     // materials all ask for it; see `cull_as_authored`.
-    let mut one = |entry, fallback, cull| load_optional(archives, entry, fallback, cull, report);
+    let mut one =
+        |entry, fallback, cull| load_optional(archives, entry, fallback, cull, store, report);
     // **Pulse's halo/hemisphere2/hemisphere1 trio and HD's ring/sphere/halo
     // trio share one container by load-order position, not by name.**
     // `blast_models::PlasmaBlastModels`'s own field names stay Pulse's -

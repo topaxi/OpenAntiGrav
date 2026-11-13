@@ -30,6 +30,7 @@ fn hull() -> Option<mesh::Model> {
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .ok()

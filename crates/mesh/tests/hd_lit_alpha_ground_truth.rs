@@ -46,7 +46,8 @@ fn anulphas_reversed_walls_light_their_alpha_and_its_floor_lights_its_colour() {
         return;
     };
     let Some((model, _report)) =
-        mesh::rcs::scene_from(&spec, TRACK, &data).expect("Anulpha Pass's track should build")
+        mesh::rcs::scene_from(&spec, TRACK, &data, oag_gpu::formats::SceneStore::default())
+            .expect("Anulpha Pass's track should build")
     else {
         panic!("{TRACK}: not a PS3 model");
     };

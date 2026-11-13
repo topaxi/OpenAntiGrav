@@ -39,6 +39,7 @@ pub(super) fn hd_sky_model(
     track: &str,
     race: &'static oag_title::RaceDefaults,
     mode: oag_race::Mode,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     let zone_sky = (mode == oag_race::Mode::Zone)
@@ -80,7 +81,7 @@ pub(super) fn hd_sky_model(
             .map_or(0.0, |c| f32::from(c[3]) / mesh::sky_cube::SKY_COLOUR_FULL),
         _ => 0.0,
     };
-    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask) {
+    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask, store) {
         Ok(sky) => {
             let (width, height) = sky
                 .textures
@@ -573,8 +574,8 @@ mod bloom;
 mod exposure;
 mod light;
 mod probes;
-pub(super) use bloom::envsettings_bloom;
 pub use bloom::hd_bloom_params;
+pub(super) use bloom::{envsettings_bloom, scene_store};
 use exposure::envsettings_exposure;
 pub use light::authored_light;
 pub(super) use light::{envsettings_light, envsettings_tonemap};

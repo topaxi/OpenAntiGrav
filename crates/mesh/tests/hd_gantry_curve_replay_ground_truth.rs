@@ -70,6 +70,7 @@ fn the_digit_boards_curves_reach_the_shaders_table_and_replay() {
         &data,
         &geometry,
         &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )
     .expect("the gantry model builds");

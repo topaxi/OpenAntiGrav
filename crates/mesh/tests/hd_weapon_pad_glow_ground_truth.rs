@@ -33,9 +33,13 @@ fn each_vineta_weapon_pad_has_an_entry_of_its_own_in_the_authored_colour() {
     let vex_data = archive_cache::read(&spec, TRACK).expect("reading the .vex");
     let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
     let model_blob = archive_cache::read(&spec, &model_name).expect("reading the .rcsmodel");
-    let (model, _) = mesh::rcs::build_weapon_pads(TRACK, &vex_data, &model_blob, &mut |path| {
-        archive_cache::read(&spec, path)
-    })
+    let (model, _) = mesh::rcs::build_weapon_pads(
+        TRACK,
+        &vex_data,
+        &model_blob,
+        &mut |path| archive_cache::read(&spec, path),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("build_weapon_pads decodes 01_vineta_k");
 
     assert_eq!(model.node_vertex_ranges.len(), 7, "seven Weapon Pad nodes");

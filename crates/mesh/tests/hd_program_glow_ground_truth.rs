@@ -33,9 +33,13 @@ fn build(image: &Path) -> Option<(mesh::Model, mesh::rcs::Report, oag_rcs::rcsmo
     let path = "/data/environments/02_track/track.vex";
     let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("the scene builds");
     let source = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the model parses");
     Some((model, report, source))

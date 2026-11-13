@@ -50,6 +50,7 @@ fn shield_of(
         archives,
         std::slice::from_ref(&team.to_string()),
         &oag_livery::LoadContext {
+            store: Default::default(),
             race: title.race,
             mode: oag_race::Mode::SingleRace,
             flare: title.flare,

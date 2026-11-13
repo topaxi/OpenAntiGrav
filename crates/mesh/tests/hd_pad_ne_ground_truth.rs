@@ -61,9 +61,22 @@ fn pads(image: &str, archive: &str, track: &str) -> (Vec<(&'static str, Model)>,
     let data = archive_cache::read(&spec, &name).expect("reading the track");
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data).expect("a .rcsmodel beside it");
     let mut read = |path: &str| archive_cache::read(&spec, path);
-    let (speedup, _) = mesh::rcs::build_pads(&name, &data, &geometry, &mut read).expect("speedup");
-    let (weapon, _) =
-        mesh::rcs::build_weapon_pads(&name, &data, &geometry, &mut read).expect("weapon");
+    let (speedup, _) = mesh::rcs::build_pads(
+        &name,
+        &data,
+        &geometry,
+        &mut read,
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("speedup");
+    let (weapon, _) = mesh::rcs::build_weapon_pads(
+        &name,
+        &data,
+        &geometry,
+        &mut read,
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("weapon");
     (
         vec![("Speedup Pad", speedup), ("Weapon Pad", weapon)],
         geometry,

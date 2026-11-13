@@ -22,6 +22,7 @@
 //! of every texture.
 
 use anyhow::{Context, Result};
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
@@ -56,7 +57,7 @@ impl View {
 /// Where a build's material tables come from.
 pub(super) enum Setup<'a> {
     /// Decoded from the file through the caller's texture reader.
-    Decode(Textures<'a>),
+    Decode(Textures<'a>, SceneStore),
     /// Read back off a model already built from the same file.
     Copy(&'a Model),
 }
@@ -65,7 +66,7 @@ impl Setup<'_> {
     /// The same source, borrowed for one call.
     fn reborrow(&mut self) -> Setup<'_> {
         match self {
-            Setup::Decode(textures) => Setup::Decode(&mut **textures),
+            Setup::Decode(textures, store) => Setup::Decode(&mut **textures, *store),
             Setup::Copy(model) => Setup::Copy(model),
         }
     }
@@ -131,8 +132,15 @@ pub fn build_scene(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
 ) -> Result<(Model, Report)> {
-    build_view(label, data, model_blob, Setup::Decode(textures), View::Main)
+    build_view(
+        label,
+        data,
+        model_blob,
+        Setup::Decode(textures, store),
+        View::Main,
+    )
 }
 
 /// [`build_scene`], plus the behind-the-glass target's two models - see this
@@ -146,8 +154,9 @@ pub fn build_scene_views(
     data: &[u8],
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
 ) -> Result<(Model, BehindGlass, Report)> {
-    let (main, report) = build_scene(label, data, model_blob, textures)?;
+    let (main, report) = build_scene(label, data, model_blob, textures, store)?;
     if report.behind_glass == 0 {
         return Ok((main, BehindGlass::default(), report));
     }
@@ -248,7 +257,7 @@ fn build_view(
     let placed = pads::placed_hashes(data, &nodes, classes, order, &model);
 
     // The pad masks are the main view's; a copied setup already carries them.
-    if let Setup::Decode(textures) = setup {
+    if let Setup::Decode(textures, _) = setup {
         pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
     }
 

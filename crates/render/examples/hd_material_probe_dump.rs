@@ -24,8 +24,9 @@ fn main() -> anyhow::Result<()> {
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("{name}: no sibling .rcsmodel"))?;
     let source = oag_rcs::rcsmodel::Model::parse(&geometry)?;
-    let (model, _) = mesh::rcs::scene_from(&spec, &name, &data)?
-        .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
+    let (model, _) =
+        mesh::rcs::scene_from(&spec, &name, &data, oag_gpu::formats::SceneStore::default())?
+            .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
     // `Fog.Fog Color`, straight off the same `.envsettings` the race loads it
     // from (`crates/raceplay/src/load/environment.rs`'s `envsettings_fog`) -

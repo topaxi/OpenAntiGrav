@@ -96,6 +96,7 @@ pub(super) fn track_model(
     model_name: Option<&str>,
     looks: &oag_title::Looks,
     zone: bool,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
@@ -187,6 +188,7 @@ pub(super) fn track_model(
                 track_blob,
                 geometry,
                 &mut crate::stages::reader(archives),
+                store,
             );
             match built {
                 Ok((model, mut groups, built)) => {

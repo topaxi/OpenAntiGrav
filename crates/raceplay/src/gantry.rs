@@ -710,6 +710,8 @@ fn build(
         blob,
         &geometry,
         &mut |path| archives.read_name(path).ok(),
+        // A board draws into its own 5-6-5 card, whose shaders decode with the plain power.
+        oag_gpu::formats::SceneStore::default(),
         |c| c.mesh,
     )?;
     Ok(model)

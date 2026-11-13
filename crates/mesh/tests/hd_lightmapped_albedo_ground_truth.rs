@@ -29,9 +29,13 @@ fn vinetas_wet_floor_binds_its_floor_texture_not_the_paraboloid() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Vineta K builds");
 
     let mut checked = 0;
@@ -74,9 +78,13 @@ fn vinetas_lightmap_only_lambert_slot_draws_no_specular() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Vineta K builds");
 
     let trim = &rcs.materials[257];
@@ -126,9 +134,13 @@ fn sebenco_slots(material: &str, ok: impl Fn(&str) -> bool, why: &str) {
         let geometry =
             mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
         let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            archive_cache::read(&spec, name)
-        })
+        let (model, _) = mesh::rcs::build_scene(
+            &path,
+            &data,
+            &geometry,
+            &mut |name| archive_cache::read(&spec, name),
+            oag_gpu::formats::SceneStore::default(),
+        )
         .expect("Sebenco Climb builds");
         for (slot, m) in rcs.materials.iter().enumerate() {
             if !m.name.ends_with(material) || m.lightmap_entry().is_none() {
@@ -185,9 +197,13 @@ fn sebencos_solar_wall_binds_its_picture_not_its_normal_map() {
         let geometry =
             mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
         let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            archive_cache::read(&spec, name)
-        })
+        let (model, _) = mesh::rcs::build_scene(
+            &path,
+            &data,
+            &geometry,
+            &mut |name| archive_cache::read(&spec, name),
+            oag_gpu::formats::SceneStore::default(),
+        )
         .expect("Sebenco Climb builds");
         for (slot, material) in rcs.materials.iter().enumerate() {
             if !material
@@ -229,9 +245,13 @@ fn vinetas_backdrop_terrain_binds_sand_and_rock_not_its_blend_mask() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Vineta K builds");
     let mut checked = 0;
     for (slot, material) in rcs.materials.iter().enumerate() {
@@ -269,9 +289,13 @@ fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Talon's Junction builds");
     let mut checked = 0;
     for (slot, material) in rcs.materials.iter().enumerate() {
@@ -322,9 +346,13 @@ fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Sebenco Climb builds");
     let mut checked = 0;
     for (slot, material) in rcs.materials.iter().enumerate() {
@@ -373,9 +401,13 @@ fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Sebenco Climb builds");
     let mut checked = 0;
     for (slot, material) in rcs.materials.iter().enumerate() {
@@ -458,9 +490,13 @@ fn constant_colour_families_bind_their_authored_constant() {
         let geometry =
             mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
         let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            archive_cache::read(&spec, name)
-        })
+        let (model, _) = mesh::rcs::build_scene(
+            &path,
+            &data,
+            &geometry,
+            &mut |name| archive_cache::read(&spec, name),
+            oag_gpu::formats::SceneStore::default(),
+        )
         .expect("the circuit builds");
         for (slot, material) in rcs.materials.iter().enumerate() {
             if !material.name.ends_with(&format!("/{family}.rcsmaterial")) {
@@ -510,9 +546,13 @@ fn metropias_lattice_floor_keeps_its_maps_alpha_over_its_constant() {
     };
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Metropia builds");
     let mut checked = 0;
     for (slot, material) in rcs.materials.iter().enumerate() {

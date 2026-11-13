@@ -39,7 +39,15 @@ fn moas_sky_rebuilds_the_original_reflection_target() {
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let blob = archive_cache::read(&spec, "/data/environments/03_track/sky.gtf").expect("sky.gtf");
-    let sky = mesh::sky_cube::build("sky", &blob, 0.0, [1.0; 3], 0.0).expect("a cubemap");
+    let sky = mesh::sky_cube::build(
+        "sky",
+        &blob,
+        0.0,
+        [1.0; 3],
+        0.0,
+        oag_gpu::formats::SceneStore::default(),
+    )
+    .expect("a cubemap");
     let map = mesh::sky_paraboloid::from_sky(&sky).expect("six faces");
     let (width, height) = mesh::sky_paraboloid::SIZE;
     assert_eq!(map.len(), (width * height * 4) as usize);
@@ -66,9 +74,13 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
     let path = "/data/environments/03_track/track.vex";
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Moa Therma builds");
     assert!(report.window_glass_bound > 0, "{}", report.describe());
     // The window mode's entries (`tint.y` and `tint.z` 0); Moa's `ds_booth_glass` reflects
@@ -137,9 +149,13 @@ fn modestos_glass_panes_bind_texture1_and_split_by_coverage() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Modesto Heights builds");
     assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
     let mut checked = 0;
@@ -196,9 +212,13 @@ fn chenghous_reflective_windows_bind_their_picture_and_reflect_through_its_alpha
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Chenghou Project builds");
     assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
     let mut checked = 0;
@@ -273,9 +293,13 @@ fn anulphas_windows_reflect_the_sky_by_their_own_weight() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Anulpha Pass builds");
     assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
     let mut checked = 0;
@@ -315,9 +339,13 @@ fn tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Tech de Ra builds");
     assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
     let mut checked = 0;
@@ -374,9 +402,13 @@ fn metropias_lattice_reflects_the_sky_through_its_normal_maps_alpha() {
     let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("Metropia builds");
     assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
     let mut checked = 0;

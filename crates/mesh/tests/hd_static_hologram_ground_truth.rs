@@ -30,9 +30,13 @@ fn amphiseums_start_gantry_board_scrolls_its_advert_and_static_under_the_scan_ma
         return;
     };
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("the sibling geometry");
-    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archive_cache::read(&spec, name)
-    })
+    let (model, report) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        oag_gpu::formats::SceneStore::default(),
+    )
     .expect("the scene builds");
     assert_eq!(
         (report.static_hologram_bound, report.static_hologram_unread),

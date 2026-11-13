@@ -57,7 +57,8 @@ fn every_track_wall_slot_binds_its_own_diffuse_not_its_glow_decal() {
         return;
     };
     let Some((model, report)) =
-        mesh::rcs::scene_from(&spec, TRACK, &data).expect("Amphiseum's track should build")
+        mesh::rcs::scene_from(&spec, TRACK, &data, oag_gpu::formats::SceneStore::default())
+            .expect("Amphiseum's track should build")
     else {
         panic!("{TRACK}: not a PS3 model");
     };

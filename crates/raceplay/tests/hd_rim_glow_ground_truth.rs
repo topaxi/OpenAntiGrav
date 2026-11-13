@@ -37,9 +37,13 @@ fn build(image: &Path, path: &str) -> mesh::Model {
     let geometry = archives
         .read_name(&sibling)
         .expect("an .rcsmodel beside it");
-    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        archives.read_name(name).ok()
-    })
+    let (model, _) = mesh::rcs::build_scene(
+        path,
+        &data,
+        &geometry,
+        &mut |name| archives.read_name(name).ok(),
+        Default::default(),
+    )
     .expect("the scene builds");
     model
 }

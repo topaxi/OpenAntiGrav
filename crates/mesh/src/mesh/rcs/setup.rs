@@ -4,6 +4,7 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+use oag_gpu::formats::SceneStore;
 use oag_rcs::rcsmodel;
 
 use super::skin::{self, flips, picks, roles, skin, variants};
@@ -83,6 +84,7 @@ pub(super) fn material_setup(
     model: &rcsmodel::Model,
     model_blob: &[u8],
     textures: Textures<'_>,
+    store: SceneStore,
     report: &mut Report,
 ) -> MaterialSetup {
     // **The variant first**, because which sampler entry each of this
@@ -91,7 +93,7 @@ pub(super) fn material_setup(
     // `skin::picks`.
     let (material_variants, material_quake) = variants(model, textures, report);
     let picks = picks(model, &material_variants, textures);
-    let (mut skins, mut seconds) = skin(model, &picks, textures, report);
+    let (mut skins, mut seconds) = skin(model, &picks, textures, store, report);
     // After the variants, because the roles are read off the resolved one.
     let skin::Roles {
         packed: mut material_slots,
