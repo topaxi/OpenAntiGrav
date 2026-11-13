@@ -3,8 +3,8 @@
 Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 `0x08804000`, language `Allegrex:LE:32:default`. Read 2026-11-13 (lane
 `demo-re`) from headless Ghidra decompiles and disassembly, the disc's own
-front-end XML, and four live PPSSPP runs on `pulse-psp-usa.chd` with a fresh
-memory stick (first-boot profile, nothing unlocked).
+front-end XML, and live PPSSPP runs on `pulse-psp-usa.chd` from two fresh boots, each
+with a fresh memory stick (first-boot profile, nothing unlocked).
 
 How the original's attract mode works end to end: what starts it, what race
 it builds, how long it runs, what it shows, and what ends it. Everything a
@@ -81,8 +81,10 @@ if (clock - screen->stamp > 60.0) {         /* 0x088e09f0.. */
 }
 ```
 
-So the timer is **60 s with no press while `Main Menu` is the current
-state**; leaving the screen or any press restarts it, and it only runs while
+So the timer is **60 s from whichever is later: the main menu becoming the
+current state, or the last press on it**. While another state is current the
+stamp follows the clock every frame, so it starts from the first frame the menu
+is current; any press restarts it, and it only runs while
 `g_display+0x5e34` reads `-1` (it did, `0xffffffff`, on the idle menu). The
 clock is the front end's own seconds clock; between two reads 93.5 emulated
 seconds apart it advanced 93.43 s (ratio 0.999), so it is real time.
@@ -90,10 +92,10 @@ seconds apart it advanced 93.43 s (ratio 0.999), so it is real time.
 **Live, twice** (a breakpoint on the `Demo Launch` call at `0x088e0a0c`, reading
 the stamp and the clock at the stop):
 
-| Run | Last press | Stamp `+0xd8` | Clock at launch | Idle |
+| Run | What set the stamp | Stamp `+0xd8` | Clock at launch | Idle |
 | --- | --- | --- | --- | ---: |
-| fresh profile, after the first-boot dialogs (state `Main menu`) | circle on `CreateFromBoot` | 112.245 | 172.273 | **60.028 s** |
-| after leaving a demo with Cross (state `Main Menu`) | the Cross that left the demo | 469.301 | 529.310 | **60.009 s** |
+| fresh profile, after the first-boot dialogs (state `Main menu`) | the menu becoming current after the circle on `CreateFromBoot` (between clock 111.0 and 113.7) | 112.245 | 172.273 | **60.028 s** |
+| after leaving a demo with Cross (state `Main Menu`) | the menu becoming current 0.6 s after the Cross that left the demo (Cross at about clock 468.8) | 469.301 | 529.310 | **60.009 s** |
 
 Both capitalisations of the main menu state arm it.
 
@@ -189,7 +191,16 @@ bits modulo the count, not `rand()` or the particle generator
 Live picks on a fresh profile: `18_Track`, then `22_Track`, then `13_Track`.
 `22_Track` carries an `<Unlock>` (`Grid9`) a fresh profile has not met, so **the
 demo draws from every circuit, locked ones included** (confidence 92). No pick
-repeated its predecessor (three picks; the rule itself is static).
+repeated its predecessor (four picks: `18_Track`, `22_Track`, `13_Track`, and
+`01_Track` on a second fresh boot; the rule itself is static).
+
+**What the off-by-one does to the distribution.** With `n` eligible circuits,
+remainders `0 .. n-2` pick eligible entries `1 .. n-1` and remainder `n-1` picks
+raw list entry 0. When list entry 0 is eligible (it is not the previous demo's
+circuit) it is also eligible entry 0, so every eligible circuit comes up exactly
+`1/n` of the time: the pick is uniform. When list entry 0 *was* the previous
+demo's circuit, it repeats one time in `n` and the first eligible entry is never
+picked. So "never the previous circuit" holds except for list entry 0.
 
 Confidence **86** for the eligibility and the off-by-one (unambiguous
 disassembly, live picks consistent; the off-by-one is not observable in three
@@ -255,9 +266,13 @@ Live: from the selection breakpoint to the `Reset Demo` call, **122.24 s and
 2 s difference is the frame that loads the world, which counts in emulated time
 but not in `dt`. Confidence **92**.
 
-Whether a 3-lap Flash race can finish inside 120 s on a short circuit, and
-what the race-end path does in mode 2, was not read or seen; both live demos
-were cut by the timer.
+**A demo race does not end on laps.** Live, with `session+0x98` written to
+`-600.0` (so the timeout could not fire), the `01_Track` demo kept racing for
+376 s of front-end time: state `Demo InGame` and race state
+(`g_race_manager+0x7c8`) `2` at every 4 s read, and a frame at the end still
+racing with the overlay up. Three laps at Flash take far less, so only the
+120 s timer ends a demo. Why the lap count does not finish it (the finish path
+was not read) is open. Confidence **85** (one run).
 
 ## Exit: any button, back to the main menu
 
@@ -274,8 +289,10 @@ entry table). Confidence **92**.
 A census of every reference to `g_game_mode` with a compare against 2 within 14
 instructions (235 references, 20 direct `xori ..,0x2` tests) gives the
 behaviour list. Jump tables over the mode were not opened case by case, so
-this is the complete set of *direct* tests, not a proof that no switch has a
-case 2.
+this is every direct test that window catches, not a proof that no switch has
+a case 2 or that no test sits further from its load. The site
+[pads.md](pads.md) calls "`DAT_08b31048 != 2`" (`xori a3, a3, 0x2`) is the
+exhaust-flare sound row below.
 
 | Site | In Demo | Conf |
 | --- | --- | ---: |
@@ -292,19 +309,23 @@ case 2.
 
 Weapons: mode 2 is not in `Race_ReadSetupOptions`' "weapons off" list
 ([state-machine.md](state-machine.md)), and the doubled AI use above only means
-anything with weapons on. The front-end `Weapons` global was not read live
-during a demo. Music: the PPSSPP instance is muted, so whether the demo plays a
-soundtrack was not observed; `FUN_0888c408(g_fe_anim_clock, 0, 0)` at launch and
-`(…, 1, 0)` on the race build are the front-end music calls `MainMenu_Update`
-and every screen make, not read further.
+anything with weapons on. Live, `g_weapons_enabled` (`0x08b30fa8`) read `1` at
+the selection stop and after the race was built: **weapons are on** (one run,
+fresh profile, so the front-end `Weapons` global held its default; 85).
+
+**The demo plays music.** Live, a breakpoint on `MusicPlayer_StartNextSong`
+(`0x08938e70`) armed at the selection stop fired 5.6 s of front-end time later
+with the state `Demo InGame` (the instance is muted, so nothing was heard; the
+call is the evidence). Which song, and whether it follows the player's
+soundtrack settings, was not read. Confidence **85**.
 
 ## What a reimplementation needs
 
 | Value | Law | Conf |
 | --- | --- | ---: |
-| entry | 60.0 s of front-end time with no press, main menu only, timer restarts on any press or on leaving the menu | 93 |
+| entry | 60.0 s of front-end time from the later of entering the main menu and the last press on it; main menu only | 93 |
 | states | play `Demo_Definition.xml`: `Demo Launch` -> `Demo InGame` (overlay) -> `Demo Kill Game` -> `Main Menu`; `Reset Demo` -> `Demo InGame` | 94 |
-| track | random over every `Type` `Race`/`PrimarilyRace` circuit present on the disc, **ignoring unlocks**, excluding the previous demo's track, with the off-by-one above (or a plain uniform pick, if the off-by-one is not wanted) | 86 |
+| track | uniform over every `Type` `Race`/`PrimarilyRace` circuit present on the disc, **ignoring unlocks**, excluding the previous demo's track (the off-by-one above only matters when list entry 0 was the previous track) | 86 |
 | team | random over present `Race` teams with `Multiplayer` set, not `Zone`, excluding the previous demo's team | 86 |
 | class | Flash (ordinal 1), always | 92 |
 | field | 8 crafts, 3 laps; opponents drawn from `Multiplayer` teams | 88 |
@@ -312,6 +333,8 @@ and every screen make, not read further.
 | camera | trackside cameras with cuts (mode 2's own camera object) | 75 |
 | HUD | race HUD hidden; only the XML overlay | 92 |
 | no | flyby skip at once, no track description, no Now Playing, no camera shake, no profile stats, AI weapon use x2 | 82-85 |
+| music, weapons | the soundtrack plays; weapons on | 85 |
+| race end | none on laps: only the timeout ends a demo | 85 |
 | timeout | 120.0 s of race `dt` (from the race's first update; the loading frame does not count), then destroy and rebuild on a new track and team, with the loading screen | 92 |
 | exit | any button (not the analog stick) -> main menu, the press consumed | 92 |
 | RNG | the wall clock modulo the count; ours uses its seeded `Rng` | 90 |
