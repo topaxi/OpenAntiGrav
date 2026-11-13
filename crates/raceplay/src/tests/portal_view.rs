@@ -80,9 +80,13 @@ fn race(commands: &[Command]) -> Race {
 /// [`race`] with `text` for the mod's shader.
 fn race_with(commands: &[Command], text: &'static str) -> Race {
     let source = shaded(commands, text);
-    let mut race = grid(prepared(std::slice::from_ref(&source)));
+    settled(grid(prepared(std::slice::from_ref(&source))), &source)
+}
+
+/// `race` with `source`'s shaders loaded and its chase camera settled.
+fn settled(mut race: Race, source: &Source) -> Race {
     let shaders = crate::extension_shaders::load(
-        std::slice::from_ref(&source),
+        std::slice::from_ref(source),
         "wipeout-pulse",
         None,
         &mut Vec::new(),
@@ -92,6 +96,46 @@ fn race_with(commands: &[Command], text: &'static str) -> Race {
         race.tick(&PlayerInputs::none());
     }
     race
+}
+
+/// [`race`] on a straight whose control points each author their own section (1, 2, ...), so
+/// the entrance ahead of the camera is in another section than the craft and the camera.
+fn sectioned_race(commands: &[Command]) -> Race {
+    let source = shaded(commands, GOOD);
+    let mut setup = setup(hulled_handling());
+    let ai = straight_track_in_sections(12.0, 12.0, |k| u8::try_from(k + 1).unwrap_or(u8::MAX));
+    setup.spline = Spline::from_track(&ai);
+    setup.course = Course::from_track(&ai, None);
+    setup.ai = ai;
+    setup.mode = Mode::SingleRace;
+    setup.extensions = prepared(std::slice::from_ref(&source));
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    settled(Race::start(setup), &source)
+}
+
+/// Sections 1 to 8, each seeing only itself: a wall between any two of them.
+fn walled_sections() -> crate::visibility::TrackVisibility {
+    let pvs = oag_vex::pvs::TrackPvs::from_sections((1u8..=8).map(|index| oag_vex::pvs::Section {
+        index,
+        visible: 1u64 << index,
+        bounds: None,
+    }));
+    crate::visibility::TrackVisibility::declaring(pvs)
+}
+
+/// Sections 1 to 8, each seeing all the others: no wall anywhere.
+fn open_sections() -> crate::visibility::TrackVisibility {
+    let pvs = oag_vex::pvs::TrackPvs::from_sections((1u8..=8).map(|index| oag_vex::pvs::Section {
+        index,
+        visible: u64::MAX,
+        bounds: None,
+    }));
+    crate::visibility::TrackVisibility::declaring(pvs)
 }
 
 /// The far plane comes off the track's radius, and the fixture's portals are tens of units on.
@@ -382,6 +426,94 @@ fn a_portal_behind_the_camera_draws_nothing() {
     assert!(eye.x > 30.0, "the camera followed: {eye}");
     let scene = scene_for(&gpu, &race);
     assert_eq!(frames(&gpu, &scene, &mut race, 3), 0);
+}
+
+/// A scene over `visibility` on the sectioned fixture.
+fn sectioned_scene(
+    gpu: &Gpu,
+    race: &Race,
+    visibility: crate::visibility::TrackVisibility,
+) -> Scene {
+    scene_for(gpu, race).with_visibility(visibility)
+}
+
+/// Whether the main view's visible set takes the section of the portal's entrance in.
+fn entrance_is_in_the_pvs(
+    race: &Race,
+    visibility: &crate::visibility::TrackVisibility,
+    request: &crate::extensions::PortalRequest,
+) -> bool {
+    let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
+    let shot = race.portal_shot(request, projection).expect("in the view");
+    let set = race.visible_set(visibility, &(projection * race.view()));
+    set.allows(1u64 << shot.entrance_section)
+}
+
+/// A wall between the camera and the portal: the entrance's section is outside the main view's
+/// PVS, so the view is not drawn (no pass, no target, no texture for the shader to read).
+#[test]
+fn a_portal_behind_a_wall_draws_nothing() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_ahead(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
+    let mut race = sectioned_race(&commands);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    assert!(
+        !entrance_is_in_the_pvs(&race, &walled_sections(), &request),
+        "the fixture puts a wall between them"
+    );
+    let scene = sectioned_scene(&gpu, &race, walled_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 0);
+    assert!(!scene.has_portal_target(), "no target either");
+    assert!(scene.portal_engine_of(&race).is_none(), "no texture bound");
+}
+
+/// The same portal with the entrance's section in the main view's PVS draws as before.
+#[test]
+fn a_portal_in_the_main_views_pvs_still_draws() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_ahead(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
+    let mut race = sectioned_race(&commands);
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    assert!(entrance_is_in_the_pvs(&race, &open_sections(), &request));
+    let scene = sectioned_scene(&gpu, &race, open_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
+    assert!(
+        scene.portal_engine_of(&race).is_some(),
+        "the texture is bound"
+    );
+}
+
+/// A snapshot is taken on the first frame its entrance is in view, not spent on a frame where a
+/// wall hides it: the skipped frames leave the one snapshot for later.
+#[test]
+fn a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view() {
+    let Some(gpu) = test_gpu() else { return };
+    let portals = pair_ahead(&sectioned_race(&[]));
+    let commands = [portal_view(0, portals, ViewUpdate::Once, 1)];
+    let mut race = sectioned_race(&commands);
+    let scene = sectioned_scene(&gpu, &race, walled_sections());
+    assert_eq!(frames(&gpu, &scene, &mut race, 4), 0, "behind the wall");
+    assert!(!scene.has_portal_target());
+    let request = race.extension_portal_view(0).expect("the guest asked");
+    let at = race
+        .portal_frame(
+            ring_exit(&race, request.entrance).expect("on the lap"),
+            oag_render::camera::portal::Face::Oncoming,
+        )
+        .expect("a frame")
+        .w_axis
+        .truncate();
+    race.sim.world.ships[0].physics.body.position.x = at.x - 1.0;
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(
+        entrance_is_in_the_pvs(&race, &walled_sections(), &request),
+        "the craft stands in the entrance's section"
+    );
+    assert_eq!(frames(&gpu, &scene, &mut race, 4), 1, "taken once, held");
 }
 
 /// Off the lap: a request for nothing, not a fault.

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-12
-summary: "slipstream, shaders, portal-view, route exits, tunnel, raise-warning landed; open: mesh portal, island exit, occlusion, loops."
+updated: 2026-11-13
+summary: "slipstream, shaders, portal-view, route exits, tunnel, raise-warning landed; portal occlusion landed; open: mesh portal, island exit, loops."
 categories: [tooling, frontend]
 size: L (50)
 difficulty: medium (50)
@@ -168,8 +168,13 @@ Open from it, each small:
    whole run and 0 `WO_TRAIL_HITSHIP`; with it on, 31 of 32 slots are `WO_TRAIL_HITSHIP` and
    the 32nd is the held surface (545 claims), so the cap on held slots keeps the surface drawn
    either way. The burst is a title effect and was not touched.
-2. **A wall between the camera and the portal does not skip the view**: only the frustum and the
-   face do. Testing the entrance's section against the main view's PVS is the cheap answer. Size S (50).
+2. ~~**A wall between the camera and the portal does not skip the view**~~ Landed: the view is skipped
+   where the seat's own visible set leaves out the section of the entrance's spline sample
+   (`tests::portal_view::a_portal_behind_a_wall_draws_nothing`, red before: 5 passes for 0;
+   `a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view`; the open case,
+   `a_portal_in_the_main_views_pvs_still_draws`). Left: the test is the entrance's one section, not
+   the sections the radius reaches, and only on a PSP-style section partition (a chunk partition, HD
+   and 2048, keeps drawing).
 3. ~~**`Stage::orient` is a no-op on an effect from `play_held`**~~ Landed for `Fired::OwnAt`:
    `Stage::orient_surface` addresses a held surface by its generation
    (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself

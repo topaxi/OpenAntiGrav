@@ -236,14 +236,19 @@ spline alone; a strip of frames of each read (2026-11-10), no test of its own.
 draws one snapshot, the first frame it is, and again when `generation` changes. The transform,
 clipping and scene are the same; only the rate differs. No draw at all, `engine_texture_bound()`
 false, while the entrance's face is turned from the camera or its sphere (`radius`, whole units) is
-outside the view, or for a progress off the lap. A wall in between does not count: a portal behind
-one still costs its scene.
+outside the view, for a progress off the lap, or where the main view's own PVS leaves out the track
+section the entrance stands in (the spline sample's `section_id`): a wall or terrain in between. That
+test is per seat (a split's seat that does not see the section falls to the next one) and on a track
+with a section partition only; a track without one, or a chunk partition (HD, 2048), keeps drawing.
+It tests the entrance's one section, not those its radius reaches, and a `Once` snapshot is not
+spent on a skipped frame: it is taken on the first frame the section is visible
+(`tests::portal_view::a_portal_behind_a_wall_draws_nothing`).
 
 **What it costs.** One scene a frame, or one for a snapshot; a race that asks for nothing draws no
 pass and builds no target (`tests::portal_view`, counted in passes). The view is a scene pass of its
 own at 960x540, in a submission of its own ahead of the view that shows it, with no shadows, post
 chain, jitter or PVS: both PVS sets are keyed to the craft and camera on this side of the portal, so
-the frustum alone culls it and a long view draws more of the circuit than the main one. No mod
+the frustum alone culls it (the main view's set only decides whether to draw it at all) and a long view draws more of the circuit than the main one. No mod
 shader draws in it: that would bind the texture to its own pass, and a portal would show itself. The
 scene blocks, a uniform region and a camera history are held for it in every race.
 
