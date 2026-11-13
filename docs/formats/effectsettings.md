@@ -395,6 +395,16 @@ circuits reaches for four files, all of them absent.** This is not a gap in
 this project's reading; it is the original game's own code reaching for data
 its own disc does not carry.
 
+**Correction, 2026-11-13 (`modes-zone-battle-detonator`): the v1.04 patch ships them.** The
+check above covered base, DLC1 and DLC2 only. `patch-v104/PSP2/data2.psarc` carries
+`data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings` (43,240 B) and
+`DetonatorModeHDFuryDLC3.effectSettings` (43,230 B), the sizes of HD's own two Detonator
+tables, `ZoneModeHDFury.effectSettings` (21,160 B) and `ZoneModeHDFuryDLC3.effectSettings`
+(43,417 B), plus `data/Tex/detonatorModeTrack0..14.gxt` and `zoneModeTrack*.gxt`
+(`python3 scripts/psarc.py list` on that archive). So on a patched 2048 the fallback finds all
+four. A 2048 Detonator race reads Detonator's pair (`oag_2048::race::DETONATOR`); a 2048 Zone
+race on a ported circuit does not read Zone's yet (checked, applies, not wired).
+
 ## `Zone_UpdateStage` (`0x81044cfc`) is the real per-stage selection - a second pass, same day
 
 **This is what the "stage-index to zone-number correspondence" bullet below

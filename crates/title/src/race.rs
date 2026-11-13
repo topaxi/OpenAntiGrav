@@ -393,8 +393,8 @@ pub struct RaceDefaults {
 /// # Not here
 ///
 /// The original aliases the **Detonator** set into the same fifteen slots when
-/// Detonator loaded last; that is a property of its storage, and a Detonator set
-/// belongs here when Detonator does.
+/// Detonator loaded last; that is a property of its storage. This engine keeps
+/// Detonator's set apart, in [`Detonator::stage_textures`].
 ///
 /// `zoneTexVis`, the third texture the shader takes, is **not a file**: the
 /// original builds a 256x1 colour ramp at runtime, to be generated when something
