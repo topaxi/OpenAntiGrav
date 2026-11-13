@@ -246,7 +246,7 @@ fn the_titles_rules_become_the_races_options() {
         eliminator_kill_target: Some(3),
         ..oag_raceplay::Options::default()
     };
-    apply_rules(&mut options, &oag_pulse::TITLE);
+    apply_rules(&mut options, oag_pulse::TITLE);
     assert_eq!(options.class, "Flash");
     assert_eq!(options.weapons_override, Some(true));
     assert_eq!(options.eliminator_kill_target, None);
@@ -259,7 +259,7 @@ fn the_titles_rules_become_the_races_options() {
 
 #[test]
 fn a_title_whose_demo_ends_on_laps_is_set_to_its_laps() {
-    let mut title = oag_pulse::TITLE.clone();
+    let mut title = *oag_pulse::TITLE;
     title.demo.rules.ends_on_laps = oag_title::pre_race::Sourced::chosen(true);
     let mut options = oag_raceplay::Options::default();
     apply_rules(&mut options, &title);
@@ -268,7 +268,7 @@ fn a_title_whose_demo_ends_on_laps_is_set_to_its_laps() {
 
 #[test]
 fn a_class_the_titles_ladder_does_not_author_leaves_the_players() {
-    let mut title = oag_pure::TITLE.clone();
+    let mut title = *oag_pure::TITLE;
     title.demo.rules.class = oag_title::pre_race::Sourced::chosen("Warp");
     let mut options = oag_raceplay::Options {
         class: "Venom".to_string(),
