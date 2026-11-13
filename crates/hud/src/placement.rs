@@ -76,52 +76,55 @@ pub fn place(draw: &Draw, p: &Placement) -> Option<Draw> {
 /// [`place`] on a draw the caller gives up: moved rather than copied, so a text draw's string
 /// is not copied.
 fn place_owned(mut draw: Draw, p: &Placement) -> Option<Draw> {
-    {
-        match &mut draw {
-            Draw::Fill { rect, .. }
-            | Draw::GradientFill { rect, .. }
-            | Draw::GradientSprite { rect, .. }
-            | Draw::Sprite { rect, .. }
-            | Draw::RotatedSprite { rect, .. }
-            | Draw::TiledSprite { rect, .. }
-            | Draw::BlendedSprite { rect, .. }
-            | Draw::GlowStamp { rect, .. } => {
-                *rect = moved(*rect, p);
-                overlaps(*rect, p.clip).then_some(())?;
-            }
-            Draw::ChamferedFill { rect, chamfer, .. } => {
-                *rect = moved(*rect, p);
-                *chamfer = [chamfer[0] * p.scale, chamfer[1] * p.scale];
-                overlaps(*rect, p.clip).then_some(())?;
-            }
-            Draw::Text {
-                x,
-                y,
-                scale,
-                wrap_width,
-                ..
-            }
-            | Draw::FacedText {
-                x,
-                y,
-                scale,
-                wrap_width,
-                ..
-            } => {
-                *x = *x * p.scale + p.offset[0];
-                *y = *y * p.scale + p.offset[1];
-                *scale *= p.scale;
-                *wrap_width = wrap_width.map(|width| width * p.scale);
-                inside(*x, *y, p.clip).then_some(())?;
-            }
-            Draw::Video { .. }
-            | Draw::FuryBackdrop(_)
-            | Draw::SceneBackdrop(_)
-            | Draw::GlowText { .. }
-            | Draw::Triangles(_) => return None,
+    place_mut(&mut draw, p).then_some(draw)
+}
+
+/// [`place`] in place: `draw` is moved by `p`, and the answer is whether it is kept (inside
+/// `p.clip`, and a draw a HUD makes). A dropped draw is left half-moved and must be discarded.
+pub(super) fn place_mut(draw: &mut Draw, p: &Placement) -> bool {
+    match draw {
+        Draw::Fill { rect, .. }
+        | Draw::GradientFill { rect, .. }
+        | Draw::GradientSprite { rect, .. }
+        | Draw::Sprite { rect, .. }
+        | Draw::RotatedSprite { rect, .. }
+        | Draw::TiledSprite { rect, .. }
+        | Draw::BlendedSprite { rect, .. }
+        | Draw::GlowStamp { rect, .. } => {
+            *rect = moved(*rect, p);
+            overlaps(*rect, p.clip)
         }
+        Draw::ChamferedFill { rect, chamfer, .. } => {
+            *rect = moved(*rect, p);
+            *chamfer = [chamfer[0] * p.scale, chamfer[1] * p.scale];
+            overlaps(*rect, p.clip)
+        }
+        Draw::Text {
+            x,
+            y,
+            scale,
+            wrap_width,
+            ..
+        }
+        | Draw::FacedText {
+            x,
+            y,
+            scale,
+            wrap_width,
+            ..
+        } => {
+            *x = *x * p.scale + p.offset[0];
+            *y = *y * p.scale + p.offset[1];
+            *scale *= p.scale;
+            *wrap_width = wrap_width.map(|width| width * p.scale);
+            inside(*x, *y, p.clip)
+        }
+        Draw::Video { .. }
+        | Draw::FuryBackdrop(_)
+        | Draw::SceneBackdrop(_)
+        | Draw::GlowText { .. }
+        | Draw::Triangles(_) => false,
     }
-    Some(draw)
 }
 
 impl Frame {

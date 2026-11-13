@@ -1,9 +1,9 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [all]
 updated: 2026-11-13
-summary: "Allocator-API arena measured, not adopted; open: HUD text quad list and sway list re-allocate every frame (plain reuse)"
-size: S (50)
+summary: "Allocator-API arena measured, not adopted; HUD quad list was already reused and the sway slide now moves in place; the per-draw Strings are left"
+size: S (40)
 difficulty: easy (60)
 ---
 
@@ -28,18 +28,14 @@ single own site of hundreds of allocations a frame.
 
 ## Open
 
-- **The HUD's text quad list regrows every frame**: `crates/game/src/render/text.rs`, the
-  `quads.push`. That is 8 reallocations and 26 KiB on Pulse, 7 and 28 KiB on HD, per frame, one
-  view.
-- **`crates/hud/src/sway.rs`'s placed list is collected anew every frame**: 10 allocations and
-  12 KiB on HD.
-- **`String` per text draw**: `ui::frontend::draw`'s `Draw::Text` (26 on HD) and
-  `hud/draw.rs`'s `text.clone()`. This is the batch-two "Left" item; no allocator reaches it.
+- **`String` per text draw**: `ui::frontend::draw`'s `Draw::Text` (26 on HD) and `hud/draw.rs`'s
+  `format!`s and `text.clone()`. This is the batch-two "Left" item; no allocator reaches it. The
+  sway slide's copy of every string is gone (`docs/rendering/frame-thread-cpu.md`, "The HUD's two
+  plain-reuse candidates"); what is left is the strings `draw_list` builds, an unmeasured share of
+  HD's 67 `hud-frame` allocations.
 
 ## Next Steps
 
-1. Keep the text renderer's `quads` between frames (`clear()`, not a new `Vec`). Then place the
-   sway list in place. Count with `perf-probe` marks `hud-frame` and `hud-paint`:
-   `cargo build --release -p oag-game --features perf-probe`, then
-   `OAG_RENDER_PERF=1 target/release/oag-game data/images/hdfury-ps3-eu-dec.iso --race --mode single_race --seed 1 --autopilot --no-audio --ticks 300 --screenshot out.png`.
-   Screenshots must stay byte-identical.
+1. Count first: which of HD's 67 `hud-frame` allocations are strings, with the repeat patch the
+   doc section describes. Reuse a buffer across frames only where a measured count says it pays
+   (a frame is 17 to 40 us here; no frame-time claim has been made for any of this).

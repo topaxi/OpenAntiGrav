@@ -593,3 +593,85 @@ fn a_half_unit_glyph_quad_grows_by_half_a_unit_at_any_scale() {
     assert_eq!(half_unit.rect[0], 100.0 - 0.5);
     assert_eq!(half_unit.uv[0], 29.5);
 }
+
+/// A renderer keeps its quad list between frames: the second frame of the same list lays out
+/// into the buffer the first one grew, so a text-heavy HUD allocates nothing for its quads after
+/// the first frame.
+///
+/// **Skips with no adapter.**
+#[test]
+fn the_quad_list_survives_into_the_next_frame() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        Atlas::build(),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("quad reuse test"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let view = target.create_view(&Default::default());
+    let list: Vec<Draw> = (0..40)
+        .map(|row| Draw::Text {
+            x: 10.0,
+            y: 10.0 + row as f32 * 8.0,
+            scale: 1.0,
+            color: [1.0; 4],
+            border: None,
+            align: Align::Left,
+            text: "SPEED 0123456789".to_string(),
+            wrap_width: None,
+        })
+        .collect();
+    let frame = |renderer: &mut Renderer| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        renderer.render_with(
+            wgpu::LoadOp::Load,
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &list,
+            (0.0, 0.0, 4.0, 4.0),
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+    };
+    frame(&mut renderer);
+    assert!(
+        renderer.quads.len() >= 40 * 16,
+        "the frame lays out its text: {}",
+        renderer.quads.len()
+    );
+    // A capacity no 640-quad frame would reach by itself: only a list kept between frames still
+    // has it afterwards.
+    renderer.quads.reserve(1 << 14);
+    let kept = renderer.quads.capacity();
+    frame(&mut renderer);
+    assert_eq!(renderer.quads.capacity(), kept, "the list was rebuilt");
+}

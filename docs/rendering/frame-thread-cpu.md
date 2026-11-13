@@ -2520,6 +2520,37 @@ sites are:
 The `String`s are out of an arena's reach. The quad list and the sway list are plain-reuse
 candidates, not arena ones.
 
+**The HUD's two plain-reuse candidates, measured in steady state (2026-11-13, `hud-reuse`).** The
+HUD figures above are the capture frame, which builds a fresh `Overlay` and draws it once, so they
+are cold-frame numbers. The race stage builds its `Overlay` once per race (`main/stage.rs`) and
+draws it every frame, so the steady state is the second frame on. Measured with a temporary patch,
+not landed: `race_capture.rs` draws the same overlay six times before the capture draw
+(`OAG_TMP_HUD_REPEAT=6`, each into its own encoder), `perf-probe` marks read per draw, the last
+draw quoted, `--seed 1 --autopilot --ticks 300`, one view.
+
+| `perf-probe` marks, per HUD frame | Pulse cold | Pulse steady | HD cold | HD steady |
+| --- | --- | --- | --- | --- |
+| `hud-frame`, before | 30 allocs, 4.3 KiB | 30, 4.3 KiB | 103, 29.9 KiB | 103, 29.9 KiB |
+| `hud-frame`, after | 30, 4.3 KiB | 30, 4.3 KiB | 67, 18.1 KiB | 67, 18.1 KiB |
+| `hud-paint`, before and after | 48, 32.4 KiB | 41, 6.4 KiB | 49, 42.8 KiB | 41, 11.2 KiB |
+
+- **The text quad list was already reused.** `render_with` starts with `self.quads.clear()`, so
+  the list's capacity survives; the 8 and 7 reallocations (26 and 28 KiB) are the first frame
+  growing an empty list, which is all a one-frame capture ever sees. In steady state `hud-paint`
+  falls from 48 to 41 allocations and 32 to 6.4 KiB on Pulse by itself. No change was needed;
+  `render::tests::the_quad_list_survives_into_the_next_frame` pins it (it fails with
+  `self.quads = Vec::new()`).
+- **The sway slide is fixed.** `sway::slide` rebuilt each of the five lists with `place`, which
+  clones the draw, so a swaying HUD allocated five lists and a copy of every text string every
+  frame. It now moves each draw where it is (`placement::place_mut`, `Vec::retain_mut`; `place_owned`
+  is the same function). HD `hud-frame`: 103 to 67 allocations and 29.9 to 18.1 KiB a frame (-36,
+  -11.8 KiB), cold and steady alike. Pulse has no sway and is unchanged.
+  `sway::tests::sliding_moves_the_draws_in_place` pins each list's buffer and each text string.
+- Screenshots, Pulse (`pulse-psp-eu.chd`) and HD (`hdfury-ps3-eu-dec.iso`), `--seed 1 --autopilot
+  --ticks 300`, no repeat: `cmp` byte-identical before and after on both.
+- **Still open:** the per-draw `String`s (`ui::frontend::draw`'s `Draw::Text`, `hud/draw.rs`'s
+  `format!`s and `text.clone()`), which no plain reuse reaches.
+
 ```sh
 # The allocation counts: perf-probe build, per-stage marks (see batch one above)
 cargo build --release -p oag-game --features perf-probe
