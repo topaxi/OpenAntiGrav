@@ -20,9 +20,12 @@ menus (`session::demo`, `oag_game::demo`).
   (the original's demo kept running under 2 s of full stick, measured).
 - **Exit**: the same inputs, in a demo. The press is consumed (the menu is not also fed it, and
   START does not pause a demo) and the menus open on the main page, not the pause screen.
-- **Length**: the title's seconds of race time. The race is set to 99 laps so it never ends on them (the original's demo ran 376 s with its timer held off and never finished, measured); a wreck that ends the race ends the demo too.
+- **Length**: the title's seconds of race time. The race is set to more laps than a demo can fly (`oag_game::demo::UNENDING_LAPS`) because the original's demo, set to three, was seen racing 376 s with its timer held off and never finishing (measured), and ours finishes a race that has run its laps; the three is `Rules::laps`, used when a title's demo ends on laps. A wreck that ends the race ends the demo too.
 - **After a demo ran out**: the next demo, a new circuit and team, through the loading screen.
-- **HUD**: hidden in every demo (measured on Pulse PSP). The flyby is skipped.
+- **HUD**: hidden in every demo (measured on Pulse PSP), the Now Playing caption with it. The flyby and its track description are skipped.
+- **Screen over the race**: `Demo InGame` of the title's own `Demo_Definition.xml`, parsed and drawn by the front end's own screen drawing (`oag_raceplay::demo_overlay`, `oag_game::demo_overlay`, `Frontend::draw_screen_over`): the `demo_logo` mark, two cyan rules and the pulsing `BOOT_PRESS_ANY2` ("Press any button"), on the demo's clock. Hidden in a wallpaper. **Pulse: read and drawn. Pure: inherited, the file is the same and reads, the logo it names is not on Pure's disc and is left out (nothing stands in). HD, 2048 and Omega: checked, applies, not wired**: their front end is HD's `demo_definition.xml` (a `.gtf` logo, 1920x1080 grid).
+- **Set-up** (`oag_title::demo::Rules`, `oag_game::demo::apply_rules`, `Race::fly_as_demo`): speed class Flash, 8 craft (what a Single Race grid is; the test pins it on Pulse), weapons on, the opponents' weapon-use odds doubled (`oag_ai::weapon_ai::Law::use_scale`, `docs/gameplay/weapon-lineage.md`), no camera shake, nothing recorded to the profile; measured on Pulse PSP, inherited by the other titles.
+- **Camera**: the spectator director (`oag_raceplay::finish_camera`), from the race's first tick on the camera craft, reseeded per race. It is the same object the original's post-finish camera is (`docs/ghidra/functions/psp-pulse-usa/attract-demo.md`, "The demo camera is the spectator director"). It needs the circuit's authored stations, which are read off Pulse's PSP disc only: every other title keeps its chase camera until its stations are read.
 - **Idle inhibition**: a demo does not hold the screen awake; a wallpaper does.
 
 ## Per title (`oag_title::demo::Demo`)

@@ -7,6 +7,10 @@
 //! captures that check its timing are
 //! [`race-finish.md`](../../../../docs/ghidra/functions/psp-pulse-usa/race-finish.md).
 //!
+//! The attract demo watches its race through the same director, from the first tick
+//! ([`Race::fly_as_demo`]; `docs/ghidra/functions/psp-pulse-usa/attract-demo.md`, "The demo camera
+//! is the spectator director").
+//!
 //! # What is ported
 //!
 //! | Rule | Source |
