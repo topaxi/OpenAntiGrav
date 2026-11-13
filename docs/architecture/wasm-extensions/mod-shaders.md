@@ -193,7 +193,7 @@ let view = engine_texture(engine_uv(input.world)).rgb;   // stays on the surface
 `engine_uv(world)` is the camera that drew the texture, carried back through the pair, so a point of
 the entrance's surface lands on the texel it covers on the screen. With `update` continuous that is
 `screen_uv`; under a snapshot only `engine_uv` stays on the surface, so use it. `engine_texture` reads
-what the scene target holds, turned back into gamma-authored colour (HD stores encoded linear, 2048
+what the scene target holds, turned back into gamma-authored colour (HD stores sRGB-encoded values and is read back with the sRGB curve, 2048
 gamma 2), so a shader that returns it writes the scene's own value through `fs_main`, and is opaque:
 the stored alpha is the bloom's glow mask. A value above 1 survives the round trip on Omega's and
 2048's float scene (the portal's 960x540 target is the scene's own format, so it stores one;
@@ -207,6 +207,16 @@ isolated), and nothing by 750; 2048 (`altima`) is identical at 718 and a slightl
 the rings at 735 and 750 (max 6 and 16). A mod's own tunnel and ring shaders keep their value above
 1 too, not only the view through the portal. 2048 is `SceneStore::Squared` (the same tests run on
 it); checked on the same code and disc, ported.
+
+**HD's round trip.** `target_to_gamma` once read a linear scene back with the 2.2 power while
+`decode` (what `fs_main` writes with) is the sRGB curve on HD's `encoded_out` scene, so a pass-through
+of `engine_texture` drifted: measured over grey from 0 to 255 in steps of 32 plus three saturated
+colours, up to 8.5 levels of 255 per channel (darks brightened most, a stored 32 came back 37). It
+is now `encode`, the inverse of `decode` on every store. Measured after: worst error 0.13 level per
+channel on HD (the half float's own rounding; `an_encoded_scene_passes_the_engine_texture_through_within_one_level`),
+and Omega's and 2048's float scenes within 1% (`a_float_scene_passes_the_engine_texture_through`).
+On a gamma target `amount` is 0, so `mix` returns the value untouched and Pulse's 8-bit bytes are
+unchanged (`an_eight_bit_target_still_clamps_a_value_above_one`).
 
 **The camera.** `virtual = exit * rotation_180 * entrance^-1 * main`, the turn about the portal's
 local up, with each portal's `+z` out of the face a craft sees: back along the road at the entrance,

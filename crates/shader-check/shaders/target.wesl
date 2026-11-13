@@ -47,10 +47,11 @@ public fn gamma_to_target(rgb: vec3<f32>, amount: f32) -> vec3<f32> {
 }
 
 // A colour of the scene's linear space back to gamma-authored: the inverse of
-// `gamma_to_target` at `amount`, what a mod's shader reads a scene picture as.
+// `gamma_to_target` at `amount` (`encode` is `decode`'s inverse on every scene,
+// the sRGB curve on Wipeout HD's included), what a mod's shader reads a scene
+// picture as.
 public fn target_to_gamma(rgb: vec3<f32>, amount: f32) -> vec3<f32> {
-    let power = 1.0 / select(2.2, 2.0, square_decode > 0.5);
-    return mix(rgb, pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(power)), amount);
+    return mix(rgb, encode(rgb), amount);
 }
 
 // 1.0 when the render target holds display (gamma-encoded) values while the

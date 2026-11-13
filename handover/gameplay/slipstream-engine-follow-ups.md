@@ -199,9 +199,10 @@ Open from it, each small:
 4. ~~**A float target's values above 1 clamp in `engine_texture`**~~ Done for Omega and 2048
    (`mod_shader_draw::a_float_target_keeps_a_value_above_one`,
    `a_highlight_in_the_engine_texture_survives_a_pass_through`, each over Omega's and 2048's store); HD never had a value above 1 to
-   lose (its scene is encoded and clamped like the console's packer). Open from it, small: on HD
-   `target_to_gamma` reads with the 2.2 power while `decode` writes with the sRGB curve, so a
-   passthrough of `engine_texture` may not write back exactly what the scene holds (not measured).
+   lose (its scene is encoded and clamped like the console's packer). The HD read-back mismatch
+   (`target_to_gamma` 2.2 power against `decode`'s sRGB curve) was real: a pass-through drifted up to
+   8.5 levels of 255; fixed (`target_to_gamma` is `encode`), now 0.13 level
+   (`an_encoded_scene_passes_the_engine_texture_through_within_one_level`; `mod-shaders.md`, "HD's round trip").
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
    if a player needs them (spec, "reduced resolution allowed").
 6. **Only Pulse and HD have a frame test.** 2048, Omega, PS2 and Pure were read off screenshots.
