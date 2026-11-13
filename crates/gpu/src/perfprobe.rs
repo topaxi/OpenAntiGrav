@@ -41,8 +41,67 @@ pub static WRITE_BUFFER_BYTES: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug)]
 pub struct Counting;
 
+static CAPTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static SITES: std::sync::Mutex<Vec<(usize, std::backtrace::Backtrace)>> =
+    std::sync::Mutex::new(Vec::new());
+thread_local! {
+    static GUARD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn capture(size: usize) {
+    if !CAPTURE.load(Relaxed) {
+        return;
+    }
+    if GUARD.try_with(|g| g.replace(true)).unwrap_or(true) {
+        return;
+    }
+    let bt = std::backtrace::Backtrace::force_capture();
+    if let Ok(mut sites) = SITES.lock() {
+        sites.push((size, bt));
+    }
+    let _ = GUARD.try_with(|g| g.set(false));
+}
+
+fn dump_sites() {
+    let sites = std::mem::take(&mut *SITES.lock().unwrap());
+    let mut ours: std::collections::BTreeMap<String, (u64, u64)> = Default::default();
+    for (size, bt) in &sites {
+        let text = bt.to_string();
+        let lines: Vec<&str> = text.lines().collect();
+        let mut first_any: Option<String> = None;
+        let mut first_oag: Option<String> = None;
+        for l in &lines {
+            let l = l.trim();
+            let Some(at) = l.strip_prefix("at ") else { continue };
+            if at.starts_with("/rustc/") || at.contains("perfprobe.rs") {
+                continue;
+            }
+            let short = at.rsplit_once(":").map_or(at, |(f, _)| f).to_owned();
+            let short = short.split("/src/").last().map(str::to_owned).unwrap_or(short);
+            let crate_ = at.split('/').skip_while(|c| *c != "registry" && *c != "crates").nth(if at.contains("registry") { 3 } else { 1 }).unwrap_or("").to_owned();
+            first_any.get_or_insert(format!("{crate_}/{}", at.rsplit('/').next().unwrap_or("")));
+            if at.contains("/crates/") && !at.contains("registry") {
+                first_oag.get_or_insert(format!("{crate_}/{}", at.rsplit('/').next().unwrap_or("")));
+                break;
+            }
+            let _ = short;
+        }
+        let k = format!("{}  <=  {}", first_oag.unwrap_or_default(), first_any.unwrap_or_default());
+        let e = ours.entry(k).or_default();
+        e.0 += 1;
+        e.1 += *size as u64;
+    }
+    let mut v: Vec<_> = ours.into_iter().collect();
+    v.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));
+    println!("ALLOC SITES ({} allocations)", sites.len());
+    for (k, (n, b)) in v {
+        println!("SITE {n:5} {b:8} {k}");
+    }
+}
+
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        capture(layout.size());
         if counting() {
             ALLOCS.fetch_add(1, Relaxed);
             ALLOC_BYTES.fetch_add(layout.size() as u64, Relaxed);
@@ -55,6 +114,7 @@ unsafe impl GlobalAlloc for Counting {
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        capture(new_size);
         if counting() {
             ALLOCS.fetch_add(1, Relaxed);
             ALLOC_BYTES.fetch_add(new_size as u64, Relaxed);
@@ -222,6 +282,17 @@ pub fn mark(label: &str) {
     thread_local! {
         static LAST_TIME: std::cell::Cell<Option<std::time::Instant>> =
             const { std::cell::Cell::new(None) };
+    }
+    if label == "t-submit" {
+        static N: AtomicU64 = AtomicU64::new(0);
+        let n = N.fetch_add(1, Relaxed) + 1;
+        let at: u64 = std::env::var("OAG_ALLOC_SITES_AT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+        if at > 0 && n == at {
+            CAPTURE.store(true, Relaxed);
+        } else if at > 0 && n == at + 1 {
+            CAPTURE.store(false, Relaxed);
+            dump_sites();
+        }
     }
     let allocs = ALLOCS.load(Relaxed);
     let bytes = ALLOC_BYTES.load(Relaxed);

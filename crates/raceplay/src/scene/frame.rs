@@ -587,6 +587,7 @@ impl Scene {
                 .unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
+        oag_gpu::perfprobe::mark("t-gantry");
         if first_view {
             // The cards draw into textures of their own with passes of their own, on the
             // queue itself: frame work, which the first view of a split does, and the first

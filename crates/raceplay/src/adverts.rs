@@ -447,8 +447,11 @@ impl Cards {
                 #[cfg(test)]
                 self.uniform_writes.set(self.uniform_writes.get() + 1);
             }
+            oag_gpu::perfprobe::mark("t-card-timeline");
             card.drawable.write_anims(queue, seconds);
+            oag_gpu::perfprobe::mark("t-card-anims");
             card.drawable.write_node_anims(queue, seconds);
+            oag_gpu::perfprobe::mark("t-card-node-anims");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("advert"),
                 color_attachments: &[
@@ -492,6 +495,8 @@ impl Cards {
             card.drawable
                 .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
             oag_gpu::perfprobe::marks::close(&mut pass);
+            drop(pass);
+            oag_gpu::perfprobe::mark("t-card-pass");
         }
     }
 }
