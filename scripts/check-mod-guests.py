@@ -32,6 +32,7 @@ A toolchain bump or an SDK change stales every module at once, which is the inte
 one command rebuilds them all: `just rebuild-guests`.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -40,8 +41,20 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGET = "wasm32-unknown-unknown"
 
 
+# A guest is built the way its build.sh builds it, with no flags from the caller's shell. RUSTFLAGS
+# feeds the crate hash, so CI's job-wide `-D warnings` changed every module's bytes (and turned the
+# guests' test-only dead code into errors) while the same check passed locally.
+GUEST_ENV = {
+    key: value
+    for key, value in os.environ.items()
+    if key not in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")
+}
+
+
 def run(guest: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["cargo", *args], cwd=guest, capture_output=True, text=True)
+    return subprocess.run(
+        ["cargo", *args], cwd=guest, capture_output=True, text=True, env=GUEST_ENV
+    )
 
 
 def has_target() -> bool:
