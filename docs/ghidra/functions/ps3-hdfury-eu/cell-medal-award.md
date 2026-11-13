@@ -181,7 +181,34 @@ instead; that stays a chosen difference until someone decides to follow the orig
 
 ## Other titles
 
-- **Omega:** see the dated note at the end of this page.
+- **Omega:** checked, applies, not wired; the note at the end of this page.
 - **Pulse:** not this law. Pulse's `Eliminator` cells keep a kill target in the flat `Gold`
   ([`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`](../psp-pulse-usa/race-campaign.md)),
   and its flip set includes Elimination.
+
+## Omega: checked, applies, not wired (2026-11-13)
+
+Read with headless Ghidra on `/omega/eboot-ps4-omega-eu-v107.bin` (x86-64, RIP-relative
+references, so string xrefs are reliable there). Not named in that binary's `names.tsv`; the
+addresses are recorded here.
+
+- **The cell fields.** `FUN_014a4590` is Omega's `PI_Cell` attribute ladder (`strcasecmp` on each
+  name): `EasyGold` at `+0x128`, flat `Gold` at `+0x140` copied to `+0x128` and `+0x134`,
+  `NitroElimNovice`/`Skilled`/`Elite` at `+0x14c`/`+0x150`/`+0x154`. HD's layout, shifted by
+  `0x78`.
+- **The evaluators.** `FUN_014a6280(cell, value)` and `FUN_014a6180(cell)` are
+  `PI_Cell_EvaluateMedalForValue` and `PI_Cell_EvaluateSavedMedal`: the same three-way compare
+  at `+0x128 + 12 * rung`, flipped only for mode (`cell+0x190`) `6` or `0xe`. The saved value is
+  record word `0x1a` (`+0x68`; the record node's link is 8 bytes on this target).
+- **The record case.** `FUN_012a40b0`, the end-of-race builder, switches on the mode; `case 8:`
+  and `case 0xd:` share one body that stores the place into `Achieved` when it is lower (or
+  unset) and the value into `Time` when it is higher, then calls `FUN_014a6280` (`0x012a7848`).
+  For mode 8 the value is the score of row `place - 1` (`param_1 + (place - 1) * 300 +
+  0x19c88`), as on HD. Race and Head2Head (`case 3`, `case 9`) have their own body.
+
+So Omega awards an Eliminator cell's medal by place too, against the rung's `1`/`2`/`3`
+(Omega re-ships HD's per-difficulty grids,
+`crates/game/tests/omega_campaign_launch_ground_truth.rs`). Its Eliminator races on kills in ours
+(`oag_omega::TITLE`, score law unmeasured there, [eliminator-score.md](eliminator-score.md)), so
+the place on Omega comes off a kill board until that changes. No live readout: shadPS4 runs
+the game without a memory readout.

@@ -53,4 +53,4 @@ now read (82, static):
 1. Wire items 1 to 4 in `oag-tables` (flip set) and `oag-game` (value), one change, with the
    regression gate quoted before and after.
 2. Optional live confirmation on RPCS3, recipe in the evidence page's "Live check".
-3. Omega: see the evidence page's Omega note for what was checked.
+3. Omega: checked, applies (same record case, same evaluator and flip set; evidence page, "Omega"). The same `Cell` change covers it; its Eliminator ranks a kill board in ours.
