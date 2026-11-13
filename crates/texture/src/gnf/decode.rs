@@ -118,7 +118,67 @@ fn has_valid_bc7_mode(byte0: u8) -> bool {
 /// `offset` is the level's first byte from [`Texture::data_offset`]. Counts
 /// blocks with no valid mode bit and reports the count beside the bytes, so a
 /// caller can refuse a level without a second pass.
+///
+/// Walks the file's own order, tile by tile and inside a tile block by block,
+/// so the read is sequential and each write lands in a run of eight blocks of
+/// one output row. A level whose bytes stop short of a tile it needs takes
+/// [`untile_level_by_block`], which names the first block that is missing.
 fn untile_level(
+    texture: &Texture,
+    blob: &[u8],
+    offset: usize,
+    grid: (u32, u32, u32),
+    block_bytes: usize,
+) -> Result<(Vec<u8>, usize)> {
+    let (width_blocks, height_blocks, tiles_x) = grid;
+    let (wb, hb) = (width_blocks as usize, height_blocks as usize);
+    let tiles_y = hb.div_ceil(8);
+    let tile_bytes = micro_tile_bytes(block_bytes) as usize;
+    let base = texture.data_offset + offset;
+    let Some(span) = (tiles_x as usize)
+        .checked_mul(tiles_y)
+        .and_then(|tiles| tiles.checked_mul(tile_bytes))
+        .and_then(|bytes| base.checked_add(bytes))
+    else {
+        return untile_level_by_block(texture, blob, offset, grid, block_bytes);
+    };
+    if span > blob.len() || wb.div_ceil(8) > tiles_x as usize {
+        return untile_level_by_block(texture, blob, offset, grid, block_bytes);
+    }
+
+    // Where each of a tile's 64 stored blocks belongs inside it, as (x, y).
+    let place: [(usize, usize); 64] = std::array::from_fn(|slot| {
+        let bit = |n: usize| (slot >> n) & 1;
+        (
+            bit(0) | (bit(2) << 1) | (bit(4) << 2),
+            bit(1) | (bit(3) << 1) | (bit(5) << 2),
+        )
+    });
+    let bc7 = texture.surface_format == SurfaceFormat::Bc7;
+    let mut out = vec![0u8; wb * hb * block_bytes];
+    let mut corrupt = 0usize;
+    for tile_y in 0..tiles_y {
+        for tile_x in 0..wb.div_ceil(8) {
+            let start = base + (tile_y * tiles_x as usize + tile_x) * tile_bytes;
+            let tile = &blob[start..start + tile_bytes];
+            for (slot, block) in tile.chunks_exact(block_bytes).enumerate() {
+                let (x, y) = place[slot];
+                let (bx, by) = (tile_x * 8 + x, tile_y * 8 + y);
+                if bx >= wb || by >= hb {
+                    continue;
+                }
+                corrupt += usize::from(bc7 && !has_valid_bc7_mode(block[0]));
+                let at = (by * wb + bx) * block_bytes;
+                out[at..at + block_bytes].copy_from_slice(block);
+            }
+        }
+    }
+    Ok((out, corrupt))
+}
+
+/// [`untile_level`] one block at a time in row-major order, which is the order
+/// a missing block is reported in.
+fn untile_level_by_block(
     texture: &Texture,
     blob: &[u8],
     offset: usize,
@@ -282,3 +342,6 @@ fn row_major_blocks(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests;
