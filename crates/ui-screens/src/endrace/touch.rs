@@ -415,6 +415,10 @@ fn content_of(
 /// texture name to its place on the sheet; `scales` is the front end's face
 /// table and `line` the `Default` face's line height in grid units.
 #[must_use]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact the one draw needs"
+)]
 pub fn draw_list(
     model: &Summary,
     page: Page,
