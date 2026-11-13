@@ -2432,3 +2432,99 @@ OAG_RENDER_GPU_BENCH=60 OAG_RENDER_PERF=1 ./oag-game hdfury-ps3-eu-dec.iso \
   --motion-blur-resolution half --screenshot out.png
 # desktop: the same with --ticks 600; Intel with VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json
 ```
+
+## A per-frame arena on the stable `Allocator` API: measured, not adopted (2026-11-13, `alloc-spike`)
+
+Rust 1.100 stabilised `std::alloc::Allocator` with `Vec::new_in` and `Box::new_in`. A probe
+outside the workspace (`unsafe impl Allocator for &Arena`, `Vec::new_in(&arena)`,
+`Box::new_in(1, &arena)`, no `#![feature]`) builds on 1.100.0. `bumpalo` 3.20.3 with its
+`allocator_api` feature does not: its `#![feature]` fails with E0554 on stable. An arena here is
+therefore hand-written.
+
+**What an arena can reach.** Every heap allocation of one frame, by call site: the `perf-probe`
+counting allocator capturing a backtrace per allocation for one bench frame (a temporary patch,
+not landed), Pulse Talon's Junction and HD's default circuit, `--seed 1 --autopilot`, one view,
+the `render_viewports` bench frame at tick 300. The first file outside `std` names the owner.
+
+| Allocations in one frame | Pulse | HD |
+| --- | --- | --- |
+| Total (Rust allocations) | 343 | 857 |
+| Inside wgpu-core, wgpu-hal, wgpu and their `hashbrown`/`smallvec`/`bit-vec` | 301 | 774 |
+| Inside `gpu-allocator`, under our `queue.write_buffer` calls | 30 | 72 |
+| Our own code | 12 (30 KiB) | 11 (31 KiB) |
+
+Most of wgpu's are the command encoder's finish (125 on Pulse), the render passes' command
+lists (31 and 268 KiB for the race pass; 13 for each of Pulse's five advert-card passes) and the
+submit (22). No wgpu API takes an allocator. `perf-probe` counts Rust allocations only; batch
+one's heaptrack figure (about 361 per frame on Pulse, every `malloc`) is the cross-check, and a
+driver's C allocations are as far out of reach.
+
+Our own sites, largest first:
+
+1. `Uploads::flush` (`drawable/scene_block.rs`): 12.5 KiB a view, every title. The
+   `sort_by_key` is a stable sort, whose scratch buffer is a heap allocation on every call.
+2. `opaque_order` (`scene/record.rs`): 12.4 KiB on Pulse, 14.3 KiB on HD, a view. Same cause.
+3. The view's `DrawList` (`scene/frame.rs`, `prepare_view`): 1.5 KiB, one allocation a view.
+   Kept between frames it would need its lifetime erased (batch two, "Left, with the reason").
+
+Items 1 and 2 are out of any arena's reach: `slice::sort_by` always allocates its scratch from
+`Global`. Plain code removes them. Each now sorts unstably with the push index breaking ties.
+That is the order a stable sort gives, so a slot staged twice still keeps its last block.
+`the_order_is_a_stable_sort_by_slot` and `the_prepass_order_breaks_ties_by_model_order` pin it.
+Result: 343 to 341 allocations a frame on Pulse and 857 to 855 on HD, about 25 KiB less a frame
+on each. Screenshots are byte-identical on both. **This is landed, with no frame-time claim.**
+
+Item 3 is the one site where an arena has a case, because reuse is blocked. The prototype
+(`478f21394`, reverted in `92ae1bb78`): a `FrameArena` of one 16 KiB block, handed out by a
+compare-and-swap bump on one `live << 32 | offset` word. The offset returns to zero when the last
+allocation is freed, and anything past capacity goes to `Global`. `DrawList` holds
+`Vec<Draw<'a>, &'a FrameArena>`. It removed exactly one allocation (1.5 KiB) a view a frame on
+both titles, 341 to 340 and 855 to 854, and the screenshots stayed byte-identical.
+
+**Frame time: no change can be seen, and none is expected.** `OAG_RENDER_BENCH=300`,
+`taskset -c 4`, `perf-probe` release builds (the bench is compiled only with the feature, as in
+batches one and two). The three binaries ran round-robin: main `c4e6022db`, the sort fix, and
+the sort fix plus the arena. Each cell is the median of each run, in us:
+
+| Pulse, one view (load 7.4 to 9.2) | main | sorts | sorts + arena |
+| --- | --- | --- | --- |
+| `Scene::render`, rounds 1-4 | 403.6, 394.4, 397.6, 400.8 | 402.0, 416.9, 398.8, 399.5 | 398.3, 401.2, 402.4, 398.9 |
+| `render_viewports`, rounds 1-4 | 676.4, 670.1, 670.4, 676.1 | 679.3, 675.6, 673.8, 672.8 | 679.4, 671.0, 667.9, 673.4 |
+
+| HD, one view (load 23.6 to 32.5) | main | sorts | sorts + arena |
+| --- | --- | --- | --- |
+| `Scene::render`, rounds 1-4 | 352.5, 350.0, 347.2, 346.8 | 357.2, 352.8, 350.5, 351.8 | 352.0, 363.3, 350.8, 348.8 |
+
+Two Pulse rounds that ran while a test build loaded the machine (load 6.7 to 17) are dropped.
+HD's `render_viewports` medians are bimodal at that load (1187 to 2953 us in one binary) and are
+not quoted. The spread inside one binary on Pulse is 5 to 10 us. One allocation and free costs
+tens of nanoseconds (an estimate, not measured), against a 670 us frame, so this is below what the bench can detect by two
+orders of magnitude.
+
+**Verdict: not adopted.** The arena reaches 1 of 343 allocations on Pulse and 1 of 857 on HD.
+It costs an `unsafe impl Allocator` and `unsafe impl Send`/`Sync` under a module-level
+`#[allow(unsafe_code)]`, `&'a FrameArena` in `DrawList`'s type, and 146 lines. As prototyped,
+neither its unit test nor the split-screen path (several live lists, recorded on other threads)
+was run. The rest of the frame is out of reach for three reasons: wgpu's allocations take no
+allocator, `slice::sort_by` scratch is always `Global`, and `String` has no allocator parameter.
+
+**The HUD, captured the same way** (from `hud-begin` to `hud-paint`, the capture frame at tick
+300, one view): 80 allocations on Pulse (29 of them wgpu's and gpu-allocator's) and 155 on HD (29). The largest own
+sites are:
+
+- the text renderer's quad list regrowing (`render/text.rs`, its `quads` list): 8 and 7
+  reallocations, 26 and 28 KiB;
+- `ui::frontend::draw` `Draw::Text`'s `String` (26 on HD), and `hud/draw.rs`'s `text.clone()`;
+- `hud/sway.rs`'s `collect` of a placed list: 10 on HD, 12 KiB.
+
+The `String`s are out of an arena's reach. The quad list and the sway list are plain-reuse
+candidates, not arena ones.
+
+```sh
+# The allocation counts: perf-probe build, per-stage marks (see batch one above)
+cargo build --release -p oag-game --features perf-probe
+OAG_RENDER_PERF=1 OAG_RENDER_BENCH=50 target/release/oag-game data/images/pulse-psp-usa.chd \
+  --race --mode single_race --seed 1 --autopilot --no-audio --ticks 300 --screenshot out.png
+# Frame time: the same with OAG_RENDER_BENCH=300 under taskset -c 4, OAG_RENDER_PERF unset,
+# binaries round-robin; read "bench Scene::render CPU" and "bench render_viewports CPU".
+```
