@@ -38,6 +38,7 @@ mod music_pool_ground_truth;
 mod music_resume_ground_truth;
 mod now_playing_ground_truth;
 mod official_remix;
+mod omega_2048_map_ground_truth;
 mod omega_campaign_launch_ground_truth;
 mod omega_campaign_screens_ground_truth;
 mod omega_colour_template_ground_truth;

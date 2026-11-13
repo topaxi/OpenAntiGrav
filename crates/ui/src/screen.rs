@@ -898,7 +898,14 @@ impl Screens {
                     .iter()
                     .filter(|canvas| canvas.name.eq_ignore_ascii_case("fe3dcanvas"))
                     .flat_map(|canvas| &canvas.children)
-                    .filter(|label| label.name.eq_ignore_ascii_case("canvaslabel"))
+                    .filter(|label| {
+                        // Omega spells its three season cards `aCanvasLabel`
+                        // (`docs/ghidra/functions/vita-2048-eu-v104/campaign-map-projection.md`,
+                        // "Season cards: checked, differs").
+                        ["canvaslabel", "acanvaslabel"]
+                            .iter()
+                            .any(|tag| label.name.eq_ignore_ascii_case(tag))
+                    })
                     .filter_map(|label| self.canvas_label_from_node(label)),
             ),
             "displaylanguages" => screen.display_languages = true,
