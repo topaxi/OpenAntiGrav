@@ -1272,8 +1272,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .race
                 .countdown_voice
                 .is_some_and(|voice| voice.beat.is_some()),
-            // A title whose grid hover skips Zone (HD's `Craft_Update`, modes 6, 13 and 14) races
-            // Zone at the race target from the grid.
+            // A title whose grid hover skips Zone (HD's `Craft_Update`, modes 6, 13, 14) races Zone from the grid.
             hull_shake: title.race.hull_shake.map(|shake| shake.value),
             launch_hover: title
                 .race
@@ -1303,6 +1302,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             autopilot_pad_grants: title.weapons.autopilot_pad_grants.value,
             launch_normal_is_track_up: title.weapons.launch_normal_is_track_up.value,
             floor_arms_steer_to_ride_point: title.weapons.floor_arms_steer_to_ride_point.value,
+            own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
             opponent_fire: title.weapons.opponent_fire.value,
             score_law: rule.law,

@@ -211,6 +211,7 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             "pads_stamp_in_eliminator",
             "launch_normal_is_track_up",
             "floor_arms_steer_to_ride_point",
+            "own_craft_box_hides_track",
         ):
             sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
             if sourced is None:

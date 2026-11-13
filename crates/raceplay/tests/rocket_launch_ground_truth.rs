@@ -16,9 +16,8 @@
 //! against the original's frames 51/61/70 and 185/221/252, and the centre shot's
 //! last position is within about four units of the original's. The original's
 //! rocket flies the first 2-3 updates on its fall arm (`Collision_SweepSegment`
-//! returned `0x7f` with the floor four units below, cause unrecovered), a slow
-//! 166.67 units/s phase ours does not reproduce: ours finds the floor on the
-//! first update. That is why the tolerances are three ticks and twelve units.
+//! returned `0x7f` with the floor four units below: the firing craft's own box),
+//! a slow 166.67 units/s phase. The tolerances stay three ticks and twelve units.
 //!
 //! Our own start lands the craft at z -199.4 heading 1.7 degrees toward -Z
 //! rather than that pose, so a volley from *our* craft cannot be compared with
@@ -37,6 +36,8 @@ const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
 /// The craft's own position at the fire, measured (`rocket-visuals.md`).
 /// The class speed, 800 km/h over 3.6.
 const CRUISE: f32 = 800.0 / 3.6;
+/// The speed before the first ride: the class speed times `rocket::LAUNCH_SPEED_SCALE`.
+const LAUNCH: f32 = CRUISE * 0.75;
 
 const ORIGINAL_SPAWN: Vec3 = Vec3::new(124.48, -47.91, -196.95);
 
@@ -99,6 +100,8 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
     }
 
     let mut ended: [Option<(u32, f32)>; projectile::ROCKET_SHOTS] = [None; 3];
+    let mut cruising = [false; 3];
+    let mut slow_updates = [0u32; 3];
     for tick in 1..=200u32 {
         let before: Vec<Vec3> = (0..3)
             .map(|s| world.projectiles.slots[s].position)
@@ -112,6 +115,7 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             None,
             &class,
             race.floor_arms(),
+            race.own_craft_probe(),
             oag_weapons::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
@@ -119,17 +123,34 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
         for slot in 0..3 {
             let p = world.projectiles.slots[slot];
             if p.kind.is_some() {
-                assert!(
-                    (p.velocity.length() - CRUISE).abs() < 0.05,
-                    "slot {slot} tick {tick}: speed {} is not the class speed {CRUISE}",
-                    p.velocity.length()
-                );
+                let speed = p.velocity.length();
+                if (speed - CRUISE).abs() < 0.05 {
+                    cruising[slot] = true;
+                } else {
+                    assert!(
+                        !cruising[slot] && (speed - LAUNCH).abs() < 0.05,
+                        "slot {slot} tick {tick}: speed {speed} is neither the launch speed {LAUNCH} \
+                         before the first ride nor the class speed {CRUISE} after it"
+                    );
+                    slow_updates[slot] += 1;
+                }
             } else if ended[slot].is_none() && impacts[slot].is_some() {
                 ended[slot] = Some((tick, (before[slot] - ORIGINAL_SPAWN).length()));
             }
         }
     }
-    println!("ended (tick, units from the spawn) by slot: {ended:?}");
+    println!(
+        "ended (tick, units from the spawn) by slot: {ended:?}; slow updates {slow_updates:?}"
+    );
+    // The firing craft's box hides the floor from the first probes, so the rocket flies its
+    // first updates on the fall arm at 0.75 of the class speed, as the original's does
+    // (`rocket-visuals.md`, "The own-craft box is a rotated frame"): the 166.67 phase the volley
+    // measured. The original read it at the entry of its first 2-3 updates, which is one or two
+    // updates that fall (the entry of the first sees the launch speed before any probe ran).
+    assert!(
+        slow_updates.iter().all(|&n| (1..=2).contains(&n)),
+        "the slow phase is one or two updates: {slow_updates:?}"
+    );
     // The original's, by slot (our slot 1 is its -Z-side shot, slot 0 the
     // centre, slot 2 the +Z-side shot): detonation frame and range.
     let original = [(61u32, 221.0f32), (51, 185.0), (70, 252.0)];

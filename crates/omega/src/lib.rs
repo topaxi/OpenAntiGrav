@@ -199,6 +199,7 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(false),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::OMEGA,
         ),

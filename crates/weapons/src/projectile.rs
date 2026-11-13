@@ -66,7 +66,7 @@ pub mod repulser;
 mod rocket;
 pub mod shuriken;
 
-pub use geometry::hull_radius;
+pub use geometry::{OwnCraftProbe, hull_radius, own_box_blocks};
 use geometry::{SweepHit, nearest_hit};
 pub use hit::WeaponHit;
 
@@ -577,6 +577,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
     floor_arms: FloorArms,
+    own_craft: OwnCraftProbe,
     push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],
@@ -595,6 +596,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
         TriggerRadii::from_table(weapons),
         class,
         floor_arms,
+        own_craft,
     );
 
     blast::apply_impacts(ships, weapons, &impacts, push, rules, hits);

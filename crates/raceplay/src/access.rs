@@ -7,6 +7,11 @@
 
 use super::*;
 
+/// How long after release a Plasma does not probe on a title that has not measured the firing
+/// craft's box, in seconds (chosen, not measured): between the last slow age and the first
+/// riding one of Pulse's recorded bolts, so a tick of rounding cannot move it.
+const UNMEASURED_PLASMA_PROBE_WINDOW: f32 = 0.04;
+
 impl Race {
     /// Chooses which control scheme maps the pilot's buttons.
     ///
@@ -487,6 +492,18 @@ impl Race {
             oag_weapons::projectile::FloorArms::SteerToRidePoint
         } else {
             oag_weapons::projectile::FloorArms::ParallelToFloor
+        }
+    }
+
+    /// How a projectile's first probes treat the firing craft,
+    /// `oag_title::weapons::Weapons::own_craft_box_hides_track`. A title without the measured box
+    /// keeps a Plasma off the probe for [`UNMEASURED_PLASMA_PROBE_WINDOW`] seconds (chosen).
+    #[must_use]
+    pub fn own_craft_probe(&self) -> oag_weapons::projectile::OwnCraftProbe {
+        if self.sim.own_craft_box_hides_track {
+            oag_weapons::projectile::OwnCraftProbe::CraftBox
+        } else {
+            oag_weapons::projectile::OwnCraftProbe::PlasmaWindow(UNMEASURED_PLASMA_PROBE_WINDOW)
         }
     }
 

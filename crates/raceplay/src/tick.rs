@@ -251,6 +251,7 @@ impl Race {
         let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
         let floor_arms = self.floor_arms();
+        let own_craft = self.own_craft_probe();
         let impacts = oag_weapons::projectile::step(
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
@@ -263,6 +264,7 @@ impl Race {
             self.sim.weapons.as_deref(),
             &self.sim.class,
             floor_arms,
+            own_craft,
             match self.sim.blast_push {
                 oag_title::weapons::BlastPush::Posted => oag_weapons::projectile::BlastPush::Posted,
                 oag_title::weapons::BlastPush::Immediate => {

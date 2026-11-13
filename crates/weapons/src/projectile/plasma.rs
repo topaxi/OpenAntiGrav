@@ -141,22 +141,5 @@ pub const LAUNCH_SPEED_SCALE: f32 = super::rocket::LAUNCH_SPEED_SCALE;
 /// Shuriken read the same global and keep `3.0` until each is measured.
 pub const RIDE_HEIGHT: f32 = 4.0;
 
-/// How long after release a bolt does not ride the floor, in seconds.
-///
-/// **Chosen inside a measured bracket, not recovered.** The original's first three
-/// `Plasma_Update`s fall (`velocity -= surface * dt * 50`: y drops 0.82 a tick) and keep
-/// the 0.75 launch speed; the fourth finds the floor and pins to the ramp (records at
-/// entry age 0, 0.0167, 0.0334 slow, 0.0501 the first ride). The Rocket shows the same
-/// four updates at a different place on the track, so this reads as age, not position.
-/// What gates it (the probe's reach, a collision kind, the bounds the query takes) is
-/// unread; the Rocket thread has the same open question. 0.04 is between the last slow
-/// age (0.0334) and the first riding one (0.0501), so a tick of rounding cannot move it.
-pub const UNPINNED_SECONDS: f32 = 0.04;
-
-/// How many updates that is at the fixed 60 Hz step: ages 0, 1/60 and 2/60 are below
-/// [`UNPINNED_SECONDS`], 3/60 is not.
-#[cfg(test)]
-const UNPINNED_UPDATES: usize = 3;
-
 #[cfg(test)]
 mod tests;

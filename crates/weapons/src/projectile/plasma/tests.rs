@@ -8,6 +8,10 @@ use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, Surface, TriangleSoup};
 use oag_tables::weapons::Weapon;
 
+/// Updates a Plasma stays off the probe under the 0.04 s window of a title without the measured
+/// craft box: ages 0, 1/60 and 2/60 are inside it, 3/60 is not.
+const UNPINNED_UPDATES: usize = 3;
+
 fn craft_at(position: Vec3, shield: f32, mass: f32) -> crate::test_craft::Ship {
     let mut ship = crate::test_craft::Ship {
         active: true,
@@ -77,6 +81,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
             crate::projectile::TriggerRadii::default(),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
         );
         tick += 1;
         let bolt = &projectiles.slots[0];
@@ -130,6 +135,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         crate::projectile::TriggerRadii::default(),
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
     );
     assert!(
         projectiles.slots[0].position.distance(nose_at_release) > 1.0,
@@ -178,6 +184,7 @@ fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
             crate::projectile::TriggerRadii::default(),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
@@ -257,6 +264,7 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
             Some(&table),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -321,6 +329,7 @@ fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
                 crate::projectile::TriggerRadii::default(),
                 "VENOM",
                 crate::projectile::FloorArms::SteerToRidePoint,
+                crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
             )
             .into_iter()
             .flatten()
@@ -366,6 +375,7 @@ fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
             Some(&table),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -417,6 +427,7 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
             Some(&table),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 3],
@@ -525,6 +536,7 @@ fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
             crate::projectile::TriggerRadii::default(),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
         );
         tick += 1;
         assert!(tick < 120, "the hold has to end");
@@ -573,6 +585,7 @@ fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
             crate::projectile::TriggerRadii::default(),
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
+            crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
         );
     };
 
@@ -655,6 +668,7 @@ fn advance_one(
         crate::projectile::TriggerRadii::default(),
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
     );
 }
 
