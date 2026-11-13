@@ -196,6 +196,11 @@ impl Session {
     /// rather than a track, and nothing there to resume into, so that one is
     /// still discarded the way every race used to be.
     pub(crate) fn escape(&mut self) {
+        // An attract demo is left, not parked: a wallpaper quits instead.
+        if self.in_demo() {
+            self.escape_demo();
+            return;
+        }
         // Photo mode is a level of its own: escape leaves it, back to the race it holds, and
         // goes no further. **Chosen, not measured.**
         if self.photo.is_some() {

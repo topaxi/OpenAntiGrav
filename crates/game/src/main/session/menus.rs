@@ -365,6 +365,7 @@ impl Session {
             && !stage.race.finished()
             && !was_lan
             && !stage.watching
+            && stage.demo.is_none()
         {
             self.suspended_race = Some(stage);
         }

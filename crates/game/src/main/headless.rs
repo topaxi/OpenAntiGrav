@@ -709,6 +709,7 @@ pub(crate) fn run_race(
                 gpu,
                 give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
+                demo: cli.demo.mode().is_some(),
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
@@ -861,6 +862,7 @@ pub(crate) fn run_race(
         // `--race` never shows the loading screen, so there is no
         // transition to time.
         measure_race_load: None,
+        demo: None,
         give,
         // A network race starts on the server's clock: no flyby to wait through.
         no_intro: cli.intro.no_intro || net.is_some(),

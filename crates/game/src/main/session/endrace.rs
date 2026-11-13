@@ -40,6 +40,10 @@ impl Session {
         let Stage::Race(stage) = &self.stage else {
             return;
         };
+        // A demo that finishes is over: no results, no end-of-race voice.
+        if stage.demo.is_some() {
+            return;
+        }
         if !stage.race.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }

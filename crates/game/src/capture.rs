@@ -474,6 +474,7 @@ pub fn run(
                 pressed: options.pressed,
                 input_script: None,
                 autopilot: options.autopilot,
+                demo: false,
                 pilot_assist: options.pilot_assist,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,

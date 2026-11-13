@@ -53,6 +53,8 @@ pub(crate) struct App {
     /// `--measure-race-load`, the number of races to time. See
     /// `session::load_probe`.
     pub(crate) measure_race_load: Option<u32>,
+    /// `--demo`: `Some(wallpaper)`. See `session::demo`.
+    pub(crate) demo: Option<bool>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
@@ -527,6 +529,7 @@ impl App {
             replay_list: Vec::new(),
             replay_refused: std::collections::BTreeMap::new(),
             watching: None,
+            demo: crate::session::DemoState::with_cli(self.demo),
             viewer: None,
             return_to_replays: false,
             rumbler: None,
@@ -936,6 +939,8 @@ impl ApplicationHandler for App {
                 // `crate::pointer::Window::other_device`.
                 if event.state == ElementState::Pressed {
                     session.pointer.other_device();
+                    // Any key, bound or not, is somebody at the machine (`session::demo`).
+                    session.demo.key = true;
                 }
                 // A CONTROLS row is waiting for its new key, and this raw event
                 // is the only place that key still exists as itself - past

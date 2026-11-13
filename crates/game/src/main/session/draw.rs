@@ -158,7 +158,7 @@ impl Session {
         // rather than only what happens to be on screen.
         let rect = display::viewport(self.gpu.output.size(), self.aspect());
         let pose_view = self.pose_view_shown();
-        let viewer_hud_off = self.viewer_hud_hidden();
+        let viewer_hud_off = self.race_hud_hidden();
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window
@@ -473,8 +473,8 @@ impl Session {
                 stage.race.set_weather(render_profile.weather);
                 // And the DYNAMIC HUD row, for the same reason.
                 stage.race.set_dynamic_hud(self.settings.display.dynamic_hud);
-                // And the GHOST SHIPS VISIBLE row.
-                if let Some(shell) = &self.shell {
+                // And the GHOST SHIPS VISIBLE row; a demo never shows the player's ghost.
+                if let Some(shell) = self.shell.as_ref().filter(|_| stage.demo.is_none()) {
                     stage
                         .race
                         .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));

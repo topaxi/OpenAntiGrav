@@ -395,6 +395,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
         sound_register: None,
+        multiplayer: false,
         skins: Vec::new(),
         rating: None,
         models: Vec::new(),

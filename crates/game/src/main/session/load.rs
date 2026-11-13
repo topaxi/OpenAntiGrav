@@ -786,6 +786,22 @@ impl Session {
                     if let Err(e) = net.begin_join(&mut race_stage.race, title) {
                         join_error = Some(e);
                     }
+                } else if let Some(run) = self.demo.loading.take() {
+                    // An attract demo: the race a player would have, with nobody in it. The
+                    // opponents' driver is chosen while a person is still seated, then the
+                    // person's slot goes to the AI too.
+                    oag_game::ai_choice::apply(
+                        &mut race_stage.race,
+                        ai_choice,
+                        oag_game::ai_choice::Source::Free(ai_difficulty),
+                    );
+                    race_stage.race.fly_as_demo();
+                    race_stage.race.begin_speed_plans();
+                    race_stage.demo = Some(run);
+                    // Never the player's best-lap ghost.
+                    race_stage.race.set_ghost_visible(false);
+                    // Nothing a demo does is a result.
+                    race_stage.result_saved = true;
                 } else if let Some(watching) = self.watching.take() {
                     // A recording: the viewer seats the race from the header and moves it; the
                     // lobby, the windows and the AI choice of a launch are not its.
@@ -1047,6 +1063,7 @@ impl Session {
                 if !self.no_intro
                     && self.net.is_none()
                     && self.viewer.is_none()
+                    && race_stage.demo.is_none()
                     && race_stage.race.begin_intro()
                 {
                     oag_game::sound::prepare_intro_voice(
@@ -1059,6 +1076,11 @@ impl Session {
             }
             Err(RaceBuildError::Load(e)) => {
                 error!("cannot start a race: {e:#}");
+                // A demo that would not load ends a `--demo` chain rather than retrying it.
+                if self.demo.loading.take().is_some() {
+                    self.demo.cli = None;
+                    self.restore_race_options();
+                }
                 // A recording that would not load is listed dimmed with why.
                 if let Some(watching) = self.watching.take() {
                     self.replay_refused.insert(watching.path, format!("{e:#}"));

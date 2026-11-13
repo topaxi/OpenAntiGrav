@@ -29,6 +29,7 @@ pub mod ai_control_stats;
 pub mod ai_race_stats;
 pub mod audio_config;
 pub mod billboard_pool;
+pub mod demo_config;
 pub mod effectsettings;
 pub mod enginelight;
 pub mod envsettings;

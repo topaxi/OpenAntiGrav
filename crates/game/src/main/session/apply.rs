@@ -131,9 +131,12 @@ impl Session {
     /// Whether this race is a verification run that must leave no record, medal, loyalty or ghost.
     /// See [`oag_game::official`].
     pub(crate) fn race_is_unofficial(&self) -> bool {
-        self.race_options
-            .as_ref()
-            .is_some_and(|options| oag_game::official::unofficial(options, self.give))
+        // A demo leaves no record, medal, loyalty or ghost.
+        self.in_demo()
+            || self
+                .race_options
+                .as_ref()
+                .is_some_and(|options| oag_game::official::unofficial(options, self.give))
     }
 
     /// What this session's campaign rows are filed under - see

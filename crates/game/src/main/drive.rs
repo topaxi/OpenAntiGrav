@@ -266,6 +266,21 @@ impl Driver {
                 self.session.escape();
                 self.frame(None)?;
             }
+            Step::Key => {
+                self.session.demo.key = true;
+                self.frame(None)?;
+            }
+            Step::Mouse { x, y } => {
+                self.session.pointer.cursor_moved(f64::from(*x), f64::from(*y));
+                self.frame(None)?;
+            }
+            Step::Click => {
+                let left = winit::event::MouseButton::Left;
+                self.session.pointer.button(left, winit::event::ElementState::Pressed);
+                self.frame(None)?;
+                self.session.pointer.button(left, winit::event::ElementState::Released);
+                self.frame(None)?;
+            }
             Step::Ticks(n) => {
                 for _ in 0..*n {
                     self.frame(None)?;
@@ -384,7 +399,14 @@ fn state_of(session: &mut Session) -> State {
         state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
         state.ghost_visible = Some(stage.race.ghost_visible());
         state.recorded_events = stage.race.recorded_event_count();
+        state.humans = Some(stage.race.sim.world.human_slots().count());
+        state.hud = Some(if session.race_hud_hidden() { "off" } else { "on" }.to_string());
     }
+    state.demo = match &session.stage {
+        Stage::Race(stage) if stage.demo.is_some() => Some("running".to_string()),
+        Stage::Loading(_) if session.demo.loading.is_some() => Some("loading".to_string()),
+        _ => None,
+    };
     state
 }
 

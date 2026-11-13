@@ -519,6 +519,39 @@ fn run(cli: Cli) -> Result<()> {
     // anything opens it, so "no disc image found" stays a message about the
     // command line rather than something to discover eight seconds of intro
     // later.
+    // `--demo` with no window: `--dry-run` flies demos back to back, `--screenshot` captures the
+    // first one's frame through the ordinary race capture. See `docs/ui/attract-demo.md`.
+    if cli.demo.mode().is_some() && (cli.dry_run || cli.screenshot.is_some()) {
+        let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
+        let music_discs = pending.music_discs(&source);
+        let mut options = pending.race_options(&source, Vec::new());
+        let catalogue = oag_game::remix::catalogue(&source)?;
+        let config = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+            .ok()
+            .and_then(|mut opened| {
+                oag_game::boot::demo_config::load(&mut opened.archives, opened.title, &mut Vec::new())
+            });
+        let length = if cli.ticks > 0 { cli.ticks } else { u32::MAX };
+        let seed = options.seed.unwrap_or_else(oag_game::race_seed::fresh);
+        let unlocked = oag_game::unlock::unlock_all();
+        let playable = |track: &race::catalogue::Track| unlocked || track.unlock_grid.is_none();
+        if cli.dry_run {
+            for (n, report) in oag_game::demo::chain::run(&options, &catalogue, config.as_ref(), playable, seed, 2, length)?
+                .iter()
+                .enumerate()
+            {
+                println!("demo {}: {report}", n + 1);
+            }
+            return Ok(());
+        }
+        let track = catalogue.tracks.iter().map(|(track, _)| track).find(|track| playable(track));
+        let team = catalogue.teams.first();
+        options.mode = oag_race::Mode::SingleRace;
+        options.track = track.map(race::catalogue::Track::entry_name);
+        options.team = team.map(|team| team.value.clone());
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, None);
+    }
+
     // `--connect` is a race too: the server's.
     if cli.race || cli.net.connect.is_some() || cli.net.online.is_some() {
         // `--prefetch` is a front-end thing, and saying so is better than
@@ -756,6 +789,7 @@ fn run(cli: Cli) -> Result<()> {
         boot_overlay,
         pick_language,
         measure_race_load: cli.measure.measure_race_load,
+        demo: cli.demo.mode(),
         give,
         no_intro: cli.intro.no_intro,
         dev: cli.dev.dev(cli.driver.people())?,

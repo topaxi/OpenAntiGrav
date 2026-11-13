@@ -201,6 +201,9 @@ pub(crate) struct RaceStage {
     /// Whether this race is a recording being watched: it is never parked behind the menus, and
     /// nothing it does is a record, a ghost or a replay.
     pub(crate) watching: bool,
+    /// Set when this race is an attract demo: every craft is flown by the AI, nothing it does is
+    /// a result, a ghost or a recording, and it is never parked behind the menus.
+    pub(crate) demo: Option<oag_game::demo::Run>,
 }
 
 impl Drop for RaceStage {

@@ -194,6 +194,7 @@ impl Session {
             // offers the same list under either mode. See
             // `oag_2048::race::DEFAULTS.zone` and
             // `crate::main::session::Shell::tracks_for`.
+            demo_config: None,
             zone_tracks: tracks.clone(),
             tracks,
             teams: team_choices,

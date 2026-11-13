@@ -195,6 +195,7 @@ mod craft_flash;
 mod cues;
 #[cfg(feature = "view")]
 mod damage_fx;
+mod demo;
 #[cfg(feature = "view")]
 mod destroy_camera;
 #[cfg(feature = "view")]

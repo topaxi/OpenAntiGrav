@@ -115,6 +115,8 @@ pub const TITLE: &Title = &Title {
     },
     // PSP: no motors; the PS2 level-and-timer law is documented and not played (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
+    // The 60 s idle test and the 120 s timeout are read off the executable; `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::PULSE,
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See

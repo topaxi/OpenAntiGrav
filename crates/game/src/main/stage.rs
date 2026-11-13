@@ -777,6 +777,7 @@ impl Stage {
             replay_header,
             auto_replay: false,
             watching: false,
+            demo: None,
         }))
     }
 }

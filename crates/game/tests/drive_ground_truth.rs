@@ -867,3 +867,247 @@ fn the_mods_page_turns_a_texture_pack_on_and_off_and_the_front_ends_faces_follow
         "turning it off builds the disc's sheet again:\n{stderr}"
     );
 }
+
+/// The ticks a Pulse main menu waits before it starts a demo (`oag_title::demo::Demo::PULSE`).
+const PULSE_IDLE_TICKS: u32 = 60 * 60;
+
+/// The states of a run that were `stage=race` with `demo=running`.
+fn demo_races(run: &Run) -> Vec<&Value> {
+    run.states
+        .iter()
+        .filter(|state| text(state, &["demo"]) == Some("running"))
+        .collect()
+}
+
+/// An untouched main menu starts an attract demo after the title's idle time, and the demo is a
+/// race with nobody in it: no slot a person flies, every craft flown by the AI. Fails on a build
+/// that never launches one, or whose race still seats a person.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_idle_main_menu_launches_a_demo_with_nobody_in_it() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "demo-idle",
+        &format!(
+            "boot; ticks {before}; expect stage=menu; expect page=main; ticks 20; \
+             until stage=race within 3000; expect demo=running; expect humans=0; expect hud=off; \
+             expect race.mode=single_race; ticks 300",
+            before = PULSE_IDLE_TICKS - 10,
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let stages: Vec<&str> = run
+        .states
+        .iter()
+        .filter_map(|state| text(state, &["stage"]))
+        .collect();
+    assert!(
+        stages.windows(2).any(|pair| pair == ["loading", "race"]),
+        "the demo went through the loading stage: {stages:?}"
+    );
+    let demo = demo_races(&run);
+    assert!(!demo.is_empty(), "no demo race was reported");
+    assert!(
+        demo.iter().all(|state| state["humans"] == 0),
+        "a demo seated a person"
+    );
+    // The race ran: its hash moved with every tick.
+    let hashes: std::collections::BTreeSet<_> = demo
+        .iter()
+        .filter_map(|state| text(state, &["hash"]))
+        .collect();
+    assert!(hashes.len() > 100, "the demo's race did not tick");
+}
+
+/// A press before the threshold starts the count again, so a menu touched every minute never
+/// launches one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_press_on_the_main_menu_restarts_the_idle_count() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive(
+        &image,
+        "demo-reset",
+        &format!(
+            "boot; ticks {first}; press down; ticks {second}; expect stage=menu; \
+             ticks {rest}; until stage=race within 3000; expect demo=running",
+            first = PULSE_IDLE_TICKS - 600,
+            second = PULSE_IDLE_TICKS - 100,
+            rest = 200,
+        ),
+        None,
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+}
+
+/// Any input in a demo returns to the main menu, and is not also read by it: a pad button (START
+/// would pause a race), a key no button is bound to, the mouse moving and a click. Each is its own
+/// run, since the first ends the demo.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn any_input_in_a_demo_returns_to_the_main_menu() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    for (tag, input) in [
+        ("pad", "press start"),
+        ("key", "key"),
+        ("mouse", "mouse 300 200"),
+        ("click", "click"),
+    ] {
+        let run = drive(
+            &image,
+            &format!("demo-exit-{tag}"),
+            &format!(
+                "boot; ticks {PULSE_IDLE_TICKS}; until stage=race within 3000; ticks 60; \
+                 expect demo=running; {input}; until stage=menu within 300; expect page=main; \
+                 ticks 30; expect page=main"
+            ),
+            None,
+        );
+        assert!(
+            run.output.status.success(),
+            "{tag}: {}",
+            run.why_not_success()
+        );
+        let last = run.last();
+        assert_eq!(text(last, &["stage"]), Some("menu"), "{tag}");
+        assert_eq!(
+            text(last, &["page"]),
+            Some("main"),
+            "{tag}: back on the main menu, not paused"
+        );
+        assert_eq!(text(last, &["demo"]), None, "{tag}");
+    }
+}
+
+/// `--demo` skips the front end, starts in a demo and goes on to the next when one ends, never
+/// touching the menus in between: the run is a chain of races on different circuits, through the
+/// loading stage each time. Any input then hands it back to the main menu.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_demo_flag_chains_demos_until_somebody_takes_over() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let length = 120 * 60;
+    let run = drive_args(
+        &image,
+        "demo-flag",
+        &format!(
+            "until stage=race within 3000; expect demo=running; expect humans=0; expect hud=off; \
+             ticks {}; until demo=running within 3000; ticks 100; key; \
+             until stage=menu within 300; expect page=main",
+            length + 100
+        ),
+        None,
+        &[],
+        &["--demo"],
+    );
+    assert!(run.output.status.success(), "{}", run.why_not_success());
+    let mut stages: Vec<&str> = run
+        .states
+        .iter()
+        .filter_map(|state| text(state, &["stage"]))
+        .collect();
+    stages.dedup();
+    let first_menu = stages
+        .iter()
+        .position(|stage| *stage == "menu")
+        .expect("a menu at the end");
+    assert_eq!(
+        first_menu,
+        stages.len() - 1,
+        "no menu between the demos, only after the input: {stages:?}"
+    );
+    assert!(
+        stages
+            .windows(3)
+            .any(|three| three == ["race", "loading", "race"]),
+        "the first demo's end loaded the next: {stages:?}"
+    );
+    let tracks: std::collections::BTreeSet<_> = demo_races(&run)
+        .iter()
+        .filter_map(|state| text(state, &["race", "track"]))
+        .collect();
+    assert!(
+        tracks.len() >= 2,
+        "two demos on different circuits: {tracks:?}"
+    );
+}
+
+/// `--wallpaper`: input is ignored (a pad button, a key, the mouse, a click all leave the demo
+/// running), Escape quits, and the HUD is not drawn.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_wallpaper_ignores_input_and_quits_on_escape() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let run = drive_args(
+        &image,
+        "wallpaper",
+        "until stage=race within 3000; expect demo=running; ticks 100; \
+         key; click; mouse 5 5; press start; press cross; ticks 30; \
+         expect stage=race; expect demo=running; escape",
+        None,
+        &[],
+        &["--wallpaper"],
+    );
+    let stderr = run.stderr();
+    assert!(
+        stderr.contains("escape: the game quit"),
+        "Escape ended the run, which nothing else did:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("expect") && !stderr.contains("does not hold"),
+        "input left the wallpaper:\n{stderr}"
+    );
+    assert!(
+        run.states
+            .iter()
+            .all(|state| text(state, &["stage"]) != Some("menu")),
+        "the wallpaper reached the menu"
+    );
+}
+
+/// The same idle launch on HD (Pulse's 60 s, inherited), and on Omega, whose `DemoConfig.xml`
+/// authors 30 s: the demo is on screen well before a minute, not after. Fails when the authored
+/// timeout is not laid over the title's.
+#[test]
+#[ignore = "needs an HD disc image in data/images/ and data/extracted/ps4"]
+fn an_idle_main_menu_launches_a_demo_on_hd_and_at_omegas_authored_30_seconds() {
+    if let Some(image) = hd() {
+        let run = drive(
+            &image,
+            "demo-idle-hd",
+            &format!(
+                "boot; ticks {PULSE_IDLE_TICKS}; until stage=race within 3000; expect demo=running; \
+                 expect humans=0; expect hud=off; ticks 30"
+            ),
+            None,
+        );
+        assert!(run.output.status.success(), "hd: {}", run.why_not_success());
+    }
+    let omega = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4");
+    if omega.exists() {
+        let run = drive(
+            &omega,
+            "demo-idle-omega",
+            "boot; ticks 1780; expect stage=menu; ticks 20; until stage=race within 100; \
+             expect demo=running; expect humans=0; expect hud=off; ticks 30",
+            None,
+        );
+        assert!(
+            run.output.status.success(),
+            "omega: {}",
+            run.why_not_success()
+        );
+    }
+}

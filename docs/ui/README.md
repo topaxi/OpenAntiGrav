@@ -27,7 +27,8 @@ apart (including under Steam Input), are in
 [button-prompts.md](button-prompts.md).
 
 The player's name and tag, and when they are asked for, are in
-[player-name.md](player-name.md).
+[player-name.md](player-name.md). The attract demo an untouched main menu starts, and
+`--demo`/`--wallpaper`, are in [attract-demo.md](attract-demo.md).
 
 The languages this build adds on top of the disc's own, and the `human`
 flag on every string, are in [project-languages.md](project-languages.md).

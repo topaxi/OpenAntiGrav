@@ -211,6 +211,11 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::OnOff,
         oag_title::rumble::Triggers::Hd,
     ),
+    // `demo_definition.xml` authors the any-press exit and no timer: the durations are Pulse's. `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::inheriting(
+        "Pulse",
+        oag_title::pre_race::Sourced::measured(oag_title::demo::Exit::AnyInput),
+    ),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup

@@ -272,6 +272,7 @@ const TITLE: &Title = &Title {
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
     rumble: oag_title::rumble::Rumble::Absent,
+    demo: oag_title::demo::Demo::PULSE,
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.
