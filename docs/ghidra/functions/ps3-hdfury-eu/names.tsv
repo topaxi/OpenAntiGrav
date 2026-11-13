@@ -958,3 +958,13 @@
 0x0007be58	function	Collision_SweepSegment	80	own-craft-box.md
 0x000336b0	function	Collision_RaycastBox	72	own-craft-box.md
 0x0003a4c8	function	Collision_SetObbTransform	72	own-craft-box.md
+0x0001f430	function	Profile_RecordCampaignResult	82	cell-medal-award.md
+0x001e1028	function	PI_Cell_EvaluateMedalForValue	88	cell-medal-award.md
+0x001e25c0	function	PI_Cell_EvaluateSavedMedal	85	cell-medal-award.md
+0x001e1138	function	PI_Cell_GetSavedMedal	80	cell-medal-award.md
+0x001e1188	function	PI_Cell_GetSavedSkillLevel	80	cell-medal-award.md
+0x001e11e0	function	PI_Cell_GetSavedBestValue	62	cell-medal-award.md
+0x00015eb0	function	PI_Cell_WriteSave	85	cell-medal-award.md
+0x00013098	function	PI_Cell_ReadSave	75	cell-medal-award.md
+0x001e1590	function	PI_Cell_ParseElement	90	cell-medal-award.md
+0x009201d8	data	PI_Cell_ModeNameTable	95	cell-medal-award.md
