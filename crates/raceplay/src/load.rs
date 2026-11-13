@@ -1004,6 +1004,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mod_icons,
         &mut report,
     );
+    let demo_space = hud.space;
 
     // The countdown's own `<Mode3D><Model>` mesh - see `load::countdown`.
     #[cfg(feature = "view")]
@@ -1342,7 +1343,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
             &mut report,
         ),
         #[cfg(feature = "view")]
-        demo_overlay: intro::read_demo_screen(&mut archives, title, options, &mut report),
+        demo_overlay: intro::read_demo_screen(
+            &mut archives,
+            title,
+            options,
+            demo_space,
+            &mut report,
+        ),
         #[cfg(feature = "view")]
         track_stats,
         #[cfg(feature = "view")]

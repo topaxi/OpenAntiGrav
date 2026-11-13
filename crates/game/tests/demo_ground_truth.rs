@@ -19,8 +19,6 @@ const LENGTH: u32 = 700;
 struct Expect {
     /// The screen over the race reads: `Some(logo)` says whether its logo is on the disc.
     screen: Option<bool>,
-    /// The grid, where the title's is measured.
-    craft: Option<usize>,
     /// The spectator director is the camera, and cuts. Only where the circuits author its stations.
     spectator: bool,
 }
@@ -48,11 +46,11 @@ fn demos_on(image: &Path, demos: u32) -> Vec<chain::Report> {
 /// ran its length and ended `Over`, and the second is another circuit. Fails when the race still
 /// seats a person (`humans` is 1) or the camera craft is not flown (`flew` is one short).
 fn a_chain_of_demos_has_nobody_in_it(image: &Path, expect: Expect) {
-    let Expect {
-        screen,
-        craft,
-        spectator,
-    } = expect;
+    let Expect { screen, spectator } = expect;
+    let rules = oag_source::title::identify(&image.display().to_string())
+        .expect("a title")
+        .demo
+        .rules;
     let reports = demos_on(image, 2);
     assert_eq!(reports.len(), 2, "{reports:#?}");
     for report in &reports {
@@ -69,7 +67,7 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path, expect: Expect) {
                 .screen
                 .unwrap_or_else(|| panic!("no demo screen: {report:?}"));
             assert!(drawn.fills >= 2, "the two rules: {drawn:?}");
-            // Pure's file names a logo its disc does not hold: left out, nothing in its place.
+            // Pure's disc holds `demo_logo.mip` as an empty entry: nothing to draw, nothing in its place.
             assert_eq!(
                 drawn.sprites >= 1,
                 logo,
@@ -91,10 +89,8 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path, expect: Expect) {
             );
             assert!(report.cuts >= 2, "it takes over and cuts: {report:?}");
         }
-        // The race is set up as measured: Flash's eight craft, where the title's grid is measured.
-        if let Some(craft) = craft {
-            assert_eq!(report.craft, craft, "{report}");
-        }
+        // The field is the rules' (`Rules::craft`): fails when the data or the grid moves.
+        assert_eq!(report.craft, rules.craft.value as usize, "{report}");
     }
     assert_ne!(
         reports[0].track, reports[1].track,
@@ -110,7 +106,6 @@ fn pulse_demos_have_nobody_in_them() {
             &image,
             Expect {
                 screen: Some(true),
-                craft: Some(8),
                 spectator: true,
             },
         );
@@ -125,7 +120,6 @@ fn pure_demos_have_nobody_in_them() {
             &image,
             Expect {
                 screen: Some(false),
-                craft: None,
                 spectator: false,
             },
         );
@@ -140,7 +134,6 @@ fn hd_demos_have_nobody_in_them() {
             &image,
             Expect {
                 screen: None,
-                craft: None,
                 spectator: false,
             },
         );

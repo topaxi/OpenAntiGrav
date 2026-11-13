@@ -23,6 +23,9 @@ pub struct Assets {
     pub sheet: Sheet,
     /// The face its text draws in.
     pub font: oag_ui::font::Atlas,
+    /// The grid the file's coordinates are in: the source's, as the HUD's are (the PS2 pressing
+    /// authors 640x448).
+    pub space: oag_display::space::Space,
 }
 
 impl Assets {
@@ -37,13 +40,15 @@ impl Assets {
             }],
             backdrop_parent: None,
         };
-        Frontend::booting(
+        let mut frontend = Frontend::booting(
             sequence,
             self.screens.clone(),
             self.strings.clone(),
             Vec::new(),
             self.sheet.entries().to_vec(),
-        )
+        );
+        frontend.set_space(self.space);
+        frontend
     }
 
     /// The state the screen is in the file.
@@ -67,6 +72,7 @@ pub fn read(
     screen: &oag_title::demo::Screen,
     strings: oag_ui::language::StringTable,
     font: oag_ui::font::Atlas,
+    space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> Option<Assets> {
     let entry = screen.entry;
@@ -124,5 +130,6 @@ pub fn read(
         state: screen.state,
         sheet,
         font,
+        space,
     })
 }

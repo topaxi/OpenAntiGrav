@@ -13,8 +13,8 @@ difficulty: medium (45)
 
 ## Open
 
-- **HD, 2048 and Omega draw no `Demo InGame` screen.** Pulse's is wired and Pure inherits it (its
-  logo is not on Pure's disc, so it draws the rules and the text); HD authors the same state in
+- **HD, 2048 and Omega draw no `Demo InGame` screen.** Pulse's (PSP and PS2) is wired and Pure inherits it (its
+  `demo_logo.mip` is a 0-byte entry, so it draws the rules and the text); HD authors the same state in
   `demo_definition.xml` (`demo_logo_HD.gtf`, `BOOT_PRESS_ANY`, two lines animating in) on its
   1920x1080 grid, which `oag_raceplay::demo_overlay` does not read yet (its `Frontend` space and a
   `.gtf` through `Archives::read_texture`). 2048 and Omega take HD's.

@@ -35,7 +35,7 @@ impl Overlay {
         format: wgpu::TextureFormat,
         assets: &Assets,
     ) -> anyhow::Result<Self> {
-        let renderer = crate::render::Renderer::new(
+        let mut renderer = crate::render::Renderer::new(
             device,
             queue,
             format,
@@ -43,6 +43,7 @@ impl Overlay {
             assets.font.clone(),
             &assets.sheet,
         )?;
+        renderer.set_space(assets.space);
         Ok(Self {
             frontend: assets.frontend(),
             state: assets.state(),
