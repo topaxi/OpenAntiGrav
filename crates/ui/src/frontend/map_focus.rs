@@ -11,6 +11,8 @@
 //!   isotropic), the angle from the row axis picks a 130 degree cone per
 //!   direction and the nearest event inside it wins; none leaves the focus where
 //!   it is. Cones overlap by 40 degrees and there is no sideways penalty.
+//! - **Reach**: only an event that is open or passed can take focus (the pick
+//!   skips a button that is not in state 2, `Canvas_FindButtonInDirection`).
 //! - **Input**: the d-pad only (the left stick never reaches `Button`), polled
 //!   left, right, up, down, first to fire wins. A held direction fires again
 //!   after [`REPEAT_FIRST`] and then every [`REPEAT_EVERY`] (`Pad_UpdateState`'s
@@ -189,7 +191,11 @@ impl Frontend {
             events
                 .iter()
                 .enumerate()
-                .filter(|&(at, _)| at != self.campaign.selected && !self.campaign.hidden(at))
+                .filter(|&(at, _)| {
+                    at != self.campaign.selected
+                        && !self.campaign.hidden(at)
+                        && self.campaign.state_of(at) != ProgressState::Locked
+                })
                 .map(|(at, event)| (at, (event.x, event.y))),
             direction,
         );

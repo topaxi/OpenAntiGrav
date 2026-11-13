@@ -898,11 +898,13 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
     frontend.set_campaign(a_gated_event());
     let mut input = Input::new();
     reach_the_shell(&mut frontend, &mut input);
+    // The d-pad never lands on a locked event (`map_focus`), a pointer does.
     press(&mut frontend, &mut input, Button::Right);
     assert_eq!(
         frontend.selected_event().map(|e| e.name.as_str()),
-        Some("2048 - Event 2")
+        Some("2048 - Event 1")
     );
+    frontend.campaign.selected = 1;
     press(&mut frontend, &mut input, Button::Cross);
     assert!(
         !frontend.is_finished(),

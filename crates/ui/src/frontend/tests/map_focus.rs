@@ -213,3 +213,11 @@ fn the_focus_look_replaces_the_marker_for_the_pad_and_the_pointer_gets_it_back()
     frontend.campaign.focus.active = false;
     assert!(!frontend.campaign.focus.active);
 }
+
+#[test]
+fn a_locked_event_never_takes_focus() {
+    let (mut frontend, mut input) = on_the_map(&[("here", 60.0, 30.0), ("shut", 64.0, 30.0)]);
+    frontend.campaign.events[1].requires = Some("never passed".to_string());
+    tap(&mut frontend, &mut input, Button::Right);
+    assert_eq!(selected(&frontend), "here");
+}
