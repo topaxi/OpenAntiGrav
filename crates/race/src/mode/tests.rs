@@ -277,3 +277,34 @@ fn head2head_shares_single_races_per_class_lap_count() {
         );
     }
 }
+
+/// Detonator's stage opens at `1`, steps once per completed lap and holds at `15`, the stage
+/// its race ends on (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`).
+#[test]
+fn detonator_steps_one_stage_per_lap_and_holds_at_fifteen() {
+    assert_eq!(Mode::detonator_stage(0), 1);
+    assert_eq!(Mode::detonator_stage(1), 2);
+    assert_eq!(Mode::detonator_stage(14), 15);
+    assert_eq!(Mode::detonator_stage(20), 15);
+}
+
+/// Fourteen laps on every class: the race is over when the stage counter reaches fifteen.
+#[test]
+fn detonator_ends_after_fourteen_laps_on_every_class() {
+    for class in SpeedClass::ALL {
+        assert_eq!(Mode::Detonator.laps_target(class), Some(14), "{class}");
+        assert_eq!(
+            Mode::detonator_stage(Mode::Detonator.laps_target(class).unwrap()),
+            Mode::DETONATOR_END_STAGE
+        );
+    }
+}
+
+/// One craft alone: no opponents, no weapons pads, one person.
+#[test]
+fn detonator_is_single_player_without_a_grid() {
+    assert_eq!(Mode::Detonator.opponent_count(), 0);
+    assert!(!Mode::Detonator.weapons_enabled());
+    assert_eq!(Mode::Detonator.max_people(), Some(1));
+    assert_eq!(Mode::from_name("detonator"), Some(Mode::Detonator));
+}
