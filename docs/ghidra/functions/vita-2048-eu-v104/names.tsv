@@ -379,3 +379,7 @@
 0x81070670	function	CanvasLabel_Paint	85	campaign-map-projection.md
 0x813c5ca0	function	CanvasLabel_BuildCellList	80	campaign-map-projection.md
 0x810d056c	function	EndRaceSummary_UpdateXpBlock	80	endrace-summary.md
+0x8118b8a0	function	Collision_SweepSegment	82	own-craft-box.md
+0x8118b818	function	Collision_RaycastMeshes	78	own-craft-box.md
+0x8118b6a8	function	Collision_RaycastMeshShape	75	own-craft-box.md
+0x81187abe	function	Collision_Construct	80	own-craft-box.md

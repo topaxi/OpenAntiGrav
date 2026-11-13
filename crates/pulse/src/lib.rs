@@ -143,7 +143,9 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(true),
         // Measured on PPSSPP: 2,302 probes of 56 captures, 0 mispredicted (`rocket-visuals.md`).
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(true),
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Falls,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
         ),

@@ -211,7 +211,6 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             "pads_stamp_in_eliminator",
             "launch_normal_is_track_up",
             "floor_arms_steer_to_ride_point",
-            "own_craft_box_hides_track",
         ):
             sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
             if sourced is None:
@@ -219,6 +218,14 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             word = {"measured": "measured", "chosen": "chosen", "inherited": "inherited"}[sourced.group(1)]
             value = "set" if sourced.group(2) == "true" else "none"
             cells.setdefault(f"weapons.{field}", {})[title] = (value, word)
+
+        # `Sourced::measured(OwnCraftBox::Holds)`: the variant is the value.
+        own_box = re.search(
+            r"Sourced::(\w+)\(\s*[\w:]*OwnCraftBox::(\w+)", weapons["own_craft_box_hides_track"]
+        )
+        if own_box is None:
+            raise SystemExit(f"check-weapon-lineage: {title}: `own_craft_box_hides_track` is not a `Sourced` OwnCraftBox")
+        cells.setdefault("weapons.own_craft_box_hides_track", {})[title] = (own_box.group(2), own_box.group(1))
 
         # `Sourced::measured(OpponentFire::HD)`: the const is the value.
         fire = re.search(r"Sourced::(\w+)\(\s*[\w:]*OpponentFire::(\w+)", weapons["opponent_fire"])

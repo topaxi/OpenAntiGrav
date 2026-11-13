@@ -309,3 +309,8 @@
 0x0885df98	function	Plasma_Init	85	plasma.md
 0x0885e1f4	function	Plasma_Launch	80	plasma.md
 0x088b43d4	function	Definition_IsUnlocked	90	campaign.md
+0x08824a9c	function	Collision_RaycastWorld	84	own-craft-box.md
+0x08825aa4	function	Collision_RaycastBox	84	own-craft-box.md
+0x0885e348	function	Plasma_Update	84	own-craft-box.md
+0x08822e28	function	Collision_AddBoxCollider	82	own-craft-box.md
+0x08827038	function	Collider_SetBoxDimensions	84	own-craft-box.md

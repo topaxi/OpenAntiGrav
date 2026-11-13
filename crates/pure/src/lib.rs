@@ -146,8 +146,10 @@ pub const TITLE: &Title = &Title {
             true,
             "Wipeout Pulse",
         ),
-        // Pure shares Pulse's engine and would inherit the law; its wiring is not measured here.
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(false),
+        // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Holds,
+        ),
         // Measured: Pure's decision code equals Pulse's law (`psp-pure-usa/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OpponentFire::PULSE,
