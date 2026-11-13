@@ -405,12 +405,13 @@ fn scratch_mod(name: &str, campaign: &str, broken: bool) -> oag_mod::Mod {
     let source = examples().join("example-campaign");
     let dir = std::env::temp_dir().join(format!("oag-custom-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    for sub in ["campaigns", "pilots", "tracks"] {
+    for sub in ["campaigns", "pilots", "tracks", "ui"] {
         std::fs::create_dir_all(dir.join(sub)).unwrap();
     }
     for file in [
         "oag-mod.toml",
         "pilots/rival.toml",
+        "ui/medals.png",
         "tracks/practice-octagon.track.toml",
         "tracks/practice-octagon.glb",
     ] {
@@ -449,6 +450,14 @@ fn a_track_file_in_a_zipped_mod_is_refused_by_name() {
             read("example-campaign/oag-mod.toml").as_bytes(),
         ),
         ("campaigns/night-run.toml", example_text().as_bytes()),
+        (
+            "ui/medals.png",
+            Box::leak(
+                std::fs::read(examples().join("example-campaign/ui/medals.png"))
+                    .unwrap()
+                    .into_boxed_slice(),
+            ),
+        ),
     ]));
     let module = oag_mod::Mod::from_container(oag_mod::Container::memory("test", files)).unwrap();
     let installed = Installed::for_title([&module, &hillside()], &[], oag_pulse::TITLE, &|_| true);
