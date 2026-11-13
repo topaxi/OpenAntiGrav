@@ -96,7 +96,12 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc8f18561` | `carbonfibre` | 11 |
 /// | `0x0617f872` | `nitro_body_new` | 13 |
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
-const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
+const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, NITRO_NORMAL, 0xc78c_9866];
+
+/// The sampler a `nitro_body_new` / `nitro_perspex_new` program declares at
+/// unit 1 and unpacks as a tangent-space normal. Its model lists the ship's
+/// diffuse before it, so the entry that unit names is not entry 1.
+pub(super) const NITRO_NORMAL: u32 = 0x0617_f872;
 
 /// The same shape on circuit scenery, keyed by **material family and
 /// sampler hash together**, because on a circuit the hash alone is not
