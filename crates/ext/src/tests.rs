@@ -722,7 +722,10 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
         reply.fire_effect(&craft, oag_ext_abi::Effect::HitSpark),
         Err(Refused::Effects)
     );
-    assert_eq!(reply.fire_mod_effect(&craft, "spark"), Err(Refused::Effects));
+    assert_eq!(
+        reply.fire_mod_effect(&craft, "spark"),
+        Err(Refused::Effects)
+    );
 }
 
 /// The motion commands refuse what the host would fault on: a craft not racing or

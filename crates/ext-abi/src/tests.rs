@@ -193,7 +193,8 @@ fn every_command() -> [Command; 38] {
                 side: WarningSide::Forward,
                 icon: ModName::new("portal").unwrap(),
             },
-        },        Command::StopModEffect {
+        },
+        Command::StopModEffect {
             slot: slot(3),
             effect: ModName::new("portal_hd").unwrap(),
         },

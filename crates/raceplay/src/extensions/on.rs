@@ -214,8 +214,6 @@ pub(super) struct On {
     /// The `set-shader-param`s in force: a scalar holds until it is sent again, until the
     /// fill through its shader stops, or until its module faults. An output, never hashed.
     pub(super) shader_params: Vec<ShaderParam>,
-    /// The shader (module, place) each slot's fill went through last tick.
-    filled: [Option<(usize, u16)>; oag_gameplay::MAX_SHIPS],
     /// Each slot's `portal-view` this tick (the later module wins): an output, never hashed.
     pub(super) portal_views: [Option<super::PortalRequest>; oag_gameplay::MAX_SHIPS],
     /// Events dropped past a cap, counted for the report: an output, never hashed.
@@ -249,6 +247,8 @@ pub(super) struct ShaderParam {
     pub(super) shader: u16,
     pub(super) index: u8,
     pub(super) value: f32,
+    /// Last tick's fill for the scalar's slot went through its shader.
+    filled: bool,
 }
 
 impl On {
@@ -475,7 +475,6 @@ impl On {
             beams: Vec::new(),
             portal_views: [None; oag_gameplay::MAX_SHIPS],
             shader_params: Vec::new(),
-            filled: [None; oag_gameplay::MAX_SHIPS],
             sound_loops: Vec::new(),
             fill: [None; oag_gameplay::MAX_SHIPS],
             fov: [0.0; oag_gameplay::MAX_SHIPS],
@@ -1132,7 +1131,10 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     // This tick's alone: a tick that draws nothing (a replayed one, a server's) drops
     // them rather than piling them up.
     on.effects.clear();
-    on.filled = on.fill.map(|fill| fill.and_then(|(_, shader)| shader));
+    for held in &mut on.shader_params {
+        held.filled =
+            on.fill[held.slot].and_then(|(_, shader)| shader) == Some((held.module, held.shader));
+    }
     on.fill = [None; oag_gameplay::MAX_SHIPS];
     on.beams.clear();
     on.portal_views = [None; oag_gameplay::MAX_SHIPS];
@@ -1236,14 +1238,10 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         }
     }
     let on = &mut sim.extensions.on;
-    for slot in 0..oag_gameplay::MAX_SHIPS {
-        if let Some((module, shader)) = on.filled[slot]
-            && on.fill[slot].and_then(|(_, now)| now) != Some((module, shader))
-        {
-            on.shader_params
-                .retain(|held| (held.module, held.slot, held.shader) != (module, slot, shader));
-        }
-    }
+    let fill = on.fill;
+    on.shader_params.retain(|held| {
+        !held.filled || fill[held.slot].and_then(|(_, now)| now) == Some((held.module, held.shader))
+    });
 }
 
 /// The look a `raise-warning` of module `mod_id` draws: the title's icon, or the mod's own art
@@ -1414,6 +1412,7 @@ fn apply(sim: &mut RaceSim, index: usize, command: Command) {
                     shader,
                     index: scalar,
                     value,
+                    filled: false,
                 };
                 let same = |held: &&mut ShaderParam| {
                     (held.module, held.slot, held.shader, held.index)

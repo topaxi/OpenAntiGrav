@@ -500,7 +500,7 @@ pub fn prepare(
                     drives_ai.push(source.drives_ai_pickup);
                     publishes.push(channel::publishes(&source.channels));
                     options.push(source.options);
-                    names.push(on::Names::of(&source));
+                    names.push(on::Names::of(source));
                 }
                 Err(e) => push(report, format!("{label} left out: {e}")),
             }
