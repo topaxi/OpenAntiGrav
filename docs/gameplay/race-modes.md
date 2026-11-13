@@ -1469,6 +1469,9 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   sphere Zone uses, stepping on the lap. 2048 reads the circuit's own table and falls back to
   HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
   as its Zone grade is not.
+- **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
+  HD flies the Zone handling file, the Zone hover rig with no brakes, and the Zone grid hover
+  (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
 - **Not here, each named on the evidence page**: the mines and bombs (placed per stage by
