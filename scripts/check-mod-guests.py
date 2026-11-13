@@ -41,14 +41,16 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGET = "wasm32-unknown-unknown"
 
 
-# A guest is built the way its build.sh builds it, with no flags from the caller's shell. RUSTFLAGS
-# feeds the crate hash, so CI's job-wide `-D warnings` changed every module's bytes (and turned the
-# guests' test-only dead code into errors) while the same check passed locally.
+# A guest is built the same way everywhere, whatever the caller's shell or cargo config says.
+# RUSTFLAGS feeds the crate hash, so CI's job-wide `-D warnings` changed every module's bytes (and
+# turned the guests' test-only dead code into errors); incremental compilation changes the code
+# itself (tether: 5931 bytes off, 6410 on), and a local `[profile.release] incremental = true` or a
+# compiler cache that turns it off decided which one a checkout built.
 GUEST_ENV = {
     key: value
     for key, value in os.environ.items()
     if key not in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")
-}
+} | {"CARGO_INCREMENTAL": "0"}
 
 
 def run(guest: Path, *args: str) -> subprocess.CompletedProcess:

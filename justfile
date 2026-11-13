@@ -1382,6 +1382,7 @@ rebuild-guests:
     #!/usr/bin/env bash
     set -euo pipefail
     unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+    export CARGO_INCREMENTAL=0
     for build in assets/mods/*/*/guest/build.sh; do
         echo "== $build"
         bash "$build"
