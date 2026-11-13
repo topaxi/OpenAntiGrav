@@ -1167,7 +1167,7 @@ impl Scene {
         // What the pass draws, in its order. The sky draws inside the track, between the
         // circuit's solid and blended lists - see `Recorder::draw_track` for why there.
         oag_gpu::perfprobe::mark("t-pre-drawlist");
-        let mut draws = DrawList(Vec::with_capacity(64));
+        let mut draws = DrawList(Vec::with_capacity_in(64, &self.draw_arena));
         draws.push(Draw::Track);
         // After the track, so a pad sitting flush on the surface wins the depth
         // test rather than z-fighting whatever it was authored on top of.
