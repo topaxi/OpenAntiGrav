@@ -18,7 +18,7 @@
 
 use super::*;
 use crate::screen::Redirect;
-use oag_2048::frontend::states as w2048;
+pub(super) use oag_2048::frontend::states as w2048;
 
 /// Every 2048 screen this build can enter and leave - the list `can_drive`
 /// and `Frontend::booting` both read. See `can_drive`'s own doc for what

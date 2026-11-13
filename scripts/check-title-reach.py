@@ -64,7 +64,6 @@ BASELINE: dict[str, int] = {
     "crates/game/src/boot/campaign2048.rs": 24,
     "crates/game/src/boot/fury.rs": 1,
     "crates/game/src/boot/movies.rs": 1,
-    "crates/game/src/boot/sprites.rs": 1,
     "crates/game/src/campaign.rs": 28,
     "crates/game/src/capture/campaign_page.rs": 3,
     "crates/game/src/capture/card.rs": 1,

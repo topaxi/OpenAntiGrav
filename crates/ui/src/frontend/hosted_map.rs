@@ -7,8 +7,8 @@
 //! implementation both titles run; what differs is the data (which screen
 //! carries the canvas labels) and that leaving the map is the host's business.
 
+use super::wipeout2048::w2048;
 use super::*;
-use oag_2048::frontend::states as w2048;
 
 /// A map that a host menu opened and takes back.
 #[derive(Debug, Clone)]
