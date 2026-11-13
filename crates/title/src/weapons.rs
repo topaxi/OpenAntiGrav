@@ -104,6 +104,12 @@ pub struct Weapons {
     /// `Plasma_Update` is its own function with a ride height of 4.0
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
+    /// Whether the firing craft's own box collider hides the track from a projectile's surface
+    /// probe, so the first probes of a shot miss until clear of the hull. Pulse measured it
+    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The own-craft box is a rotated
+    /// frame"); Pure inherits it but its engine is not wired for it yet. Where `false`, a Plasma
+    /// does not probe for a short chosen window after its release instead.
+    pub own_craft_box_hides_track: crate::pre_race::Sourced<bool>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,

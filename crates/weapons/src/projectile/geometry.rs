@@ -147,3 +147,128 @@ pub(super) fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> O
 
 #[cfg(test)]
 mod tests;
+
+/// How a flyer's first surface probes treat the firing craft.
+///
+/// `Collision_RaycastWorld` sees every craft's box collider, the firer's included, so the
+/// original's probes miss on their own craft until they are clear of its box
+/// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The own-craft box is a rotated
+/// frame"). A title that has not measured that keeps a plain age window for the Plasma and
+/// lets every other flyer probe from the first update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OwnCraftProbe {
+    /// The firing craft's box blocks a probe that crosses it before the mesh does, seen through
+    /// the transposed rotation ([`own_box_blocks`]).
+    CraftBox,
+    /// No box: a Plasma does not probe for this many seconds after its release (chosen).
+    PlasmaWindow(f32),
+}
+
+/// Whether the firing craft's box collider hides the track from a probe.
+///
+/// `Collision_RaycastBox` (`0x08817b1c`) first runs a separating-axis test of the segment
+/// against the half dimensions, in a frame built from the collider's rotation rows by
+/// `vtfm4.q`, which is `R^T * (p - centre)`, the transpose of the frame that would put a point in
+/// the box's own axes; only a segment that passes crosses the box's faces, in world space. So the
+/// reach ahead of a craft is 4.875 aligned to the world axes and 2.06 at 45 degrees of yaw
+/// (`rocket-visuals.md`, confidence 90: 2,302 recorded probes replayed, 0 mispredicted).
+///
+/// `start` to `end` is the probe segment; `mesh_distance` is how far along it the track mesh was
+/// met, if it was. The box blocks only when its nearest face is strictly nearer.
+///
+/// The box is centred on the body with the original's rows, `(-right, up, forward)`
+/// (row 0 measured as the ship's left, `oag_trace::replay::Basis`), and half dimensions of
+/// `(width, height, length) * 0.75 * 0.5` (`TARGET_GLOBAL_SCALE`).
+#[must_use]
+pub fn own_box_blocks(
+    body: &oag_physics::Body,
+    dimensions: &Dimensions,
+    start: Vec3,
+    end: Vec3,
+    mesh_distance: Option<f32>,
+) -> bool {
+    let scale = oag_physics::hover::TARGET_GLOBAL_SCALE * 0.5;
+    let extent = [
+        dimensions.width * scale,
+        dimensions.height * scale,
+        dimensions.length * scale,
+    ];
+    let rows = [-body.right(), body.up(), body.forward()];
+    let centre = body.position;
+    // The gate's frame: the columns of the row matrix.
+    let columns = [
+        Vec3::new(rows[0].x, rows[1].x, rows[2].x),
+        Vec3::new(rows[0].y, rows[1].y, rows[2].y),
+        Vec3::new(rows[0].z, rows[1].z, rows[2].z),
+    ];
+    let local = |point: Vec3| {
+        let offset = point - centre;
+        [
+            columns[0].dot(offset),
+            columns[1].dot(offset),
+            columns[2].dot(offset),
+        ]
+    };
+    if !separating_axis_passes(local(start), local(end), extent) {
+        return false;
+    }
+    let Some(t) = face_crossing(&rows, centre, extent, start, end) else {
+        return false;
+    };
+    let length = (end - start).length();
+    mesh_distance.is_none_or(|mesh| t * length < mesh)
+}
+
+/// The segment's midpoint and half direction against the half dimensions, the three axis
+/// tests and the three cross products, as `Collision_RaycastBox` runs them.
+fn separating_axis_passes(start: [f32; 3], end: [f32; 3], extent: [f32; 3]) -> bool {
+    let mid: [f32; 3] = std::array::from_fn(|i| (start[i] + end[i]) * 0.5);
+    let half: [f32; 3] = std::array::from_fn(|i| mid[i] - start[i]);
+    let a: [f32; 3] = std::array::from_fn(|i| half[i].abs());
+    if (0..3).any(|i| mid[i].abs() > a[i] + extent[i]) {
+        return false;
+    }
+    (mid[1] * half[2] - mid[2] * half[1]).abs() <= a[2] * extent[1] + a[1] * extent[2]
+        && (mid[0] * half[2] - mid[2] * half[0]).abs() <= a[2] * extent[0] + a[0] * extent[2]
+        && (mid[0] * half[1] - mid[1] * half[0]).abs() <= a[1] * extent[0] + a[0] * extent[1]
+}
+
+/// The smallest `t` in `(0, 1]` at which the segment crosses a face of the true oriented box.
+fn face_crossing(
+    rows: &[Vec3; 3],
+    centre: Vec3,
+    extent: [f32; 3],
+    start: Vec3,
+    end: Vec3,
+) -> Option<f32> {
+    let direction = end - start;
+    let offset = start - centre;
+    let local_start = [
+        rows[0].dot(offset),
+        rows[1].dot(offset),
+        rows[2].dot(offset),
+    ];
+    let local_dir = [
+        rows[0].dot(direction),
+        rows[1].dot(direction),
+        rows[2].dot(direction),
+    ];
+    let mut nearest: Option<f32> = None;
+    for axis in 0..3 {
+        if local_dir[axis].abs() < 1e-9 {
+            continue;
+        }
+        for sign in [-1.0_f32, 1.0] {
+            let t = (sign * extent[axis] - local_start[axis]) / local_dir[axis];
+            if t > 0.0 && t <= 1.0 {
+                let inside = (0..3)
+                    .filter(|&j| j != axis)
+                    .all(|j| (local_start[j] + local_dir[j] * t).abs() <= extent[j] + 1e-4);
+                if inside && nearest.is_none_or(|best| t < best) {
+                    nearest = Some(t);
+                }
+            }
+        }
+    }
+    nearest
+}

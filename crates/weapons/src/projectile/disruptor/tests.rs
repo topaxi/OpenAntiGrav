@@ -93,6 +93,7 @@ fn tick(
         TriggerRadii::default(),
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
+        crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
     )[0]
 }
 
