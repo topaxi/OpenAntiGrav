@@ -259,7 +259,7 @@ impl TournamentResults {
         self.elapsed += seconds;
         if self.elapsed > 3.0 {
             self.elapsed = 0.0;
-            self.showing_standings = !self.showing_standings;
+            self.showing_standings.toggle();
         }
     }
 

@@ -111,6 +111,6 @@ fn glb_path_beside(manifest: &Path) -> PathBuf {
     let stem = manifest
         .file_name()
         .and_then(|n| n.to_str())
-        .map_or("track", |n| n.strip_suffix(".track.toml").unwrap_or(n));
+        .map_or("track", |n| n.trim_suffix(".track.toml"));
     manifest.with_file_name(format!("{stem}.glb"))
 }

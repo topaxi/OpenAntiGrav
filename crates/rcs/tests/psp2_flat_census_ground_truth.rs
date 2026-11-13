@@ -434,7 +434,7 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             let material = s
                 .material
                 .and_then(|m| model.materials[m].name.rsplit('/').next())
-                .map(|n| n.strip_suffix(".rcsmaterial").unwrap_or(n))
+                .map(|n| n.trim_suffix(".rcsmaterial"))
                 .filter(|n| n.starts_with("tarmac_"));
             if let Some(material) = material {
                 out.uv_dirt_tarmac += 1;
@@ -480,7 +480,7 @@ fn sweep(rel: &str, ps4: bool) -> Option<BTreeMap<String, Census>> {
             .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
         let c = census_of(&blob, ps4);
         let dir = entry.rsplit_once('/').map_or("", |(d, _)| d);
-        let dir = dir.strip_prefix("data/art/published/").unwrap_or(dir);
+        let dir = dir.trim_prefix("data/art/published/");
         let zone = entry.to_ascii_lowercase().ends_with("trackzone.rcsmodel");
         let key = if zone {
             format!("{dir} [zone]")

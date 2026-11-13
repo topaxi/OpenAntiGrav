@@ -41,7 +41,7 @@ use oag_title::Title;
 fn norm(path: &str) -> String {
     let lower = path.to_lowercase().replace('\\', "/");
     let trimmed = lower.trim_start_matches('/');
-    trimmed.strip_prefix("data/").unwrap_or(trimmed).to_string()
+    trimmed.trim_prefix("data/").to_string()
 }
 
 struct Census {

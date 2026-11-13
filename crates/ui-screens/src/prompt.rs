@@ -733,7 +733,7 @@ impl Confirm {
             (Button::Down, Dir::Down),
         ] {
             if input.take(button) {
-                self.yes = !self.yes;
+                self.yes.toggle();
                 self.navs.push(match dir {
                     Dir::Left | Dir::Right => Nav::Stepped(Some(dir)),
                     Dir::Up | Dir::Down => Nav::Moved(Some(dir)),

@@ -61,7 +61,7 @@ pub struct Stage {
 /// The zone index and stage name a key's leading segment names, or `None` for a
 /// key with no stage prefix (`"Sky Radius"`, a plain group like `"Lighting"`).
 fn parse_stage_head(head: &str) -> Option<(u32, &str)> {
-    let head = head.strip_prefix("Zone ").unwrap_or(head);
+    let head = head.trim_prefix("Zone ");
     let (number, name) = head.split_once(' ')?;
     let index: u32 = number.parse().ok()?;
     Some((index, name))

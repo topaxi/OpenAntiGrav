@@ -597,7 +597,7 @@ pub fn build_billboard(
 /// node under it, `Airbrake_LeftShape`, is the same mesh).
 fn flap_side(path: &str) -> Option<usize> {
     let leaf = path.rsplit(['|', '/']).next().unwrap_or(path);
-    let leaf = leaf.strip_suffix("Shape").unwrap_or(leaf);
+    let leaf = leaf.trim_suffix("Shape");
     if leaf.eq_ignore_ascii_case("Airbrake_Left") {
         Some(0)
     } else if leaf.eq_ignore_ascii_case("Airbrake_Right") {

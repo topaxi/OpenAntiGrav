@@ -169,7 +169,7 @@ pub fn card_shifts(card: &Card) -> Vec<((i32, i32), [f32; 2])> {
             }
             offset += PAIR_STEP;
         }
-        pair_first = !pair_first;
+        pair_first.toggle();
     }
     out
 }

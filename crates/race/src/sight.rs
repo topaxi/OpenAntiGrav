@@ -618,7 +618,7 @@ impl Sight {
         self.blink_timer -= dt;
         while self.blink_timer < 0.0 {
             self.blink_timer += BLINK_PERIOD;
-            self.blink = !self.blink;
+            self.blink.toggle();
         }
 
         // The extrapolated point is what decides "on screen"; the raw one is

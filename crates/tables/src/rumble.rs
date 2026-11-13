@@ -195,7 +195,7 @@ impl std::error::Error for Error {}
 /// An [`Error`] naming what is missing or not understood.
 pub fn parse(data: &[u8]) -> Result<Pattern, Error> {
     let text = std::str::from_utf8(data).map_err(|_| Error::NotText)?;
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let text = text.trim_prefix('\u{feff}');
     let root = text.find("<RumbleApp").ok_or(Error::NoRoot)?;
     let body = &text[root..];
     let start = body.find("<RumbleData").ok_or(Error::NoData)?;

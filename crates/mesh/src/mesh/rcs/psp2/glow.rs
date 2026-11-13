@@ -190,7 +190,7 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
 /// [`vertex_scroll::inherited_rate`] for what makes it inherited.
 fn inherited_scroll(material: &Material, textures: Textures<'_>) -> Option<([f32; 2], bool)> {
     let stem = material.name.rsplit(['/', '\\']).next()?;
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     let own = material
         .samplers
         .iter()

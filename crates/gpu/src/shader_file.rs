@@ -18,7 +18,7 @@ pub fn split_header(source: &str) -> (String, &str) {
     for line in source.split_inclusive('\n') {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("//!") {
-            header.push_str(rest.strip_prefix(' ').unwrap_or(rest));
+            header.push_str(rest.trim_prefix(' '));
             if !rest.ends_with('\n') {
                 header.push('\n');
             }

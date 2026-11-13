@@ -76,7 +76,7 @@ impl Plan {
 /// The two pictures' paths, when `material` is one of the two `markings` families.
 fn paths(material: &Material) -> Option<[&str; 2]> {
     let stem = material.name.rsplit(['/', '\\']).next()?;
-    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let stem = stem.trim_suffix(".rcsmaterial");
     if !stem.eq_ignore_ascii_case("tarmac_markings_dirt_markingsnormal")
         && !stem.eq_ignore_ascii_case("tarmac_markings_dirt_markingsnormal_emis")
     {

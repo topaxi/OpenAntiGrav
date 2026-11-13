@@ -84,7 +84,7 @@ impl DiscKey {
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         if let Ok(text) = std::str::from_utf8(bytes) {
             let text = text.trim();
-            let text = text.strip_prefix("0x").unwrap_or(text);
+            let text = text.trim_prefix("0x");
             let digits: Vec<u8> = text
                 .bytes()
                 .filter(|b| !matches!(b, b' ' | b'-' | b':' | b'\t'))

@@ -70,12 +70,7 @@ pub fn signed_samplers(file: &[u8]) -> SignedSamplers {
                     .iter()
                     .find(|r| r.size == 0 && r.slot == u32::from(slot))
             })
-            .map(|r| {
-                r.name
-                    .strip_suffix("Texture")
-                    .unwrap_or(&r.name)
-                    .to_string()
-            })
+            .map(|r| r.name.trim_suffix("Texture").to_string())
             .filter(|n| n != SHADOW_MAP)
             .collect();
         if names.is_empty() {

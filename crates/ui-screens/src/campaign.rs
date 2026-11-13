@@ -1048,7 +1048,7 @@ impl CellSelection {
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
         if input.take(Button::Triangle) {
-            self.help_open = !self.help_open;
+            self.help_open.toggle();
             out.push(Event::Help);
             return out;
         }

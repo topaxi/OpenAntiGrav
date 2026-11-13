@@ -182,7 +182,7 @@ fn words(statement: &str) -> Result<Vec<String>, String> {
     for c in statement.chars() {
         match c {
             '"' => {
-                quoted = !quoted;
+                quoted.toggle();
                 started = true;
             }
             c if c.is_whitespace() && !quoted => {

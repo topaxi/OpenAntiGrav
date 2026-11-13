@@ -285,7 +285,7 @@ impl Photo {
 
     /// Shows or hides the effects panel, showing the help it sits in.
     pub fn toggle_panel(&mut self) {
-        self.panel = !self.panel;
+        self.panel.toggle();
         if self.panel {
             self.help = true;
         }
@@ -416,7 +416,7 @@ impl Photo {
 
     /// Turns the HUD in the picture on or off.
     pub fn toggle_hud(&mut self) {
-        self.hud = !self.hud;
+        self.hud.toggle();
     }
 
     /// Puts the orbit, the tilt, the pan and both fields back to where entering left them.
