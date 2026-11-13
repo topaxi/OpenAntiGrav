@@ -636,3 +636,35 @@ fn the_player_place_on_a_kill_race_ranks_on_kills() {
     race.sim.world.ships[0].standing.kills = 3;
     assert_eq!(race.eliminator_place(), 1);
 }
+
+/// An opponent reaching the target ends the player's race too (the finished flag is set on
+/// every person, as the original sets it on every craft), so a player beaten to it still has a
+/// place to read: second, not an unfinished race that records nothing.
+#[test]
+fn a_player_beaten_to_the_score_target_finishes_second() {
+    let mut race = scored(200);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[0].standing.score = 120.0;
+    race.sim.world.ships[1].standing.score = 201.0;
+    assert!(!race.finished());
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.finished(),
+        "the leader's target ends the player's race"
+    );
+    assert_eq!(race.eliminator_place(), 2);
+}
+
+/// The same on a kill race, Omega's path.
+#[test]
+fn a_player_beaten_to_the_kill_target_finishes_second() {
+    let mut race = eliminator();
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ship_count = 2;
+    race.sim.eliminator_kill_target = 5;
+    race.sim.world.ships[0].standing.kills = 2;
+    race.sim.world.ships[1].standing.kills = 5;
+    race.tick(&PlayerInputs::none());
+    assert!(race.finished());
+    assert_eq!(race.eliminator_place(), 2);
+}

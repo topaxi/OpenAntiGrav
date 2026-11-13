@@ -58,6 +58,14 @@ manager and the campaign authors it as `mode="NitroBattle"` (`AICount="7"`, `lap
 `scripts/ps3-dform-scan.py` over the update's real extent) to find what steps a viewport's
 stage and what the elimination targets count. 2048 and Omega checked against it per CLAUDE.md.
 
+**The medal side is read, the wiring waits for the race.** A `NitroBattle` cell's medal is its
+race position against the rung's `1`/`2`/`3` (`<=`, unflipped; confidence 70,
+`docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`), and `Cell::evaluate_medal_for_difficulty`
+already reads it that way for a title whose `counting_modes` omits the mode. Not wired:
+`oag_game::campaign::race_mode_for_cell` refuses the mode, and `RaceStage::campaign_tier` has no
+value arm for `Other("NitroBattle")`, so the day it launches that arm needs the race-position
+value (the original passes `param_1[0xb22]` there, a `u16` off the race record, not read).
+
 ## 2048 Combat is unread
 
 `GameMode_GetKindLabel` (`0x812b021a`) shows `FE_GAMEMODE_ELIM` as `COMBAT`, so 2048's Combat
