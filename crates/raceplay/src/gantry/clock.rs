@@ -222,7 +222,7 @@ impl Clock {
     /// release: frame 0 on tick `release - assembly_ticks`, then free-running.
     ///
     /// HD's Zone board, whose assembly was read off the original as starting
-    /// about 3.5 s before the release (`oag_title::adverts::ZoneGantry`). **What
+    /// about 3.5 s before the release (`oag_title::adverts::ModeGantry`). **What
     /// the board does after the release is chosen, not measured**: the clock
     /// keeps running to the asset's own end and the caller clamps it.
     #[must_use]

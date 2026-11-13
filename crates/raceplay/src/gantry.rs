@@ -324,7 +324,7 @@ pub(super) fn place_card(
     name: &str,
     track_model: &Model,
     spec: &oag_title::adverts::Adverts,
-    zone_board: Option<oag_title::adverts::ZoneGantry>,
+    mode_board: Option<oag_title::adverts::ModeGantry>,
     clock: ClockRule,
     report: &mut Vec<String>,
 ) -> Option<crate::adverts::Card> {
@@ -360,8 +360,8 @@ pub(super) fn place_card(
         &HD_LAP_WINDOWS
     };
     let (cull, parked) = panel_cull(&model, countdown, &mount, windows);
-    let clock = match (zone_board, native, pulse) {
-        (Some(zone), _, _) => zone_clock(zone, name, report),
+    let clock = match (mode_board, native, pulse) {
+        (Some(zone), _, _) => mode_clock(zone, name, report),
         (None, Some(board), _) => native_clock(board, name, report),
         (None, None, true) => Clock::PULSE,
         (None, None, false) => hd_clock(&model, name, report),
@@ -507,17 +507,17 @@ fn native_clock(
     clock
 }
 
-/// A Zone board's clock: its assembly ends on the release, per
-/// [`oag_title::adverts::ZoneGantry::assembly_ticks`], and the line says what is
+/// A mode board's clock: its assembly ends on the release, per
+/// [`oag_title::adverts::ModeGantry::assembly_ticks`], and the line says what is
 /// and is not measured.
-fn zone_clock(zone: oag_title::adverts::ZoneGantry, name: &str, report: &mut Vec<String>) -> Clock {
+fn mode_clock(zone: oag_title::adverts::ModeGantry, name: &str, report: &mut Vec<String>) -> Clock {
     let clock = Clock::assembled_at_release(zone.assembly_ticks);
     report.push(format!(
-        "start gantry clock: {name} is this title's Zone board, its assembly starting {} ticks \
-         before the release, on tick {} (read off RPCS3, 2026-10-08, one boot: a few ticks either \
+        "start gantry clock: {name} is this title's {:?} board, its assembly starting {} ticks \
+         before the release, on tick {} (Zone read off RPCS3, one boot: a few ticks either \
          way); what it shows after the release is chosen, not measured - the timeline runs on and \
          is held at its limit",
-        zone.assembly_ticks, clock.start_tick,
+        zone.mode, zone.assembly_ticks, clock.start_tick,
     ));
     clock
 }

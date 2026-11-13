@@ -18,7 +18,7 @@ categories: [rendering]
 - **The HD-lineage board** (`321Go_StartFinish.vex`, on the 16 HD-ported 2048 circuits and Omega's HD circuits) is withheld
   with a loader line: its digits are material curves in a container `oag_rcs::rcsmodel::psp2` does not parse
   (`omega-low-hanging-from-hd.md` in `handover/tooling/`, item 4). Once read, add it to `Adverts::gantry_boards` (or drop the
-  field), then the Zone, Zone Battle and detonator boards through `zone_gantry`.
+  field), then the Zone, Zone Battle and detonator boards through `mode_gantries`.
 - **The digits' phase is chosen.** shadPS4 draws this card's face blank white through the whole countdown, so only the board's
   place is measured. A frame that draws the card is needed: Vita3K for 2048 (`scripts/vita3k-drive.py`), nothing known for Omega.
 - **FINAL LAP and the chequered flag** are never played: the clock has no `laps`, so it holds the `A·G·R·C` logo state at

@@ -8,6 +8,16 @@
 
 use super::super::*;
 
+/// The start-board mode of a race mode, for the modes this engine runs that a title
+/// gives a board of their own. Zone Battle, Detonator and Combat have no `Mode` yet,
+/// so their boards stay listed in the title's table and nothing selects them.
+fn gantry_mode(mode: Mode) -> Option<oag_title::adverts::GantryMode> {
+    match mode {
+        Mode::Zone => Some(oag_title::adverts::GantryMode::Zone),
+        _ => None,
+    }
+}
+
 /// Which advert pass `title` runs in `mode`, and why none does when it does not.
 ///
 /// A Zone race on a title whose zone effects bind one shared texture in place of
@@ -149,7 +159,7 @@ pub(super) fn build(
             };
             if let Some(spec) = gantry_card {
                 // The mode picks the board (measured on HD, `GetMode()` 6).
-                let zone_board = spec.zone_gantry.filter(|_| mode == Mode::Zone);
+                let zone_board = gantry_mode(mode).and_then(|m| spec.mode_gantry(m));
                 adverts.extend(super::super::gantry::place_card(
                     archives,
                     zone_board.map_or(model, |zone| zone.entry),

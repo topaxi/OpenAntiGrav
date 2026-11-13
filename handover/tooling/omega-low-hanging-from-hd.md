@@ -62,7 +62,7 @@ data proves it.
    clock off the UV keys its `.vex` `Mesh` nodes author (Omega `TexAnim_UpdateTransform` `0x0172ba00`, confidence 88;
    the PS4 and Vita `.rcsmodel` carry no curve), and `321Go_Zone.vex` in a Zone race on both titles. Open: (a) the Zone
    Battle, Detonator and 2048 Combat boards build and their substitution is read on both executables, but
-   `oag_title::adverts::ZoneGantry` is Zone only, so nothing selects them; (b) the digits' phase against the original is
+   the carrier is now `oag_title::adverts::Adverts::mode_gantries` (a per-mode `ModeGantry` table, `GantryMode` Zone, ZoneBattle, Detonator, Combat; Omega and 2048 list all they author), but `oag_race::Mode` has Zone only, so `gantry_mode` in `crates/raceplay/src/load/gantry_visibility.rs` selects Zone and the other boards wait for a `Mode` each (their assembly ticks are HD's Zone 210, chosen, not measured); (b) the digits' phase against the original is
    unmeasured (shadPS4 draws the card blank white; Vita3K untried); (c) HD's race-manager windows run inherited, not re-read
    on either executable; (d) a stippled triangle crosses the board's quad on 2048 (Tech De Ra), as on other 2048 surfaces
    in the same frame. Lead, not chased: `omega-status.md` holds a chevron `offset` at its authored value because "the PS4
@@ -73,7 +73,9 @@ data proves it.
    sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
    in `FUN_0130e090` (`Distance` to `ship+0xbc`, `Radius` to `ship+0xc0`); the
-   consumer of those two fields is unread. Needs it read, then a thrust frame
+   consumer of those two fields is unread. **Read 2026-11-13, not finished:** `FUN_0130e090` (`0x0130e090`) writes `+0xbc`/`+0xc0`; an
+   offset search (`+ 0xc0]`) is not selective (60 hits in the first 78k instructions, all other structs), so the consumer is
+   unread and both flags stay off. Needs it read, then a thrust frame
    pair, Omega against HD, on the same circuit. With the light on a grid still
    gains a warm cast at the nozzle; with `front_faces_only` on nothing changed at
    the two ticks checked, because the flame is not visible there.
@@ -126,7 +128,7 @@ data proves it.
 
 ## Next Steps
 
-1. Item 4: give the Zone Battle, Detonator and Combat boards a mode carrier, or measure the digits' phase on Vita3K.
+1. Item 4: give Zone Battle, Detonator and Combat an `oag_race::Mode` (their boards are listed and tested), or measure the digits' phase on Vita3K.
 2. Item 6: read the call sites of the six functions above, in the order
    `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
 3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.

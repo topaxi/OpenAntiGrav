@@ -298,13 +298,27 @@ pub const TITLE: &Title = &Title {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_2048.vex",
             assembly_ticks: 200,
         }]),
-        // The board is this title's own substitution in a Zone race
-        // (`TrackStartup_Load`, `docs/ghidra/functions/ps4-omega-eu/billboards.md`);
-        // the assembly ticks are HD's, inherited.
-        zone_gantry: Some(oag_title::adverts::ZoneGantry {
-            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
-            assembly_ticks: 210,
-        }),
+        // Each mode's board is this title's own substitution
+        // (`TrackStartup_Load`, `docs/ghidra/functions/ps4-omega-eu/billboards.md`); the
+        // assembly ticks are HD's Zone figure, inherited, and chosen, not measured, for
+        // the boards of the modes this engine does not run yet.
+        mode_gantries: &[
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Zone,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::ZoneBattle,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_HD_Zone_Battle.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Detonator,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
+                assembly_ticks: 210,
+            },
+        ],
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     }),
 };

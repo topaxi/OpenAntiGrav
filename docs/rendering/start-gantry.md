@@ -1169,7 +1169,7 @@ frozen `START RACE`). Nothing here compares a pixel of the original. The command
 emulator runs: `rpcs3-drive.py countdown --load 75 --drive 25 --nav "Main Menu=right" --nav "Single
 Player=right,right,right,right,right,cross"`, then `scripts/hd-countdown-frames.py` on the recording.
 
-**Zone Battle and Detonator: what their boards need.** The same chooser (`ZoneGantry` is a `Mode::Zone` rule
+**Zone Battle and Detonator: what their boards need.** The same chooser (`Adverts::mode_gantries` is a table by mode, selected only for `Mode::Zone`
 today; it would become a table by mode id, `13`/`21` Zone Battle, `14` Detonator, per the PS4 branch) and two
 new `oag_race::Mode`s, which is not this lane. Their files are `321Go_HD_Zone_Battle.vex` and
 `321Go_HD_Detonator.vex`; `DATA00`'s `321Go_Zone.vex` already references `detonator_scroll.gtf`, so some of the
@@ -2981,5 +2981,5 @@ panel on which the loop icon's light pieces assemble, as HD's Zone board is desc
 (`start_gantry_clock_inherit_ground_truth.rs`: the clock line and that `3`, `2`, `1` and `GO` light different vertices, on
 Omega's default circuit and Tech De Ra and on 2048's thirteen HD-ported circuits). **Open:** the Zone Battle, Detonator and
 2048 Combat boards (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_2048_Combat.vex`): their files build and
-the substitution is read, but this engine has no mode carrier for them (`ZoneGantry` is Zone only); the digits' phase
+the substitution is read, and `Adverts::mode_gantries` lists each (`every_omega_mode_board_resolves_to_an_authored_vex`, `every_2048_mode_board_resolves_to_an_authored_vex` read them off the disc), but this engine has no `Mode` for them, so only Zone is selected (`gantry_mode`); the digits' phase
 against the original on either title; FINAL LAP and the chequered flag on the node-driven `321Go_2048.vex`.
