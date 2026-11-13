@@ -829,15 +829,65 @@ pub(super) fn zone_grade(
 ) -> Option<crate::zone_grade::ZoneGrade> {
     use oag_tables::effectsettings::EffectSettings;
 
-    if mode != oag_race::Mode::Zone {
-        return None;
-    }
-    let name = race.zone_palette?.entry_for(track)?;
-    let Ok(blob) = archives.read_name(&name) else {
-        report.push(format!(
-            "{name}: not in the archive set - the Zone race keeps the circuit's own colours"
-        ));
-        return None;
+    // Zone's table and ladder, or Detonator's own table and texture sets, which the
+    // original picks against Zone's on the same mode test; a Detonator stage is its lap
+    // counter, so it carries no zone ladder (`crate::Scene::sync_zone_grade`).
+    let (palette, fallback, stage_textures, zone_stages) = match mode {
+        oag_race::Mode::Zone => (
+            race.zone_palette,
+            None,
+            race.zone_stage_textures,
+            race.zone_stages,
+        ),
+        oag_race::Mode::Detonator => {
+            let Some(detonator) = race.detonator else {
+                return None;
+            };
+            if detonator.palette.is_none() {
+                report.push(
+                    "detonator: this title's stage grade is not drawn; the circuit keeps its own \
+                     colours"
+                        .to_string(),
+                );
+            }
+            (
+                detonator.palette,
+                detonator.fallback_palette,
+                detonator.stage_textures,
+                None,
+            )
+        }
+        _ => return None,
+    };
+    let palette = palette?;
+    let mut name = palette.entry_for(track)?;
+    let mut in_play = palette;
+    let blob = match archives.read_name(&name) {
+        Ok(blob) => blob,
+        Err(_) => {
+            let fallback_entry = fallback.and_then(|f| Some((f, f.entry_for(track)?)));
+            match fallback_entry.and_then(|(f, entry)| {
+                let blob = archives.read_name(&entry).ok()?;
+                Some((f, entry, blob))
+            }) {
+                Some((f, entry, blob)) => {
+                    report.push(format!(
+                        "{name}: not in the archive set; the title-wide {entry} grades this circuit"
+                    ));
+                    name = entry;
+                    in_play = f;
+                    blob
+                }
+                None => {
+                    report.push(format!(
+                        "{name}: not in the archive set - the {} race keeps the circuit's own \
+                         colours",
+                        mode.fallback_label().to_lowercase()
+                    ));
+                    return None;
+                }
+            }
+        }
     };
     let text = match String::from_utf8(blob) {
         Ok(text) => text,
@@ -853,19 +903,17 @@ pub(super) fn zone_grade(
             return None;
         }
     };
-    let (art, scene_art) = match race.zone_stage_textures {
+    let (art, scene_art) = match stage_textures {
         Some(textures) => zone_stage_art(archives, textures, report),
         None => (Vec::new(), Vec::new()),
     };
     let mut grade =
-        crate::zone_grade::ZoneGrade::new(name.clone(), table, race.zone_stages, art, scene_art)
+        crate::zone_grade::ZoneGrade::new(name.clone(), table, zone_stages, art, scene_art)
             // How a stage step sweeps the world, where the title's own law is read -
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
             .map(|grade| grade.with_transition(race.zone_transition))
-            .map(|grade| {
-                grade.with_arena(race.zone_palette.is_some_and(|p| p.on_zone_circuit(track)))
-            });
+            .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)));
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:

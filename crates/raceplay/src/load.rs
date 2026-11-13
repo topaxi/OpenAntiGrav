@@ -158,6 +158,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
             art: mut foreign_art,
     } = track_inputs::resolve(options, &mut archives, title, craft_title, &mut report)?;
+    anyhow::ensure!(
+        options.mode != oag_race::Mode::Detonator || title.race.detonator.is_some(),
+        "{} has no Detonator mode",
+        title.name
+    );
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
         archives
             .read_name(name)
@@ -299,20 +304,26 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .race
             .craft_laws
             .is_some_and(|laws| laws.chase_view_sheared.value);
+        let craft_scale = crate::camera::craft_scale(title, options.mode);
         (
             ChaseParams {
                 view_sheared: sheared,
+                craft_scale,
                 ..chase
             },
             ChaseParams {
                 view_sheared: sheared,
+                craft_scale,
                 ..chase_close
             },
         )
     };
     // The lock-on's rig, which is all of the cameras the simulation reads.
     #[cfg(not(feature = "view"))]
-    let chase = chase_params(stats.external_camera_far);
+    let chase = ChaseParams {
+        craft_scale: crate::camera::craft_scale(title, options.mode),
+        ..chase_params(stats.external_camera_far)
+    };
 
     // What the scene target stores, which baked colours are encoded for; told before the staging.
     #[cfg(feature = "view")]

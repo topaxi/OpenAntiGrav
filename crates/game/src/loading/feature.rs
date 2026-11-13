@@ -38,10 +38,10 @@ pub(super) fn pick(assets: &Assets, mode: Option<u32>, draw: u64) -> Option<usiz
 ///
 /// Only the ones `docs/ghidra/functions/ps3-hdfury-eu/mode-manager.md` names:
 /// `3` is `SPArcade` (a single race), `4` `SPTournament`, `5` `SPTimeTrial` and
-/// `8` `SPElimination`. **Speed Lap, Zone and Head2Head are `None`**, because the ids that
-/// would be theirs are among the seven unnamed ones - `6`, `0xd` and `0xe`
-/// carry decks of their own and which of them is Zone is not established. They
-/// draw from the default deck, which is chosen, not measured.
+/// `8` `SPElimination`, and `0xe` Detonator (settled on the same page). **Speed Lap,
+/// Zone and Head2Head are `None`**, because the ids that would be theirs are among the
+/// unnamed ones - `6` and `0xd` carry decks of their own and which of them is Zone is not
+/// established. They draw from the default deck, which is chosen, not measured.
 #[must_use]
 pub fn executable_mode(mode: oag_race::Mode) -> Option<u32> {
     use oag_race::Mode;
@@ -50,6 +50,7 @@ pub fn executable_mode(mode: oag_race::Mode) -> Option<u32> {
         Mode::Tournament => Some(4),
         Mode::TimeTrial => Some(5),
         Mode::Eliminator => Some(8),
+        Mode::Detonator => Some(0xe),
         Mode::SpeedLap | Mode::Zone | Mode::Head2Head => None,
     }
 }
@@ -64,6 +65,7 @@ pub(super) fn mode_name(mode: u32) -> Option<&'static str> {
         Mode::Tournament,
         Mode::TimeTrial,
         Mode::Eliminator,
+        Mode::Detonator,
     ]
     .into_iter()
     .find(|candidate| executable_mode(*candidate) == Some(mode))

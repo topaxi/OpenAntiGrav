@@ -539,6 +539,40 @@ impl ZoneGrade {
         true
     }
 
+    /// Shows `stage` (clamped to the file's last), the way a counter that names its
+    /// stage directly drives the grade: HD/Fury's Detonator, whose stage-blend source is
+    /// the race manager's stage counter rather than a zone ladder
+    /// (`Environment_UpdateStageBlend`, mode `0xe`). Answers whether the stage changed.
+    /// A no-op once [`Self::pin_stage`] has pinned this grade.
+    pub fn show_stage(&mut self, stage: u32) -> bool {
+        if self.pinned {
+            return false;
+        }
+        let stage = stage.min(self.last_stage);
+        if self.blend.current == stage && self.blend.requested == stage {
+            return false;
+        }
+        self.blend.current = stage;
+        self.blend.requested = stage;
+        self.blend.weight = 1.0;
+        true
+    }
+
+    /// [`Self::follow`] for a grade driven by [`Self::show_stage`]: `frames` is the ticks
+    /// since the showing stage stepped, `None` for the opening stage, which is shown
+    /// whole. The stage swept out is the one below, as the counter only ever steps by one.
+    pub fn follow_step(&mut self, frames: Option<u32>, origin: [f32; 3]) {
+        self.wavefront.origin = origin;
+        let (Some(law), false, Some(frames)) = (self.transition, self.pinned, frames) else {
+            self.settle();
+            return;
+        };
+        self.wavefront.previous = self.blend.current.saturating_sub(1);
+        self.wavefront.frames = frames;
+        self.wavefront.radius = law.radius_after(frames);
+        self.blend.weight = law.weight_after(frames);
+    }
+
     /// Which stage is showing, which is asked for, and at what weight.
     #[must_use]
     pub fn blend(&self) -> StageBlend {

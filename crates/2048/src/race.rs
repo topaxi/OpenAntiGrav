@@ -106,6 +106,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // a named file its loader picks by a mode gate; nothing equivalent has been
     // read here.
     zone_sky: None,
+    detonator: Some(DETONATOR),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&GUEST_ROSTER),
     // 2048's own reskins are `team_variants`' own measured shape too - a
@@ -456,6 +457,31 @@ pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
 /// do the four `ZoneEnvironmentHDFury\*` paths its DLC fallback names; see
 /// `docs/formats/effectsettings.md`. So this is the only copy there is.
 pub const ZONE_PALETTE: &str = "ZoneMode2048.effectSettings";
+
+/// 2048's Detonator (the Fury pack): the same fourteen-stage law as HD's
+/// (`FUN_8117e9c2`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`, "The same law
+/// on 2048 and Omega"), the `0.7` camera its craft constructors write on mode `14`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/camera.md`), and the grade
+/// `Environment_Load` picks: the circuit's own [`ZONE_PALETTE`] and, for HD's ported circuits
+/// with no environment tree of their own, HD/Fury's Detonator table out of the v1.04 patch
+/// (`data2.psarc`), the DLC3 revision on the four `zone_N`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`). The per-stage
+/// textures are `.gxt`, unwired here as Zone's are.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
+    fallback_palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings",
+        zone_circuits: &[
+            "data/art/published/DLC1/environments/zone_1/track.vex",
+            "data/art/published/DLC1/environments/zone_2/track.vex",
+            "data/art/published/DLC1/environments/zone_3/track.vex",
+            "data/art/published/DLC1/environments/zone_4/track.vex",
+        ],
+        zone_circuit_entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFuryDLC3.effectSettings",
+    }),
+    stage_textures: None,
+    camera_scale: 0.7,
+};
 
 pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.vex";
 

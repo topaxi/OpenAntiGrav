@@ -327,6 +327,9 @@ pub struct RaceDefaults {
     /// `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`. `None` where no swap is
     /// located, every title but HD/Fury.
     pub zone_sky: Option<&'static str>,
+    /// This title's Detonator mode, or `None` where the title offers none: the menu
+    /// lists `oag_race::Mode::Detonator` only where this is `Some`. See [`Detonator`].
+    pub detonator: Option<&'static Detonator>,
     /// Team ids that carry more than one selectable directory, and what each is
     /// called and how it combines with the team's own id. See [`TeamVariants`].
     ///
@@ -500,6 +503,32 @@ impl ZoneStages {
         let index = self.records.iter().position(|&(at, _)| zone >= at)?;
         Some(self.records[index].1)
     }
+}
+
+/// What a title's Detonator race loads beside the circuit: its own stage grade, its
+/// own per-stage textures and its chase-camera scale.
+///
+/// HD/Fury's Detonator escalates through fourteen stages, one per lap, on a table of
+/// its own (`detonatormode.effectsettings`, with a DLC3 revision on the four Zone
+/// circuits) and a texture set of its own, picked against Zone's by the same mode test
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`,
+/// `zone-effectsettings-loader.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Detonator {
+    /// The stage grade, chosen per circuit the way [`RaceDefaults::zone_palette`] is, or
+    /// `None` where this title's grade is not drawn.
+    pub palette: Option<ZonePalette>,
+    /// The table tried when [`Self::palette`]'s file is not in the archive set. 2048's
+    /// `Environment_Load` reads the circuit's own table and, for a circuit with no
+    /// environment tree of its own (HD's ported circuits), HD/Fury's title-wide one
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`).
+    pub fallback_palette: Option<ZonePalette>,
+    /// The per-stage texture sets, or `None` where none is located.
+    pub stage_textures: Option<&'static ZoneStageTextures>,
+    /// The chase rig's craft scale in this mode, in place of the `0.75` every other
+    /// mode uses: HD's craft constructors write `0.7` on mode `14`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).
+    pub camera_scale: f32,
 }
 
 /// Where a title keeps its `.effectSettings` stage table, the per-stage colour

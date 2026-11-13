@@ -633,7 +633,8 @@ fn drop_quit_removes_only_the_quit_rows() {
 #[test]
 fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
     let strings = oag_ui::language::StringTable::default();
-    let stored: Vec<String> = mode_choices(&strings)
+    // HD names every mode's data, Detonator's included, so it offers them all.
+    let stored: Vec<String> = mode_choices(&strings, oag_hd::TITLE)
         .into_iter()
         .map(|choice| choice.value)
         .collect();
@@ -644,6 +645,12 @@ fn the_supplied_mode_rows_are_exactly_the_modes_the_game_has() {
             .map(|mode| mode.name().to_string())
             .collect::<Vec<_>>(),
         "the supplied rows and Mode::ALL must be one list, in the same order"
+    );
+    // Pulse ships no Detonator, so its row does not offer one.
+    assert!(
+        mode_choices(&strings, oag_pulse::TITLE)
+            .iter()
+            .all(|choice| choice.value != oag_race::Mode::Detonator.name())
     );
 }
 
@@ -827,7 +834,7 @@ fn the_mode_row_starts_on_the_time_trial() {
 
     let strings = oag_ui::language::StringTable::default();
     assert_eq!(
-        mode_choices(&strings)
+        mode_choices(&strings, oag_pulse::TITLE)
             .first()
             .map(|choice| choice.value.clone()),
         Some(oag_race::Mode::TimeTrial.name().to_string())

@@ -148,11 +148,11 @@ fn picking_a_language_changes_the_labels_shell_from_boot_builds_rows_from() {
     let german = shell_for(&image, "German");
     let italian = shell_for(&image, "Italian");
 
-    let german_modes: Vec<String> = oag_ui::menu::mode_choices(&german.strings)
+    let german_modes: Vec<String> = oag_ui::menu::mode_choices(&german.strings, oag_pulse::TITLE)
         .into_iter()
         .map(|choice| choice.label)
         .collect();
-    let italian_modes: Vec<String> = oag_ui::menu::mode_choices(&italian.strings)
+    let italian_modes: Vec<String> = oag_ui::menu::mode_choices(&italian.strings, oag_pulse::TITLE)
         .into_iter()
         .map(|choice| choice.label)
         .collect();

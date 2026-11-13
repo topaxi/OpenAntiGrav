@@ -100,6 +100,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     },
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
+    detonator: Some(DETONATOR),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: None,
     // HD/Fury's own reskins are `team_variants`' own measured shape - a
@@ -392,6 +393,32 @@ pub const ZONE_STAGE_TEXTURES: &oag_title::ZoneStageTextures = &oag_title::ZoneS
     track: "/data/tex/zonemodetrack",
     extension: ".gtf",
     stages: 15,
+};
+
+/// Wipeout HD/Fury's Detonator: its grade table, its DLC3 revision on the four Zone
+/// circuits, its two fifteen-entry texture sets (`DATA00.PSARC`) and its `0.7` camera.
+///
+/// `Environment_LoadStageTextures` passes `g_detonator_mode_texture_names` (`0x007b26c8`)
+/// instead of Zone's on mode `14`, and its track set `g_detonator_mode_track_texture_names`
+/// (`0x007b28b8`) beside it; `Environment_LoadRaceScene` splits the Detonator tables on the
+/// same four circuits as Zone's (`docs/formats/effectsettings.md`, "Which HD table a race
+/// loads"). The camera scale is `camera.md`'s. Its gate byte `0x009384e1` is unread and taken
+/// clear: set, `Environment_UpdateStageBlend` would skip the mode dispatch and never read
+/// Detonator's stage counter at all.
+pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
+    palette: Some(oag_title::ZonePalette::TitleWide {
+        entry: "/data/environments/detonatormode.effectsettings",
+        zone_circuits: ZONE_TRACKS,
+        zone_circuit_entry: "/data/environments/detonatormodedlc3.effectsettings",
+    }),
+    fallback_palette: None,
+    stage_textures: Some(&oag_title::ZoneStageTextures {
+        general: "/data/tex/detonatormode",
+        track: "/data/tex/detonatormodetrack",
+        extension: ".gtf",
+        stages: 15,
+    }),
+    camera_scale: 0.7,
 };
 
 /// Wipeout HD/Fury's Zone milestone announcer.

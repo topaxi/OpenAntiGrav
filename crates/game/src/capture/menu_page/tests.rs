@@ -128,7 +128,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
-        &oag_ui::menu::mode_choices(&strings),
+        &oag_ui::menu::mode_choices(&strings, oag_pulse::TITLE),
     );
     model.seed(
         "race.mode",

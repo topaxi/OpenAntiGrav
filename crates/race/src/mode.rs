@@ -127,6 +127,22 @@ pub enum Mode {
     /// this project's own: **chosen, not measured**. The row takes two people at most
     /// ([`Self::max_people`]), and WEAPONS and AI DIFFICULTY grey as the original does.
     Head2Head,
+    /// HD/Fury's Detonator: one craft, alone, through fourteen stages.
+    ///
+    /// **A stage is a lap**, read off the executable: `Detonator_UpdateRace` steps its stage
+    /// counter on the player's own forward line crossing, never the race's first one, opens it
+    /// at `1` and ends the race when it reaches `15`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`, confidence 78). 2048's manual
+    /// page says the same in words ("the 14 stages", a stage begins "every time you cross the
+    /// start line"). So [`Self::laps_target`] is fourteen on every class and
+    /// [`Self::detonator_stage`] is the counter.
+    ///
+    /// **What it races without**: the mines and bombs, the pulse cannon, the EMP and the score
+    /// are unread and not drawn, and the "automatic and ever-increasing" acceleration the manual
+    /// promises has no recovered law, so the player throttles. The page lists each with its
+    /// address. Offered only on a title whose data names it
+    /// (`oag_title::RaceDefaults::detonator`).
+    Detonator,
 }
 
 impl Mode {
@@ -150,14 +166,35 @@ impl Mode {
     /// why a tournament needs a leg list rather than a single track and
     /// cannot be reached from this array's own consumer, the RACE page's
     /// mode row.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::TimeTrial,
         Self::SpeedLap,
         Self::Zone,
         Self::SingleRace,
         Self::Eliminator,
         Self::Head2Head,
+        Self::Detonator,
     ];
+
+    /// The stage a Detonator race ends on: the counter steps once per lap from
+    /// [`Self::DETONATOR_FIRST_STAGE`] and the race is over when it reaches this
+    /// (`Detonator_UpdateRace`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`).
+    pub const DETONATOR_END_STAGE: u32 = 15;
+
+    /// The stage a Detonator race opens on, before the first lap is completed.
+    pub const DETONATOR_FIRST_STAGE: u32 = 1;
+
+    /// The Detonator stage after `laps_completed` laps: one per completed lap from
+    /// [`Self::DETONATOR_FIRST_STAGE`], held at [`Self::DETONATOR_END_STAGE`].
+    #[must_use]
+    pub const fn detonator_stage(laps_completed: u32) -> u32 {
+        let stage = Self::DETONATOR_FIRST_STAGE.saturating_add(laps_completed);
+        if stage > Self::DETONATOR_END_STAGE {
+            Self::DETONATOR_END_STAGE
+        } else {
+            stage
+        }
+    }
 
     /// Laps in a time trial, per speed class, slowest rung first.
     ///
@@ -269,6 +306,7 @@ impl Mode {
             Self::Eliminator => "eliminator",
             Self::Tournament => "tournament",
             Self::Head2Head => "head_to_head",
+            Self::Detonator => "detonator",
         }
     }
 
@@ -369,6 +407,9 @@ impl Mode {
             Self::SingleRace | Self::Tournament | Self::Head2Head => {
                 Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class.index()])
             }
+            // Fourteen stages, one per lap: the race is over when the stage
+            // counter reaches fifteen. Every class alike.
+            Self::Detonator => Some(Self::DETONATOR_END_STAGE - Self::DETONATOR_FIRST_STAGE),
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }
     }
@@ -396,6 +437,9 @@ impl Mode {
             Self::Eliminator => "MSC_EVENT_ELIM",
             Self::Tournament => "MSC_EVENT_TOURN",
             Self::Head2Head => "MSC_EVENT_HTH",
+            // HD's own name for the mode (`DATA06` English entries); it has no
+            // `MSC_EVENT_` text.
+            Self::Detonator => "Detonator",
         }
     }
 
@@ -414,6 +458,7 @@ impl Mode {
             Self::Eliminator => "ELIMINATOR",
             Self::Tournament => "TOURNAMENT",
             Self::Head2Head => "HEAD TO HEAD",
+            Self::Detonator => "DETONATOR",
         }
     }
 
@@ -481,7 +526,7 @@ impl Mode {
         match self {
             Self::SingleRace | Self::Eliminator | Self::Tournament => 7,
             Self::Head2Head => 1,
-            Self::TimeTrial | Self::SpeedLap | Self::Zone => 0,
+            Self::TimeTrial | Self::SpeedLap | Self::Zone | Self::Detonator => 0,
         }
     }
 
@@ -509,6 +554,9 @@ impl Mode {
     pub const fn max_people(self) -> Option<u8> {
         match self {
             Self::Head2Head => Some(2),
+            // "You must face this one alone - it's single player only" (2048's
+            // `MAN_3_DETONATOR`).
+            Self::Detonator => Some(1),
             _ => None,
         }
     }

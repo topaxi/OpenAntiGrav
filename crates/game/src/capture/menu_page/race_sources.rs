@@ -37,7 +37,7 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
-        &oag_ui::menu::mode_choices(strings),
+        &oag_ui::menu::mode_choices(strings, title),
     );
     model.supply(
         oag_ui::menu::ValueSource::SpeedClasses,

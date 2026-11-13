@@ -392,6 +392,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     game_options: crate::race::GameOptions::NONE,
     zone_stage_textures: None,
     zone_sky: None,
+    detonator: None,
     team_variants: Some(&NATIVE),
     guest_roster: Some(&GUEST_ROSTER),
     // This fixture's own axis is `team_variants`' shape; nothing here
