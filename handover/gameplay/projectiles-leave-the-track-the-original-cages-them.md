@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-13
-summary: "Cage test, Cannon muzzle speed, track-up launch normal, floor arms and own-craft box wired on Pulse (box: firer only); HD floor arms, opponent box, travel sweep, Pure"
+summary: "Cage, Cannon speed, launch normal, floor arms and own-craft box wired on Pulse; open: opponent box, travel sweep, Pure, HD floor arms"
 size: S (50)
 difficulty: medium (55)
 ---
