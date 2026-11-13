@@ -184,6 +184,77 @@ fn the_headless_demo_run_chains_demos_with_nobody_in_them() {
     }
 }
 
+/// `oag-game --wallpaper --windows 3 --screenshot`: a wallpaper on three outputs is three cameras,
+/// each on a craft of its own, from the one simulation (`Race::watch_in_windows`). Fails if a
+/// window is not written, or two windows show the same picture (a seat dealt as a person, or
+/// every window on the player's camera).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_wallpaper_on_three_outputs_shows_three_cameras() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("demo-wallpaper-windows");
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).expect("a scratch directory");
+    let shot = scratch.join("wallpaper.png");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(&image)
+        .args([
+            "--no-audio",
+            "--wallpaper",
+            "--windows",
+            "3",
+            "--ticks",
+            "600",
+            "--screenshot",
+        ])
+        .arg(&shot)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_DATA_HOME", scratch.join("data"))
+        .env("XDG_STATE_HOME", scratch.join("state"))
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY")
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .output()
+        .expect("running oag-game");
+    assert!(
+        output.status.success(),
+        "{:?}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let pixels: Vec<Vec<u8>> = (1..=3)
+        .map(|window| {
+            let path = scratch.join(format!("wallpaper-window{window}.png"));
+            let file =
+                std::fs::File::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+                .read_info()
+                .expect("a PNG");
+            let mut buffer = vec![0; reader.output_buffer_size().expect("a size")];
+            let info = reader.next_frame(&mut buffer).expect("a frame");
+            buffer.truncate(info.buffer_size());
+            buffer
+        })
+        .collect();
+    for (a, b) in [(0, 1), (1, 2), (0, 2)] {
+        assert_eq!(pixels[a].len(), pixels[b].len());
+        let differing = pixels[a]
+            .iter()
+            .zip(&pixels[b])
+            .filter(|(x, y)| x.abs_diff(**y) > 24)
+            .count();
+        assert!(
+            differing * 4 > pixels[a].len(),
+            "windows {} and {} are much the same picture ({differing} of {} bytes differ)",
+            a + 1,
+            b + 1,
+            pixels[a].len()
+        );
+    }
+}
+
 /// 2048 and Omega author their demo in `DemoConfig.xml` (byte-identical on both): the menu waits
 /// 30 s, a demo runs 120 s and flies the circuit `tower`. The boot reads it, the timing takes its
 /// seconds over the title's own, and a demo is on that circuit. Fails when the file is not read or
