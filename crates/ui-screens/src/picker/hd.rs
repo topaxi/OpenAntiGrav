@@ -460,8 +460,11 @@ pub(super) fn body(
         let base = base.map(|base| base.values()[index]);
         stat_bar(
             block,
-            (value.map(rating_fraction), base.map(rating_fraction)),
-            value.map(|value| format!("{value:03}")),
+            (
+                value.map(rating_fraction),
+                base.map(rating_fraction),
+                value.map(|value| format!("{value:03}")),
+            ),
             layout,
             extra,
             frame,
@@ -484,8 +487,11 @@ pub(super) fn body(
         };
         stat_bar(
             block,
-            (total.map(|total| total as f32 / LOYALTY_MAX), None),
-            total.map(|total| format!("{total:03}")),
+            (
+                total.map(|total| total as f32 / LOYALTY_MAX),
+                None,
+                total.map(|total| format!("{total:03}")),
+            ),
             layout,
             extra,
             frame,
@@ -598,8 +604,7 @@ pub fn logo_src(location: &str) -> String {
 /// loyalty block) the block draws in its own colour, as any block does.
 fn stat_bar(
     block: &BlockWidget,
-    (value, base): (Option<f32>, Option<f32>),
-    text: Option<String>,
+    (value, base, text): (Option<f32>, Option<f32>, Option<String>),
     layout: &Layout,
     extra: &TeamScreen,
     frame: &Frame,
