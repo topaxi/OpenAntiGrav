@@ -242,6 +242,12 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
     race: &mut oag_raceplay::Race,
 ) {
     let slot = race.player_slot();
+    // Whatever the race held before, a few ticks of nothing re-arm the pop-in (the height runs out
+    // at 10/s, then the next frame resets it).
+    race.sim.world.ships[slot].pickup.weapon = None;
+    for _ in 0..20 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
     race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     // The icon is the one 85x86 sprite (`PickupIcon`'s size) and the frame the one 95 high
@@ -258,17 +264,45 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
                 }
             }
         }
-        (icon.expect("the Missile icon draws"), frame)
+        (icon, frame)
     };
-    let mut seen = Vec::new();
-    for _ in 0..90 {
+    // The icon pops in over its first ticks (`hud+0x220` falls `10 -> 1` at 70/s, `hud+0x224`
+    // rises `0 -> 1` at 7/s): a wide bar about the authored centre, not yet its 85x86 box.
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let popping = oag_hud::draw_list(context, &race.readout())
+        .sprites
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. }
+                if (rect[0] + rect[2] * 0.5 - 480.0).abs() < 0.01
+                    && (rect[1] + rect[3] * 0.5 - 60.0).abs() < 0.01 =>
+            {
+                Some(*rect)
+            }
+            _ => None,
+        })
+        .expect("the popping icon draws about the authored centre");
+    assert!(
+        popping[2] > 85.0 * 5.0 && popping[3] < 86.0 * 0.3,
+        "{popping:?}"
+    );
+    // Nine more ticks finish the pop (`9 / 70` s wide, `1 / 7` s high); the caption has run ten.
+    for _ in 0..9 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        seen.push((race.readout().pickup_announcing, frame_of(race)));
+    }
+    let mut seen = Vec::new();
+    for _ in 0..80 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        let (icon, frame) = frame_of(race);
+        seen.push((
+            race.readout().pickup_announcing,
+            (icon.expect("the Missile icon draws once popped"), frame),
+        ));
     }
     let announcing = seen.iter().take_while(|(up, _)| *up).count();
     assert!(
-        (59..=60).contains(&announcing),
-        "{announcing} ticks of caption"
+        (49..=50).contains(&announcing),
+        "{announcing} ticks of caption left after the pop"
     );
     for (_, (icon, frame)) in &seen[..announcing] {
         assert_eq!(
