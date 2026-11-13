@@ -61,7 +61,7 @@ use crate::pointer::{Pointer, contains};
 use oag_title::MapRole;
 
 use super::canvas_camera::{self, Camera};
-use super::canvas_cells::{self, Card, CanvasButton, Tile};
+use super::canvas_cells::{self, CanvasButton, Card, Tile};
 use super::canvas_lattice;
 use super::canvas_prism;
 use super::touch::{LABEL_SCALE, Launch};

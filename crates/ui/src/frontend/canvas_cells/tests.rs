@@ -76,14 +76,17 @@ fn a_tiles_own_cells_beat_every_ring_and_a_raised_tile_is_not_a_ground_cell() {
         .find(|p| p.cell == (9, 11))
         .expect("a flat tile's cell");
     assert_eq!((flat.fill, flat.colour), (0, [0.5; 3]));
-    let flat_over_ring = resolve(&[
-        neighbour,
-        CanvasButton {
-            cell: (6, 10),
-            tile: Tile::Raised,
-            ring: 4,
-        },
-    ], &[]);
+    let flat_over_ring = resolve(
+        &[
+            neighbour,
+            CanvasButton {
+                cell: (6, 10),
+                tile: Tile::Raised,
+                ring: 4,
+            },
+        ],
+        &[],
+    );
     assert!(
         flat_over_ring
             .iter()
@@ -95,11 +98,14 @@ fn a_tiles_own_cells_beat_every_ring_and_a_raised_tile_is_not_a_ground_cell() {
 
 #[test]
 fn a_button_with_no_ring_paints_no_ring_cell() {
-    let painted = resolve(&[CanvasButton {
-        cell: (20, 20),
-        tile: Tile::Flat([1.0; 3]),
-        ring: 0,
-    }], &[]);
+    let painted = resolve(
+        &[CanvasButton {
+            cell: (20, 20),
+            tile: Tile::Flat([1.0; 3]),
+            ring: 0,
+        }],
+        &[],
+    );
     assert_eq!(painted.len(), 6, "only its six cells");
     assert!(painted.iter().all(|p| p.fill == 0));
 }
@@ -248,7 +254,8 @@ fn a_card_holds_priority_five_over_a_ring_and_below_a_tile() {
     assert!(
         resolve(&[ring], &[season()])
             .iter()
-            .all(|painted| painted.fill == 0 || !(51..65).contains(&painted.cell.0)
+            .all(|painted| painted.fill == 0
+                || !(51..65).contains(&painted.cell.0)
                 || !(29..32).contains(&painted.cell.1)),
         "no ring cell is painted where the card lies"
     );

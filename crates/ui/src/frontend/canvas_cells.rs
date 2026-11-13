@@ -149,8 +149,7 @@ fn half(value: f32) -> f32 {
 pub fn card_shifts(card: &Card) -> Vec<((i32, i32), [f32; 2])> {
     let (width, height) = (card.size.0 as i32, card.size.1 as i32);
     let mut out = Vec::new();
-    let mut pair_first =
-        card.cell.1.rem_euclid(2) != i32::from(card.cell.0.rem_euclid(2) == 0);
+    let mut pair_first = card.cell.1.rem_euclid(2) != i32::from(card.cell.0.rem_euclid(2) == 0);
     for row in 0..height {
         let mut offset = if pair_first { 0.0 } else { LONE_START };
         let v = half(card.origin.1 + row as f32 * ROW_STEP);
@@ -211,10 +210,7 @@ struct Slot {
 }
 
 /// The priority each button's writes leave on every cell, raised tiles included.
-fn slots(
-    buttons: &[CanvasButton],
-    cards: &[Card],
-) -> std::collections::BTreeMap<(i32, i32), Slot> {
+fn slots(buttons: &[CanvasButton], cards: &[Card]) -> std::collections::BTreeMap<(i32, i32), Slot> {
     use std::collections::BTreeMap;
     let mut cells: BTreeMap<(i32, i32), Slot> = BTreeMap::new();
     let mut write = |cell: (i32, i32), slot: Slot| {
@@ -427,7 +423,9 @@ fn cell_pixels(atlas: &[u8], width: u32, height: u32, up: bool, shift: [f32; 2])
                 .filter(|&(px, py)| px < VIEWPORT[0] && py < VIEWPORT[1])
                 .and_then(|(px, py)| cell_at(world_at(px, py)))
                 .filter(|&(found, _)| found == reference.cell)
-                .map(|(_, at)| bilinear(atlas, width, height, [at[0] + shift[0], at[1] + shift[1]]));
+                .map(|(_, at)| {
+                    bilinear(atlas, width, height, [at[0] + shift[0], at[1] + shift[1]])
+                });
             match texel {
                 Some(texel) => {
                     rgba.extend(texel[..3].iter().map(|&c| composite_encode(c)));
@@ -484,7 +482,10 @@ fn card_layout(card: &Card) -> CardLayout {
             let at = origin(&camera, cell);
             (
                 cell,
-                ((at.0 - first.0).round() as i32, (at.1 - first.1).round() as i32),
+                (
+                    (at.0 - first.0).round() as i32,
+                    (at.1 - first.1).round() as i32,
+                ),
             )
         })
         .collect();
@@ -493,7 +494,10 @@ fn card_layout(card: &Card) -> CardLayout {
     });
     let high = cells.iter().fold((i32::MIN, i32::MIN), |high, (cell, at)| {
         let size = layout(is_up(*cell)).size;
-        (high.0.max(at.0 + size.0 as i32), high.1.max(at.1 + size.1 as i32))
+        (
+            high.0.max(at.0 + size.0 as i32),
+            high.1.max(at.1 + size.1 as i32),
+        )
     });
     CardLayout {
         corner: low,

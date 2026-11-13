@@ -137,7 +137,10 @@ impl Screens {
             name: node.attr("name")?.to_string(),
             cell: (number("x")?.round() as i32, number("y")?.round() as i32),
             origin: (number("u")?, number("v")?),
-            size: (number("width")?.round() as u32, number("height")?.round() as u32),
+            size: (
+                number("width")?.round() as u32,
+                number("height")?.round() as u32,
+            ),
             linked_event: node.value("linkedevent").map(str::to_string),
         })
     }

@@ -144,7 +144,7 @@ slot when the dirty byte `canvas+0x5e0a4` is set (`Canvas3D_PrepareDraw` `0x8107
 | Vtable | Live count | What | Confidence |
 | --- | --- | --- | --- |
 | `0x8150abb8` | 212 | The hex button: 3 x 2 cells, colour `+0x38`, state `+0x3c`, ring mode `+0x34`, icon `u` at `+0x48` (0.415 = the flag, 0.507 = the stopwatch in `canvasTexture.gxt`) | 85 |
-| `0x8150ad08` | 1 | 14 x 3 cells at (51, 29), atlas origin `v` = 0.4785: the `A-G-R-C 2048` season card | 70 |
+| `0x8150ad08` | 1 | The **canvas label** (`"Dummy label button"`): a rectangle of cells painted with a crop of the atlas. The live one is `2048SeasonText`, 14 x 3 cells at (51, 29), atlas origin `v` = 0.4785: the `A-G-R-C 2048` season card ("The season cards", below; the earlier reading as one item holding three cards was wrong) | 90 |
 | `0x8150ac48` | 3 | 7 x 4 footprints of 16 cells, colour `0xfaf3f3` | 50 |
 | `0x8150acd8`, `0x8150abe8`, `0x8150aca8`, `0x8150ac78`, `0x8150ac18` | 40, 11, 10, 5, 1 | not read | - |
 
@@ -198,6 +198,9 @@ map's own tiles, blurred, behind the five tiles (the parked question of
 | `0x810f2f04` | `TouchCampaign_Update` | 75 | Timer and states at `+0x150/+0x154`; live 1 -> 2 -> 4 with the timings above. Ghidra's decompile fails on it; read as disassembly |
 | `0x810f2d18` | `TouchCampaign_UpdateIntroSweep` | 55 | The 300..3000 sweep, read only |
 | `0x810ef98c` | `TouchCampaign_UpdateScrollBounds` | 70 | Min and max of the projections, 650 px margin |
+| `0x81074da4` | `CanvasLabel_SetShown` | 80 | Creates the label item on first show and sets its state to 2, or to 0 when hidden; a label whose linked event's progress is not above 1 is hidden ("The season cards") |
+| `0x81070670` | `CanvasLabel_Paint` | 85 | The label item's paint slot: the icon writer over its cell list, then priority 5 on every cell when the state is 2 |
+| `0x813c5ca0` | `CanvasLabel_BuildCellList` | 80 | Vtable slot `+0x10`: the cell list of a `w x h` rectangle, `(col + i) + (row + j) * 401` |
 | `0x810ef3f8` | `TouchCampaign_ClearCanvasCells` | 75 | Fills the 401 x 120 colours with `0xffffff`, zeroes priorities and `canvasTex2` |
 | `0x810ef78c` | `TouchCampaign_ApplyEventStates` | 70 | The state table |
 | `0x810ef5fe` | `TouchCampaign_PaintChainRings` | 60 | Walks the chain from Event 1 setting ring mode 3 or 4 and colour |
@@ -269,7 +272,7 @@ red on the even grid) and, for the prism, `the_opening_view_renders_the_prism_th
 in the same file (the rendered map: green face, a wall that darkens towards its foot, no tinted square
 around the tile).
 
-Not wired, with what each needs: the season cards and the other item classes, the ground relief,
+Not wired, with what each needs: the other item classes, the 45 other canvas labels ("The season cards"), the ground relief,
 the scroll bounds, the wait and the eases (ours arrives at once), the icon
 glyph through the cells' atlas shift (below). The prism itself is wired
 ("The prism", below).
@@ -450,7 +453,62 @@ the pointer and the travel limits, until a pass is earned on one. The original r
 player rank (hypothesis, confidence 45); this build has no rank, so until a rank model exists they cannot be
 launched from the map (open: "player rank model needed to unlock the 15 rank-gated 2048 challenges
 (`m_RankRequired` 10-50)").
-The season cards (item 3 of the thread) are still not drawn.
+The season cards are drawn: "The season cards", below.
+
+## The season cards: canvas labels (2026-11-13, lane `w2048-season-cards`)
+
+**What `0x8150ad08` is** (confidence 90, decompile and disassembly, static): the vtable of the
+**canvas label** item, created by `CanvasLabel_SetShown` (`0x81074da4`) for each `<CanvasLabel>` the
+front end names. It is not one item holding three cards: `NEWGUI/Definition.xml`'s `<FE3DCanvas>`
+authors three labels, one per season, each its own 14 x 3 block with its own origin:
+
+| Label | Cells `(x, y)` | `u`, `v` (atlas fraction) | `linkedevent` |
+| --- | --- | --- | --- |
+| `2048SeasonText` | (51, 29) | 0, 0.4785 | none |
+| `2049SeasonText` | (96, 39) | 0, 0.5981 | `2049 - Event 1` |
+| `2050SeasonText` | (131, 53) | 0.3228 (661/2048), 0.6377 | `2050 - Event 1` |
+
+The measured save had one live because a label's item exists only once it is shown: `TouchCampaign_SetMapActive`
+(`0x810efff6`) walks 48 names (`0x8151e9b8`; the first three are these) and calls `CanvasLabel_SetShown` on
+each. `CanvasLabel_SetShown(label, show)`: a label whose `+200` event pointer is null (no `linkedevent`) or whose
+progress word `+0x2d8` is above 1 (open or passed; the state table above) gets its item and state 2; any
+other is state 0. So 2048's card is always there and 2049's and 2050's wait for their season's first event.
+The other 45 names (the trophies, the HD and Fury group wordmarks) go through the same code; their own
+show conditions are unread and **they are not drawn** (the Fury list at `0x8151eb1c` is the nine names
+`FUN_810f665e` shows on its own page).
+
+**The paint** (`CanvasLabel_Paint` `0x81070670`, confidence 85; this slot replaces `CanvasItem_Paint`, so the label
+writes no colour and no height): `CanvasButton_PaintIconCells` (`0x81072702`) over the label's cell list
+with the label's `u`, `v`, then, in state 2, priority **5** into `canvas + 0x2f0c4` for every cell it holds
+(only where the cell's priority is not above 5).
+
+**The shift law** (`0x81072702`, confidence 90, read as the full decompile): per row `j` of the block,
+`v' = v + j * 82/2048`; per cell, `u' = u + k * 94/2048` where `k` counts pairs. A row whose first cell is apex up
+(`row % 2 != (col % 2 == 0)`, flipping every row) opens on a pair, so cells 0 and 1 share `u`, cells 2 and 3
+`u + 94/2048`, and so on; the other rows open on one lone cell at `u - 47/2048` and then pair up. Each stored
+value is rounded to a half float (round half up on the dropped bits). The vertex shader adds it to the
+cell's own atlas triangle, so a pair (an apex-up cell and the apex-down cell beside it) shows one
+94-unit slice of the crop. 2048's first row ends at 658 atlas units and 2050's `u` is 661/2048: the crops are
+laid side by side in the atlas.
+
+**Wave: the cards do not ride it.** Priority 5 is not below 5 (`canvas-music-wave.md`, section 1), so the wave
+neither lifts nor bumps a card cell, and a card outranks every ring mode (1 to 4) and yields to a tile (6, 7).
+
+**Wired** (`oag_ui::frontend::canvas_cells`: `card_shifts`, `bake_card`, `CARD_PRIORITY`; `Screen::canvas_labels`
+reads the labels, `season_cards` filters by name): one baked picture per card, drawn over the ring cells and
+under the tiles, shown by the rule above. Evidence: `the_season_cards_resolve_to_atlas_rectangles_decoded_from_the_disc`
+and `the_season_2048_card_is_drawn_on_the_map` (`crates/game/tests/vita_2048_season_cards_ground_truth.rs`).
+
+**Against frame `12`** (`data/reference/2048-frontend/12-campaign-map-season-2048-start.png`, 2048's card with
+Event 1 selected): the card's pixels against ours, best integer shift over the card's box: mean grey error 3.7 of 255 after
+a shift of (+26, 0) px, and Event 1's hexagon in the same capture needs (+27, -1) px. That common shift is
+the capture's scroll (`--until map:...` stops near, not on, the reference scroll), not a card error; the card
+against its own tile is **(-1, +1) px**. Not measured at the exact reference scroll.
+
+**Open**: the 45 other labels and their show conditions; whether `CanvasLabel_BuildCellList`'s slant override
+(`+0xc0`, written when the owner is set up) applies to a season card (read as the plain rectangle: the
+three entries author no such attribute, confidence 70); the half-pixel rounding of the block's per-cell
+offsets (cells are put at whole pixels).
 
 ## Omega
 
@@ -478,3 +536,9 @@ as the four floats within 160 bytes of each other and not found (nine `55.0` wor
 `25.0` and `4.0`): its stores are not laid out as on ARM, and the value is unconfirmed. A live
 Omega value is **not checkable** (shadPS4 has no memory readout), and whether Omega's front end
 (HD's) ever shows this map was not established.
+
+**Season cards: checked, differs.** Omega's `campaign2048_definition.xml` (`data00.psarc`, `Data/plugins/frontend/gui/`)
+carries the same three entries with identical `x`, `y`, `u`, `v`, `width`, `height` and `linkedevent`, but spells their tag
+`<aCanvasLabel>` (the trophies beside them stay `<CanvasLabel>`), and the PS4 `eboot.bin` has the three name strings
+(`2048SeasonText` at `0x888d66`). Whether Omega's engine reads `aCanvasLabel` is unread (no memory readout), and
+`oag_omega` declares `touch: None`, so nothing draws a canvas map there; our reader does not read `aCanvasLabel`.

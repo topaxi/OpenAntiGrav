@@ -375,3 +375,6 @@
 0x8125f460	function	MusicAnalysis_Update	70	canvas-music-wave.md
 0x8125f66c	function	MusicAnalysis_GetHistoryRow	85	canvas-music-wave.md
 0x818c3d58	data	g_MusicAnalysis	80	canvas-music-wave.md
+0x81074da4	function	CanvasLabel_SetShown	80	campaign-map-projection.md
+0x81070670	function	CanvasLabel_Paint	85	campaign-map-projection.md
+0x813c5ca0	function	CanvasLabel_BuildCellList	80	campaign-map-projection.md
