@@ -966,5 +966,5 @@
 0x001e11e0	function	PI_Cell_GetSavedBestValue	62	cell-medal-award.md
 0x00015eb0	function	PI_Cell_WriteSave	85	cell-medal-award.md
 0x00013098	function	PI_Cell_ReadSave	75	cell-medal-award.md
-0x001e1590	function	PI_Cell_ParseAttribute	90	cell-medal-award.md
+0x001e1590	function	PI_Cell_ParseElement	90	cell-medal-award.md
 0x009201d8	data	PI_Cell_ModeNameTable	95	cell-medal-award.md

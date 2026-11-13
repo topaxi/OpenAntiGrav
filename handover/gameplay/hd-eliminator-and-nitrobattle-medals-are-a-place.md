@@ -26,7 +26,12 @@ now read (82, static):
 1. **The value.** `crates/game/src/main/race_stage.rs` (`campaign_medal`) passes
    `player_standing().kills` for `CampaignMode::Elimination`. On a cell with
    `difficulty_targets` (HD's per-rung schema) pass the player's 1-based place on the score
-   board instead. The original's end-of-race order (`0x0005ac00`'s bubble sort) is: higher
+   board instead: the 1-based **sort index**, not `oag_raceplay::scoreboard`'s `Row::place`
+   (the shown number, shared on ties: `177, 177, 90` reads 1, 1, 3). Counter-example: the player
+   ties an opponent on points with more kills; the original sorts the player 2nd (silver), the
+   shown number says 1 (gold). Evaluate only on a finished race (a target reached), as
+   `Race | Head2Head if finished` already does: the original records nothing for a quit
+   Eliminator (`0x0005ac00`'s `+0x2cd5` gate). The original's end-of-race order (`0x0005ac00`'s bubble sort) is: higher
    truncated score first; equal score, **fewer kills** first; equal score and kills, the player
    above an opponent. That differs from `oag_race::score::ranked` (the HUD's rule, later grid
    slot on top), so the results board and the medal may need different tie rules; name the

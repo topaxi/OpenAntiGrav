@@ -32,14 +32,14 @@ read-only session.
 | `0x001e11e0` | function | `PI_Cell_GetSavedBestValue` | 62 | Returns record `+4` (`Time`) for modes 3, 8, 9, 13 and `+0` (`Achieved`) for every other mode; called by the cell screen (`0x00215258`, `0x002181a8`). What the screen prints with it is not read. |
 | `0x00015eb0` | function | `PI_Cell_WriteSave` | 85 | Writes `<PI_Cell name="%s_%d_%d">`, the cell's `Values`, `Gold`/`Silver`/`Bronze`, then `<Save Achieved="%d" Time="%d" SkillLevel="%d" Medal="%d">` from the record's `+0`, `+4`, byte `+8`, byte `+9`. |
 | `0x00013098` | function | `PI_Cell_ReadSave` | 75 | Reads the four attributes `Achieved`/`Time`/`SkillLevel`/`Medal` and copies a `0x48`-byte record into the cell's entry. |
-| `0x001e1590` | function | `PI_Cell_ParseAttribute` | 90 | The per-element attribute ladder: names and offsets in the table below. |
-| `0x009201d8` | data | `PI_Cell_ModeNameTable` | 95 | `{ordinal, name}` pairs, `PI_Cell_ParseAttribute`'s `mode=` lookup (TOC `+0x13cc` = `0x008ae8a4` holds `0x009201d8`). |
+| `0x001e1590` | function | `PI_Cell_ParseElement` | 90 | The per-element attribute ladder: names and offsets in the table below; it also parses the `_x_y` grid coordinates into `+0x158`/`+0x15c`. Pulse's `PI_Cell_ParseElement` (`0x088bf83c`) is the same role. |
+| `0x009201d8` | data | `PI_Cell_ModeNameTable` | 95 | `{ordinal, name}` pairs, `PI_Cell_ParseElement`'s `mode=` lookup (TOC `+0x13cc` = `0x008ae8a4` holds `0x009201d8`). |
 
 `PI_Cell_` and `Profile_` keep these apart from Pulse's `Cell_EvaluateMedal` (`0x088bf620`,
 another binary), the clash that left `0x001e25c0` unnamed in
 [race-campaign.md](race-campaign.md).
 
-## The cell's fields: `PI_Cell_ParseAttribute` (`0x001e1590`)
+## The cell's fields: `PI_Cell_ParseElement` (`0x001e1590`)
 
 Each branch matches one attribute name, read through its TOC slot, and stores it at one cell
 offset. A flat `Gold`/`Silver`/`Bronze` fills all three rungs at once.
@@ -84,6 +84,15 @@ deaths `+0x6f78` at `+0x45 * 4`. It bubble-sorts the rows:
 The player's place is the 1-based index of the flagged row, stored at `param_1[0x660]`.
 Every other mode first takes `param_1[0x660] = craft+0x7918` (the race position); mode 3
 overwrites it from its own table.
+
+**The record is gated on a finished race.** `0x0005ac00` sets `param_1+0x2cd5` only when its
+second argument is set, the player craft's finished byte `+0x7002` is set, or the mode is 6, 10
+or 13; with it clear it stores `0xff` and skips the record and the medal. In an Eliminator
+the finished byte comes from `SPElimination_UpdateTarget`: the tick any score reaches the
+target it writes `craft+0x7002 = 1` on every craft in `RM+0xe8` (`stb r0,0x7002(r9)` at
+`0x00069418`, a `bdnz` loop over the field) before `RaceManager_SetPhase(rm, 3)`. So a target
+reached Eliminator records and a quit one does not. NitroBattle (13) passes the gate
+unconditionally.
 
 Then, at `0x0005b3b0`:
 
@@ -148,7 +157,7 @@ same thresholds, agree.
 
 | Claim | Confidence | Why not higher |
 | --- | ---: | --- |
-| Eliminator medal = score-board place against the rung's `1`/`2`/`3`, `<=` | 82 | Static only: decompile, disassembly and the TOC agree, two consumers agree; no live finish read. |
+| Eliminator medal = score-board place against the rung's `1`/`2`/`3`, `<=` | 84 | Static only: decompile, disassembly and the TOC agree, and Omega's x86-64 build has the same `case 8: case 0xd:` body passing the place to the same compare (note at the end), an independent binary on another architecture; no live finish read. |
 | `NitroElim*` is the race-end score target, not a medal threshold | 88 | Parse offsets `+0xd4..+0xdc` against `SPElimination_UpdateTarget`'s `+0xd4 + 4 * difficulty`; nothing reads them in `PI_Cell_EvaluateMedalForValue`. |
 | The tie order on equal score (fewer kills first, then the player) | 72 | Read off the bubble sort's two compares; never seen live. |
 | NitroBattle (13) medal = race position `craft+0x7918` against `1`/`2`/`3` | 70 | Same case and compare; that `+0x7918` is the race position and that mode 13 takes the default branch are read, not watched. |
@@ -204,7 +213,11 @@ addresses are recorded here.
   and `case 0xd:` share one body that stores the place into `Achieved` when it is lower (or
   unset) and the value into `Time` when it is higher, then calls `FUN_014a6280` (`0x012a7848`).
   For mode 8 the value is the score of row `place - 1` (`param_1 + (place - 1) * 300 +
-  0x19c88`), as on HD. Race and Head2Head (`case 3`, `case 9`) have their own body.
+  0x19c88`), as on HD. Race and Head2Head (`case 3`, `case 9`) have their own body. The
+  decompile prints the call with no arguments; the disassembly fixes them: the body at
+  `0x012a76ca` loads `ESI` with the place byte (`MOVZX ESI,CL`), stores it to `+0x68` when lower,
+  stores `EDX` (the score) to `+0x6c` when higher, and jumps to `0x012a7840`, which calls
+  `FUN_014a6280` with `ESI` untouched. The place is the compared value.
 
 So Omega awards an Eliminator cell's medal by place too, against the rung's `1`/`2`/`3`
 (Omega re-ships HD's per-difficulty grids,
