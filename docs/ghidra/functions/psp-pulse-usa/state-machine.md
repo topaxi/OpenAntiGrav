@@ -29,7 +29,7 @@ had been decoding one value at a time).
 | `0x088df820` | `GriefReport_UpdateCancel` | function | 78 |
 | `0x088df8b0` | `GriefReport_UpdateSend` | function | 78 |
 | `0x08830990` | `AiBatchTest_Construct` | function | 80 |
-| `0x088331ac` | `Demo_Construct` | function | 80 |
+| `0x088331ac` | `Demo_Construct` | function | 88, [attract-demo.md](attract-demo.md) |
 | `0x0882c108` | `ArcadeRace_Construct` | function | 82 |
 | `0x0882e57c` | `Tournament_Construct` | function | 82 |
 | `0x0882d9c0` | `TimeTrial_Construct` | function | 82 |
@@ -118,7 +118,7 @@ of string constants passed to the transition anywhere in the binary:
 | `InGame` | `InGame_UpdatePauseInput` | a second edge test (`FUN_0894f258`) on the same index while in `InGame Pause` |
 | `InGame` | `FUN_08829e6c` (three sites) | the race-start countdown's own nested machine handing the race over |
 | `Reset Demo` | `Demo_UpdateAttractMode` | the 120-second attract timeout |
-| `Demo Launch` | `MainMenu_Update` | 60 s without a press while on `Main Menu` |
+| `Demo Launch` | `MainMenu_Update` | 60 s without a press while on `Main Menu` (live, [attract-demo.md](attract-demo.md)) |
 | `Show Unlock All` | `MainMenu_Update` | the unlock code below |
 | `SyncPopUp` | seven functions `0x088ad998`-`0x088aff40` | ad hoc session sync dialogs |
 | `Sync Data` | `FUN_088aec5c` | ad hoc data sync |
