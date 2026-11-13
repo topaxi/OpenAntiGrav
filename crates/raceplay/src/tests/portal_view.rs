@@ -479,7 +479,10 @@ fn a_portal_in_the_main_views_pvs_still_draws() {
     assert!(entrance_is_in_the_pvs(&race, &open_sections(), &request));
     let scene = sectioned_scene(&gpu, &race, open_sections());
     assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
-    assert!(scene.portal_engine_of(&race).is_some(), "the texture is bound");
+    assert!(
+        scene.portal_engine_of(&race).is_some(),
+        "the texture is bound"
+    );
 }
 
 /// A snapshot is taken on the first frame its entrance is in view, not spent on a frame where a
