@@ -219,7 +219,11 @@ fn head2head_alone_fixes_its_field_and_caps_its_people_at_two() {
     assert!(Mode::Head2Head.field_is_fixed());
     assert_eq!(Mode::Head2Head.max_people(), Some(2));
     for mode in Mode::ALL.into_iter().chain([Mode::Tournament]) {
-        if mode == Mode::Head2Head {
+        // Detonator is single-player, its own cap (`detonator_is_single_player_without_a_grid`).
+        if matches!(mode, Mode::Head2Head | Mode::Detonator) {
+            if mode == Mode::Detonator {
+                assert!(!mode.field_is_fixed());
+            }
             continue;
         }
         assert!(!mode.field_is_fixed(), "{mode:?}");

@@ -840,9 +840,7 @@ pub(super) fn zone_grade(
             race.zone_stages,
         ),
         oag_race::Mode::Detonator => {
-            let Some(detonator) = race.detonator else {
-                return None;
-            };
+            let detonator = race.detonator?;
             if detonator.palette.is_none() {
                 report.push(
                     "detonator: this title's stage grade is not drawn; the circuit keeps its own \
