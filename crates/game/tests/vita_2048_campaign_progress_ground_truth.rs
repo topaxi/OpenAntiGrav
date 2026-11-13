@@ -385,8 +385,10 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
 }
 
 /// A whole event raced under the autopilot pays the lap and place awards the disc's table
-/// authors, through the edges the race reports: a lap without damage at full health, and the
-/// places taken on the way. Fails if the lap or place feeds are dropped from `Race::tick`.
+/// authors, through the edges the race reports. Each lap's expectation is read off the ship as it
+/// is driven (a drop in health since the last line is damage; health at the maximum at the line is
+/// full), and the shield is refilled after the first line so a clean, full lap exists whatever the
+/// autopilot scraped. Fails if the lap or place feeds are dropped from `Race::tick`.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
@@ -401,28 +403,46 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let mut run = race::Race::start(loaded.setup);
     run.arm_event_xp(&progress);
     run.set_autopilot(true);
+    let max = run.sim.world.ships[0].handling.dimensions.shield;
+    let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
+    let (mut perfect, mut full) = (0, 0);
     while !run.finished() && run.sim.world.tick < 30_000 {
         run.tick(&oag_gameplay::PlayerInputs::none());
+        let now = run.sim.world.ships[0].physics.shield;
+        damaged |= now < shield;
+        shield = now;
+        if run.sim.world.race[0].lap > lap {
+            lap = run.sim.world.race[0].lap;
+            perfect += u32::from(!damaged);
+            full += u32::from(now >= max);
+            damaged = false;
+            run.sim.world.ships[0].physics.shield = max;
+            shield = max;
+        }
     }
     assert!(run.finished(), "the event did not finish in 30000 ticks");
     let tally = run.xp_tally().expect("armed");
     let column = progress.xp_column;
-    let paid = |index: u32| tally.times_paid(index);
     assert!(
         awards.xp(5, column) > 0 && awards.xp(44, column) > 0 && awards.xp(21, column) > 0,
         "the table authors the lap and place awards"
     );
-    // The autopilot scrapes a wall in the first lap and never refills: the laps after it are
-    // clean, the scraped one is not, and no lap ends at full health.
-    let laps = u64::from(run.sim.world.race[0].laps_target.expect("a lap target"));
-    assert!(
-        (1..laps).contains(&u64::from(paid(5))),
-        "Perfect lap paid {} of {laps} laps",
-        paid(5)
+    assert_eq!(tally.times_paid(5), perfect, "Perfect lap, lap by lap");
+    assert_eq!(
+        tally.times_paid(44),
+        full,
+        "full health at the line, lap by lap"
     );
-    assert_eq!(paid(44), 0, "no lap ended at full health");
     assert!(
-        paid(21) + paid(22) + paid(23) >= 1,
+        perfect >= 1 && full >= 1,
+        "sanity: {perfect} clean, {full} full"
+    );
+    let taken: u32 = [21, 22, 23]
+        .map(|index| tally.times_paid(index))
+        .iter()
+        .sum();
+    assert!(
+        taken >= 1,
         "the player took at least one of the first three places"
     );
 }

@@ -164,7 +164,7 @@ tally and banks its total.
 | 34 | Shielded against Plasma | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 2; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 35 | Shielded against Cannon | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 3; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 36 | Shielded against Mine | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 4; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
-| 37 | Shielded against Quake | **wired** for the projectile paths; **unreachable for Quake**: a wave meeting a running shield asks nothing and reports no absorb (`Wave::apply_hits`), so the weapon is never named; weapon type 5; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
+| 37 | Shielded against Quake | **read, unreachable**: a Quake wave meeting a running shield asks nothing and reports no absorb (`Wave::apply_hits`), so the weapon is never named and the award cannot fire; weapon type 5; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 38 | Shielded against Bomb | **wired**: the human's shield absorbs a hit (`WeaponHit::absorbed` with the weapon named), gate; weapon type 6; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 39 | Shielded against Leach Beam | **read, unwired**: the Leach Beam link reports a drain, not an absorb (`advance_one_leach_beam`); weapon type 7; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
 | 40 | Shielded against Light Barrier | **read, not wired**: Light Barrier (type 10), see 20; `Pilot_ApplyPendingHit` `0x811bd214` (72) |
@@ -212,11 +212,15 @@ Awarded in ours through `XpTally`, fed from `Race::tick`'s own edges and never p
 attributed to the human through `Impact::owner` (the Eliminator's `Race::impact_reaching`, shared)
 or `Wave::owner`; Missile, Plasma, Cannon, Mine and Bomb go through the same lookup and are not
 tested one by one. Never paid by the original and left unpaid here: 59-61, 65-70, 77.
+An award that would land after the player's own finish is not banked: the finish banks and empties the tally
+at `race.finished()` while rivals still lap (**chosen, not measured**; matters for none of the wired awards,
+and would for 45-47 on the final crossing).
 
 Not wired by anything here, in the original: the rank bar and the `RaceXP` popups.
 
-**Omega check.** Omega ships a byte-identical `XPAwards.xml` and the same loader: **ported** (an
-Omega `--event` arms the tally from Omega's table, `omega_event_xp_ground_truth`).
+**Omega check.** Omega ships a byte-identical `XPAwards.xml` and the same loader: **ported**, with its own
+ground truth (an Omega `--event` arms the tally from Omega's table; `omega_event_xp_ground_truth` checks a
+lap or place award pays in an Omega race and that a repeat Bronze pays no completion).
 
 ## Cross-check
 

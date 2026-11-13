@@ -363,8 +363,9 @@ impl crate::Race {
     pub(super) fn observe_xp(&mut self) {
         let slot = self.player_slot();
         // Before the racing gate: the launch award is paid without one.
-        let launched =
-            self.sim.world.ships[slot].physics.launch.grade == oag_physics::launch::Grade::Perfect;
+        let launched = self.sim.world.controllers[slot].is_human()
+            && self.sim.world.ships[slot].physics.launch.grade
+                == oag_physics::launch::Grade::Perfect;
         if let Some(xp) = self.sim.xp.as_mut() {
             xp.observe_launch(launched);
         }
