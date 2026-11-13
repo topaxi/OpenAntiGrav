@@ -475,6 +475,9 @@ impl Race {
 
     /// The closest point on `owner`'s trail centre line to `point`, and how far it is. **The
     /// title's own trail**: HD's tube where the race draws it, the PSP-preset ribbon otherwise.
+    /// The ribbon's line ends where it is drawn below [`exhaust::TRAIL_HIT_MIN_BRIGHTNESS`] of
+    /// its head's brightness, so a lent burst never fires in the part nobody can see
+    /// (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst reach"); HD's tube is whole.
     fn trail_nearest(&self, owner: usize, point: Vec3) -> Option<(Vec3, f32)> {
         if self.view.hd_trail_active {
             self.view.hd_trail[owner].nearest(point)

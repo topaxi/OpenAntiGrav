@@ -318,7 +318,9 @@ impl Tube {
         super::centre_line::nearest_on_polyline(
             self.samples().iter().map(|sample| sample.position),
             point,
+            f32::INFINITY,
         )
+        .map(|(on, away, _)| (on, away))
     }
 
     /// Extrudes the tube: 53 segments x 3 fins x 6 vertices = 954 at a tick, the

@@ -365,6 +365,71 @@ fn a_craft_beside_a_pulse_ribbon_is_clear_of_it() {
     assert_eq!(race.view.trail_inside[0] & 0b10, 0, "just outside");
 }
 
+/// **A lent burst fires only where the ribbon is lit.** Slot 0's ribbon runs along -X from its
+/// head at x = -36 (the newest sample) back to x = 0, four units a sample; the drawn fade passes
+/// 10 % of the head's a little before sample 5, x = -16. A craft at the head fires; one on the
+/// ribbon's dark back half, still dead on its line, fires nothing.
+#[test]
+fn a_lent_burst_does_not_fire_in_the_faded_tail_of_a_pulse_ribbon() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-4.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "age 8 is under 2 %");
+    assert_eq!(race.view.stage.playing_count(), 0);
+    place_and_step(&mut race, Vec3::new(-28.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "age 2, near the head");
+    assert_eq!(race.view.stage.playing_count(), 1);
+}
+
+/// The two ends of the cut, each side of x = -16: the cut itself is the fade law's, not a sample.
+#[test]
+fn the_lit_edge_of_a_pulse_ribbon_is_where_the_fade_reaches_the_floor() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let lit_end = -36.0 + 4.0 * race.view.exhaust[0].trail_lit_age();
+    let reach = 2.0 + race.view.exhaust[0].trail_half_width();
+    place_and_step(&mut race, Vec3::new(lit_end - 0.5, 0.0, 0.0));
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "just inside the lit part"
+    );
+    // Along the line, just past the end, and farther than the reach from it.
+    place_and_step(&mut race, Vec3::new(lit_end + reach + 0.5, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "past the lit end");
+}
+
+/// Leaving the lit part is leaving: the latch and the lent burst's rate state clear in the tail,
+/// and re-entering fires at once, as it does after any other exit.
+#[test]
+fn leaving_the_lit_part_clears_the_latch_and_the_burst_fires_again_on_return() {
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    let bit = 0b10;
+    place_and_step(&mut race, Vec3::new(-34.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & bit, 0);
+    assert_ne!(race.view.trail_hit_rest[0] & bit, 0, "fired, so resting");
+    assert_eq!(race.view.stage.playing_count(), 1);
+    place_and_step(&mut race, Vec3::new(-4.0, 0.0, 0.0));
+    assert_eq!(race.view.trail_inside[0] & bit, 0, "in the tail");
+    assert_eq!(race.view.trail_hit_rest[0] & bit, 0, "so not resting");
+    assert_eq!(
+        race.view.stage.playing_count(),
+        1,
+        "and nothing fired there"
+    );
+    place_and_step(&mut race, Vec3::new(-34.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & bit, 0);
+    assert_eq!(race.view.stage.playing_count(), 2, "fired on re-entry");
+}
+
+/// **HD keeps its whole tube.** A craft deep in the back of HD's 54-sample tube, where the
+/// Pulse ribbon would be dark, is inside it and fires every tick, as before.
+#[test]
+fn an_hd_craft_in_the_back_of_the_tube_still_hits_it() {
+    let mut race = race_with_a_trail();
+    // The tube runs from its head at x = -212 to x = 0; this is its oldest fifth.
+    place_and_step(&mut race, Vec3::new(-8.0, 0.0, 0.0));
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0);
+}
+
 /// A ribbon whose ring is not full is not drawn and is not tested - the grid's opening ticks
 /// latch nothing.
 #[test]
