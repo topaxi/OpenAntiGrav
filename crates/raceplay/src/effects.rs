@@ -327,9 +327,10 @@ impl Race {
                 // trail holds about thirty instances at the every-tick rate, and
                 // a detonation or pickup burst must not lose its slot to them.
                 let velocity = self.sim.world.ships[intruder].physics.body.linear_velocity;
+                let tint = self.trail_hit_tint();
                 self.view
                     .stage
-                    .play_carried_expendable(&effect, point, 1.0, velocity);
+                    .play_carried_expendable(&effect, point, 1.0, velocity, tint);
             }
         }
     }
@@ -401,9 +402,30 @@ impl Race {
         let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
+        self.view.stage.play_carried_expendable(
+            &effect,
+            probe,
+            1.0,
+            body.linear_velocity,
+            self.trail_hit_tint(),
+        );
+    }
+
+    /// The hue of the burst a craft raises inside a rival's trail, when the burst is lent.
+    ///
+    /// **A derivation, not a measurement.** Wipeout HD picks its burst by the ribbon's owner:
+    /// the blue one in a blue ribbon, the red one in a red ribbon (`advance_trail_hits`). A
+    /// burst lent to Pulse or Pure is HD's blue, which is no colour of those titles' ribbons,
+    /// so it is redrawn in the hue the owner's ribbon shows and keeps its own brightness. Their
+    /// ribbon is one colour law for every craft ([`exhaust::TrailLaw::ribbon_colour`], which
+    /// differs between the PSP and the PS2), so the owner does not change the answer. A burst
+    /// the title authors is never tinted. See `docs/formats/pulse-absent-effects.md`,
+    /// "Trail-hit burst colour".
+    fn trail_hit_tint(&self) -> Option<psys::Tint> {
         self.view
-            .stage
-            .play_carried_expendable(&effect, probe, 1.0, body.linear_velocity);
+            .handles
+            .is_lent(Trigger::TrailHitship)
+            .then(|| psys::Tint::towards(self.trail_law().ribbon_colour()))
     }
 
     /// Whether any of the craft's own authored hull points is inside the

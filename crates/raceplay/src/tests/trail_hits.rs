@@ -262,9 +262,20 @@ pub(super) fn a_one_shot_burst(name: &str) -> oag_fx::psys::Effect {
     let record = blob.len() - oag_pob::EMITTER_LEN;
     blob[record + 0x24..record + 0x28].copy_from_slice(&1.0f32.to_bits().to_le_bytes());
     blob[record + 0x4d0..record + 0x4d4].copy_from_slice(&0.5f32.to_bits().to_le_bytes());
+    for entry in blob[record + 0xc4..]
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .take(256)
+    {
+        *entry = BURST_BLUE;
+    }
     oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses")
 }
+
+/// The palette the hand-laid burst is painted in: a saturated blue, as HD's own is.
+const BURST_BLUE: [u8; 4] = [26, 64, 255, 255];
 
 /// A Pulse-shaped grid: the PSP ribbon, no HD tube, slot 0's ribbon laid along -X (ten samples,
 /// the ring the title's own trail holds), and `burst` lent to the trigger when given.
@@ -449,4 +460,90 @@ fn a_detonation_started_while_trail_hits_stream_still_plays_to_completion() {
         );
     }
     assert!(race.view.stage.alive_count_of(&detonation) > 0);
+}
+
+/// The rgb of every vertex the stage draws once its burst has spawned (a play spawns on the
+/// stage's next step).
+fn burst_colours(race: &mut Race) -> Vec<[f32; 3]> {
+    race.view
+        .stage
+        .advance(1.0 / oag_fx::psys::TICK_HZ, &mut oag_core::Rng::new(3));
+    let (additive, alpha) = race.view.stage.vertices(Vec3::Z, Vec3::Y);
+    additive
+        .iter()
+        .chain(alpha.iter())
+        .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+        .collect()
+}
+
+/// The burst as its effect draws it, played in a stage of its own with no tint.
+fn untinted_burst_colours() -> Vec<[f32; 3]> {
+    let effect = std::sync::Arc::new(a_one_shot_burst(
+        oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+    ));
+    let mut stage = oag_fx::psys::Stage::new();
+    stage.play_carried_expendable(&effect, Vec3::ZERO, 1.0, Vec3::ZERO, None);
+    stage.advance(1.0 / oag_fx::psys::TICK_HZ, &mut oag_core::Rng::new(3));
+    let (additive, alpha) = stage.vertices(Vec3::Z, Vec3::Y);
+    additive
+        .iter()
+        .chain(alpha.iter())
+        .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+        .collect()
+}
+
+fn luma(rgb: [f32; 3]) -> f32 {
+    rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+}
+
+/// **A lent burst is drawn in the colour of the ribbon it was struck in, at its own brightness.**
+/// HD's burst is blue; a Pulse ribbon is violet (deep blue, magenta and near-white layers
+/// summed). Red to green: with the tint dropped the colours are HD's blue again.
+#[test]
+fn a_lent_burst_takes_the_ribbon_hue_and_keeps_its_brightness() {
+    let blue = untinted_burst_colours();
+    assert!(!blue.is_empty());
+    let mut race = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut race, Vec3::new(-18.0, 0.0, 0.0));
+    let drawn = burst_colours(&mut race);
+    assert_eq!(drawn.len(), blue.len());
+    let tint = oag_fx::psys::Tint::towards(oag_fx::exhaust::TrailLaw::Ramped.ribbon_colour());
+    for (drawn, authored) in drawn.iter().zip(&blue) {
+        assert!(
+            (luma(*drawn) - luma(*authored)).abs() < 1e-4,
+            "{drawn:?} is not as bright as {authored:?}"
+        );
+        assert_ne!(drawn, authored, "the burst kept HD's blue");
+        assert_eq!(*drawn, tint.apply(*authored));
+        assert!(drawn[0] > authored[0], "violet has more red than HD's blue");
+    }
+}
+
+/// The PS2's ribbon leaves its outer blue layer out, so its burst is another hue than the PSP's.
+#[test]
+fn a_lent_burst_follows_the_platforms_ribbon_law() {
+    let mut psp = a_pulse_race_with_a_ribbon(true);
+    place_and_step(&mut psp, Vec3::new(-18.0, 0.0, 0.0));
+    let mut ps2 = a_pulse_race_with_a_ribbon(true);
+    ps2.view.ps2_trail = true;
+    place_and_step(&mut ps2, Vec3::new(-18.0, 0.0, 0.0));
+    let (psp, ps2) = (burst_colours(&mut psp), burst_colours(&mut ps2));
+    assert!(!psp.is_empty() && psp.len() == ps2.len());
+    assert_ne!(psp, ps2);
+}
+
+/// **A burst the title authors is never tinted** (Wipeout HD, and 2048 and Omega with the setting
+/// on): drawn exactly as its effect draws it, whatever the ribbon.
+#[test]
+fn a_burst_the_title_authors_keeps_its_own_colours() {
+    let mut race = race_with_a_trail();
+    race.view.handles.insert(
+        Trigger::TrailHitship,
+        a_one_shot_burst(oag_title::engine_effects::TRAIL_HITSHIP_EFFECT),
+    );
+    assert!(!race.view.handles.is_lent(Trigger::TrailHitship));
+    place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
+    let drawn = burst_colours(&mut race);
+    assert!(!drawn.is_empty());
+    assert_eq!(drawn, untinted_burst_colours());
 }

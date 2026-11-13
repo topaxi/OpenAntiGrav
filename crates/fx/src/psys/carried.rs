@@ -5,7 +5,7 @@
 
 use oag_core::math::Vec3;
 
-use super::{Effect, Playing, Stage, System};
+use super::{Effect, Playing, Stage, System, Tint};
 
 impl System {
     /// Gives every running root emitter an inherited velocity of `velocity`
@@ -47,16 +47,20 @@ impl Stage {
         Some(playing)
     }
 
-    /// [`Self::play_carried`] through [`Self::play_expendable`].
+    /// [`Self::play_carried`] through [`Self::play_expendable`], drawn in `tint`'s hue when given.
     pub fn play_carried_expendable(
         &mut self,
         effect: &std::sync::Arc<Effect>,
         point: Vec3,
         scale: f32,
         velocity: Vec3,
+        tint: Option<Tint>,
     ) -> Option<Playing> {
         let playing = self.play_expendable(effect, point, scale)?;
         self.carry(playing, effect, velocity);
+        if let Some(instance) = self.instances.get_mut(usize::from(playing.index)) {
+            instance.tint = tint;
+        }
         Some(playing)
     }
 
@@ -108,5 +112,58 @@ mod tests {
         let half = drift_after_ten_ticks(0.5);
         assert!((4.0..=5.5).contains(&half), "drifted {half}");
         assert_eq!(drift_after_ten_ticks(0.0), 0.0);
+    }
+
+    /// The colour of every vertex `stage` draws, additive list.
+    fn drawn_colours(stage: &Stage) -> Vec<[f32; 3]> {
+        let (additive, _) = stage.vertices(Vec3::X, Vec3::Y);
+        additive
+            .iter()
+            .map(|v| [v.colour[0], v.colour[1], v.colour[2]])
+            .collect()
+    }
+
+    fn a_blue_burst() -> std::sync::Arc<Effect> {
+        let mut built = (*effect("blue", false, 1.0)).clone();
+        built.emitters[0].palette = Box::new([[0.1, 0.25, 1.0, 1.0]; 256]);
+        std::sync::Arc::new(built)
+    }
+
+    /// **A tint changes the hue of what the instance draws and nothing else's, and a recycled
+    /// slot does not keep it.** Red to green: dropping the call's tint leaves the blue.
+    #[test]
+    fn a_tint_recolours_its_own_instance_only_and_a_recycled_slot_forgets_it() {
+        let burst = a_blue_burst();
+        let tint = Tint::towards([1.0, 0.1, 0.1]);
+        let mut stage = Stage::new();
+        stage
+            .play_carried_expendable(&burst, Vec3::ZERO, 1.0, Vec3::ZERO, Some(tint))
+            .expect("a free stage plays");
+        stage
+            .play_carried_expendable(&burst, Vec3::X, 1.0, Vec3::ZERO, None)
+            .expect("a free stage plays");
+        let mut rng = Rng::new(1);
+        stage.advance(DT, &mut rng);
+        let drawn = drawn_colours(&stage);
+        assert_eq!(drawn.len(), 12, "two quads");
+        assert_eq!(drawn[0], tint.apply([0.1, 0.25, 1.0]));
+        assert_eq!(
+            drawn[6],
+            [0.1, 0.25, 1.0],
+            "the untinted burst is as authored"
+        );
+        assert!(drawn[0][0] > drawn[0][2], "red now");
+
+        let mut stage = Stage::new();
+        for _ in 0..crate::psys::MAX_INSTANCES {
+            stage.play_carried_expendable(&burst, Vec3::ZERO, 1.0, Vec3::ZERO, Some(tint));
+        }
+        stage.play_carried_expendable(&burst, Vec3::ZERO, 1.0, Vec3::ZERO, None);
+        stage.advance(DT, &mut Rng::new(1));
+        let plain = drawn_colours(&stage)
+            .into_iter()
+            .filter(|c| *c == [0.1, 0.25, 1.0])
+            .count();
+        assert_eq!(plain, 6, "the recycled slot took no tint with it");
     }
 }

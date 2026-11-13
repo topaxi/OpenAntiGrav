@@ -180,9 +180,14 @@ impl Stage {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
+            let (from_additive, from_alpha) = (additive.len(), alpha_over.len());
             instance
                 .system
                 .extend_vertices(additive, alpha_over, effect, right, up, guard);
+            if let Some(tint) = instance.tint {
+                tint.recolour(additive, from_additive);
+                tint.recolour(alpha_over, from_alpha);
+            }
         }
     }
 
@@ -198,7 +203,13 @@ impl Stage {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
+            let from: Vec<usize> = out.iter().map(|(_, list)| list.len()).collect();
             instance.system.extend_shaded(out, effect, right, up, guard);
+            if let Some(tint) = instance.tint {
+                for (at, (_, list)) in out.iter_mut().enumerate() {
+                    tint.recolour(list, from.get(at).copied().unwrap_or(0));
+                }
+            }
         }
     }
 
@@ -214,9 +225,13 @@ impl Stage {
             let Some(effect) = instance.effect.as_deref() else {
                 continue;
             };
+            let from = out.len();
             instance
                 .system
                 .extend_underlay_vertices(out, effect, right, up, guard);
+            if let Some(tint) = instance.tint {
+                tint.recolour(out, from);
+            }
         }
     }
 }

@@ -49,7 +49,9 @@ effects.
   2. The burst's look mends with the draw above.
   3. A Pulse or Pure race on a machine with no HD, 2048 or Omega source plays nothing, by
      design.
-  4. The lent burst is the blue variant only.
+  4. The lent burst is the blue variant only, redrawn in the Pulse or Pure ribbon's hue
+     (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst colour"); the PSP change is small
+     because HD's burst is already that violet.
   5. The stage holds 64 effects and a trail hit is expendable, so it no longer evicts a
      detonation or an absorb burst; the lent burst fires every other tick
      (`docs/formats/pulse-absent-effects.md`, "Trail-hit burst budget"). Unmeasured: a rocket

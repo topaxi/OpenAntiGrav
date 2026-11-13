@@ -18,6 +18,33 @@ pub enum TrailLaw {
     Baked,
 }
 
+impl TrailLaw {
+    /// The first layer this law submits.
+    #[must_use]
+    pub const fn first_layer(self) -> usize {
+        match self {
+            Self::Ramped => 0,
+            Self::Baked => PS2_FIRST_LAYER,
+        }
+    }
+
+    /// The colour the ribbon shows where its layers overlap, from the layers this law draws:
+    /// the sum of their authored colours, since the three are drawn additively
+    /// ([`super::LAYER_COLOUR`]). Only the hue is a ribbon's own; its brightness is the grey
+    /// ramp's, so this is not a vertex colour. The PSP's outer layer is deep blue and the
+    /// whole sums violet; the PS2 leaves that layer out and the sum is pink-white.
+    #[must_use]
+    pub fn ribbon_colour(self) -> [f32; 3] {
+        let mut sum = [0.0; 3];
+        for colour in &super::LAYER_COLOUR[self.first_layer()..] {
+            for (total, channel) in sum.iter_mut().zip(colour) {
+                *total += channel;
+            }
+        }
+        sum
+    }
+}
+
 /// The first layer the PS2's draw submits: its loop's `index != 0` test leaves out
 /// layer 0, the widest one (`LAYER_WIDTH[0]`, the blue `LAYER_COLOUR[0]`).
 pub const PS2_FIRST_LAYER: usize = 1;

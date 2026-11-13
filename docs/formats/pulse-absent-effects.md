@@ -196,3 +196,57 @@ eviction; the red-to-green test above does.
 Not measured: a rocket volley from several craft at once (the `--give rocket` aid fires
 about 127 in flight, which no race reaches), and Pure. Checked against HD, 2048 and Omega:
 the stage and the expendable rule are title-blind, and their burst rate is unchanged.
+
+## Trail-hit burst colour
+
+With `graphics.trail_hits` on, the lent `WO_TRAIL_HITSHIP` is redrawn in the hue of the ribbon
+the craft was struck in, at the burst's own brightness (`oag_fx::psys::Tint`,
+`Race::trail_hit_tint`). **A derivation, not a measurement.** HD picks its burst by the ribbon's
+owner: `WO_TRAIL_HITSHIP` in a blue ribbon, `_RED` in a red one
+(`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, the call-site table: the variant byte is the owner's `+0x7d2c`).
+Pulse and Pure author no burst, so the lent one would otherwise be HD's regardless of their
+ribbon; this applies HD's rule to it.
+
+**The rule.**
+
+1. **The hue is the ribbon's visible colour**: the sum of the layers the platform draws, since the
+   three are drawn additively and the burst sits on the hull inside the ribbon
+   (`oag_fx::exhaust::TrailLaw::ribbon_colour`, computed from `LAYER_COLOUR`, nothing typed in).
+   PSP (every layer): (1.43, 0.86, 1.81), luma 1.05, chroma direction (0.44, -0.22, 0.87), violet.
+   PS2 (`PS2_FIRST_LAYER`, the deep blue layer is not submitted): (1.43, 0.82, 1.31), luma 0.99,
+   chroma direction (0.78, -0.29, 0.56), pink-white. The outer layer alone, (0, 0.03, 0.50), is
+   direction (-0.13, -0.06, 0.99), blue; it is not used because it is the rim of the ribbon, not
+   what the core shows.
+2. **Chroma swap, luminance kept.** Per vertex, `Y = 0.2126 R + 0.7152 G + 0.0722 B`, chroma
+   `c = rgb - Y`; the vertex becomes `Y + |c| * unit(target chroma)`. Luminance is unchanged by
+   construction, a white or grey vertex stays as it was (the white-hot core is not coloured), a
+   saturated one keeps its strength of colour. A channel that would go negative shrinks the chroma
+   rather than being clamped (a negative in an additive blend subtracts light). A plain multiply
+   by the ribbon colour would only darken the core.
+3. **Per instance**, set by `Stage::play_carried_expendable` and cleared when the slot is
+   claimed again, applied where the stage gathers vertices. Render side only; no simulation
+   state, determinism untouched.
+4. **Only a lent burst.** `EffectHandles::is_lent(TrailHitship)` gates it: HD, and 2048 and Omega
+   (which play their own with the setting on), draw the effect as authored. The Pulse and Pure
+   ribbon is one colour law for every craft, so the owner does not change the hue; the PSP and
+   PS2 laws differ.
+
+**Evidence, and the limit of it.** Tests: `psys::tint::tests` (white stays white, blue takes the
+target hue at equal luminance, no negative channel), `psys::carried::tests` (a tint recolours
+its own instance only and a recycled slot forgets it), `tests::trail_hits` (a lent burst is the
+ribbon's hue at the authored luminance; the PS2 law gives another hue; an authored burst is
+byte-identical to its effect's own draw) and, on the discs,
+`trail_hits_lent_ground_truth` (every coloured vertex of HD's real burst on a Pulse race points
+within 0.999 of the ribbon's chroma direction).
+
+**The change is small on the PSP.** HD's burst palette ends at (0.79, 0.43, 1.0), chroma direction
+(0.46, -0.22, 0.86) (`engine-trail.md`, "The two emitters"): the PSP ribbon's summed hue to two
+places. The burst was already the ribbon's violet there, so the tint mostly removes the cyan
+cast the over-life ramp and the additive stacking give the fringe (hundreds of overlapping soft
+quads clip white; only the rim shows a hue). Seed 7, `--trail-sparks`, tick 200, 1440x816: 4,617
+of the frame's pixels move by more than 8 levels, the moved pixels' mean going from
+(144, 207, 246) to (171, 202, 244): cyan-white to lilac-white. On the PS2 the ribbon is
+pink-white and the shift is larger. A probe with the tint forced to red recolours every spark red
+and thins the cloud, so no draw path escapes it. Checked against HD, 2048 and Omega: not
+applicable, they author the burst and are never lent it; Pure draws Pulse's ribbon law
+(`oag_pure::race`), not measured separately.
