@@ -414,3 +414,70 @@ fn an_icon_the_mod_does_not_declare_faults_the_module_naming_it() {
         "nothing lit by a faulted module"
     );
 }
+
+/// A `fire-effect` burst leaves its craft along the `axis` its file declares: `rear` away from
+/// the nose, `up` out of the roof. `play_fired` once did `play` then `orient`, which ignores a
+/// burst, so both went along the stage's default.
+#[test]
+fn a_fired_mod_effect_leaves_its_craft_along_its_files_axis() {
+    use std::sync::Arc;
+
+    use crate::extension_effects::{Fired, ModEffects, OwnEffect};
+    use oag_core::math::Vec3;
+
+    let file = |axis: &str| {
+        format!(
+            "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/effect.tosd\", version = \"1.0.0\" }}\naxis = \"{axis}\"\n[[emitter]]\nduration = 1\nlifetime = [60, 0]\nspeed = [0.5, 0.0]\nspread = 0\nlive-cap = 2\nsize = 0.1\nalpha = 1.0\ncolour = \"#ffffff\"\n"
+        )
+    };
+    for axis in ["rear", "up"] {
+        let parsed = oag_fx::psys::parametric::parse(
+            &file(axis),
+            &mut |_| Err("no textures".to_string()),
+            &mut |_| Err("no shaders".to_string()),
+        )
+        .unwrap();
+        let own = OwnEffect {
+            effect: Arc::new(parsed.effect),
+            axis: parsed.axis,
+        };
+        let mut race = grid(prepared(&[]));
+        race.view.handles = std::mem::take(&mut race.view.handles)
+            .with_own(ModEffects(vec![("test.axis".to_string(), vec![Some(own)])]));
+        race.tick(&PlayerInputs::none());
+        let body = &race.sim.world.ships[0].physics.body;
+        let (forward, up) = (body.forward(), body.up());
+        let nozzle =
+            body.position - forward * (race.sim.world.ships[0].handling.dimensions.length * 0.5);
+        race.play_fired(
+            0,
+            &Fired::Own {
+                mod_id: "test.axis".to_string(),
+                index: 0,
+            },
+        );
+        for _ in 0..6 {
+            race.tick(&PlayerInputs::none());
+        }
+        let (mut additive, mut alpha) = (Vec::new(), Vec::new());
+        race.view
+            .stage
+            .extend_vertices(&mut additive, &mut alpha, Vec3::X, Vec3::Y, None);
+        let all = [additive, alpha].concat();
+        assert!(!all.is_empty(), "{axis}: nothing was emitted");
+        let moved = all
+            .iter()
+            .fold(Vec3::ZERO, |sum, v| sum + Vec3::from_array(v.position))
+            / all.len() as f32
+            - nozzle;
+        let (along, other) = if axis == "rear" {
+            (-forward, up)
+        } else {
+            (up, -forward)
+        };
+        assert!(
+            moved.dot(along) > 0.5 && moved.dot(other).abs() < 0.5,
+            "{axis}: the burst moved {moved:?} from the nozzle, wanted along {along:?}"
+        );
+    }
+}

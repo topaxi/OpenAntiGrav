@@ -69,6 +69,15 @@ The engine never names the mod.
    covered by the `route_point` check, no transit or portal-view test on them). Open from it,
    small: the entrance is still a ring progress, so a firer already on a route frames its portal
    from the ring; the official `oag.slipstream` exits by progress and does not use the trigger form.
+2a. ~~**The oblique near plane drops the TAA jitter** (lane portal-taa-jitter).~~ Not a bug: negative result.
+   `prepare_view` replaces the jittered matrix with the unjittered oblique one only when
+   `ViewSettings::portal` is `Some`, and that is set in exactly one place, `Scene::encode_portal_view`
+   (the 960x540 secondary scene pass into the portal's texture), which builds its settings with
+   `camera_jitter: None` (and `Scene::render`/`render_window` build `portal: None`). So the
+   replaced matrix never carried a jitter, and `prev_vp` is unjittered in that pass too. A craft
+   in a transit is framed by the ordinary view (`portal: None`), so the transit camera frames take
+   the normal jittered path. Not open; a fence for a future jittered portal pass: it would need the jitter
+   applied after `oblique_near` (it rewrites the depth row only, the jitter is an x/y clip offset).
 2b. **Incoming warning for a person the portal passes (lane mod-warnings-api).** Landed: a `raise-warning`
    command (37, `WarningIcon`, SDK `raise_warning`) raises the viewer's incoming-weapon warning through
    `Warnings::raise`; `oag.slipstream` raises the rear Repulser icon once, on the transit, for a person it
@@ -183,12 +192,22 @@ Open from it, each small:
    `Stage::orient_surface` addresses a held surface by its generation
    (`psys::tests::a_held_surface_takes_its_orientation`, red before). `Stage::orient` itself
    stays attached-only, on purpose: the wreck debris and smoke (`wreck_fx`) `play` then `orient`
-   and today ignore it, so widening `orient` would change a title visual nobody measured. Open,
-   small: a mod effect fired by `fire-effect` (`Fired::Own`, `play` + `orient`) still ignores
-   its `axis` (`wall-penalty`'s `sputter.toml` is `rear`); fix it on `orient_surface` and look
-   at a frame.
-4. **A float target's values above 1 clamp in `engine_texture`**: `fs_main` clamps a shader's output,
-   so HD's and Omega's brightest highlights in a portal stop at white. Size S (40).
+   and today ignore it, so widening `orient` would change a title visual nobody measured. Landed
+   (lane mod-effect-axis): a mod effect fired by `fire-effect` (`Fired::Own`) takes the `axis`
+   its file declares through `Stage::play_aimed` (`play` + `orient_surface`; mod effects only,
+   a title's `Fired::Title` still plays unoriented)
+   (`psys::tests::a_fired_mod_effect_takes_the_axis_its_file_declares` and
+   `tests::extension_view::a_fired_mod_effect_leaves_its_craft_along_its_files_axis`, both red
+   before). Looked at: `wall-penalty`'s `sputter.toml` (`rear`) on Pulse PSP EU `16_Track`,
+   throttle held into the wall, far camera, tick 660: before, the smoke filled the whole view;
+   now a small dark puff sits behind the hull, on the rear side.
+4. ~~**A float target's values above 1 clamp in `engine_texture`**~~ Done for Omega and 2048
+   (`mod_shader_draw::a_float_target_keeps_a_value_above_one`,
+   `a_highlight_in_the_engine_texture_survives_a_pass_through`, each over Omega's and 2048's store); HD never had a value above 1 to
+   lose (its scene is encoded and clamped like the console's packer). The HD read-back mismatch
+   (`target_to_gamma` 2.2 power against `decode`'s sRGB curve) was real: a pass-through drifted up to
+   8.5 levels of 255; fixed (`target_to_gamma` is `encode`), now 0.13 level
+   (`an_encoded_scene_passes_the_engine_texture_through_within_one_level`; `mod-shaders.md`, "HD's round trip").
 5. **The texture is a fixed 960x540** at every window size; a configurable rate and size are later
    if a player needs them (spec, "reduced resolution allowed").
 6. **Only Pulse and HD have a frame test.** 2048, Omega, PS2 and Pure were read off screenshots.

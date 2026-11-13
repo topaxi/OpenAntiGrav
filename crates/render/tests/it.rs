@@ -21,6 +21,7 @@ mod blend_class_ground_truth;
 mod blink_lights_ground_truth;
 mod bloom_gain;
 mod collision_capture;
+mod depth_bias_portal;
 mod gantry_mount_ground_truth;
 mod glow_mask_ground_truth;
 mod hd_amphiseum_wall_material_ground_truth;

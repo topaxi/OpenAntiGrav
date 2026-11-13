@@ -66,8 +66,14 @@ count this way.
 
 Both textures sample at level 0 with a repeating linear sampler, so they may be read anywhere,
 inside an `if` too. `mod_fragment` returns straight alpha in gamma space, like every colour a mod
-hands the engine: the engine clamps it and converts it to whatever the title's scene target holds
+hands the engine: the engine converts it to whatever the title's scene target holds
 (`oag_shaders::target`), so one file looks alike on Pulse's 8-bit target and HD's float target.
+A value is clamped to 0..1 on an 8-bit target; on a linear float target (Omega's, 2048's) only
+below 0, and above 1 it is kept up to the half float's ceiling (65504) for the bloom and the
+tonemap, as the frame's own draws are. HD's scene stores what the console's packer wrote,
+encoded and clamped to 1 (`SceneStore::Encoded`, `oag_shaders::target::target_out`), so nothing
+on HD holds a value above 1 and a shader's output there stops at white as the rest of the frame
+does (`mod_shader.wesl`, `scene_rgb`).
 It writes colour only: no depth, no glow mask, no velocity, as a particle does.
 
 `uv` by surface: an effect's quad, its corners; a beam, `x` along it from `slot` to `to` and `y`
@@ -187,9 +193,33 @@ let view = engine_texture(engine_uv(input.world)).rgb;   // stays on the surface
 `engine_uv(world)` is the camera that drew the texture, carried back through the pair, so a point of
 the entrance's surface lands on the texel it covers on the screen. With `update` continuous that is
 `screen_uv`; under a snapshot only `engine_uv` stays on the surface, so use it. `engine_texture` reads
-what the scene target holds, turned back into gamma-authored colour (HD stores encoded linear, 2048
+what the scene target holds, turned back into gamma-authored colour (HD stores sRGB-encoded values and is read back with the sRGB curve, 2048
 gamma 2), so a shader that returns it writes the scene's own value through `fs_main`, and is opaque:
-the stored alpha is the bloom's glow mask. A value above 1 on a float target clamps there.
+the stored alpha is the bloom's glow mask. A value above 1 survives the round trip on Omega's and
+2048's float scene (the portal's 960x540 target is the scene's own format, so it stores one;
+`a_highlight_in_the_engine_texture_survives_a_pass_through`); it was lost in `fs_main`'s clamp,
+not in the target or the sampling. On HD there is none to keep (Talon's Junction, ticks 725 and 750: byte-identical). Seen with
+`oag.slipstream` fired at tick 700, 1440x816, against the old clamp: Omega (`tech_de_ra`) at tick
+718 shows the light beyond the portal's mouth with its glare and streaks (mean 10, up to 96 of 255
+off), at 725 a few levels (max 18, mean 1.7: the whites were already at the tonemap's white, and
+the frame is a level darker on average, consistent with `omega_tonemap`'s adaptive exposure, not
+isolated), and nothing by 750; 2048 (`altima`) is identical at 718 and a slightly stronger bloom on
+the rings at 735 and 750 (max 6 and 16). A mod's own tunnel and ring shaders keep their value above
+1 too, not only the view through the portal. 2048 is `SceneStore::Squared` (the same tests run on
+it); checked on the same code and disc, ported.
+
+**HD's round trip.** `target_to_gamma` once read a linear scene back with the 2.2 power while
+`decode` (what `fs_main` writes with) is the sRGB curve on HD's `encoded_out` scene, so a pass-through
+of `engine_texture` drifted: measured over grey from 0 to 255 in steps of 32 plus three saturated
+colours, up to 8.5 levels of 255 per channel (darks brightened most, a stored 32 came back 37). It
+is now `encode`, the inverse of `decode` on every store. Measured after: worst error 0.13 level per
+channel on HD (the half float's own rounding; `an_encoded_scene_passes_the_engine_texture_through_within_one_level`),
+and Omega's and 2048's float scenes within 1% (`a_float_scene_passes_the_engine_texture_through`).
+Seen with `oag.slipstream` fired at tick 700 on HD (Talon's Junction, 1440x816, ticks 725 and 750,
+before and after): the change is confined to the view through the portal, a few levels darker there
+(mean 1.7 and 2.4 of 255, max 9), and the rest of the frame is identical (max 1, and 7 at 750 in the
+bloom's spill). On a gamma target `amount` is 0, so `mix` returns the value untouched and Pulse's 8-bit bytes are
+unchanged (`an_eight_bit_target_still_clamps_a_value_above_one`).
 
 **The camera.** `virtual = exit * rotation_180 * entrance^-1 * main`, the turn about the portal's
 local up, with each portal's `+z` out of the face a craft sees: back along the road at the entrance,

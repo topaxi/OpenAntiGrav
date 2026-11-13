@@ -434,7 +434,7 @@ from outside the checkout, plus `act` on the Linux jobs; the macOS recipe by rea
 Android and iOS done: iOS stages into `OpenAntiGrav.app/mods`; Android ships the mods as APK
 assets with an index and unpacks them on first launch to the files directory's
 `assets/mods/official` (`docs/tools/packaging.md`, "Official mods"). Built and inspected with an
-APK built locally; not run on a device.
+APK built locally; on a device (maintainer, 2026-11-13, nightly f3c3d21): the mods ship and load. The same nightly's macOS app passed codesign in CI (`Contents/Resources/mods`); not run on a Mac.
 Still open: the AUR PKGBUILDs (`mods` beside `/usr/bin/oag-game`), web.
 
 Lane 8 confirmed before it started: the repo exists (public), launch option 2, folder delivery.
@@ -444,4 +444,4 @@ Lane 8 confirmed before it started: the repo exists (public), launch option 2, f
 1. Done: ADR-0082 and ADR-0083 accepted. Open: read whether the web and mobile builds can
    search for mods at all, and pick their delivery (ADR-0083 decision 7).
 2. Lane 9 left: AUR PKGBUILDs install the mods to `mods` beside `/usr/bin/oag-game`; web
-   delivery (see item 9). Android and iOS are done, an Android device run is not.
+   delivery (see item 9). Android (device-checked 2026-11-13) and iOS are done.

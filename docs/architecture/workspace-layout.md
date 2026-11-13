@@ -307,7 +307,7 @@ before.
 Two kinds of test do not go through the helper and take the driver's default
 adapter, which on a laptop is the discrete GPU: a test that spawns `oag-game`
 (the binary's `adapter::choose` asks wgpu for its default pick) and a test that
-calls `capture_pixels_from` or `capture_from` in `oag-mesh`. Those are the
+calls `capture_pixels_from`, `capture_pixels_through` or `capture_from` in `oag-mesh`. Those are the
 `gpu-vram` test group below.
 
 ## Test groups: the `gpu-vram` cap (2026-11-05)

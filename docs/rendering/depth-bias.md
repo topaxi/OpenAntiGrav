@@ -46,9 +46,25 @@ zero the lane in `build_class` for it. Wipeout HD, 2048 and Omega draw `.rcsmode
 differs**).
 
 **Not covered.** The shadow maps and the craft's own shadow passes use `oag_render`'s own vertex shaders and are not
-biased. A portal view's oblique near plane (`oag_render::camera::portal::oblique_near`) rewrites the projection's depth
-row, so `alpha` and `beta` read from that matrix are not the hyperbola's; the bias there is of the right sign and
-the wrong size.
+biased.
+
+## Under a portal's oblique near plane
+
+A portal view's near plane is swung onto the exit (`oag_render::camera::portal::oblique_near`), which rewrites the
+projection's depth row alone: the `x`, `y` and `w` rows are untouched. Depth is then no function of `w`, but along one
+pixel's ray it is still `c + beta / w` (`c` varies per pixel), and `beta` is the same on every ray: the depth row
+evaluated at the eye, where `w` is zero. The pull the original applies is a shift of `6 * bias / 76,779` in `1 / w`, so
+the clip-space shift is `beta * shift * w` with that `beta`. Reading `beta` from the depth and `w` rows as the standard
+projection allows (`depth.w - alpha * w.w`) gave the right sign and the wrong size, by `dot(depth.xyz - alpha * w.xyz,
+eye)`.
+
+`biased_clip` adds exactly that term, with the eye solved as the meeting point of the three untouched rows (a cross
+product, so it holds under TAA jitter, which only adds multiples of the `w` row to `x` and `y`). It does so only where
+the depth row's share off the `w` row is above `1e-8` of its squared length: a plain projection measures 0 to 2e-14
+(near 1.0 and 0.01, eyes at hundreds to thousands of units, three headings), the test's oblique plane 0.41. A plain
+projection therefore takes today's arithmetic unchanged and its clip z is bit-identical. Whether a fragment is clipped by
+the oblique plane is not touched: only the added bias term changes. The eye is read from the matrix because the uniform
+block has no free slot and the portal pass already binds the oblique `view_projection` there.
 
 ## Evidence
 
@@ -71,6 +87,10 @@ the wrong size.
   1.3 of it (red with `LEVELS_PER_BIAS` 3 or 12, and with the `biased_clip` call dropped).
   `depth_bias_ground_truth` (disc): every vertex of `13_Track`'s model carries its batch's authored byte (155 of 1,823
   batches, 10,712 vertices).
+  `depth_bias_portal` (oag-render, any GPU): the same pair under the plain projection and under `oblique_near` with a
+  plane tilted 40 degrees off the view axis and the eye 50 units off the origin, bracketed at 0.7 and 1.3 of the pull;
+  the oblique case is red with the pre-change shader (the eye-offset tilt is what the old coefficient misses) and
+  `the_oblique_fixture_rewrites_the_depth_row` guards the fixture against becoming a plain projection.
 
 ## Setting
 

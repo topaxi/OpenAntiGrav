@@ -48,7 +48,7 @@ pub use vertex_layout::Texcoords;
 /// Headless capture, split into `crate::capture` so a pixel-returning entry
 /// point could be added there without pushing this file past its frozen
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
-pub use crate::capture::{capture_from, capture_pixels_from};
+pub use crate::capture::{capture_from, capture_pixels_from, capture_pixels_through};
 
 pub mod chunks;
 pub mod cutout;

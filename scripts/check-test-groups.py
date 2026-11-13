@@ -15,7 +15,7 @@ laptop is its discrete GPU:
 
 - a test that spawns the game (`CARGO_BIN_EXE_oag-game`, `CARGO_BIN_EXE_oag-view`):
   the binary's own `adapter::choose` takes wgpu's default pick;
-- a test that calls `capture_pixels_from` / `capture_from` (`oag-mesh`), which
+- a test that calls `capture_pixels_from` / `capture_pixels_through` / `capture_from` (`oag-mesh`), which
   does the same in process.
 
 Every other in-process GPU test picks its adapter through
@@ -50,7 +50,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GROUP = "gpu-vram"
 
 MARKER = re.compile(
-    r"CARGO_BIN_EXE_oag-(?:game|view)\b|\b(?:capture_pixels_from|capture_from)\b"
+    r"CARGO_BIN_EXE_oag-(?:game|view)\b|\b(?:capture_pixels_from|capture_pixels_through|capture_from)\b"
 )
 
 # `package(oag-game) & test(/^(a|b)::/)`, the only form an override of the group may take.
