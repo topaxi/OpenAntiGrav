@@ -202,6 +202,11 @@ Two structural facts to expect, both different from every other binary here:
   six-mip sprite, the feedback-trail post passes, and the per-screen tint. Also
   where `ShaderRegistry_RegisterPair` closes renderer.md's unpaired-shader
   question.
+- [cell-medal-award.md](cell-medal-award.md) - how a campaign cell's medal is awarded and
+  saved: `Profile_RecordCampaignResult`, `PI_Cell_EvaluateMedalForValue`, the
+  `<Save Achieved Time SkillLevel Medal>` record; an Eliminator or NitroBattle cell's
+  medal is its place against the rung's `1`/`2`/`3`, and `NitroElim*` is the race-end
+  score target.
 - [race-campaign.md](race-campaign.md) - `PI_Cell`'s own attribute table
   (`0x008ae898`), which puts `NitroElimNovice`/`Skilled`/`Elite` in the class's
   own field list rather than an unrelated subsystem; the `HARD(ELITE)` save
