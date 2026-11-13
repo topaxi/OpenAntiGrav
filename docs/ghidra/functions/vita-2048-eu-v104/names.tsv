@@ -383,3 +383,7 @@
 0x8118b818	function	Collision_RaycastMeshes	78	own-craft-box.md
 0x8118b6a8	function	Collision_RaycastMeshShape	75	own-craft-box.md
 0x81187abe	function	Collision_Construct	80	own-craft-box.md
+0x812b40b4	function	GameModeBase_IsChainMember	80	xp-award.md
+0x812b40ba	function	GameModeBase_MarkChain	82	xp-award.md
+0x812b4872	function	GameModeBase_OnRaceEnd	78	xp-award.md
+0x810f041e	function	TouchCampaign_BuildEventButtons	72	xp-award.md

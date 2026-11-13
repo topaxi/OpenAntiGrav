@@ -228,3 +228,75 @@ in a title-keyed row, so no cross-title store needed building. Awards come from 
 `XPAwards.xml`, which Omega ships byte-identical. The rank tables are **not** identical: Omega's
 `XPRanks.xml` has half the thresholds, so each title ranks the shared total by its own table (the
 same total is a higher Omega rank). Decided (maintainer, 2026-11-12): each title ranks by its own table.
+
+## When a hidden event is promoted (2026-11-13, lane `w2048-xp-unlock-re`)
+
+Ghidra `/2048/eboot-vita-2048-eu-v104.elf`, decompile and disassembly; `SP.xml` re-read from the
+v1.04 `data.psarc` (`data/xml/SP.xml`, 1,316,363 bytes; the patch's `data1.psarc` copy differs by one
+byte at offset 1,291,041 and gives the same census below). Builds on
+[canvas-music-wave.md](canvas-music-wave.md), section 3, which read `Campaign_UnlockEvents` and
+`GameModeBase_IsUnlockable`; this section reads the flag and the triggers that section left open.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x812b40b4` | `GameModeBase_IsChainMember` | 80 |
+| `0x812b40ba` | `GameModeBase_MarkChain` | 82 |
+| `0x812b4872` | `GameModeBase_OnRaceEnd` | 78 |
+| `0x810f041e` | `TouchCampaign_BuildEventButtons` | 72 |
+
+**The rule (confidence 80, decompile only; two call sites and Omega's copy agree).** Promotion is
+`Campaign_UnlockEvents` (`0x812b5b6c`) and nothing else. It runs at exactly two moments:
+
+1. **Race end**, after the race's XP is banked: `GameModeBase_OnRaceEnd` (`0x812b4872`) calls
+   `Profile_BankRaceXP` first, shows the unlock cards, then `Campaign_UnlockEvents` at `0x812b49d8`.
+2. **Building the map's event buttons**: `TouchCampaign_BuildEventButtons` (`0x810f041e`, slot `+0x2c`
+   of the TouchCampaign vtable at `0x8150e958`, the slot the base widget fills with `0x81064900`) calls
+   it at `0x810f0800`, before it creates a button for every event whose button `+0x1ec` is still null.
+
+In that pass an event is promoted when all of these hold:
+
+- progress `+0x2d8 == 0`;
+- **not a chain member**: `GameModeBase_IsChainMember` (`+0x2e5`) is 0. `GameModeBase_PostLoad`
+  (`0x812b40de`) calls `GameModeBase_MarkChain` (`0x812b40ba`) on every event with a next (`+0x2cc`)
+  or branch (`+0x2d0`) event, and `MarkChain` sets `+0x2e5 = 1` on the event and recursively on
+  everything reachable along next and branch. So the numbered campaign is never promoted by the
+  loop; the chain opens through `SetProgress` (a pass opens next and branch at 2). The three season
+  heads `2048/2049/2050 - Event 1` are chain members too (each has a next), which is why the
+  function opens them by name before the loop (to 2, same unlockable test). Two reads agree on this
+  meaning of `+0x2e5`: the setter, and the head special case that is only needed if heads fail the
+  loop's test;
+- `GameModeBase_IsUnlockable` (`0x812b3a76`): force flag `+0x2e4`, or XP total `profile+0x3257c >=
+  Profile_GetRankThresholdXP(m_RankRequired)` and the required event `+0x2d4` null or at progress 3+.
+
+The new progress is **1** when the hidden test (vtable `+0x74`, `m_options & 0x10`) or `m_options & 8`
+holds, else **2**. A one-shot news headline builder (`FUN_812b274a`, guarded by `+0x326`) runs for
+every event in the list first; it gates nothing.
+
+**The fifteen side challenges pass every gate but the rank** (census of `SP.xml` v1.04): none has a
+next, branch or required event, none is the target of another event's next, branch or required
+edge, so `+0x2e5` stays 0 and `+0x2d4` is null; `M_Options` is 16 (`0x10`, hidden) on thirteen and 17
+on Qirex and Auricom P Ship Challenge (also hidden). `M_RankRequired`: Feisar 10, Auricom 20,
+AG-Systems 26, Qirex 30, Pirhana 50 (P Ship Challenges); Square 25, Mall 26, Park 27, Bridge 28,
+Tower 29, Arena 30, Cathedral 31, Subway 32, Sol 33, Altima 34 (S Phantom Challenges). So **a side
+challenge goes to progress 1 at the first race end or map build at which the XP total has reached
+its rank's `XPRanks.xml` threshold**, and a tap on its spot takes it to 2 (canvas-music-wave.md).
+
+**Why the rank-50 test promoted nothing (explanation, confidence 60).** That test wrote the XP total
+into a running game whose map was already built and did not finish a race, so neither trigger ran
+after the write. The law above needs no extra gate to explain it. Not yet confirmed live: the check
+is to write `profile+0x3257c` before the first map entry of a boot, then read a side challenge's
+`+0x2d8` on the map (expect 1); a 0 there would point at the event list `Campaign_UnlockEvents`
+walks (`0x81965b28`, vector at `+0x24`) not holding the side challenges, since the button builder
+walks a different list (`0x81965b60`, vector at `+4`).
+
+**Ours.** `Store::rank_reveals`, asked at boot, is the map-build trigger. The race-end trigger is not
+wired (a reveal earned by a race shows at the next launch); wiring it means asking the same query
+after `Store::bank_event_xp`.
+
+**Omega: checked, applies, not wired.** Omega's `eboot.bin` has the same function at `0x015a1200`
+(found through `"2049 - Event 1"`): the three heads by name to 2, then the loop with
+`IsUnlockable` inlined (force `+0x3cc`; XP `DAT_02039628+0x4dc` against the rank table
+`DAT_0203a570[rank - 1]`, rank `+0x3c8`; required event `+0x3b8` at progress `+0x3c0 > 2`), the chain
+flag at `+0x3cd`, and 1 versus 2 by vtable `+0xe8` or `+0x22c & 8`. Its two callers are the same
+pair: `FUN_0159dea0` and the campaign map's button builder `0x014e32c0`. Only the offsets differ.
+Omega's map does not launch events yet, so no Omega reveal is wired.
