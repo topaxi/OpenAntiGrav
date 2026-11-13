@@ -23,7 +23,7 @@ pub const TEXTURE_PACKS: &str = "data/texture-packs";
 
 /// Where mods are looked for when nothing names a directory: `data/mods` in a
 /// checkout, [`OFFICIAL`] and [`EXAMPLES`] in a checkout, `mods` beside the AppImage file and beside the program (inside the image
-/// for an AppImage), and `<data dir>/oag/mods`; then the texture packs: [`TEXTURE_PACKS`],
+/// for an AppImage; `Contents/Resources/mods` for a macOS bundle), and `<data dir>/oag/mods`; then the texture packs: [`TEXTURE_PACKS`],
 /// `<data dir>/oag/texture-packs` and a PPSSPP memstick's `PSP/TEXTURES`.
 #[must_use]
 pub fn mods_search_path() -> Vec<PathBuf> {
@@ -59,20 +59,36 @@ pub fn user_mods_dir() -> Option<PathBuf> {
 
 /// Adds the `mods` folders a packaged build ships: beside the AppImage file (where a
 /// player puts their own) and beside the program, which for an AppImage is inside the
-/// mounted image (`usr/bin`, where the build puts the official mods).
+/// mounted image (`usr/bin`, where the build puts the official mods). A program inside a
+/// macOS bundle (`<name>.app/Contents/MacOS/<program>`) also searches
+/// `Contents/Resources/mods`: `Contents/MacOS` holds code only, so the build stages the
+/// official mods in `Resources` (`docs/tools/packaging.md`, "Official mods").
 pub(crate) fn packaged_mods(
     appimage: Option<&Path>,
     program: Option<&Path>,
     paths: &mut Vec<PathBuf>,
 ) {
+    let mut push = |mods: PathBuf| {
+        if !paths.contains(&mods) {
+            paths.push(mods);
+        }
+    };
     for file in [appimage, program].into_iter().flatten() {
         if let Some(directory) = file.parent() {
-            let mods = directory.join("mods");
-            if !paths.contains(&mods) {
-                paths.push(mods);
-            }
+            push(directory.join("mods"));
         }
     }
+    if let Some(contents) = program.and_then(bundle_contents) {
+        push(contents.join("Resources").join("mods"));
+    }
+}
+
+/// The `Contents` folder of the macOS bundle a program sits in, when its path is
+/// `Contents/MacOS/<program>`.
+fn bundle_contents(program: &Path) -> Option<&Path> {
+    let macos = program.parent()?;
+    let contents = macos.parent()?;
+    (macos.file_name()? == "MacOS" && contents.file_name()? == "Contents").then_some(contents)
 }
 
 /// One candidate under a search directory.
