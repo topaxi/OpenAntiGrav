@@ -203,7 +203,7 @@ fn season() -> Card {
         name: "2048SeasonText".to_string(),
         cell: (51, 29),
         size: (14, 3),
-        origin: (0.0, 0.478_515_625),
+        origin: (0.0, 0.478_515_63),
         linked_event: None,
     }
 }
@@ -238,7 +238,7 @@ fn the_first_row_of_a_card_ends_where_the_next_cards_authored_origin_is_near() {
         .map(|(_, shift)| shift[0])
         .fold(0.0_f32, f32::max);
     assert_eq!(last * 2048.0 + 94.0, 658.0);
-    assert_eq!(0.322_753_906_25_f32 * 2048.0, 661.0);
+    assert_eq!(0.322_753_9_f32 * 2048.0, 661.0);
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn a_card_holds_priority_five_over_a_ring_and_below_a_tile() {
 
 #[test]
 fn a_half_float_keeps_a_whole_atlas_unit_of_an_eleventh_bit_value() {
-    assert_eq!(half(0.478_515_625), 0.478_515_625);
+    assert_eq!(half(0.478_515_63), 0.478_515_63);
     assert_eq!(half(0.0), 0.0);
     assert_eq!(half(-47.0 / 2048.0), -47.0 / 2048.0);
 }

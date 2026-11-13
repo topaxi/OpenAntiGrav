@@ -78,7 +78,9 @@ fn disc() -> Option<(Vec<u8>, u32, u32, Vec<canvas_cells::Card>)> {
 
 /// Pixels of an RGBA image whose blue exceeds red by 40 (the cards' ink).
 fn ink(rgba: &[u8]) -> usize {
-    rgba.chunks_exact(4)
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| p[3] > 0 && i32::from(p[2]) > i32::from(p[0]) + 40 && p[0] < 140)
         .count()
 }
@@ -100,7 +102,7 @@ fn the_season_cards_resolve_to_atlas_rectangles_decoded_from_the_disc() {
     );
     let first = &cards[0];
     assert_eq!((first.cell, first.size), ((51, 29), (14, 3)));
-    assert_eq!(first.origin, (0.0, 0.478_515_625));
+    assert_eq!(first.origin, (0.0, 0.478_515_63));
     assert_eq!(first.linked_event, None);
     assert_eq!(
         cards[1].linked_event.as_deref(),
