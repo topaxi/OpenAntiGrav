@@ -76,7 +76,7 @@ The engine never names the mod.
    `camera_jitter: None` (and `Scene::render`/`render_window` build `portal: None`). So the
    replaced matrix never carried a jitter, and `prev_vp` is unjittered in that pass too. A craft
    in a transit is framed by the ordinary view (`portal: None`), so the transit camera frames take
-   the normal jittered path. Open only as a fence: a jittered portal pass would need the jitter
+   the normal jittered path. Not open; a fence for a future jittered portal pass: it would need the jitter
    applied after `oblique_near` (it rewrites the depth row only, the jitter is an x/y clip offset).
 2b. **Incoming warning for a person the portal passes (lane mod-warnings-api).** Landed: a `raise-warning`
    command (37, `WarningIcon`, SDK `raise_warning`) raises the viewer's incoming-weapon warning through
