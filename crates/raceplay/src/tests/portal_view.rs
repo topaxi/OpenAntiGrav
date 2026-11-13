@@ -644,10 +644,12 @@ fn entrance_centre(race: &Race, request: &crate::extensions::PortalRequest) -> V
 
 /// What `frames` counts of a race over a chunk partition, with the portal's draws as given
 /// relative to its entrance: `(chunk, offset from the entrance)`.
-fn chunked_frames(near: &[(u32, Vec3)], far: &[(u32, Vec3)], sees: &[usize]) -> (u32, bool) {
-    let Some(gpu) = test_gpu() else {
-        return (u32::MAX, false);
-    };
+fn chunked_frames(
+    near: &[(u32, Vec3)],
+    far: &[(u32, Vec3)],
+    sees: &[usize],
+) -> Option<(u32, bool)> {
+    let gpu = test_gpu()?;
     let portals = pair_ahead(&race(&[]));
     let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
     let request = race.extension_portal_view(0).expect("the guest asked");
@@ -659,7 +661,7 @@ fn chunked_frames(near: &[(u32, Vec3)], far: &[(u32, Vec3)], sees: &[usize]) -> 
         .collect();
     let scene = chunked_scene(&gpu, &race, chunked_track(&draws), sees);
     let drawn = frames(&gpu, &scene, &mut race, 5);
-    (drawn, scene.portal_engine_of(&race).is_some())
+    Some((drawn, scene.portal_engine_of(&race).is_some()))
 }
 
 /// A chunk partition where everything the surface reaches is hidden: no pass, no texture. A
@@ -667,7 +669,10 @@ fn chunked_frames(near: &[(u32, Vec3)], far: &[(u32, Vec3)], sees: &[usize]) -> 
 #[test]
 fn a_portal_among_hidden_chunks_draws_nothing() {
     let far = (0, Vec3::new(-900.0, 0.0, 0.0));
-    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO), (1, Vec3::X * 3.0)], &[far], &[0]);
+    let Some((drawn, bound)) = chunked_frames(&[(1, Vec3::ZERO), (1, Vec3::X * 3.0)], &[far], &[0])
+    else {
+        return;
+    };
     assert_eq!(drawn, 0);
     assert!(!bound, "no texture bound");
 }
@@ -675,7 +680,10 @@ fn a_portal_among_hidden_chunks_draws_nothing() {
 /// The entrance's own chunk is hidden but a neighbour the radius reaches is visible.
 #[test]
 fn a_portal_whose_radius_reaches_a_visible_chunk_still_draws() {
-    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO), (0, Vec3::X * 6.0)], &[], &[0]);
+    let Some((drawn, bound)) = chunked_frames(&[(1, Vec3::ZERO), (0, Vec3::X * 6.0)], &[], &[0])
+    else {
+        return;
+    };
     assert_eq!(drawn, 5);
     assert!(bound);
 }
@@ -683,7 +691,9 @@ fn a_portal_whose_radius_reaches_a_visible_chunk_still_draws() {
 /// The control for the two above: the entrance's chunk is visible.
 #[test]
 fn a_portal_in_a_visible_chunk_draws() {
-    let (drawn, bound) = chunked_frames(&[(1, Vec3::ZERO)], &[], &[1]);
+    let Some((drawn, bound)) = chunked_frames(&[(1, Vec3::ZERO)], &[], &[1]) else {
+        return;
+    };
     assert_eq!(drawn, 5);
     assert!(bound);
 }
@@ -705,7 +715,9 @@ fn a_portal_reaching_an_unplaced_draw_still_draws() {
 /// A track with no draw in reach has nothing to hide: the view is drawn.
 #[test]
 fn a_portal_reaching_no_draw_still_draws() {
-    let (drawn, _) = chunked_frames(&[], &[(1, Vec3::new(-900.0, 0.0, 0.0))], &[0]);
+    let Some((drawn, _)) = chunked_frames(&[], &[(1, Vec3::new(-900.0, 0.0, 0.0))], &[0]) else {
+        return;
+    };
     assert_eq!(drawn, 5);
 }
 
