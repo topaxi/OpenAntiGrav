@@ -228,19 +228,24 @@ fn the_hd_medal_atlas_resolves_for_a_mod_and_every_frame_is_a_drawn_hexagon() {
     let Some(source) = oag_testdata::exact("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let medals = oag_mod::CampaignMedals {
-        source: oag_mod::MedalSource::Title("wipeout-hd".to_string()),
-        per_difficulty: true,
-        tiers: Vec::new(),
+    let ask = oag_game::campaign::custom::MedalAsk {
+        mod_id: "t".to_string(),
+        medals: oag_mod::CampaignMedals {
+            source: oag_mod::MedalSource::Title("wipeout-hd".to_string()),
+            per_difficulty: true,
+            tiers: Vec::new(),
+        },
+        atlas: None,
+        own_campaigns: false,
     };
-    let none = oag_game::campaign::medal_art::resolve("t", &medals, &[]).unwrap_err();
+    let none = oag_game::campaign::medal_art::resolve(&ask, &[]).unwrap_err();
     assert!(
         none.contains("needs") && none.contains("Wipeout HD"),
         "{none}"
     );
 
     let rows = oag_game::launcher::survey(&[source]);
-    let resolved = oag_game::campaign::medal_art::resolve("t", &medals, &rows).expect("resolves");
+    let resolved = oag_game::campaign::medal_art::resolve(&ask, &rows).expect("resolves");
     let sheet = Sheet::build(&[], &mut Vec::new()).extended(&resolved.blobs, &mut Vec::new());
     let image = resolved.art.image().expect("an atlas");
     let placed = sheet.get(image).expect("the atlas is on the sheet");

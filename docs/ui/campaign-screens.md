@@ -467,6 +467,22 @@ hexagons (`grid-select@N` stills, mod on against off: byte-identical).
   only when art is on (it chooses the block); with the swatch the still keeps its old
   `Best  Bronze` row, where a live session reads `Bronze (Hard)`.
 
+### A mod's own atlas, 2026-11-13 (`[campaign-medals] source = { mod = ... }`)
+
+`MedalArt::Atlas` holds `rows` (the tier named by each row of a block), a frame size and a row
+pitch; a title's atlas is built by `Atlas::of_title` (HD's 60/61 px grid, `hd_medal_frame` shares
+`atlas_frame` with it) and a mod's by `Atlas::of_mod` (equal rows cut from the PNG, no gaps). The
+frame is picked by the tier's **name** against `rows`, so a mod's platinum draws its own row. It
+reaches the screens through `oag_game::campaign::medal_art::apply`, which is given the campaign
+that is open: a mod that carries campaigns draws its art on those campaigns only
+(`Installed::medals_for`; the disc's campaign keeps the swatches). Cell Selection only, as the
+HD atlas; Pulse's target rows beside the hexagons keep their colour swatches. Test:
+`a_mod_atlas_draws_the_row_its_tier_names_in_the_block_of_the_difficulty` (the frame),
+`a_mod_with_its_own_atlas_draws_it_on_its_own_campaigns_screens` (the wiring) and
+`a_mods_atlas_is_not_drawn_on_the_discs_campaign_or_another_mods` (the scope). Seen on
+`--menu-page cell-select=oag.example-campaign/night-run` with `example-campaign`'s own
+`ui/medals.png` (flat-topped hexagons, one pip per difficulty step).
+
 ## Captures
 
 `--menu-page grid-select` / `--menu-page cell-select`

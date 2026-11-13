@@ -158,6 +158,7 @@ impl Session {
                 // for a slideshow's own stills.
                 let medal_art = oag_game::campaign::medal_art::apply(
                     &installed,
+                    custom.as_ref(),
                     || oag_game::launcher::survey(&oag_source::source::candidates()),
                     &mut campaign.sprites,
                 );

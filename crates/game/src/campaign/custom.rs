@@ -1048,15 +1048,39 @@ pub struct Installed {
     /// Every `tracks/*.track.toml` of a folder mod for this title, raced from
     /// RACE REMIX's CUSTOM title as well as from a campaign.
     pub tracks: Vec<std::path::PathBuf>,
-    /// The medal art the first mod that is on and carries `[campaign-medals]` for this title
-    /// asks the campaign screens to draw, with the mod's id.
-    pub medals: Option<(String, oag_mod::CampaignMedals)>,
+    /// The medal art each mod that is on and carries `[campaign-medals]` for this title asks
+    /// the campaign screens to draw ([`Self::medals_for`] picks one).
+    pub medals: Vec<MedalAsk>,
     /// A mod's id and the name of a title whose disc it needs (`needs-titles`) and this
     /// machine has none of. What the MODS page's NEEDS line says.
     pub needs_discs: Vec<(String, String)>,
 }
 
+/// One mod's `[campaign-medals]`, with what reading it needs from the mod.
+#[derive(Debug, Clone)]
+pub struct MedalAsk {
+    /// The mod's id.
+    pub mod_id: String,
+    /// The declaration.
+    pub medals: oag_mod::CampaignMedals,
+    /// The bytes of the mod's own atlas file, for a `{ mod = ... }` source that could be read.
+    pub atlas: Option<Vec<u8>>,
+    /// The mod carries campaigns of its own: its art is theirs, and the disc's campaign and
+    /// other mods' campaigns keep the title's swatches (a mod with none, like HD's medals on
+    /// Pulse, is title-wide). Chosen, not measured.
+    pub own_campaigns: bool,
+}
+
 impl Installed {
+    /// The medal art the screens of the campaign `open` (`None`: the disc's own) draw: the
+    /// first mod whose art is title-wide or belongs to that campaign.
+    #[must_use]
+    pub fn medals_for(&self, open: Option<&Custom>) -> Option<&MedalAsk> {
+        self.medals.iter().find(|ask| {
+            !ask.own_campaigns || open.is_some_and(|custom| custom.mod_id == ask.mod_id)
+        })
+    }
+
     /// Reads and compiles every campaign the mods carry for `title`: a mod or
     /// campaign whose `titles` leave this title out is skipped quietly, a broken
     /// one, or one with an event on a disc `has_disc` (by title slug) says this
@@ -1101,10 +1125,31 @@ impl Installed {
         installed.medals = mods
             .iter()
             .filter(|module| module.is_for(&slug))
-            .find_map(|module| {
+            .filter_map(|module| {
                 let medals = module.manifest.campaign_medals.clone()?;
-                Some((module.manifest.id.clone(), medals))
-            });
+                let atlas = match &medals.source {
+                    oag_mod::MedalSource::Mod(key) => {
+                        let path = module.manifest.icons.get(key)?;
+                        match module.read(path) {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                log::warn!("campaign medals: {}: {path}: {e}", module.manifest.id);
+                                None
+                            }
+                        }
+                    }
+                    oag_mod::MedalSource::Title(_) => None,
+                };
+                Some(MedalAsk {
+                    mod_id: module.manifest.id.clone(),
+                    medals,
+                    atlas,
+                    own_campaigns: !module
+                        .files_under(oag_mod::campaign::DIRECTORY, "toml")
+                        .is_empty(),
+                })
+            })
+            .collect();
         if !title.campaign.custom_campaigns {
             return installed;
         }
