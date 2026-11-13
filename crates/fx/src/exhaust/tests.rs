@@ -756,14 +756,21 @@ fn the_lit_age_scales_with_a_longer_ring() {
     let head = -((LONG_TRAIL_SAMPLES - 1) as f32);
     let lit = exhaust.trail_lit_age();
     let share = lit / (LONG_TRAIL_SAMPLES - 1) as f32;
-    assert!((share - a_full_ribbon().trail_lit_age() / 9.0).abs() < 1e-5, "{share}");
+    assert!(
+        (share - a_full_ribbon().trail_lit_age() / 9.0).abs() < 1e-5,
+        "{share}"
+    );
     assert!(lit > 25.0, "{lit}");
     let fade = trail_fade_at(exhaust.shape_age(lit));
     assert!((fade - TRAIL_HIT_MIN_BRIGHTNESS).abs() < 1e-4, "{fade}");
     // One unit a sample: a point at the lit age is on the line, one past it is held at the end.
-    let (on, _) = exhaust.trail_nearest(Vec3::new(head + lit - 1.0, 1.0, 0.0)).unwrap();
+    let (on, _) = exhaust
+        .trail_nearest(Vec3::new(head + lit - 1.0, 1.0, 0.0))
+        .unwrap();
     assert!((on.x - (head + lit - 1.0)).abs() < 1e-4, "{on:?}");
-    let (on, _) = exhaust.trail_nearest(Vec3::new(head + lit + 3.0, 1.0, 0.0)).unwrap();
+    let (on, _) = exhaust
+        .trail_nearest(Vec3::new(head + lit + 3.0, 1.0, 0.0))
+        .unwrap();
     assert!((on.x - (head + lit)).abs() < 1e-4, "{on:?}");
 }
 
@@ -788,7 +795,11 @@ fn trail_nearest_stops_at_the_lit_end_of_the_ribbon() {
 /// The polyline query reports how far along the line the nearest point is, in samples.
 #[test]
 fn nearest_on_polyline_reports_the_position_along_the_line() {
-    let line = [Vec3::ZERO, Vec3::new(-4.0, 0.0, 0.0), Vec3::new(-8.0, 0.0, 0.0)];
+    let line = [
+        Vec3::ZERO,
+        Vec3::new(-4.0, 0.0, 0.0),
+        Vec3::new(-8.0, 0.0, 0.0),
+    ];
     let (_, _, along) = centre_line::nearest_on_polyline(
         line.into_iter(),
         Vec3::new(-6.0, 2.0, 0.0),
@@ -800,7 +811,10 @@ fn nearest_on_polyline_reports_the_position_along_the_line() {
     let (on, _, along) =
         centre_line::nearest_on_polyline(line.into_iter(), Vec3::new(-7.0, 0.0, 0.0), 1.25)
             .unwrap();
-    assert!((along - 1.25).abs() < 1e-5 && (on.x + 5.0).abs() < 1e-5, "{on:?} {along}");
+    assert!(
+        (along - 1.25).abs() < 1e-5 && (on.x + 5.0).abs() < 1e-5,
+        "{on:?} {along}"
+    );
 }
 
 /// The width is the runtime scale `intensity * 0.35 + 0.2` on the widest layer.

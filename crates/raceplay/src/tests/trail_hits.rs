@@ -387,7 +387,11 @@ fn the_lit_edge_of_a_pulse_ribbon_is_where_the_fade_reaches_the_floor() {
     let lit_end = -36.0 + 4.0 * race.view.exhaust[0].trail_lit_age();
     let reach = 2.0 + race.view.exhaust[0].trail_half_width();
     place_and_step(&mut race, Vec3::new(lit_end - 0.5, 0.0, 0.0));
-    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "just inside the lit part");
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "just inside the lit part"
+    );
     // Along the line, just past the end, and farther than the reach from it.
     place_and_step(&mut race, Vec3::new(lit_end + reach + 0.5, 0.0, 0.0));
     assert_eq!(race.view.trail_inside[0] & 0b10, 0, "past the lit end");
@@ -406,7 +410,11 @@ fn leaving_the_lit_part_clears_the_latch_and_the_burst_fires_again_on_return() {
     place_and_step(&mut race, Vec3::new(-4.0, 0.0, 0.0));
     assert_eq!(race.view.trail_inside[0] & bit, 0, "in the tail");
     assert_eq!(race.view.trail_hit_rest[0] & bit, 0, "so not resting");
-    assert_eq!(race.view.stage.playing_count(), 1, "and nothing fired there");
+    assert_eq!(
+        race.view.stage.playing_count(),
+        1,
+        "and nothing fired there"
+    );
     place_and_step(&mut race, Vec3::new(-34.0, 0.0, 0.0));
     assert_ne!(race.view.trail_inside[0] & bit, 0);
     assert_eq!(race.view.stage.playing_count(), 2, "fired on re-entry");
