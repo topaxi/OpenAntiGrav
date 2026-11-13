@@ -145,7 +145,7 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 # Held at 0.13: winit 0.30 takes 0.13, so 0.14 would be a second copy for nothing we use
 # (0.14 drops abstract unix socket connections, as libxcb did, and bumps its MSRV and
 # `raw-window-handle`; `docs/architecture/dependency-upgrades.md`).
-x11rb = { version = "0.13", default-features = false, features = ["randr"] }
+x11rb = { version = "0.14", default-features = false, features = ["randr"] }
 pollster = "1"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
