@@ -216,27 +216,38 @@ fn pack(endpoint: [u8; 4]) -> u64 {
 /// The `+ 32` of [`lerp`] in each lane of [`pack`].
 const ROUND: u64 = 32 | 32 << 16 | 32 << 32;
 
+/// [`pack`] with alpha in the fourth lane, for a mode whose alpha shares the
+/// colour's weight.
+fn pack_rgba(endpoint: [u8; 4]) -> u64 {
+    pack(endpoint) | u64::from(endpoint[3]) << 48
+}
+
+/// The `+ 32` of [`lerp`] in each lane of [`pack_rgba`].
+const ROUND_RGBA: u64 = ROUND | 32 << 48;
+
 /// Reads one index per texel, the anchor texel of each subset one bit
 /// narrower (its top bit is known to be zero).
 ///
 /// Out of one 64-bit window rather than a `u128` shift per index: no mode's
-/// index field is wider than 63 bits (mode 6's primary, `16 * 4 - 1`).
+/// index field is wider than 63 bits (mode 6's primary, `16 * 4 - 1`). Each
+/// index's position is its start in a field of `width` bits less one per anchor
+/// before it, so the sixteen reads do not wait on one another.
+#[inline(always)]
 fn read_indices(
     bits: &mut BitStream,
     width: u32,
     subset_of: &[u8; 16],
     anchors: [usize; 3],
 ) -> [u32; 16] {
-    let mut window = (bits.bits >> bits.pos) as u64;
-    let mut used = 0;
+    let window = (bits.bits >> bits.pos) as u64;
+    let mut start = 0;
     let mut out = [0u32; 16];
     for (t, slot) in out.iter_mut().enumerate() {
         let n = width - u32::from(t == anchors[subset_of[t] as usize]);
-        *slot = (window & ((1u64 << n) - 1)) as u32;
-        window >>= n;
-        used += n;
+        *slot = ((window >> start) & ((1u64 << n) - 1)) as u32;
+        start += n;
     }
-    bits.pos += used;
+    bits.pos += start;
     out
 }
 
@@ -371,8 +382,29 @@ fn decode_mode<const MODE: usize>(block: &[u8; 16]) -> [[u8; 4]; 16] {
     let color_weights = weights(color_bits);
     let alpha_weights = weights(alpha_bits);
 
-    let packed: [u64; 6] = std::array::from_fn(|e| pack(endpoint_rgba[e]));
     let mut out = [[0u8; 4]; 16];
+    if mode.index_bits2 == 0 {
+        // One index drives colour and alpha alike, and no such mode rotates, so
+        // all four channels interpolate in one multiply.
+        let packed: [u64; 6] = std::array::from_fn(|e| pack_rgba(endpoint_rgba[e]));
+        for t in 0..16 {
+            let subset = subset_of[t] as usize;
+            let weight = color_weights[color_index[t] as usize];
+            let texel = (packed[2 * subset] * u64::from(64 - weight)
+                + packed[2 * subset + 1] * u64::from(weight)
+                + ROUND_RGBA)
+                >> 6;
+            out[t] = [
+                texel as u8,
+                (texel >> 16) as u8,
+                (texel >> 32) as u8,
+                (texel >> 48) as u8,
+            ];
+        }
+        return out;
+    }
+
+    let packed: [u64; 6] = std::array::from_fn(|e| pack(endpoint_rgba[e]));
     for t in 0..16 {
         let subset = subset_of[t] as usize;
         let e0 = endpoint_rgba[2 * subset];

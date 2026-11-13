@@ -1,4 +1,5 @@
 use super::*;
+use crate::gxt::twiddle;
 
 /// One 8-byte word: modulation first, then the colour pair, both
 /// little-endian.
@@ -127,4 +128,84 @@ fn a_non_square_surface_comes_out_row_major() {
         lit > 0 && lit < out.len(),
         "one word's worth lit, got {lit}"
     );
+}
+
+/// The decode as it was written word by word: every quad through [`quad`], every
+/// word fetched and twiddled afresh. The fast path must agree with it byte for
+/// byte, including the quads that take a hard transition.
+fn decode_by_quad(data: &[u8], width: u32, height: u32) -> Vec<[u8; 4]> {
+    let surface_w = width.max(MIN_SIDE) as usize;
+    let surface_h = height.max(MIN_SIDE) as usize;
+    let (words_x, words_y) = (surface_w / WORD_SIDE, surface_h / WORD_SIDE);
+    let mut surface = vec![[0u8; 4]; surface_w * surface_h];
+    let word_at = |x: usize, y: usize| -> Word {
+        let at = twiddle(x as u32, y as u32, words_x as u32, words_y as u32) as usize * WORD_LEN;
+        let Some(bytes) = data.get(at..at + WORD_LEN) else {
+            return Word::default();
+        };
+        Word {
+            modulation: u32::from_le_bytes(bytes[0..4].try_into().unwrap()),
+            colour: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
+        }
+    };
+    for quad_y in 0..words_y {
+        for quad_x in 0..words_x {
+            let px = (quad_x + words_x - 1) % words_x;
+            let py = (quad_y + words_y - 1) % words_y;
+            let texels = quad(
+                word_at(px, py),
+                word_at(quad_x, py),
+                word_at(px, quad_y),
+                word_at(quad_x, quad_y),
+            );
+            let half = WORD_SIDE / 2;
+            for row in 0..half {
+                for column in 0..half {
+                    let mut place = |wx: usize, wy: usize, dr: usize, dc: usize, texel| {
+                        surface[(wy * WORD_SIDE + row + dr) * surface_w
+                            + wx * WORD_SIDE
+                            + column
+                            + dc] = texel;
+                    };
+                    place(px, py, half, half, texels[row][column]);
+                    place(quad_x, py, half, 0, texels[row][column + half]);
+                    place(px, quad_y, 0, half, texels[row + half][column]);
+                    place(quad_x, quad_y, 0, 0, texels[row + half][column + half]);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for y in 0..height as usize {
+        out.extend_from_slice(&surface[y * surface_w..y * surface_w + width as usize]);
+    }
+    out
+}
+
+#[test]
+fn random_surfaces_decode_the_same_as_the_word_by_word_path() {
+    // A xorshift stream: every bit pattern, so opaque and transparent words, both
+    // modulation modes, punch-through, and hard transitions (about one word in
+    // two here, against 7% on the shipped corpus) all occur.
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    for (width, height) in [(8, 8), (16, 8), (8, 32), (64, 64), (96, 40), (4, 4), (5, 3)] {
+        for _ in 0..4 {
+            let mut data: Vec<u8> = (0..width as usize * height as usize / 2 + 16)
+                .map(|_| (next() >> 32) as u8)
+                .collect();
+            // Cut a run short so absent words are covered too.
+            data.truncate(data.len() - data.len() / 7);
+            assert_eq!(
+                decode_ii_4bpp(&data, width, height).expect("decodes"),
+                decode_by_quad(&data, width, height),
+                "{width}x{height}"
+            );
+        }
+    }
 }
