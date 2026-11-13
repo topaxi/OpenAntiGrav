@@ -154,7 +154,13 @@ fn the_hold_pays_only_first_place_against_rivals_and_not_in_elimination() {
 #[test]
 fn finishing_pays_completion_and_place_and_take_empties_the_tally() {
     let mut t = tally(Column::Race);
-    t.finish(Some(false), Some(1));
+    t.finish(
+        Completion {
+            pass: true,
+            elite: false,
+        },
+        Some(1),
+    );
     assert_eq!(
         t.total(),
         awards().xp(0, Column::Race) + awards().xp(24, Column::Race)
@@ -165,4 +171,36 @@ fn finishing_pays_completion_and_place_and_take_empties_the_tally() {
         awards().xp(0, Column::Race) + awards().xp(24, Column::Race)
     );
     assert_eq!(t.total(), 0);
+}
+
+#[test]
+fn the_completion_awards_pay_on_improvement_only() {
+    let pass = Some(false);
+    let elite = Some(true);
+    let pays = |before, now| {
+        let c = Completion::on_improvement(before, now);
+        (c.pass, c.elite)
+    };
+    assert_eq!(pays(None, pass), (true, false));
+    assert_eq!(pays(None, elite), (true, true), "an elite first pass pays both");
+    assert_eq!(pays(pass, elite), (false, true));
+    assert_eq!(pays(None, None), (false, false));
+    assert_eq!(pays(pass, pass), (false, false));
+    assert_eq!(pays(elite, elite), (false, false));
+    assert_eq!(pays(elite, pass), (false, false), "a worse result pays nothing");
+}
+
+#[test]
+fn the_completion_xp_is_the_authored_value_without_the_chain() {
+    let mut t = tally(Column::Race);
+    t.finish(
+        Completion {
+            pass: true,
+            elite: false,
+        },
+        Some(1),
+    );
+    assert_eq!(t.completion_xp(), awards().xp(0, Column::Race));
+    t.take();
+    assert_eq!(t.completion_xp(), awards().xp(0, Column::Race), "kept past take");
 }

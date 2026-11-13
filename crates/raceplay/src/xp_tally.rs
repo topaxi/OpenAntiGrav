@@ -159,17 +159,54 @@ impl XpTally {
         }
     }
 
-    /// The race-end awards: `Event complete` (Elite or Pass; `None` pays none) and `Finished Nth`.
-    pub fn finish(&mut self, completion: Option<bool>, place: Option<u8>) {
-        if let Some(elite) = completion {
-            self.award(if elite {
-                award::EVENT_ELITE
-            } else {
-                award::EVENT_PASS
-            });
+    /// The race-end awards: `Event complete` as `completion` says and `Finished Nth`.
+    pub fn finish(&mut self, completion: Completion, place: Option<u8>) {
+        if completion.pass {
+            self.award(award::EVENT_PASS);
+        }
+        if completion.elite {
+            self.award(award::EVENT_ELITE);
         }
         if let Some(p) = place.filter(|p| (1..=8).contains(p)) {
             self.award(award::FINISHED_1ST + u32::from(p) - 1);
+        }
+    }
+
+    /// What the completion awards paid at their authored value, chain bonuses left out: the
+    /// end-race page's `PassBonusXP`.
+    #[must_use]
+    pub fn completion_xp(&self) -> u32 {
+        [award::EVENT_PASS, award::EVENT_ELITE]
+            .into_iter()
+            .map(|index| self.awards.xp(index, self.column) * self.times_paid(index))
+            .sum()
+    }
+}
+
+/// Which `Event complete` awards a finish pays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Completion {
+    /// `Event complete- PASS`.
+    pub pass: bool,
+    /// `Event complete- ELITE`.
+    pub elite: bool,
+}
+
+impl Completion {
+    /// The awards a result pays given the best before it, each `None` for no pass, `Some(false)`
+    /// for a pass and `Some(true)` for an elite. The completion awards pay on improvement only:
+    /// the end-race page shows `PassBonusXP` when the result state differs from the best before
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/xp-award.md`, "Completion pays on improvement").
+    /// An elite on a first pass pays both, an elite over a pass the Elite alone.
+    #[must_use]
+    pub fn on_improvement(before: Option<bool>, now: Option<bool>) -> Self {
+        let rank = |tier: Option<bool>| tier.map_or(0, |elite| 1 + u8::from(elite));
+        if rank(now) <= rank(before) {
+            return Self::default();
+        }
+        Self {
+            pass: before.is_none(),
+            elite: now == Some(true),
         }
     }
 }

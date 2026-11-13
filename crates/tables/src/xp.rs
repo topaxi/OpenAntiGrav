@@ -96,27 +96,6 @@ impl Awards {
     pub fn xp(&self, index: u32, column: Column) -> u32 {
         self.get(index).map_or(0, |a| a.xp[column as usize])
     }
-
-    /// The XP a finished event pays in `column`: its completion award
-    /// (`elite` picks `Event complete- ELITE`, else `PASS`; `None` pays no
-    /// completion) plus `Finished Nth` for a finishing `place` (1-based, 1 to 8).
-    #[must_use]
-    pub fn race_end(&self, column: Column, completion: Option<bool>, place: Option<u8>) -> u32 {
-        let complete = completion.map_or(0, |elite| {
-            self.xp(
-                if elite {
-                    award::EVENT_ELITE
-                } else {
-                    award::EVENT_PASS
-                },
-                column,
-            )
-        });
-        let finish = place.filter(|p| (1..=8).contains(p)).map_or(0, |p| {
-            self.xp(award::FINISHED_1ST + u32::from(p) - 1, column)
-        });
-        complete + finish
-    }
 }
 
 fn award_row(node: &Node) -> Option<Award> {

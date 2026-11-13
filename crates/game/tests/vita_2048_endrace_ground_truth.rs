@@ -212,7 +212,7 @@ fn a_real_event_says_what_it_came_to() {
     };
     // "FinishRaceAnyPosition" for the pass bar, a win for the elite one: the
     // autopilot finishes, so the event is at least passed.
-    let facts = finished_event(&race_options, "2048 - Event 1", 30_000, 0)
+    let facts = finished_event(&race_options, "2048 - Event 1", 30_000, 0, None)
         .expect("the event races")
         .facts;
     let tier = facts.tier.expect("finishing passes `2048 - Event 1`");
@@ -319,7 +319,7 @@ fn a_finished_event_shows_what_it_paid_and_the_rank_bar() {
     };
     let prior = ranks.thresholds[0] - 100;
     let finished =
-        finished_event(&race_options, "2048 - Event 1", 30_000, prior).expect("the event races");
+        finished_event(&race_options, "2048 - Event 1", 30_000, prior, None).expect("the event races");
     let (banked, ranks) = finished.xp.expect("the event pays XP");
     assert!(banked.bonus > 0, "an autopilot finish passes the event");
     assert_eq!(banked.total_after, prior + banked.earned);

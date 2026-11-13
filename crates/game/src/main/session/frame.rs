@@ -1115,31 +1115,33 @@ impl Session {
                     }
                 }
                 if let Some(progress) = stage.campaign_2048_event.as_ref().filter(|_| !unofficial) {
+                    let title = campaign_title.as_deref().unwrap_or(&key.title);
+                    // The best before this race, which `record_campaign` below overwrites.
+                    let prior = self
+                        .records
+                        .campaign_medal(title, &progress.name)
+                        .and_then(|row| row.best_medal);
                     self.records.record_campaign(
-                        campaign_title.as_deref().unwrap_or(&key.title),
+                        title,
                         &progress.name,
                         observation.campaign_medal,
                         None,
                     );
                     let banked = stage.race.xp_tally_mut().map(|tally| {
-                        self.records.bank_event_xp(
+                        let earned = self.records.bank_event_xp(
                             tally,
+                            prior,
                             observation.campaign_medal,
                             observation.place,
-                        )
+                        );
+                        // What the EndRace page shows: the completion award among it.
+                        (earned, tally.completion_xp())
                     });
-                    let xp = banked.unwrap_or(0);
+                    let xp = banked.map_or(0, |(earned, _)| earned);
                     log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
-                    // What the EndRace page shows, read before `take` empties the tally.
-                    stage.xp_banked = banked.map(|earned| oag_game::endrace::touch::XpBanked {
+                    stage.xp_banked = banked.map(|(earned, bonus)| oag_game::endrace::touch::XpBanked {
                         earned,
-                        bonus: progress.xp_awards.as_ref().map_or(0, |awards| {
-                            awards.race_end(
-                                progress.xp_column,
-                                observation.campaign_medal.map(|m| m == records::Medal::Gold),
-                                None,
-                            )
-                        }),
+                        bonus,
                         total_after: self.records.xp(),
                     });
                 }

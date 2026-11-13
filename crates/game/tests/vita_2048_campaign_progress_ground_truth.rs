@@ -343,7 +343,7 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
     gathered.observe_kills(1);
     let kill = awards.xp(6, column);
     assert!(kill > 0, "the table authors Opponent destroyed");
-    let paid = store.bank_event_xp(&mut gathered, Some(records::Medal::Bronze), Some(3));
+    let paid = store.bank_event_xp(&mut gathered, None, Some(records::Medal::Bronze), Some(3));
     let pass = awards.xp(oag_tables::xp::award::EVENT_PASS, column);
     let third = awards.xp(oag_tables::xp::award::FINISHED_1ST + 2, column);
     assert!(pass > 0 && third > 0, "the table authors both rows");
@@ -355,13 +355,32 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
         "banking empties the tally, so a second call adds nothing"
     );
 
-    // First place is elite; the stored total accumulates.
+    // First place is elite over the pass before it: Elite alone, and the stored total accumulates.
     let before = store.xp();
-    let paid = store.bank_event_xp(&mut tally(), Some(records::Medal::Gold), Some(1));
-    let expected = awards.xp(oag_tables::xp::award::EVENT_ELITE, column)
-        + awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
-    assert_eq!(paid, expected);
-    assert_eq!(store.xp(), before + expected);
+    let first = awards.xp(oag_tables::xp::award::FINISHED_1ST, column);
+    let elite = awards.xp(oag_tables::xp::award::EVENT_ELITE, column);
+    let paid = store.bank_event_xp(
+        &mut tally(),
+        Some(records::Medal::Bronze),
+        Some(records::Medal::Gold),
+        Some(1),
+    );
+    assert_eq!(paid, elite + first);
+    assert_eq!(store.xp(), before + elite + first);
+
+    // An elite as a first pass pays both completion awards.
+    let paid = store.bank_event_xp(&mut tally(), None, Some(records::Medal::Gold), Some(1));
+    assert_eq!(paid, pass + elite + first);
+
+    // Repeating a result that does not beat the best pays the finishing place only.
+    for (prior, now) in [
+        (records::Medal::Bronze, records::Medal::Bronze),
+        (records::Medal::Gold, records::Medal::Gold),
+        (records::Medal::Gold, records::Medal::Bronze),
+    ] {
+        let paid = store.bank_event_xp(&mut tally(), Some(prior), Some(now), Some(1));
+        assert_eq!(paid, first, "{prior:?} then {now:?}");
+    }
     assert_eq!(store.xp_rank(&ranks), ranks.rank(store.xp()));
 }
 

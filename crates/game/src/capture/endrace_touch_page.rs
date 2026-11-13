@@ -109,7 +109,7 @@ pub(super) fn draw(
     )?;
     let (facts, xp) = match (kind.tier, event) {
         (None, Some(name)) => {
-            let finished = finished_event(race, name, 30_000, kind.prior_xp)?;
+            let finished = finished_event(race, name, 30_000, kind.prior_xp, None)?;
             (
                 finished.facts,
                 finished

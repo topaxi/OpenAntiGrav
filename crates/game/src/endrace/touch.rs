@@ -187,6 +187,7 @@ pub fn finished_event(
     name: &str,
     cap: u64,
     prior_xp: u32,
+    prior_medal: Option<crate::records::Medal>,
 ) -> Result<FinishedEvent> {
     let loaded = oag_raceplay::load_event(options, name)?;
     let progress = loaded
@@ -213,16 +214,10 @@ pub fn finished_event(
     profile.bank_xp(prior_xp);
     let place = Some(race.player_place());
     let banked = race.xp_tally_mut().map(|tally| {
-        let earned = profile.bank_event_xp(tally, medal, place);
+        let earned = profile.bank_event_xp(tally, prior_medal, medal, place);
         XpBanked {
             earned,
-            bonus: progress.xp_awards.as_ref().map_or(0, |awards| {
-                awards.race_end(
-                    progress.xp_column,
-                    medal.map(|m| m == crate::records::Medal::Gold),
-                    None,
-                )
-            }),
+            bonus: tally.completion_xp(),
             total_after: profile.xp(),
         }
     });

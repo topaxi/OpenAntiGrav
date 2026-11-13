@@ -69,6 +69,7 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
     let in_race = run.xp_tally_mut().expect("armed").total();
     let paid = store.bank_event_xp(
         run.xp_tally_mut().expect("armed"),
+        None,
         Some(records::Medal::Bronze),
         Some(place),
     );
