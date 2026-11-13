@@ -90,5 +90,5 @@ So a Zone race on an HD-ported circuit shows `321Go_Zone.vex` on slot 8, a
 Zone Battle `321Go_HD_Zone_Battle.vex` and a Detonator race
 `321go_hd_detonator.vex`, as on Omega. `FUN_81001982` (the Zone Battle test)
 and `FUN_812b0880` (the Combat test) are unread and keep their addresses.
-`oag_2048::TITLE.adverts.zone_gantry` carries the Zone case; the other three
-have no carrier in this engine yet.
+`oag_2048::TITLE.adverts.mode_gantries` lists all four boards; only Zone is
+selected, since this engine has no Zone Battle, Detonator or Combat `Mode`.

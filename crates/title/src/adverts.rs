@@ -97,9 +97,10 @@ pub struct Adverts {
     /// the title has none. Any board not listed plays HD's clock off its own `GO`
     /// edge.
     pub gantry_boards: Option<&'static [GantryBoard]>,
-    /// The board slot 8 shows instead of the circuit's own while the race is a
-    /// Zone race, or `None` where the title keeps one gantry for every mode.
-    pub zone_gantry: Option<ZoneGantry>,
+    /// The board slot 8 shows instead of the circuit's own, by race mode; empty
+    /// where the title keeps one gantry for every mode. A mode this engine does not
+    /// run yet is still listed, so the table is the title's whole mode vocabulary.
+    pub mode_gantries: &'static [ModeGantry],
     /// Where the numbers came from.
     pub origin: crate::Origin,
 }
@@ -141,7 +142,24 @@ pub struct GantryBoard {
     pub assembly_ticks: u64,
 }
 
-/// A Zone race's own start board.
+/// A race mode that shows a start board of its own.
+///
+/// The ids are the executables' mode numbers (Omega `TrackStartup_Load`: `6` Zone,
+/// `0xd` and `0x15` Zone Battle, `0xe` Detonator; 2048 `TrackStartup_Read`), and 2048
+/// adds Combat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GantryMode {
+    /// Zone.
+    Zone,
+    /// Zone Battle.
+    ZoneBattle,
+    /// Detonator.
+    Detonator,
+    /// 2048's Combat.
+    Combat,
+}
+
+/// A mode's own start board.
 ///
 /// **HD, measured on RPCS3 (Vineta K, one boot per mode):** `GetMode()` 6 shows a
 /// board of its own before the release (a dark panel on which a loop icon
@@ -150,10 +168,20 @@ pub struct GantryBoard {
 /// the names on the disc and the PS4 binary's mode table
 /// (`docs/ghidra/functions/ps4-omega-eu/billboards.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ZoneGantry {
+pub struct ModeGantry {
+    /// The mode that shows this board.
+    pub mode: GantryMode,
     /// The model's archive path, spelled as a `trackstartup.xml` names one.
     pub entry: &'static str,
     /// Ticks the board's assembly runs before the release (HD: 210, about 3.5 s off
     /// the capture; one boot, so a few ticks either way).
     pub assembly_ticks: u64,
+}
+
+impl Adverts {
+    /// The board `mode` shows on slot 8, or `None` where it keeps the circuit's own.
+    #[must_use]
+    pub fn mode_gantry(&self, mode: GantryMode) -> Option<ModeGantry> {
+        self.mode_gantries.iter().copied().find(|g| g.mode == mode)
+    }
 }

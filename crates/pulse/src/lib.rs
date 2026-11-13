@@ -204,7 +204,7 @@ pub const TITLE: &Title = &Title {
         card_store: oag_title::adverts::CardStore::R5G6B5Gamma,
         card_unlit: true,
         gantry_boards: None,
-        zone_gantry: None,
+        mode_gantries: &[],
         origin: oag_title::Origin::Measured,
     }),
 };

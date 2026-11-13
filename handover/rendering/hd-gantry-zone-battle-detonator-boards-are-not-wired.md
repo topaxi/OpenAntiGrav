@@ -17,7 +17,7 @@ panel was the Zone grade replacing the quad's albedo, not the model. See `docs/r
 ## Open
 
 - **`oag_race::Mode` has Zone only.** Zone Battle (`GetMode()` 13, and 21 on the PS4) and Detonator (14)
-  need modes before their boards can be chosen; the rule is `oag_title::adverts::ZoneGantry`, which is a
+  need modes before their boards can be chosen; the rule is `oag_title::adverts::Adverts::mode_gantries`, which is a
   `Mode::Zone` rule today and would become a table by mode id. Files: `321Go_HD_Zone_Battle.vex`,
   `321Go_HD_Detonator.vex`; both are loaded as a card the same way, and each probably needs its own check
   of which `DATA0N` copy is live (the game's own load order is last-wins, `data00` last).

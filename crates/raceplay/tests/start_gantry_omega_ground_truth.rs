@@ -112,7 +112,7 @@ fn vineta_k_adverts_load_from_omegas_container() {
 }
 
 /// The Zone board, `321Go_Zone.vex`, builds through the same branch: the board a
-/// Zone race shows on slot 8 (`oag_omega::TITLE.adverts`, `zone_gantry`).
+/// Zone race shows on slot 8 (`oag_omega::TITLE.adverts`, `mode_gantries`).
 #[test]
 #[ignore = "needs data/extracted/ps4"]
 fn the_zone_board_builds_through_the_vita_ps4_branch() {
@@ -151,4 +151,66 @@ fn the_same_branch_reads_2048s_321go_files() {
         );
         println!("{name}: {report:#?}");
     }
+}
+
+fn assert_every_mode_board_builds(
+    archives: &mut oag_assets::Archives,
+    adverts: &oag_title::adverts::Adverts,
+    expect: &[(oag_title::adverts::GantryMode, &str)],
+) {
+    for (mode, file) in expect {
+        let board = adverts
+            .mode_gantry(*mode)
+            .unwrap_or_else(|| panic!("{mode:?} has no board listed"));
+        assert!(board.entry.ends_with(file), "{mode:?}: {}", board.entry);
+        let mut report = Vec::new();
+        let (model, _) = gantry::load_with_blob(archives, board.entry, &mut report)
+            .unwrap_or_else(|e| panic!("{}: {e:#}", board.entry));
+        assert!(
+            !model.draws.is_empty() || !model.transparent_draws.is_empty(),
+            "{mode:?}"
+        );
+    }
+}
+
+/// Every mode board Omega lists resolves to an authored `.vex` that builds.
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn every_omega_mode_board_resolves_to_an_authored_vex() {
+    use oag_title::adverts::GantryMode::*;
+    let Some(mut archives) = archives() else {
+        return;
+    };
+    let adverts = oag_omega::TITLE.adverts.as_ref().expect("omega adverts");
+    assert_every_mode_board_builds(
+        &mut archives,
+        adverts,
+        &[
+            (Zone, "321Go_Zone.vex"),
+            (ZoneBattle, "321Go_HD_Zone_Battle.vex"),
+            (Detonator, "321go_hd_detonator.vex"),
+        ],
+    );
+}
+
+/// The same for 2048, with its Combat board.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn every_2048_mode_board_resolves_to_an_authored_vex() {
+    use oag_title::adverts::GantryMode::*;
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&source.display().to_string()).expect("mounting 2048");
+    let adverts = oag_2048::TITLE.adverts.as_ref().expect("2048 adverts");
+    assert_every_mode_board_builds(
+        &mut archives,
+        adverts,
+        &[
+            (Zone, "321Go_Zone.vex"),
+            (ZoneBattle, "321Go_HD_Zone_Battle.vex"),
+            (Detonator, "321go_hd_detonator.vex"),
+            (Combat, "321Go_2048_Combat.vex"),
+        ],
+    );
 }

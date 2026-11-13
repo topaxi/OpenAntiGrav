@@ -305,10 +305,11 @@ pub const TITLE: &Title = &Title {
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
         gantry_boards: None,
-        zone_gantry: Some(oag_title::adverts::ZoneGantry {
+        mode_gantries: &[oag_title::adverts::ModeGantry {
+            mode: oag_title::adverts::GantryMode::Zone,
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
             assembly_ticks: 210,
-        }),
+        }],
         origin: oag_title::Origin::Measured,
     }),
 };
