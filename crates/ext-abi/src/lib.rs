@@ -23,7 +23,7 @@
 //! | [`STATE_AT`] | [`MAX_STATE_BYTES`] | the module's state blob, in and out |
 //! | [`REPLY_AT`] | 4 | command count, written by the guest |
 //! | [`REPLY_AT`] + 4 | [`COMMAND_LEN`] x [`MAX_COMMANDS`] | commands ([`Command`]): kind `u8`, slot `u8`, `u16` argument, `f32`, `u32` |
-//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text`, `hud-icon`, `pickup-look` or `raise-warning` command |
+//! | [`POOL_AT`] | [`POOL_LEN`] | the reply's string pool: entries of a length byte then UTF-8, named by offset from a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or mod-asset command |
 //! | [`CRAFTS_AT`] | [`CRAFT_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Craft`]): pickup `u8`, flags `u8`, lap `u8`, laps target `u8`, shield `f32`, shield maximum `f32`, speed km/h `f32` |
 //! | [`TRACKING_AT`] | [`TRACKING_LEN`] x [`MAX_CRAFTS`] | one record per grid slot ([`Tracking`]): progress `f32`, place `u8`, flags `u8` (bit 0: progress is a fix), 2 bytes unused |
 //! | [`TITLE_AT`] | 4 | the title's key: `channel_key` of its lowercased hyphenated name (0: none) |
@@ -62,10 +62,11 @@ pub use hud::{
 pub use kind::CommandKind;
 pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
-pub use pickup::{Colour, Icon, ModIcon, Pickup};
+pub use name::ModName;
+pub use pickup::{Colour, Icon, Pickup};
 pub use scene::{
-    MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_INDEX,
-    MAX_SHADER_PARAMS, MAX_VIEW_GENERATION, ViewUpdate,
+    MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_PARAMS,
+    MAX_VIEW_GENERATION, ViewUpdate,
 };
 pub use sound::SoundMode;
 pub use tracking::{
@@ -78,7 +79,7 @@ pub use warning::{Warning, WarningSide};
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 4;
+pub const REVISION: u32 = 5;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
 const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
@@ -191,7 +192,7 @@ const EVENT_MOD: u8 = 10;
 const EVENT_TRANSIT_END: u8 = 11;
 const EVENT_CLEARANCE: u8 = 12;
 /// Bit 15 of a `hud-text`, `hud-icon`, `pickup-look`, `raise-warning` or `fire-effect`
-/// argument: the string, icon or effect is the sending mod's own, not the title's. The pool offset or effect index is the rest.
+/// argument: the string, icon or effect is the sending mod's own, not the title's. The rest is the name's pool offset.
 const OWN_FLAG: u16 = 1 << 15;
 /// The craft record's pickup code for a simulation mod's own pickup.
 const PICKUP_OURS: u8 = u8::MAX;
@@ -476,13 +477,14 @@ pub enum Command {
     },
     /// Fire one of the sending mod's own particle effects (`[effects]` of its manifest)
     /// at the craft's nozzle. An output: drawn, never hashed. Shares `fire-effect`'s
-    /// code, told apart by bit 15 of the argument; an `index` the mod has no effect at
-    /// draws nothing, and the load report names the effects that did not load.
+    /// code, told apart by bit 15 of the argument, the rest naming the effect in the
+    /// reply's pool. A name the manifest lacks faults the module; an effect that did not
+    /// load draws nothing, and the load report names it.
     FireModEffect {
         /// The grid slot.
         slot: Slot,
-        /// The effect's place in the mod's `[effects]`, in name order (15 bits).
-        index: u16,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
     },
     /// This tick, recolour the slot's HUD `element`. An output, re-sent each tick it
     /// should hold: drawn, never hashed. A title without the element draws nothing.
@@ -661,8 +663,8 @@ pub enum Command {
         slot: Slot,
         /// The colour, straight alpha.
         rgba: Rgba,
-        /// The shader, by its place in the mod's `[shaders]`, at most [`MAX_SHADER_INDEX`].
-        shader: Option<u16>,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: Option<ModName>,
     },
     /// This tick, widen (positive) or narrow (negative) the vertical field of view of the
     /// slot's view by `degrees`, in `[-MAX_FOV_OFFSET_DEG, MAX_FOV_OFFSET_DEG]`, before the
@@ -673,7 +675,7 @@ pub enum Command {
         /// Degrees.
         degrees: f32,
     },
-    /// Play the sending mod's own effect number `index` (its place in `[effects]`) at the
+    /// Play the sending mod's own effect `effect` (its key in `[effects]`) at the
     /// course point `distance` ahead of the craft, on the road's centre line, where it
     /// stays for the effect's own lifetime: a sprite of the mod's texture standing in the
     /// world (a portal). Counts toward [`MAX_FIRE_EFFECTS_PER_TICK`]; a distance that
@@ -681,8 +683,8 @@ pub enum Command {
     FireModEffectAhead {
         /// The grid slot the point is ahead of.
         slot: Slot,
-        /// The effect, by its place in the mod's `[effects]`.
-        index: u16,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
         /// How far ahead along the circuit.
         distance: Distance,
     },
@@ -699,8 +701,8 @@ pub enum Command {
         rgba: Rgba,
         /// Half its width in world units, above 0 and at most [`MAX_BEAM_HALF_WIDTH`].
         half_width: f32,
-        /// The shader, by its place in the mod's `[shaders]`, at most [`MAX_SHADER_INDEX`].
-        shader: Option<u16>,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: Option<ModName>,
     },
     /// This tick, scalar `index` (its place in the shader's header, under
     /// [`MAX_SHADER_PARAMS`]) of the sending mod's shader, as the view of `slot` draws it.
@@ -708,8 +710,8 @@ pub enum Command {
     SetShaderParam {
         /// The grid slot whose view reads it.
         slot: Slot,
-        /// The shader, by its place in the mod's `[shaders]`.
-        shader: u16,
+        /// The shader, by its key in the mod's `[shaders]`.
+        shader: ModName,
         /// The scalar.
         index: u8,
         /// Its value, finite.
@@ -738,15 +740,14 @@ pub enum Command {
         /// [`MAX_VIEW_GENERATION`].
         generation: u8,
     },
-    /// Play the sending mod's own sound number `index` (its place in `[sounds]`, name
-    /// order) from the craft, placed like a title cue (positioned, HRTF and rear cue
+    /// Play the sending mod's own sound `sound` (its key in `[sounds]`) from the craft, placed like a title cue (positioned, HRTF and rear cue
     /// apply; the player's own craft is heard dry). One the mod lacks or that did not
     /// load plays nothing and the load report says so. Heard, never hashed.
     PlayModSound {
         /// The grid slot the sound comes from.
         slot: Slot,
-        /// The sound, by its place in the mod's `[sounds]`.
-        index: u16,
+        /// The sound, by its key in the mod's `[sounds]`.
+        sound: ModName,
         /// Once, a loop to start, or a loop to stop.
         mode: SoundMode,
     },
@@ -772,6 +773,16 @@ pub enum Command {
         /// The icon: the title's own, which fixes the group, or the mod's, which names it.
         warning: Warning,
     },
+    /// End the surfaces of the sending mod's own effect `effect` that it placed for `slot` with
+    /// [`Self::FireModEffectAhead`] before this tick, at once: a portal that closes, a marker
+    /// that is picked up. Particles it still holds go with it. None standing is not a fault.
+    /// An output, never hashed.
+    StopModEffect {
+        /// The grid slot the surfaces were placed for.
+        slot: Slot,
+        /// The effect, by its key in the mod's `[effects]`.
+        effect: ModName,
+    },
 }
 
 impl Command {
@@ -788,6 +799,7 @@ impl Command {
             Self::ScaleSlotPads { .. } => CommandKind::ScaleSlotPads,
             Self::PlayCue { .. } => CommandKind::PlayCue,
             Self::RaiseWarning { .. } => CommandKind::RaiseWarning,
+            Self::StopModEffect { .. } => CommandKind::StopModEffect,
             Self::FireEffect { .. } | Self::FireModEffect { .. } => CommandKind::FireEffect,
             Self::HudTint { .. } => CommandKind::HudTint,
             Self::HudShake { .. } => CommandKind::HudShake,
@@ -849,12 +861,43 @@ impl Command {
             | Self::DrawBeam { slot, .. }
             | Self::SetShaderParam { slot, .. }
             | Self::PortalView { slot, .. }
-            | Self::PlayModSound { slot, .. } => Some(slot),
+            | Self::PlayModSound { slot, .. }
+            | Self::StopModEffect { slot, .. } => Some(slot),
             Self::PickupRoll { .. }
             | Self::ScalePad { .. }
             | Self::SetWeather { .. }
             | Self::SetSun { .. }
             | Self::GradeSky { .. } => None,
+        }
+    }
+
+    /// The string this command's record names in the reply's pool, if it names one: a
+    /// `hud-text` string, a `hud-icon` sprite, or the name of an asset of the sending mod.
+    #[must_use]
+    pub fn pooled_name(&self) -> Option<&str> {
+        match self {
+            Self::HudText { text, .. } => Some(text.as_str()),
+            Self::HudIcon { sprite, .. } => Some(sprite.as_str()),
+            Self::PickupLook {
+                icon: Icon::Mod(name),
+                ..
+            }
+            | Self::RaiseWarning {
+                warning: Warning::Mod { icon: name, .. },
+                ..
+            }
+            | Self::ScreenFill {
+                shader: Some(name), ..
+            }
+            | Self::DrawBeam {
+                shader: Some(name), ..
+            }
+            | Self::SetShaderParam { shader: name, .. }
+            | Self::FireModEffect { effect: name, .. }
+            | Self::FireModEffectAhead { effect: name, .. }
+            | Self::StopModEffect { effect: name, .. }
+            | Self::PlayModSound { sound: name, .. } => Some(name.as_str()),
+            _ => None,
         }
     }
 
@@ -883,7 +926,7 @@ impl Command {
                 Warning::Mod { side, .. } => (pool_at | OWN_FLAG, 0, u32::from(side.code())),
             },
             Self::FireEffect { effect, .. } => (effect.code(), 0, 0),
-            Self::FireModEffect { index, .. } => (index | OWN_FLAG, 0, 0),
+            Self::FireModEffect { .. } => (pool_at | OWN_FLAG, 0, 0),
             Self::HudTint { element, rgba, .. } => (element.code(), 0, rgba.to_u32()),
             Self::HudShake {
                 element, amplitude, ..
@@ -935,8 +978,9 @@ impl Command {
             | Self::FireModEffectAhead { .. }
             | Self::DrawBeam { .. }
             | Self::SetShaderParam { .. }
-            | Self::PortalView { .. } => scene::encode(self).unwrap_or_default(),
-            Self::PlayModSound { .. } => sound::encode(self).unwrap_or_default(),
+            | Self::PortalView { .. } => scene::encode(self, pool_at).unwrap_or_default(),
+            Self::PlayModSound { .. } => sound::encode(self, pool_at).unwrap_or_default(),
+            Self::StopModEffect { .. } => (pool_at, 0, 0),
         };
         let mut record = [0; COMMAND_LEN];
         record[COMMAND_KIND] = self.kind().code();
@@ -1068,7 +1112,7 @@ impl Command {
                             .ok()
                             .and_then(WarningSide::from_code)
                             .ok_or(Malformed::WarningSide(word))?,
-                        icon: ModIcon::from_string(
+                        icon: ModName::from_string(
                             pool_string(pool, at).ok_or(Malformed::Pool(at))?,
                         ),
                     },
@@ -1080,10 +1124,13 @@ impl Command {
                     WarningIcon::from_code(arg).ok_or(Malformed::WarningIcon(arg))?,
                 ),
             },
-            CommandKind::FireEffect if arg & OWN_FLAG != 0 => Self::FireModEffect {
-                slot,
-                index: arg & !OWN_FLAG,
-            },
+            CommandKind::FireEffect if arg & OWN_FLAG != 0 => {
+                let at = arg & !OWN_FLAG;
+                Self::FireModEffect {
+                    slot,
+                    effect: ModName::from_string(pool_string(pool, at).ok_or(Malformed::Pool(at))?),
+                }
+            }
             CommandKind::FireEffect => Self::FireEffect {
                 slot,
                 effect: Effect::from_code(arg).ok_or(Malformed::Effect(arg))?,
@@ -1153,7 +1200,7 @@ impl Command {
                 let bad = Malformed::PickupLook { arg, value: raw };
                 let icon = if arg & OWN_FLAG != 0 {
                     let at = arg & !OWN_FLAG;
-                    Icon::Mod(ModIcon::from_string(
+                    Icon::Mod(ModName::from_string(
                         pool_string(pool, at).ok_or(Malformed::Pool(at))?,
                     ))
                 } else {
@@ -1188,9 +1235,13 @@ impl Command {
             | CommandKind::DrawBeam
             | CommandKind::SetShaderParam
             | CommandKind::PortalView => {
-                return scene::decode(kind, slot, (arg, value, word));
+                return scene::decode(kind, slot, (arg, value, word), pool);
             }
-            CommandKind::PlayModSound => return sound::decode(slot, arg, word),
+            CommandKind::PlayModSound => return sound::decode(slot, arg, word, pool),
+            CommandKind::StopModEffect => Self::StopModEffect {
+                slot,
+                effect: ModName::from_string(pool_string(pool, arg).ok_or(Malformed::Pool(arg))?),
+            },
             CommandKind::Emit => {
                 if !value.is_finite() {
                     return Err(Malformed::EmitValue { slot, value });
@@ -1403,6 +1454,7 @@ pub mod hud;
 mod kind;
 mod malformed;
 pub mod motion;
+mod name;
 mod pickup;
 mod scene;
 mod sound;

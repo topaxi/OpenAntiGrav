@@ -11,8 +11,10 @@ discharge = "fx/discharge.toml"
 ```
 
 A module fires one with `fire-effect` and bit 15 of the argument set (`Command::FireModEffect`,
-SDK `reply.fire_mod_effect(&craft, index)`): the index is the effect's place in `[effects]`
-in name order. It plays at the craft's nozzle (the hull's back end along the body's heading),
+SDK `reply.fire_mod_effect(&craft, "discharge")`): the effect is named by its key in `[effects]`,
+carried in the reply's string pool, so adding a file never renumbers the others; a key the manifest
+lacks faults the module, naming it. `reply.stop_mod_effect` ends the surfaces
+`fire_mod_effect_ahead` placed (`hooks.md`). It plays at the craft's nozzle (the hull's back end along the body's heading),
 its cone axis `rear` (away from the nose) or `up`. Render-side only: never hashed, never in
 the simulation; a race firing mod effects hashes like one firing none
 (`tests::extensions::on::a_mod_effect_is_queued_under_its_mod_and_a_race_firing_one_hashes_like_one_firing_none`).

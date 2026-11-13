@@ -10,13 +10,30 @@ use oag_gameplay::cue::{ModSoundEvent, ModSoundMode};
 use super::extension_faults::scripted;
 use super::extensions::on::prepared;
 use super::extensions::{grid, run};
+use crate::extensions::Source;
+
+/// The mod's `[sounds]`, in name order: a sound's place is its place here.
+const SOUNDS: [&str; 8] = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 fn sound(slot: usize, index: u16, mode: SoundMode) -> Command {
     Command::PlayModSound {
         slot: Slot::new(slot).unwrap(),
-        index,
+        sound: oag_ext_abi::ModName::new(SOUNDS[usize::from(index)]).unwrap(),
         mode,
     }
+}
+
+fn sounds() -> Vec<(String, String)> {
+    SOUNDS
+        .map(|name| (name.to_string(), format!("{name}.wav")))
+        .to_vec()
+}
+
+/// [`scripted`] for a mod whose `[sounds]` is [`SOUNDS`].
+fn with_sounds(id: &str, guard: &str, commands: &[Command], publishes: &[&str]) -> Source {
+    let mut source = scripted(id, guard, commands, publishes);
+    source.sounds = sounds();
+    source
 }
 
 fn event(index: u16, slot: u8, mode: ModSoundMode) -> ModSoundEvent {
@@ -40,7 +57,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
         ],
         &[],
     );
-    loops.sounds = vec![("a".to_string(), "a.wav".to_string())];
+    loops.sounds = sounds();
     let mut race = grid(prepared(&[loops]));
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
@@ -64,7 +81,7 @@ fn a_loop_is_queued_once_a_one_shot_every_time_and_a_stop_ends_it() {
         &[sound(1, 3, SoundMode::Loop), sound(1, 3, SoundMode::Stop)],
         &[],
     );
-    stopper.sounds = vec![("a".to_string(), "a.wav".to_string())];
+    stopper.sounds = sounds();
     let mut race = grid(prepared(&[stopper]));
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert_eq!(
@@ -91,7 +108,7 @@ fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
         index,
         slot,
     };
-    let source = scripted(
+    let source = with_sounds(
         "test.sound",
         "",
         &[sound(1, 3, SoundMode::Loop), sound(2, 5, SoundMode::Loop)],
@@ -109,7 +126,7 @@ fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
     assert!(race.mod_sound_loops().is_empty(), "a faulted module's stop");
 
     // A start and a stop every tick, never drained: 1,200 events asked for.
-    let churn = scripted(
+    let churn = with_sounds(
         "test.sound",
         "",
         &[sound(1, 3, SoundMode::Loop), sound(1, 3, SoundMode::Stop)],
@@ -122,7 +139,7 @@ fn the_wanted_loops_survive_a_silent_tick_and_the_queue_is_bounded() {
 
 #[test]
 fn a_faulted_module_stops_the_loops_it_started() {
-    let source = scripted(
+    let source = with_sounds(
         "test.sound",
         "",
         &[sound(1, 3, SoundMode::Loop), sound(2, 5, SoundMode::Loop)],
@@ -149,8 +166,8 @@ fn a_faulted_module_stops_the_loops_it_started() {
 
 #[test]
 fn a_race_that_asks_for_sounds_hashes_like_one_that_asks_for_none() {
-    let quiet = scripted("test.sound", "", &[], &[]);
-    let loud = scripted(
+    let quiet = with_sounds("test.sound", "", &[], &[]);
+    let loud = with_sounds(
         "test.sound",
         "",
         &[sound(1, 0, SoundMode::Loop), sound(2, 1, SoundMode::Once)],

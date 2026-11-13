@@ -37,13 +37,9 @@ pub(super) fn scripted_with_icons(
     for command in commands {
         let at = pool.len() as u16;
         bytes.extend(command.encode_pooled(at));
-        if let Command::RaiseWarning {
-            warning: oag_ext_abi::Warning::Mod { icon, .. },
-            ..
-        } = command
-        {
-            pool.push(icon.as_str().len() as u8);
-            pool.extend(icon.as_str().bytes());
+        if let Some(name) = command.pooled_name() {
+            pool.push(name.len() as u8);
+            pool.extend(name.bytes());
         }
     }
     let escaped = |bytes: &[u8]| -> String { bytes.iter().map(|b| format!("\\{b:02x}")).collect() };

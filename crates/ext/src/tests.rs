@@ -528,7 +528,7 @@ fn a_pickup_look_is_one_record_and_a_mod_icon_rides_the_pool() {
     };
     let red = Colour::Rgba(Rgba::new(0xE0, 0x20, 0x20, 0x80));
     assert_eq!(reply.pickup_look(&held, icon::title::TURBO, red), Ok(()));
-    let bolt = Icon::Mod(ModIcon::new("bolt").unwrap());
+    let bolt = Icon::Mod(ModName::new("bolt").unwrap());
     assert_eq!(
         reply.pickup_look(&held, bolt, colour::title::SHIELD),
         Ok(())
@@ -598,7 +598,7 @@ fn a_raised_mod_warning_rides_the_pool_with_its_group() {
             slot: slot(0),
             warning: Warning::Mod {
                 side: WarningSide::Rear,
-                icon: ModIcon::new("portal").unwrap(),
+                icon: ModName::new("portal").unwrap(),
             }
         })
     );
@@ -714,7 +714,7 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
         let sent = if i % 2 == 0 {
             reply.fire_effect(&craft, oag_ext_abi::Effect::HitSpark)
         } else {
-            reply.fire_mod_effect(&craft, 0)
+            reply.fire_mod_effect(&craft, "spark")
         };
         assert_eq!(sent, Ok(()));
     }
@@ -722,7 +722,10 @@ fn the_reply_refuses_a_fire_effect_past_the_cap_counting_both_kinds() {
         reply.fire_effect(&craft, oag_ext_abi::Effect::HitSpark),
         Err(Refused::Effects)
     );
-    assert_eq!(reply.fire_mod_effect(&craft, 0), Err(Refused::Effects));
+    assert_eq!(
+        reply.fire_mod_effect(&craft, "spark"),
+        Err(Refused::Effects)
+    );
 }
 
 /// The motion commands refuse what the host would fault on: a craft not racing or
@@ -866,17 +869,17 @@ fn the_view_commands_refuse_what_the_host_would_fault_on_and_count_the_effect() 
         Ok(())
     );
     assert_eq!(
-        reply.fire_mod_effect_ahead(&craft, 0, Distance::Units(0.0)),
+        reply.fire_mod_effect_ahead(&craft, "ring", Distance::Units(0.0)),
         Err(Refused::Range)
     );
     for _ in 0..oag_ext_abi::MAX_FIRE_EFFECTS_PER_TICK {
         assert_eq!(
-            reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+            reply.fire_mod_effect_ahead(&craft, "ring", Distance::Units(80.0)),
             Ok(())
         );
     }
     assert_eq!(
-        reply.fire_mod_effect_ahead(&craft, 1, Distance::Units(80.0)),
+        reply.fire_mod_effect_ahead(&craft, "ring", Distance::Units(80.0)),
         Err(Refused::Effects),
         "it counts toward the effect cap"
     );
@@ -990,4 +993,57 @@ fn a_crafts_speed_is_its_kmh_in_units_and_a_test_flies_it_on() {
         slot: me,
         factor: 1.5
     }));
+}
+
+/// A name a command carries is stored once in the reply's pool however often it is sent, so a
+/// shader's scalars, its fill and a sound's repeats cost one entry, and a different name past
+/// the pool's end is `Refused::Pool`, never a silent drop.
+#[test]
+fn a_name_sent_twice_takes_one_pool_entry_and_a_full_pool_is_refused_by_name() {
+    use oag_ext_abi::{POOL_AT, REPLY_AT};
+    let mut io = [0_u8; oag_ext_abi::IO_LEN];
+    let mut reply = Reply::new(&mut io[REPLY_AT..], 0, 0);
+    let record = racer(1.0).encode();
+    let craft = Craft {
+        slot: slot(0),
+        record: &record,
+        tracking: &[0; oag_ext_abi::TRACKING_LEN],
+        records: &[],
+    };
+    for index in 0..oag_ext_abi::MAX_SHADER_PARAMS {
+        assert_eq!(reply.set_shader_param(&craft, "tunnel", index, 1.0), Ok(()));
+    }
+    assert_eq!(
+        reply.screen_fill_shaded(&craft, Rgba::new(1, 2, 3, 4), "tunnel"),
+        Ok(())
+    );
+    reply.finish();
+    let pool = &io[POOL_AT..POOL_AT + oag_ext_abi::POOL_LEN];
+    assert_eq!(&pool[..7], b"\x06tunnel");
+    assert_eq!(pool[7], 0, "one entry, not five");
+    let commands = oag_ext_abi::command_record(&io, 4);
+    assert_eq!(
+        Command::decode_in(&commands, pool),
+        Ok(Command::ScreenFill {
+            slot: slot(0),
+            rgba: Rgba::new(1, 2, 3, 4),
+            shader: ModName::new("tunnel"),
+        })
+    );
+
+    let mut io = [0_u8; oag_ext_abi::IO_LEN];
+    let mut reply = Reply::new(&mut io[REPLY_AT..], 0, 0);
+    let long = "n".repeat(oag_ext_abi::MAX_HUD_TEXT);
+    let mut sent = 0;
+    loop {
+        let name = format!("{}{sent}", &long[..long.len() - 3]);
+        match reply.play_mod_sound(&craft, &name, SoundMode::Once) {
+            Ok(()) => sent += 1,
+            Err(refused) => {
+                assert_eq!(refused, Refused::Pool);
+                break;
+            }
+        }
+    }
+    assert!(sent > 10 && sent < oag_ext_abi::MAX_COMMANDS, "{sent}");
 }

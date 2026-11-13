@@ -937,8 +937,8 @@ fn extension(e: ExtensionTable, has: &dyn Fn(&str) -> bool) -> Result<Extension,
 
 /// What `fire-mod-effect`'s index (15 bits of an argument) can name, kept well inside it.
 const MAX_EFFECTS: usize = 256;
-/// Every place `oag_ext_abi::MAX_SHADER_INDEX` can name.
-const MAX_SHADERS: usize = oag_ext_abi::MAX_SHADER_INDEX as usize + 1;
+/// The most shaders a mod may declare. Chosen.
+const MAX_SHADERS: usize = 255;
 
 /// What `play-mod-sound`'s index can name.
 const MAX_SOUNDS: usize = 64;

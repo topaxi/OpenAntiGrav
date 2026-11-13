@@ -86,6 +86,27 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
     );
 }
 
+/// What a guest reads as `Craft::progress()` is the craft's standing, and a frozen craft keeps
+/// reporting the progress it went in at: a guest asks for the pair of a portal from where the
+/// craft stands, and relies on it being the same on every tick of the flight
+/// (`docs/architecture/wasm-extensions/hooks.md`, "Transit").
+#[test]
+fn a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at() {
+    let mut race = moving();
+    let entry = race.sim.world.ships[1].standing.progress;
+    assert!(entry.is_some());
+    race.begin_transit(1, 30, Distance::Units(20.0), 0.5)
+        .unwrap();
+    for tick in 1..30 {
+        race.tick(&PlayerInputs::none());
+        assert!(race.sim.world.ships[1].transit.is_some(), "tick {tick}");
+        assert_eq!(
+            race.sim.world.ships[1].standing.progress, entry,
+            "tick {tick}"
+        );
+    }
+}
+
 #[test]
 fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing() {
     let mut race = moving();

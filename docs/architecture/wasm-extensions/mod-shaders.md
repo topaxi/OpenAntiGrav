@@ -49,6 +49,7 @@ fn engine_texture_bound() -> bool               // whether this view has one
 fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
 fn craft_frame() -> mat4x4<f32>                 // the view's own craft in eye space: right, up, back, place
 fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32>   // the ray through that point of the view, eye space, z -1
+fn view_aspect() -> f32                         // the view's width over its height: a circle on screen_uv is round with uv.x * view_aspect()
 ```
 
 `craft_frame` and `eye_ray` are what a shader needs to cut geometry of its own round the craft:
@@ -56,6 +57,13 @@ eye space has the eye at the origin looking down `-z`, so a point `d` units ahea
 is `eye_ray(input.screen_uv) * d`, and the craft's frame is rigid (no scale, lean or shake). For a
 craft in a transit the frame is the line it is flown along ("A craft's own transit" below).
 `fx/wormhole.wgsl` of `oag.slipstream` draws a tunnel round the craft with the two.
+
+**At a cut.** A craft put elsewhere on a tick (a `transit`'s entry or exit) has its camera cut, not
+blended, while `between` still runs -1..0 for that tick's frames, so a scalar that counts ticks and
+is read as `param_x() + rate * input.between` is a tick behind the picture on them. A guest that
+must not show the far side early skips the count that would: `oag.slipstream`'s `Flight::Through`
+never takes the value one past the last tick of its tunnel. (The shader is not told a frame is a
+cut.)
 
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it

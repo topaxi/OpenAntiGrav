@@ -139,7 +139,7 @@ pub enum LoadError {
         /// The layout revision it was built for.
         revision: Option<u32>,
     },
-    /// The module's `oag_state_len` export disagrees with the manifest's `state_bytes`.
+    /// The module's `oag_state_len` export disagrees with the `state_bytes` its manifest declares.
     State {
         /// What the module exports.
         module: u32,
@@ -190,7 +190,9 @@ impl std::error::Error for LoadError {}
 pub struct Limits {
     /// The guest's maximum linear memory, 64 KiB pages, at most [`MAX_MEMORY_PAGES`].
     pub memory_pages: u32,
-    /// The state blob's length, at most [`MAX_STATE_BYTES`].
+    /// The state blob's length, at most [`MAX_STATE_BYTES`]. 0 takes the length the module
+    /// exports as `oag_state_len` (a module that exports none has no state); another number
+    /// must equal it.
     pub state_bytes: u32,
     /// Fuel per tick.
     pub fuel: u64,
@@ -345,7 +347,7 @@ impl Module {
         let pre = linker
             .instantiate_pre(&module)
             .map_err(|e| LoadError::Start(format!("{e:#}")))?;
-        let loaded = Self { pre, limits };
+        let mut loaded = Self { pre, limits };
         // A first instance at load, so a module that cannot start (too much memory, a
         // trapping start function, the wrong ABI) is refused here and never mid-race.
         let (mut store, instance) = loaded
@@ -369,7 +371,8 @@ impl Module {
                 ));
             }
         }
-        // Optional: a module that says how long its state is must agree with its manifest.
+        // Optional: a module that says how long its state is must agree with its manifest,
+        // and a manifest that declares none (0) takes the module's.
         if let Some(export) = module.get_export("oag_state_len") {
             let ExternType::Func(func) = export else {
                 return Err(LoadError::Export(
@@ -381,7 +384,14 @@ impl Module {
                 .get_typed_func::<(), u32>(&mut store, "oag_state_len")
                 .and_then(|f| f.call(&mut store, ()))
                 .map_err(|e| LoadError::Export(format!("`oag_state_len`: {e:#}")))?;
-            if len != limits.state_bytes {
+            if limits.state_bytes == 0 {
+                if len as usize > MAX_STATE_BYTES {
+                    return Err(LoadError::Limits(format!(
+                        "the module's state is {len} bytes, over {MAX_STATE_BYTES}"
+                    )));
+                }
+                loaded.limits.state_bytes = len;
+            } else if len != limits.state_bytes {
                 return Err(LoadError::State {
                     module: len,
                     manifest: limits.state_bytes,

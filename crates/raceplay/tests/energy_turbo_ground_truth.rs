@@ -55,7 +55,12 @@ fn energy_turbo() -> Option<race::extensions::Source> {
         read: Arc::new(move || Ok(wasm.clone())),
         strings: Arc::new(|_| Default::default()),
         icons: Vec::new(),
-        effects: Vec::new(),
+        effects: module
+            .manifest
+            .effects
+            .iter()
+            .map(|(name, path)| (name.clone(), path.clone()))
+            .collect(),
         shaders: Vec::new(),
         sounds: Vec::new(),
         files: Arc::new(|_| Err("no files".into())),

@@ -20,6 +20,14 @@ pub enum Fired {
         /// Its place in the mod's `[effects]`, in name order.
         index: u16,
     },
+    /// The sending mod's own effect, ended where `fire-mod-effect-ahead` placed it for a craft:
+    /// every surface of it that mod placed for that slot (`stop-mod-effect`).
+    Stop {
+        /// The sending mod.
+        mod_id: String,
+        /// Its place in the mod's `[effects]`, in name order.
+        index: u16,
+    },
     /// The sending mod's own effect, played at a point of the road ahead of a craft
     /// (`fire-mod-effect-ahead`) rather than at its nozzle.
     OwnAt {
@@ -49,6 +57,20 @@ mod view {
     use oag_fx::psys::parametric::Axis;
 
     use super::Fired;
+
+    /// A mod's surface standing on the stage, kept so `stop-mod-effect` can end it.
+    #[derive(Debug, Clone)]
+    pub struct Surface {
+        slot: usize,
+        mod_id: String,
+        index: u16,
+        playing: oag_fx::psys::Playing,
+    }
+
+    /// Surfaces remembered: the stage holds a handful at once, and the oldest of these is
+    /// forgotten first.
+    const MAX_SURFACES: usize = 64;
+
     use crate::extensions::Source;
 
     /// One loaded effect of a mod and how to aim it.
@@ -225,6 +247,18 @@ mod view {
         pub(crate) fn play_fired(&mut self, slot: usize, fired: &Fired) {
             let (effect, axis) = match fired {
                 Fired::Title(trigger) => (self.view.handles.get(*trigger).cloned(), Axis::Up),
+                Fired::Stop { mod_id, index } => {
+                    let stage = &mut self.view.stage;
+                    self.view.surfaces.retain(|held| {
+                        let hit = (held.slot, held.mod_id.as_str(), held.index)
+                            == (slot, mod_id.as_str(), *index);
+                        if hit {
+                            stage.kill_surface(held.playing);
+                        }
+                        !hit
+                    });
+                    return;
+                }
                 Fired::Own { mod_id, index } | Fired::OwnAt { mod_id, index, .. } => {
                     let own = self.view.handles.own(mod_id, *index);
                     (
@@ -236,9 +270,24 @@ mod view {
             let Some(effect) = effect else {
                 return;
             };
-            if let Fired::OwnAt { at, up, .. } = fired {
+            if let Fired::OwnAt {
+                mod_id,
+                index,
+                at,
+                up,
+            } = fired
+            {
                 if let Some(playing) = self.view.stage.play_held(&effect, *at, 1.0) {
                     self.view.stage.orient_surface(playing, *up);
+                    if self.view.surfaces.len() >= MAX_SURFACES {
+                        self.view.surfaces.remove(0);
+                    }
+                    self.view.surfaces.push(Surface {
+                        slot,
+                        mod_id: mod_id.clone(),
+                        index: *index,
+                        playing,
+                    });
                 }
                 return;
             }

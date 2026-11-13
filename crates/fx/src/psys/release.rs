@@ -71,4 +71,17 @@ impl Stage {
             instance.system = System::new();
         }
     }
+
+    /// [`Self::kill`] for a handle from [`Self::play_held`]: a mod's portal or marker ends at
+    /// once with every particle it holds, and its slot is free. A no-op on a stale handle.
+    pub fn kill_surface(&mut self, playing: Playing) {
+        if let Some(instance) = self
+            .instances
+            .get_mut(usize::from(playing.index))
+            .filter(|instance| instance.generation == playing.generation)
+        {
+            instance.held = false;
+            instance.system = System::new();
+        }
+    }
 }

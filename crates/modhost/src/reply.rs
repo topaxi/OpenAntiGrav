@@ -191,6 +191,7 @@ pub(crate) fn read(
             | Command::PlayModSound { .. }
             | Command::HudTint { .. }
             | Command::RaiseWarning { .. }
+            | Command::StopModEffect { .. }
             | Command::PickupLook { .. }
             | Command::HudShake { .. }
             | Command::HudBarExtra { .. }

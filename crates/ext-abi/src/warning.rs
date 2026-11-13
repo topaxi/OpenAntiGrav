@@ -1,7 +1,7 @@
 //! What `raise-warning` names: one of the title's ten warning icons, or an icon of the
 //! sending mod's own `[icons]` on a slot the mod picks.
 
-use crate::{ModIcon, WarningIcon};
+use crate::{ModName, WarningIcon};
 
 coded! {
     /// The incoming-warning group a mod's own icon lights. A title's icon fixes its group
@@ -36,7 +36,7 @@ pub enum Warning {
         /// The group it lights.
         side: WarningSide,
         /// The icon's name in the mod's `[icons]`.
-        icon: ModIcon,
+        icon: ModName,
     },
 }
 
