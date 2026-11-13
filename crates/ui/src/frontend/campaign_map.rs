@@ -61,7 +61,7 @@ use crate::pointer::{Pointer, contains};
 use oag_title::MapRole;
 
 use super::canvas_camera::{self, Camera};
-use super::canvas_cells::{self, CanvasButton, Tile};
+use super::canvas_cells::{self, CanvasButton, Card, Tile};
 use super::canvas_lattice;
 use super::canvas_prism;
 use super::touch::{LABEL_SCALE, Launch};
@@ -891,6 +891,33 @@ impl Frontend {
             .collect()
     }
 
+    /// The season cards the map shows: a label with no linked event is always
+    /// shown, one with a linked event once that event is open or passed
+    /// (`0x81074da4` shows a label whose event's progress is above 1). A linked
+    /// event this map does not carry hides the label.
+    pub(super) fn season_cards(&self) -> Vec<Card> {
+        let Some(screen) = self
+            .screens
+            .screens
+            .iter()
+            .find(|screen| !screen.canvas_labels.is_empty())
+        else {
+            return Vec::new();
+        };
+        canvas_cells::season_cards(&screen.canvas_labels)
+            .into_iter()
+            .filter(|card| {
+                card.linked_event.as_deref().is_none_or(|name| {
+                    self.campaign
+                        .events
+                        .iter()
+                        .position(|event| event.name == name)
+                        .is_some_and(|at| self.campaign.state_of(at) != ProgressState::Locked)
+                })
+            })
+            .collect()
+    }
+
     /// The canvas's ground cells that are neither lattice nor a raised tile: every
     /// ring cell and every unreached event's flat tint, by the canvas's priority
     /// rule ([`canvas_cells::resolve`]), drawn over the lattice and under the
@@ -902,7 +929,8 @@ impl Frontend {
             height / canvas_camera::VIEWPORT.1,
         );
         let buttons = self.canvas_buttons();
-        for painted in canvas_cells::resolve(&buttons) {
+        let cards = self.season_cards();
+        for painted in canvas_cells::resolve(&buttons, &cards) {
             let up = canvas_cells::is_up(painted.cell);
             let Some(picture) = self.placed(canvas_cells::name(painted.fill, up)) else {
                 continue;
@@ -937,6 +965,37 @@ impl Frontend {
                 } else {
                     [1.0; 4]
                 },
+            });
+        }
+        // The season cards: one picture each, over the ring cells they outrank.
+        for card in &cards {
+            let Some(picture) = self.placed(&canvas_cells::card_name(card)) else {
+                continue;
+            };
+            let size = canvas_cells::card_size(card);
+            let origin = canvas_cells::card_origin(camera, card);
+            let (x, y) = (origin.0.round(), origin.1.round());
+            if x + size.0 as f32 <= 0.0
+                || y + size.1 as f32 <= 0.0
+                || x >= canvas_camera::VIEWPORT.0
+                || y >= canvas_camera::VIEWPORT.1
+            {
+                continue;
+            }
+            out.push(Draw::Sprite {
+                rect: [
+                    (x + 1.0) * scale.0,
+                    (y + 1.0) * scale.1,
+                    (size.0 as f32 - 2.0) * scale.0,
+                    (size.1 as f32 - 2.0) * scale.1,
+                ],
+                uv: picture.sheet_rect([
+                    1.0,
+                    1.0,
+                    picture.width as f32 - 2.0,
+                    picture.height as f32 - 2.0,
+                ]),
+                color: [1.0; 4],
             });
         }
     }

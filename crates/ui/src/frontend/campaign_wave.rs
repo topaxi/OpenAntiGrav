@@ -52,7 +52,7 @@ impl Frontend {
             return;
         };
         let centre = self.wave_centre();
-        let priorities = canvas_cells::priorities(&self.canvas_buttons());
+        let priorities = canvas_cells::priorities(&self.canvas_buttons(), &self.season_cards());
         let priority = |cell: (i32, i32)| priorities.get(&cell).copied().unwrap_or(0);
         #[expect(
             clippy::cast_possible_truncation,
@@ -91,12 +91,14 @@ impl Frontend {
             return;
         }
         let buttons = self.canvas_buttons();
-        let priorities = canvas_cells::priorities(&buttons);
+        let cards = self.season_cards();
+        let priorities = canvas_cells::priorities(&buttons, &cards);
         let priority = |cell: (i32, i32)| priorities.get(&cell).copied().unwrap_or(0);
-        let fills: std::collections::BTreeMap<(i32, i32), u8> = canvas_cells::resolve(&buttons)
-            .into_iter()
-            .map(|painted| (painted.cell, painted.fill))
-            .collect();
+        let fills: std::collections::BTreeMap<(i32, i32), u8> =
+            canvas_cells::resolve(&buttons, &cards)
+                .into_iter()
+                .map(|painted| (painted.cell, painted.fill))
+                .collect();
         let height_of = |cell: (i32, i32)| match priority(cell) {
             7 => TILE_HEIGHT,
             6 => 0.0,

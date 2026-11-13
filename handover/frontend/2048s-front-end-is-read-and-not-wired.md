@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-11-12
-summary: "2048 front end: DLC campaigns, Select Team, map tile places, canvas prism and ring cells wired; season cards, glyph shift, ground relief open"
+updated: 2026-11-13
+summary: "2048 front end: map tiles, prism, rings and season cards wired; glyph shift, 45 other canvas labels, ground relief open"
 difficulty: hard (30)
 ---
 
@@ -155,9 +155,19 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      decompile and frame `13` against ours: `campaign-map-projection.md`, "The
      ring". Left over: the ground relief, and the blink between modes 3 and 4 (an
      event at progress 1, which this build has none of).
-  3. **The season cards**: one canvas item (vtable `0x8150ad08`) of 14 x 3 cells
-     at cell (51, 29) with atlas origin `v` = 0.4785; the three cards are in
-     `canvasTexture.gxt`. The other item classes are unread.
+  3. **Resolved 2026-11-13 (`w2048-season-cards`): the season cards.** Not one item of
+     three cards: three authored `<CanvasLabel>`s (`2048SeasonText` at (51, 29),
+     `2049SeasonText`, `2050SeasonText`, each 14 x 3 cells with its own atlas `u`, `v`), the
+     canvas label item `0x8150ad08`. Each paints a crop of `canvasTexture.gxt` through the
+     icon writer's shift law and holds cell priority 5, so it does not ride the wave. 2048's
+     is always shown, the others once their `linkedevent` is open. Drawn, with
+     `the_season_cards_resolve_to_atlas_rectangles_decoded_from_the_disc` and
+     `the_season_2048_card_is_drawn_on_the_map`; against frame `12` the card sits (-1, +1) px
+     from where its tile's own offset puts it. Evidence: `campaign-map-projection.md`, "The
+     season cards". **Open: the other 45 names `TouchCampaign_SetMapActive` shows (the
+     trophies, the HD and Fury wordmarks) go through the same paint; their show conditions
+     are unread, so they are not drawn.** `oag_ui::frontend::canvas_cells::season_cards`
+     filters by name; widening it is one reader change plus each label's condition.
   4. **Resolved 2026-11-12: which events get a tile.** Not "passed and open only":
      an event not reached yet (progress 0, `m_options & 0x10` clear: every event of
      the chains) is the flat state-1 tint, `e0e0e9` on the main chain and `f3f3fa`
@@ -168,15 +178,11 @@ shape, not by screen, and would have mis-fired on `Team`'s own
      2026-11-12): no tile, ring or cursor until a pass is earned on one, matching frame
      `12`. **Open: a player rank model is needed to unlock the 15 rank-gated 2048
      challenges (`m_RankRequired` 10-50); until then they cannot be launched from the map.**
-     **Open, from the maintainer's play (2026-11-12): the 15 are hidden prototype
-     races the player FINDS by tapping their spot on the lattice; once found they
-     draw a tile (hexagon or triangle, unread).** The pad's stick cursor and the
-     mouse now reach any spot, but a Confirm on a hidden event's cell does nothing
-     yet: the reveal rule (what raises progress `+0x2d8` on a tap, the hit area,
-     what counts as unlocked given `m_RankRequired`, the found tile's shape) is
-     unread; a `str [rN,#0x2d8]` sweep finds no direct writer and the single-player
-     tap path is not `0x810eecb4`'s callers. Needs an RE pass, then a "found" set
-     persisted with the campaign state.
+     **Resolved 2026-11-12: the 15 are hidden prototype races the player FINDS by tapping
+     their spot; once found they draw a tile.** A click or Confirm on a hidden event's cells
+     finds it (saved, drawn as the grey prism); the reveal rule is `canvas-music-wave.md`,
+     section 5. Still open there: the found tile's shape for the other fourteen and what
+     the original counts as unlocked against `m_RankRequired`.
      The original's own rule for which events the pad or a tap may select is
      unread (`+0x50` is the paint's alpha snap, not a selection flag: `campaign-map-projection.md`,
      "The ring"); ours keeps every drawn event, flat or raised, a cursor target.
@@ -405,4 +411,4 @@ shape, not by screen, and would have mis-fired on `Team`'s own
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's painted cells (2026-11-12: tile places, lattice, opening view, prism and ring cells are the original's; the season cards and the ground relief are not drawn), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis
+2026-09-17, updated 2026-09-21. **The boot walks it now**: `just play 2048` runs the five declared screens off their own redirects, draws `GameModeChoice`/`Home`/the campaign map off the disc's own widgets and `SP.xml` (pad and pointer), and a tap on an event races it through `race::load_event`; two tiles the disc does not author (`RACEBOX`, `REMIX`) sit after the authored four as this build's own. Earlier: [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) made `FrontEnd::menu` `Option` and added the `touch` axis (`menu: None`, `touch: Some`); the HUD's `IG_HUD_*` fallback is a role-name mismatch (`2048HUD` vs `"HUD"`), not a missing plugin; the six-vs-four tiles are DLC-gated `FE3DCanvas` hotspots; the 69 `CanvasLabel`s cluster in one corner. Open: the MP4 intro's length and picture (`lane/2048-intro-mp4`), the map's painted cells (2026-11-13: tile places, lattice, opening view, prism, ring cells and season cards are the original's; the ground relief and the other 45 canvas labels are not drawn), the `BootFlowCanvas` art, `team`'s own icon grid and ship preview, the campaign-event functions' caller, `frontend.bnk`'s cues, the per-title HUD-font-role axis

@@ -40,8 +40,8 @@ fn the_higher_fill_wins_and_the_order_of_buttons_does_not_matter() {
         tile: Tile::Raised,
         ring: 2,
     };
-    let one = resolve(&[near, far]);
-    let mut other = resolve(&[far, near]);
+    let one = resolve(&[near, far], &[]);
+    let mut other = resolve(&[far, near], &[]);
     let mut sorted = one.clone();
     sorted.sort_by_key(|p| p.cell);
     other.sort_by_key(|p| p.cell);
@@ -66,7 +66,7 @@ fn a_tiles_own_cells_beat_every_ring_and_a_raised_tile_is_not_a_ground_cell() {
         ring: 4,
     };
     assert!(ring_set((9, 11)).contains(&(12, 11)));
-    let painted = resolve(&[raised, neighbour]);
+    let painted = resolve(&[raised, neighbour], &[]);
     assert!(
         !painted.iter().any(|p| p.cell == (12, 11)),
         "a raised tile's cell is the prism's, not a ring cell"
@@ -76,14 +76,17 @@ fn a_tiles_own_cells_beat_every_ring_and_a_raised_tile_is_not_a_ground_cell() {
         .find(|p| p.cell == (9, 11))
         .expect("a flat tile's cell");
     assert_eq!((flat.fill, flat.colour), (0, [0.5; 3]));
-    let flat_over_ring = resolve(&[
-        neighbour,
-        CanvasButton {
-            cell: (6, 10),
-            tile: Tile::Raised,
-            ring: 4,
-        },
-    ]);
+    let flat_over_ring = resolve(
+        &[
+            neighbour,
+            CanvasButton {
+                cell: (6, 10),
+                tile: Tile::Raised,
+                ring: 4,
+            },
+        ],
+        &[],
+    );
     assert!(
         flat_over_ring
             .iter()
@@ -95,11 +98,14 @@ fn a_tiles_own_cells_beat_every_ring_and_a_raised_tile_is_not_a_ground_cell() {
 
 #[test]
 fn a_button_with_no_ring_paints_no_ring_cell() {
-    let painted = resolve(&[CanvasButton {
-        cell: (20, 20),
-        tile: Tile::Flat([1.0; 3]),
-        ring: 0,
-    }]);
+    let painted = resolve(
+        &[CanvasButton {
+            cell: (20, 20),
+            tile: Tile::Flat([1.0; 3]),
+            ring: 0,
+        }],
+        &[],
+    );
     assert_eq!(painted.len(), 6, "only its six cells");
     assert!(painted.iter().all(|p| p.fill == 0));
 }
@@ -190,4 +196,74 @@ fn a_cell_lands_where_the_camera_projects_it() {
         assert!((origin.0 + anchor.0 - at.0).abs() < 1e-3);
         assert!((origin.1 + anchor.1 - at.1).abs() < 1e-3);
     }
+}
+
+fn season() -> Card {
+    Card {
+        name: "2048SeasonText".to_string(),
+        cell: (51, 29),
+        size: (14, 3),
+        origin: (0.0, 0.478_515_63),
+        linked_event: None,
+    }
+}
+
+#[test]
+fn a_card_writes_each_of_its_cells_once_with_its_pairs_sharing_a_shift() {
+    let shifts = card_shifts(&season());
+    assert_eq!(shifts.len(), 42);
+    let mut cells: Vec<_> = shifts.iter().map(|(cell, _)| *cell).collect();
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(cells.len(), 42, "no cell twice");
+    let at = |cell: (i32, i32)| shifts.iter().find(|(c, _)| *c == cell).expect("a cell").1;
+    // Row 29 opens on an apex-down cell: a pair starts at once.
+    assert_eq!(at((51, 29))[0], at((52, 29))[0]);
+    assert_eq!(at((53, 29))[0] - at((51, 29))[0], 94.0 / 2048.0);
+    // Row 30 opens on a lone cell, 47 behind, then the pairs follow.
+    assert_eq!(at((51, 30))[0], -47.0 / 2048.0);
+    assert_eq!(at((52, 30))[0], at((53, 30))[0]);
+    assert_eq!(at((52, 30))[0], 47.0 / 2048.0);
+    // A row is 82 atlas units on.
+    assert_eq!(at((51, 30))[1] - at((51, 29))[1], 82.0 / 2048.0);
+}
+
+#[test]
+fn the_first_row_of_a_card_ends_where_the_next_cards_authored_origin_is_near() {
+    // 2048's card ends 7 pairs of 94 atlas units on; the disc authors 2050's card
+    // at u = 661/2048, three units past it.
+    let last = card_shifts(&season())
+        .iter()
+        .filter(|(cell, _)| cell.1 == 29)
+        .map(|(_, shift)| shift[0])
+        .fold(0.0_f32, f32::max);
+    assert_eq!(last * 2048.0 + 94.0, 658.0);
+    assert_eq!(0.322_753_9_f32 * 2048.0, 661.0);
+}
+
+#[test]
+fn a_card_holds_priority_five_over_a_ring_and_below_a_tile() {
+    let ring = CanvasButton {
+        cell: (56, 29),
+        tile: Tile::Flat([1.0; 3]),
+        ring: 4,
+    };
+    let priorities = priorities(&[ring], &[season()]);
+    assert_eq!(priorities.get(&(60, 29)), Some(&CARD_PRIORITY));
+    assert_eq!(priorities.get(&(56, 29)), Some(&6));
+    assert!(
+        resolve(&[ring], &[season()])
+            .iter()
+            .all(|painted| painted.fill == 0
+                || !(51..65).contains(&painted.cell.0)
+                || !(29..32).contains(&painted.cell.1)),
+        "no ring cell is painted where the card lies"
+    );
+}
+
+#[test]
+fn a_half_float_keeps_a_whole_atlas_unit_of_an_eleventh_bit_value() {
+    assert_eq!(half(0.478_515_63), 0.478_515_63);
+    assert_eq!(half(0.0), 0.0);
+    assert_eq!(half(-47.0 / 2048.0), -47.0 / 2048.0);
 }
