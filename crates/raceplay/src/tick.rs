@@ -287,6 +287,11 @@ impl Race {
             }
         }
         self.credit_impact_points(&impacts, &hits);
+        let by = std::array::from_fn(|slot| {
+            self.impact_reaching(&impacts, slot)
+                .map(|impact| (impact.owner, impact.kind))
+        });
+        self.xp_weapon_hits(&hits, &by);
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]

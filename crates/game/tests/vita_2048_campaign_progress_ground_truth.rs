@@ -384,6 +384,49 @@ fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
     assert_eq!(store.xp_rank(&ranks), ranks.rank(store.xp()));
 }
 
+/// A whole event raced under the autopilot pays the lap and place awards the disc's table
+/// authors, through the edges the race reports: a lap without damage at full health, and the
+/// places taken on the way. Fails if the lap or place feeds are dropped from `Race::tick`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
+    let Some(source) = source() else { return };
+    let options = race::Options {
+        source: source.display().to_string(),
+        ..race::Options::default()
+    };
+    let loaded = race::load_event(&options, "2048 - Event 1").expect("the event loads");
+    let progress = loaded.campaign_2048_event.clone().expect("an event");
+    let awards = progress.xp_awards.clone().expect("the table loads");
+    let mut run = race::Race::start(loaded.setup);
+    run.arm_event_xp(&progress);
+    run.set_autopilot(true);
+    while !run.finished() && run.sim.world.tick < 30_000 {
+        run.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    assert!(run.finished(), "the event did not finish in 30000 ticks");
+    let tally = run.xp_tally().expect("armed");
+    let column = progress.xp_column;
+    let paid = |index: u32| tally.times_paid(index);
+    assert!(
+        awards.xp(5, column) > 0 && awards.xp(44, column) > 0 && awards.xp(21, column) > 0,
+        "the table authors the lap and place awards"
+    );
+    // The autopilot scrapes a wall in the first lap and never refills: the laps after it are
+    // clean, the scraped one is not, and no lap ends at full health.
+    let laps = u64::from(run.sim.world.race[0].laps_target.expect("a lap target"));
+    assert!(
+        (1..laps).contains(&u64::from(paid(5))),
+        "Perfect lap paid {} of {laps} laps",
+        paid(5)
+    );
+    assert_eq!(paid(44), 0, "no lap ended at full health");
+    assert!(
+        paid(21) + paid(22) + paid(23) >= 1,
+        "the player took at least one of the first three places"
+    );
+}
+
 /// The rank gate reaches the map: the 15 hidden side challenges author the rank they wait for,
 /// and the profile's XP against this package's own `XPRanks.xml` decides which one is
 /// revealable (`boot::reveals2048::refresh`); a find kept in the save reads as found.

@@ -218,6 +218,10 @@ impl Race {
         if self.draws() {
             self.throw_hit_sparks(&hits, false);
         }
+        self.xp_weapon_hits(
+            &hits,
+            &[Some((wave.owner, oag_tables::weapons::Weapon::Quake)); MAX_SHIPS],
+        );
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 self.record_pending_hit(slot, wave.owner);
