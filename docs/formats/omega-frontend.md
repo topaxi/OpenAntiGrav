@@ -365,9 +365,16 @@ the d-pad (with auto-repeat, not the stick) moves focus between per-event canvas
 event, plays `newGUI_select`, scrolls the view to it, brightens it with a 1.26 s pulse and runs a
 2.5 s ripple over the lattice around it; Triangle opens the event's records. Law, addresses and
 confidence (72 to 84, static reading): [campaign-map-pad.md](../ghidra/functions/ps4-omega-eu/campaign-map-pad.md).
-Cross's launch path is open there. Ported back to 2048 by rule (one shared map): not wired yet;
-until it is, the d-pad, the cursor and the key choices on both titles stay 2048's, labelled
-chosen, not measured.
+Cross's launch path is open there. **Wired (2026-11-13) in the shared map, both titles**
+(`oag_ui::frontend::map_focus`): cones, repeat, view glide, pulse and ripple; the right-stick
+arrow and the pointer's `Orange2048` marker stay ours (the marker shows for pointer focus only).
+Chosen, not measured: pulse base grey (the open event's grey), ripple reach, glide speed. Not
+wired: the per-type button footprints (every event takes the default 3 x 2, which cancels out
+of the cone), the start-focus walk, Triangle records. **Season filter**: the map has
+`Frontend::set_map_season` (season from the year in the event name, `event+0x308` unread), but
+Omega's host leaves it off: `Grid Selection 2048` is not wired (`grid_16`..`grid_18` are stubs
+the grid reader skips and it is a 3D flyer carousel), so no season is ever chosen. Vita 2048
+keeps all three seasons by the maintainer's decision.
 
 **Missing art, said in the loader report:** `Data\FE\NewImages\trackscreens\*.gtf` (the event
 cards' track pictures), `Data\FE\NewImages\Demo\*` and each 2048 circuit's
