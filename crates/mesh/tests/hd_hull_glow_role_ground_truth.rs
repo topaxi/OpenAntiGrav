@@ -263,3 +263,89 @@ fn zone_1s_floor_and_pads_no_longer_glow_their_normal_maps() {
         report.emissive_surface_map_excluded
     );
 }
+
+/// `nitro_body_new` and `nitro_perspex_new` declare their diffuse under this
+/// name hash at unit 0.
+const NITRO_DIFFUSE: u32 = 0x1b2a_3d71;
+
+/// Teams that ship an `_n1` (Fury Nitro) hull: all twelve.
+const NITRO_TEAMS: [&str; 12] = [
+    "ag_systems",
+    "assegai",
+    "auricom",
+    "egx",
+    "feisar",
+    "goteki",
+    "harimau",
+    "icaras",
+    "mirage",
+    "piranha",
+    "qirex",
+    "triakis",
+];
+
+/// The nitro hull's two lit materials take their picture from the sampler
+/// their own program declares at unit 0 (the ship's diffuse), not from the
+/// first entry of the model's list: `nitro_body_new` lists `iridescence.gtf`
+/// (a view-angle ramp, sampled at `-dot(V, N)`) first and `nitro_perspex_new`
+/// lists `holographic_02_rich_glow.gtf` (read one channel wide at `TC5`)
+/// first. Binding either as the picture painted every nitro hull in green and
+/// purple patches. Neither accumulates a second texture: the entry their unit
+/// 1 declares is a normal map.
+///
+/// Pinned over all twelve hulls, with a `_c1` hull as the control that
+/// shares none of it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_nitro_hull_paints_its_diffuse_and_adds_no_second() {
+    let Some(image) = image() else { return };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA06.PSARC", image.display());
+    let mut checked = 0;
+    for team in NITRO_TEAMS {
+        let path = format!("/data/ships/{team}_n1/ship.vex");
+        let Some((model, _)) = build_ship(&image, "DATA06.PSARC", &path) else {
+            panic!("{path} should build");
+        };
+        let data = archive_cache::read(&spec, &path).expect("the .vex reads");
+        let geometry =
+            mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
+        let geometry_model =
+            oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+        for (slot, material) in geometry_model.materials.iter().enumerate() {
+            let leaf = material.name.rsplit('/').next().unwrap_or(&material.name);
+            if !matches!(
+                leaf,
+                "nitro_body_new.rcsmaterial" | "nitro_perspex_new.rcsmaterial"
+            ) {
+                continue;
+            }
+            let packed = model.material_slots[slot];
+            assert_eq!(
+                packed & mesh::slots::ADD_SECOND,
+                0,
+                "{team}_n1 {leaf} still adds a second texture"
+            );
+            let label = model
+                .textures
+                .get(slot)
+                .and_then(Option::as_ref)
+                .map(|t| t.label.clone())
+                .unwrap_or_default();
+            let diffuse = material
+                .samplers
+                .iter()
+                .find(|(hash, _)| *hash == NITRO_DIFFUSE)
+                .and_then(|(_, path)| path.clone())
+                .expect("the nitro program's unit 0 sampler names a file");
+            assert_eq!(
+                label, diffuse,
+                "{team}_n1 {leaf} paints {label:?}, not its unit 0 diffuse"
+            );
+            checked += 1;
+        }
+    }
+    assert!(
+        checked >= 12,
+        "expected at least one nitro slot per team, saw {checked}"
+    );
+}

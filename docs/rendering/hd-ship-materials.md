@@ -1182,3 +1182,49 @@ Still pairs draw it on neither side: ours uses `--no-hull-shake`, and the origin
 On Talon's Junction, re-captured that way, the craft
 offset is `(0, -9)` -> `(0, 0)` px and the craft difference 32.95 -> 10.84 ([hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)). Open: a live sample of `ship+0x6b00` for the lane masks and to
 confirm the fade input is speed. Cross-title: Omega and 2048 inherit HD's law; neither was read.
+
+## The nitro hull's picture was a ramp and a mask (2026-11-13, `fury-nitro-colours`)
+
+Every Fury Nitro hull (`<team>_n1`, all twelve) drew green and purple patches over its paint. The maintainer's report was "every
+team's nitro skin is the wrong colour", so the term was one every nitro hull shares: its two lit materials, `nitro_body_new` and
+`nitro_perspex_new`.
+
+**The model lists the wrong texture first.** Both materials' model tables begin with a texture their program does not use as a
+colour (`scripts/ps3-microcode.py fp-file`, the resolved blocks `0x3fd0` and `0x4250`, and `hd_material_probe_dump` over all
+twelve `_n1` hulls):
+
+| Hash | Unit | File (every team) | What the program does with it |
+| --- | ---: | --- | --- |
+| `0x2d5fc6a6` | 3 / 4 | `iridescence.gtf` | `TEX H1.xyz, -R3.wwww`: a ramp read at `-dot(V, N)`, scaled by a parameter and overlaid on the diffuse. A view-angle sheen like `0x94b2b285`, never a picture |
+| `0x3a7e591d` | 2 | `holographic_02_rich_glow.gtf` (perspex only) | `TEX R4.y, f[TC5]`: one channel, folded into the ramp's coordinate. A mask |
+| `0x1b2a3d71` | 0 | the team's own diffuse (`*_tp_nolivery.gtf`, `feisar_livery_nologos.gtf`, `assegai_concept_diffuse_nolivery.gtf`) | the lit paint: `TEX H0, R0 unit0` times the light |
+| `0x0617f872` | 1 | `*_livery_n.gtf` | the tangent-space normal (`hull_normal`) |
+
+`skin::picks` takes the first entry that is declared, sampled as a colour and not in `NOT_A_PICTURE`. The ramp and the mask were
+in neither list, so the body bound `iridescence.gtf` and the perspex bound the holographic mask as their picture, and the
+perspex (drawn blended over the whole hull) painted the rainbow. Second, with the picture moved off entry 0, the ordinal fallback
+`aux = entry 1` is the diffuse itself, which `emissive` would add back onto its own paint (`accumulates(1)` is the tangent
+arithmetic, as in Finding 1).
+
+**The fix** (`mesh::rcs::skin`, `emissive`; confidence 85 on the program reads, measured off the resolved blocks): both hashes
+join `NOT_A_PICTURE` (the table there carries the census: 24 and 12 binds, only these two files, no forward circuit binds
+either); where the entry the program declares at unit 1 binds `0x0617f872` and no traced alpha unit applies, that entry is the
+second binding, which `emissive` already refuses as a normal map. Both slots now read `lit_default`.
+
+**Measured** (ours, Talon's Junction grid, `--camera-view far`, the hull box 360 x 300, before and after on one binary
+difference): `ASSEGAI_N1`, `FEISAR_N1` and `HARIMAU_N1` lose the green and purple and show their own paint (Assegai blue and
+yellow, Feisar grey-olive, Harimau black and copper). `ASSEGAI_C1` and the classic `ASSEGAI` are **byte-identical** before and
+after (0 differing pixels in 1440 x 816). Pinned by
+`hd_hull_glow_role_ground_truth::every_nitro_hull_paints_its_diffuse_and_adds_no_second` (all twelve hulls: the picture is the
+file the program names at unit 0, no `ADD_SECOND`; it fails with the fix removed).
+
+**Not measured against the original.** A fresh RPCS3 profile pads every `_n1` row (nitro needs `grid8`, `docs/ui/campaign-screens.md`)
+and Ship Select draws a locked row as a black silhouette, so there is no original frame of a nitro hull yet; the claim "matches
+within a grey tolerance" is **open**. **Still open on the hull**: the iridescent overlay itself (`diffuse` overlaid with
+`ramp(-dot(V, N)) * 0.5637`, a hue that moves with the view) is not drawn, and the white wing rims on the `_n1` skins are a
+separate term (the `nitro_emissive_outlines` shell).
+
+**Other titles.** Fury: same disc, **ported**. Omega: **checked, differs by name, open** - it ships `nitro_perspex_new_2`,
+`Nitro_Body_DG` and `Nitro_Perspex_2` (`data00.psarc`, `data05.psarc`) with `hdships\<team>_n1` hulls, not the HD materials, and its
+PS4 programs are not read here, so whether the same entries sit first is unmeasured (its source did not load from the extracted
+tree in this lane). 2048: **not applicable**, no `_n1` directory and no `nitro_*` material in its extracted data.

@@ -399,6 +399,8 @@ fn is_picture(material: &rcsmodel::Material, hash: u32) -> bool {
 /// | `0x35281c78` | 37 | `blue_metal_facing_ramp.gtf`, and nothing else | 88 |
 /// | `0x994bbcf1` | 27 | `blue_metal_facing_ramp.gtf`, `tunnel_fx_facingramp.gtf` | 88 |
 /// | `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | 85 |
+/// | `0x2d5fc6a6` | 24 | `iridescence.gtf` and nothing else: one per `_n1` hull's `nitro_body_new` and one per `nitro_perspex_new` (12 hulls). The program samples it at a scalar (`-dot(V, N)`, `TEX H1.xyz, -R3.wwww unit3` after `DP3 R3.w, -R2, R3`), the coordinate `0x94b2b285` is traced at; no circuit binds it (16 forward circuits) | 85 |
+/// | `0x3a7e591d` | 12 | `holographic_02_rich_glow.gtf` and nothing else, on `nitro_perspex_new` only. Read one channel wide at `TC5` (`TEX R4.y, f[TC5] unit2`) and folded into the ramp's coordinate, never a colour; no circuit binds it | 80 |
 /// | `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` | 88 |
 /// | `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec` | 85 |
 /// | `0x48f37f5a` (`NormalMap`) | 5 distinct (family, path) | `ds_solarwall_n`, `tracknormal`, `aadc_build_g_window_n`, `jd_chenghou_windowtrans_01_n` - only ever a `*_n*.gtf` (`hd_sampler_hash_binds.rs`, all 28 circuits and the ships) | 85 |
@@ -456,6 +458,8 @@ const NOT_A_PICTURE: &[u32] = &[
     0x3528_1c78,
     0x994b_bcf1,
     0x94b2_b285,
+    0x2d5f_c6a6,
+    0x3a7e_591d,
     0x739a_786e,
     0x20c3_e476,
     0x48f3_7f5a,
@@ -673,6 +677,12 @@ pub(super) fn picks(
                 _ => None,
             }
             .filter(|&i| Some(i) != albedo)
+            // The nitro hull lists its diffuse where the ordinal fallback
+            // looks, so without this the second binding is the picture itself
+            // and `emissive` would add it back onto its own paint. The entry
+            // the program's unit 1 declares is its normal map, which
+            // `emissive` refuses as a glow.
+            .or(index_of(1).filter(|&i| material.samplers[i].0 == super::emissive::NITRO_NORMAL))
             .or(default.aux);
             Pick { albedo, aux }
         })
