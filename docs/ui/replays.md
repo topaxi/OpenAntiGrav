@@ -144,6 +144,13 @@ and race clocks after a seek equal the live race's at that tick.
 | Select, PHOTO | photo mode at the tick on screen ([photo mode](photo-mode.md), "Over the replay viewer") |
 | Circle, Escape, a right click, EXIT | leave for the REPLAYS page |
 
+Backing out of the REPLAYS page after that is the front end's main page, on every title. A watched
+recording is never parked and the viewer has its own pause (Start, Cross), so the title's pause
+screen with its RESTART RACE and QUIT RACE rows is never built for it
+(`replay_viewer_ground_truth::leaving_a_recording_never_lands_on_the_pause_screen`: Escape, Circle
+and a click on EXIT each leave, and none lands on the pause page). The end-of-race WATCH REPLAY row
+opens the same viewer through the same path.
+
 The **speed**: at 1X the race sounds as a race does (`sound::race_tick`); at any other speed the
 effects are muted (the cues of the ticks that ran are dropped); the music is the race's own
 playlist and a seek does not touch it. **Split screen**: a split recording opens in one view of the first seat; L1 and R1 cycle every
