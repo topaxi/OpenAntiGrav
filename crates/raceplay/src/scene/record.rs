@@ -694,6 +694,11 @@ fn opaque_order(track: &Drawable, eye: Vec3, order: &mut Vec<(f32, u32)>) {
         let centre = Vec3::from_array(draw.bounds.centre);
         (centre.distance(eye) - draw.bounds.radius, i)
     }));
+    nearest_first(order);
+}
+
+/// Sorts `(key, index)` pairs by key, ties by index.
+fn nearest_first(order: &mut [(f32, u32)]) {
     order.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
 }
 
@@ -715,6 +720,17 @@ mod tests {
     /// list-B mesh, which then paints over it where it passes its own depth test (the ribbon
     /// writes no depth). The ribbons must be recorded before the circuit's blended list, and the
     /// circuit's own draw must leave that list out, or it draws twice and over the ribbon.
+    /// Equal distances keep the model's order, as the stable sort this replaced did.
+    #[test]
+    fn the_prepass_order_breaks_ties_by_model_order() {
+        let keys = [2.0, -1.0, 2.0, 0.5, -1.0, 2.0, 0.5, 0.0];
+        let mut stable: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        stable.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut order: Vec<(f32, u32)> = keys.iter().copied().zip(0u32..).collect();
+        nearest_first(&mut order);
+        assert_eq!(order, stable);
+    }
+
     #[test]
     fn the_ribbons_are_drawn_before_the_blended_list() {
         let mut list = DrawList(Vec::new());
