@@ -922,9 +922,9 @@ pub fn decode(code: &[u8], at: usize) -> Result<Instruction, DecodeError> {
             let w1 = r.word(1)?;
             i.name = Some("exp");
             let en = field(w0, 0, 4) as u8;
-            for k in 0..4 {
+            for (k, slot) in i.src.iter_mut().enumerate().take(4) {
                 if en >> k & 1 != 0 {
-                    i.src[k] = Some(Operand::vgpr(field(w1, 8 * k as u32, 8), 1));
+                    *slot = Some(Operand::vgpr(field(w1, 8 * k as u32, 8), 1));
                 }
             }
             i.detail = Detail::Export {
@@ -1136,12 +1136,12 @@ fn decode_vop3p(r: &Reader<'_>, w0: u32, i: &mut Instruction) -> Result<(), Deco
     } else {
         2
     };
-    for k in 0..sources {
+    for (k, slot) in i.src.iter_mut().enumerate().take(sources) {
         let code = field(w1, 9 * k as u32, 9);
         if code == 255 {
             return Err(DecodeError::LiteralInVop3 { at: r.at });
         }
-        i.src[k] = Some(Operand::scalar(code as u16, 1, None));
+        *slot = Some(Operand::scalar(code as u16, 1, None));
     }
     i.dst[0] = Some(Operand::vgpr(field(w0, 0, 8), 1));
     i.clamp = bit(w0, 15);

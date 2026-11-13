@@ -64,7 +64,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/topaxi/OpenAntiGrav"
-rust-version = "1.97.1"
+rust-version = "1.100"
 
 [workspace.dependencies]
 oag-2048 = { path = "crates/2048" }

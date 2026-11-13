@@ -534,7 +534,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         // of a window is that it starts where tick 0 starts.
         if let Some(every) = options.reseed
             && index > 0
-            && index % every.get() == 0
+            && index % every == 0
         {
             world.ships[0].physics =
                 initial_state(recorded, handling, options.basis, options.angular);

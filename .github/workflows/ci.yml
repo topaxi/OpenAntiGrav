@@ -41,7 +41,7 @@ jobs:
         with:
           submodules: true
           lfs: true
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
@@ -111,11 +111,11 @@ jobs:
   # exists to catch. If the two ever diverge, this job is the one that is
   # supposed to fail.
   msrv:
-    name: MSRV build (1.97.1)
+    name: MSRV build (1.100.0)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@1.100.0
         id: msrv-toolchain
       - uses: Swatinem/rust-cache@v2
       - name: Install libpipewire and ALSA
@@ -136,7 +136,7 @@ jobs:
       RUSTFLAGS: ""
     steps:
       - uses: actions/checkout@v7
-      # rust-toolchain.toml pins 1.99.0 and wins over the default this step sets,
+      # rust-toolchain.toml pins 1.100.0 and wins over the default this step sets,
       # so the cargo call names the nightly (as the msrv job does).
       - uses: dtolnay/rust-toolchain@master
         id: web-toolchain
@@ -174,7 +174,7 @@ jobs:
       OAG_REQUIRE_WEB_SHADERS: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Install libpipewire and ALSA
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
@@ -199,7 +199,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Print determinism hashes (release)
         run: cargo run -q -p oag-core --example core_determinism_report
@@ -264,7 +264,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2
