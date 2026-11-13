@@ -104,6 +104,16 @@ it is the original game's own data falling short of its own code's
 expectations. **What actually happens when that load fails is now answered**
 - see `Zone_UpdateStage` below.
 
+**Correction, 2026-11-13 (`modes-zone-battle-detonator`): the v1.04 patch ships them.** The
+check above covered base, DLC1 and DLC2 only. `patch-v104/PSP2/data2.psarc` carries
+`data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings` (43,240 B) and
+`DetonatorModeHDFuryDLC3.effectSettings` (43,230 B), the sizes of HD's own two Detonator
+tables, `ZoneModeHDFury.effectSettings` (21,160 B) and `ZoneModeHDFuryDLC3.effectSettings`
+(43,417 B), plus `data/Tex/detonatorModeTrack0..14.gxt` and `zoneModeTrack*.gxt`
+(`python3 scripts/psarc.py list` on that archive). So on a patched 2048 the fallback finds all
+four. A 2048 Detonator race reads Detonator's pair (`oag_2048::race::DETONATOR`); a 2048 Zone
+race on a ported circuit does not read Zone's yet (checked, applies, not wired).
+
 ## `Environment_LoadHDFuryContent` (`0x8102493c`), confidence 75 - a separate subsystem, not a shared one
 
 **2026-08-28, fourth pass.** Called with the raw effectSettings path string

@@ -669,3 +669,58 @@ fn the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse() {
     let clear = rocket_velocity_after_one_update(&race, 6.0);
     assert!(clear.length() < 0.5, "6 ahead is clear of it: {clear:?}");
 }
+
+/// Pure's grid craft: its box hides the floor from a Rocket seeded inside its reach, and the
+/// Rocket keeps the diving velocity it came with, where clear of the box the ride arm levels it
+/// (`docs/ghidra/functions/psp-pure-usa/own-craft-box.md`). Drops with
+/// `Weapons::own_craft_box_hides_track` or with the hold arm.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_grid_craft_holds_its_own_first_probes_on_pure() {
+    let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let race = race::Race::start(loaded.setup);
+    assert_eq!(
+        race.own_craft_probe(),
+        oag_weapons::projectile::OwnCraftProbe::CraftBoxHolds
+    );
+    let diving = |ahead: f32| {
+        let mut world = race.sim.world.clone();
+        world.projectiles.clear();
+        let craft = world.ships[0].physics.body;
+        let above = craft.position + craft.forward() * ahead;
+        let floor = oag_physics::Raycaster::raycast(
+            race.collision(),
+            oag_physics::Ray::new(above, -craft.up(), 20.0),
+            None,
+            false,
+        )
+        .expect("the grid has a floor under the craft");
+        let launch = craft.forward() * 40.0 - floor.normal * 6.0;
+        world.projectiles.slots[0] = Projectile {
+            kind: Some(Weapon::Rocket),
+            owner: 0,
+            position: above,
+            velocity: launch,
+            surface: floor.normal,
+            lifetime: MAX_FLIGHT_SECONDS - 0.1,
+            ..Projectile::default()
+        };
+        update(&race, &mut world, None, 1.0 / 60.0);
+        (launch, world.projectiles.slots[0].velocity)
+    };
+    // Seeded at the craft's own height, as a launch is: 1.5 ahead is inside a Venom's box at any
+    // yaw (the reach is at least 2.06).
+    let (launch, held) = diving(1.5);
+    assert_eq!(held, launch, "1.5 ahead is held by the box");
+    let (launch, rode) = diving(8.0);
+    assert!(rode != launch, "8 ahead takes the ride arm: {rode:?}");
+}

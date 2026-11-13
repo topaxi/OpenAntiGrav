@@ -274,6 +274,11 @@ pub(crate) fn run_windowless(
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 press_until_reached: cli.press_until_reached,
+                map_presses: cli
+                    .map_presses
+                    .as_deref()
+                    .map(|list| list.split(',').map(|name| button_mask(Some(name))).collect())
+                    .unwrap_or_default(),
                 scheme,
                 trace: cli.trace,
                 race: Some(race_options),

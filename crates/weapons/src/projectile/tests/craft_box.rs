@@ -204,16 +204,27 @@ fn rocket_velocity_after_one_update(
     ahead: f32,
     own_craft: OwnCraftProbe,
 ) -> Vec3 {
+    flyer_velocity_after_one_update(Weapon::Rocket, orientation, ahead, Vec3::ZERO, own_craft)
+}
+
+/// [`rocket_velocity_after_one_update`] for any flyer, seeded with `velocity`.
+fn flyer_velocity_after_one_update(
+    kind: Weapon,
+    orientation: Quat,
+    ahead: f32,
+    velocity: Vec3,
+    own_craft: OwnCraftProbe,
+) -> Vec3 {
     let mut ships = ships(&[(true, Vec3::new(0.0, 1.0, 0.0))]);
     ships[0].physics.body.orientation = orientation;
     ships[0].handling.dimensions = venom();
     let heading = ships[0].physics.body.forward();
     let mut projectiles = Projectiles::new();
     projectiles.slots[0] = Projectile {
-        kind: Some(Weapon::Rocket),
+        kind: Some(kind),
         owner: 0,
         position: Vec3::new(0.0, 3.0, 0.0) + heading * ahead,
-        velocity: Vec3::ZERO,
+        velocity,
         surface: Vec3::Y,
         lifetime: MAX_FLIGHT_SECONDS - 0.1,
         ..Projectile::default()
@@ -269,4 +280,75 @@ fn without_the_measured_box_a_rocket_rides_from_the_first_update() {
     let velocity =
         rocket_velocity_after_one_update(Quat::IDENTITY, 3.9, OwnCraftProbe::PlasmaWindow(0.04));
     assert!(velocity.y.abs() < 0.5, "{velocity}");
+}
+
+/// Pure's weapons run no arm on a box hit: inside the reach the bolt keeps the velocity it came
+/// with, neither falling nor turned to the ride point (seeded diving, so the ride arm would level it)
+/// (`docs/ghidra/functions/psp-pure-usa/own-craft-box.md`).
+#[test]
+fn on_pure_a_flyer_inside_the_box_keeps_its_velocity() {
+    let launch = Vec3::new(0.0, -6.0, -40.0);
+    for kind in [Weapon::Rocket, Weapon::Missile, Weapon::Plasma] {
+        let held = flyer_velocity_after_one_update(
+            kind,
+            Quat::IDENTITY,
+            3.9,
+            launch,
+            OwnCraftProbe::CraftBoxHolds,
+        );
+        assert_eq!(held, launch, "{kind:?} inside the box");
+        let falls = flyer_velocity_after_one_update(
+            kind,
+            Quat::IDENTITY,
+            3.9,
+            launch,
+            OwnCraftProbe::CraftBox,
+        );
+        assert!(falls != launch, "{kind:?} on Pulse's arm moves: {falls}");
+        let clear = flyer_velocity_after_one_update(
+            kind,
+            Quat::IDENTITY,
+            5.02,
+            launch,
+            OwnCraftProbe::CraftBoxHolds,
+        );
+        assert!(
+            clear != launch,
+            "{kind:?} clear of the box takes an arm: {clear}"
+        );
+    }
+}
+
+/// 2048 and Omega have no box in the probe's query and no window: a Plasma released inside what
+/// would be Pulse's box rides the floor on its first update
+/// (`docs/ghidra/functions/vita-2048-eu-v104/own-craft-box.md`).
+#[test]
+fn with_no_box_a_plasma_rides_from_its_first_update() {
+    let none = flyer_velocity_after_one_update(
+        Weapon::Plasma,
+        Quat::IDENTITY,
+        3.9,
+        Vec3::ZERO,
+        OwnCraftProbe::NoBox,
+    );
+    assert!(none.y.abs() < 0.5, "no box: {none}");
+    let windowed = flyer_velocity_after_one_update(
+        Weapon::Plasma,
+        Quat::IDENTITY,
+        3.9,
+        Vec3::ZERO,
+        OwnCraftProbe::PlasmaWindow(0.04),
+    );
+    assert!(
+        windowed.y.abs() < 1e-6,
+        "the chosen window does not probe: {windowed}"
+    );
+    let boxed = flyer_velocity_after_one_update(
+        Weapon::Plasma,
+        Quat::IDENTITY,
+        3.9,
+        Vec3::ZERO,
+        OwnCraftProbe::CraftBox,
+    );
+    assert!(boxed.y < -0.5, "Pulse's box: {boxed}");
 }

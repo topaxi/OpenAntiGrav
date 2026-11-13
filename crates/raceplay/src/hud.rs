@@ -88,7 +88,7 @@ pub(super) fn hud_roots(
 /// See `docs/gameplay/pickups.md`.
 ///
 /// Layouts no mode here reaches - HD's Detonator, Duel and MPTag - stay in
-/// their own title crate waiting for the mode that uses them.
+/// their own title crate waiting for the readouts or the mode that uses them.
 #[must_use]
 pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str {
     match mode {
@@ -106,6 +106,11 @@ pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str
         // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
         Mode::SingleRace | Mode::Tournament | Mode::Head2Head => hud.arcade,
         Mode::Eliminator => hud.elimination,
+        // HD's own `detonator_hud.xml` is a stage, score and EMP readout this build
+        // has none of (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`), so a
+        // Detonator race draws the time trial's: its lap counter is the stage.
+        // **Chosen, not measured.**
+        Mode::Detonator => hud.time_trial,
     }
 }
 
@@ -551,7 +556,7 @@ fn split_assets(
             Mode::Eliminator => Some(elimination),
             // The Multiplayer Time Trial draws the arcade HUD, so its split is the arcade one.
             Mode::TimeTrial if mode.is_multiplayer_time_trial(people) => Some(arcade),
-            Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => None,
+            Mode::TimeTrial | Mode::SpeedLap | Mode::Zone | Mode::Detonator => None,
         }
     };
     let rows = pick((authored.arcade, authored.elimination)).and_then(|roots| {

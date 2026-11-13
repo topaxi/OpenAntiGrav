@@ -105,11 +105,8 @@ pub struct Weapons {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
     /// Whether the firing craft's own box collider hides the track from a projectile's surface
-    /// probe, so the first probes of a shot miss until clear of the hull. Pulse measured it
-    /// (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The own-craft box is a rotated
-    /// frame"); Pure inherits it but its engine is not wired for it yet. Where `false`, a Plasma
-    /// does not probe for a short chosen window after its release instead.
-    pub own_craft_box_hides_track: crate::pre_race::Sourced<bool>,
+    /// probe, and what a probe that meets it does. See [`OwnCraftBox`].
+    pub own_craft_box_hides_track: crate::pre_race::Sourced<OwnCraftBox>,
     /// Which terms of `WeaponAi_DecideFireOrAbsorb` the title's opponents roll
     /// by, on the [`Self::ai`] odds.
     pub opponent_fire: crate::pre_race::Sourced<OpponentFire>,
@@ -220,6 +217,26 @@ pub enum LeachDrain {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, confidence 80). See
     /// `oag_weapons::projectile::leach_beam::trip`.
     PerTrip,
+}
+
+/// What the firing craft's own box does to its projectiles' surface probes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnCraftBox {
+    /// The box hides the track from a probe that crosses it first and the probe reads as open
+    /// air, so the projectile falls: Pulse's `Collision_SweepSegment` turns a box hit into
+    /// `0x7f` (`docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "The own-craft box is a
+    /// rotated frame").
+    Falls,
+    /// The box hides the track the same way, but a probe that meets it runs neither the fall nor
+    /// the ride: the projectile keeps its velocity that update. Pure's weapons branch on the hit
+    /// kind themselves (`docs/ghidra/functions/psp-pure-usa/own-craft-box.md`).
+    Holds,
+    /// The projectile query tests track meshes only, so no craft box answers a probe and a shot
+    /// probes the track from its first update
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/own-craft-box.md`).
+    Absent,
+    /// Unmeasured: no box, and a Plasma does not probe for a short window after its release.
+    PlasmaWindow,
 }
 
 /// How a weapon blast's push reaches the craft it hits.

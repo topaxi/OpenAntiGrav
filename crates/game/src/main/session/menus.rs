@@ -686,8 +686,18 @@ impl Session {
         // mode this one does not have still races - and still checks
         // the circuit against whichever list that leftover mode
         // implies.
+        // A mode this title does not offer (a stored `detonator` carried to Pulse) is
+        // refused the same way, with a line saying so.
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-            race_options.mode = mode;
+            match self.shell.as_ref().map(|shell| shell.title) {
+                Some(title) if !oag_ui::menu::mode_offered(mode, title) => log::warn!(
+                    "race.mode {:?} is not a mode {} offers; racing {} instead",
+                    mode.name(),
+                    title.name,
+                    race_options.mode.name()
+                ),
+                _ => race_options.mode = mode,
+            }
         }
         // **A stored mode that takes fewer people than are seated does not launch.** Head to
         // Head is two craft ([`oag_race::Mode::max_people`], chosen, not measured), and the

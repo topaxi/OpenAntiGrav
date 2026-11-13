@@ -96,8 +96,9 @@ pub struct TouchFrontEnd {
     pub home: &'static [TouchButton],
     /// The screen `Team_Definition.xml` nests the ship preview inside:
     /// `<Screen name="team" type="team2048">`, itself under a `teamshell`
-    /// wrapper.
-    pub team_screen: &'static str,
+    /// wrapper. `None` on a title whose touch front end is the campaign map
+    /// alone (Omega ships no such screen).
+    pub team_screen: Option<&'static str>,
     /// That screen's own `<Model name="ShipModel">` origin, `(OriginX,
     /// OriginY)` in the same 960x544 space [`TouchButton`]'s coordinates
     /// share. Authored: `<Values OriginX="1400" OriginY="264" ...>`.
@@ -110,7 +111,7 @@ pub struct TouchFrontEnd {
     /// touch idiom, not the `oag_ui_screens::picker::Layout` dialect `race_box`
     /// names), so that field would be inert either way. See
     /// `docs/formats/2048-frontend.md`'s "Team selection is 3D too".
-    pub team_model_origin: (f32, f32),
+    pub team_model_origin: Option<(f32, f32)>,
     /// The screen `<FE3DCanvas>` lives inside: `newFEshell`, nested inside its
     /// own `<TouchScroll name="FeShellTouchScroll">`.
     ///
@@ -127,6 +128,11 @@ pub struct TouchFrontEnd {
     /// stops being true the moment a label moves. Naming the screen instead
     /// lets a caller walk the real `<CanvasLabel>` list and play the data.
     pub canvas_screen: &'static str,
+    /// The definition file holding [`Self::canvas_screen`] when the front-end
+    /// root does not include it. `None` on 2048, whose root includes every
+    /// `NEWGUI` document; Omega's map is the one screen of its front end that
+    /// is not in `Skin.xml`'s includes, so the boot reads this entry itself.
+    pub canvas_definition: Option<&'static str>,
     /// The atlas `<CanvasLabel>` UV coordinates index into:
     /// `Data\FE\NewImages\canvasTexture.gxt`.
     ///
@@ -190,9 +196,10 @@ mod tests {
             width: 140.0,
             height: 140.0,
         }],
-        team_screen: "team",
-        team_model_origin: (1400.0, 264.0),
+        team_screen: Some("team"),
+        team_model_origin: Some((1400.0, 264.0)),
         canvas_screen: "newFEshell",
+        canvas_definition: None,
         canvas_texture: r"Data\FE\NewImages\canvasTexture.gxt",
         map_nodes: crate::NodeMap {
             scale: (4, 2),

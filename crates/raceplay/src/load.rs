@@ -177,7 +177,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let zone_handling = craft_title
         .race
         .zone_handling
-        .filter(|_| options.mode == oag_race::Mode::Zone);
+        .filter(|_| options.mode.on_zone_mask());
     let stats_name = match zone_handling {
         Some(zone) => zone.entry.value.to_string(),
         None => handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team),
@@ -283,6 +283,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
     #[cfg(feature = "view")]
     let (chase, chase_close, internal) = cameras::resolve(
+        title,
         &stats,
         &stats_name,
         options,
@@ -312,7 +313,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
     // The lock-on's rig, which is all of the cameras the simulation reads.
     #[cfg(not(feature = "view"))]
-    let chase = chase_params(stats.external_camera_far);
+    let chase = crate::camera::chase_params_for(stats.external_camera_far, title, options.mode);
 
     // What the scene target stores, which baked colours are encoded for; told before the staging.
     #[cfg(feature = "view")]
@@ -1274,10 +1275,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             launch_hover: title
                 .race
                 .launch_hover
-                .filter(|hover| options.mode != oag_race::Mode::Zone || hover.in_zone.value),
+                .filter(|hover| !options.mode.on_zone_mask() || hover.in_zone.value),
             // Zone flies the title's Zone hover where it has one (Pulse's `Ship_HoverFourCorner`).
-            hover_rig: match (options.mode, title.race.zone_hover_rig) {
-                (oag_race::Mode::Zone, Some(zone)) => Some(zone),
+            hover_rig: match title.race.zone_hover_rig {
+                Some(zone) if options.mode.on_zone_mask() => Some(zone),
                 _ => title.race.hover_rig,
             },
             craft_laws: title.race.craft_laws,

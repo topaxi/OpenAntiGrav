@@ -78,6 +78,18 @@ pub fn acos(x: f32) -> f32 {
     libm::acosf(x)
 }
 
+/// `sin`, from our own libm rather than the platform's. See [`acos`].
+#[must_use]
+pub fn sin(x: f32) -> f32 {
+    libm::sinf(x)
+}
+
+/// `atan2(y, x)`, from our own libm rather than the platform's. See [`acos`].
+#[must_use]
+pub fn atan2(y: f32, x: f32) -> f32 {
+    libm::atan2f(y, x)
+}
+
 /// `sin` and `cos` of the same angle, from our own libm rather than the
 /// platform's.
 ///

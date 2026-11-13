@@ -255,7 +255,11 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(false),
+        // A box branch is read, but its surface filter and row sign are open, 65
+        // (`ps3-hdfury-eu/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::OwnCraftBox::PlasmaWindow,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::measured(oag_title::weapons::OpponentFire::HD),
     },
     weapon_models: race::WEAPON_MODELS,
@@ -311,11 +315,21 @@ pub const TITLE: &Title = &Title {
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
         card_unlit: true,
         gantry_boards: None,
-        mode_gantries: &[oag_title::adverts::ModeGantry {
-            mode: oag_title::adverts::GantryMode::Zone,
-            entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
-            assembly_ticks: 210,
-        }],
+        // Detonator's board is the one copy `DATA00` ships, Omega's mode-`0xe` name
+        // (`docs/ghidra/functions/ps4-omega-eu/billboards.md`); its assembly ticks are
+        // Zone's, chosen, not measured.
+        mode_gantries: &[
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Zone,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
+                assembly_ticks: 210,
+            },
+            oag_title::adverts::ModeGantry {
+                mode: oag_title::adverts::GantryMode::Detonator,
+                entry: "/Data/Billboards/HD_Adverts/321Go/321go_hd_detonator.vex",
+                assembly_ticks: 210,
+            },
+        ],
         origin: oag_title::Origin::Measured,
     }),
 };

@@ -1224,7 +1224,23 @@ within a grey tolerance" is **open**. **Still open on the hull**: the iridescent
 `ramp(-dot(V, N)) * 0.5637`, a hue that moves with the view) is not drawn, and the white wing rims on the `_n1` skins are a
 separate term (the `nitro_emissive_outlines` shell).
 
-**Other titles.** Fury: same disc, **ported**. Omega: **checked, differs by name, open** - it ships `nitro_perspex_new_2`,
-`Nitro_Body_DG` and `Nitro_Perspex_2` (`data00.psarc`, `data05.psarc`) with `hdships\<team>_n1` hulls, not the HD materials, and its
-PS4 programs are not read here, so whether the same entries sit first is unmeasured (its source did not load from the extracted
-tree in this lane). 2048: **not applicable**, no `_n1` directory and no `nitro_*` material in its extracted data.
+**Other titles.** Fury: same disc, **ported**. **2048: ported** (2026-11-13, `w2048-fury-nitro`; the earlier "not applicable, no
+`_n1` directory" was wrong, the extraction had been read without looking at `hdships`). 2048 ships all twelve
+`hdships\<team>_n1` hulls in the **base package** (`data.psarc`; the 1.04 patch's `data2.psarc` re-ships them with 4x livery
+textures), not in the Fury pack (`dlc2.psarc` carries circuits and sound only: no `hdships` entry, no `nitro` material). Their
+`nitro_body_new` and `nitro_perspex_new` carry the same sampler hashes as HD (`0x2d5fc6a6`, `0x3a7e591d`, `0x1b2a3d71` at unit 0,
+`0x0617f872`), listed ramp and mask first, and the Vita binder (`mesh::rcs::psp2`, which does not use `skin::picks`) took the
+first path, so the hulls drew the ramp (black with green and purple, `Harimau_n1` an almost black silhouette). A sweep of every
+`.rcsmodel` in the five 2048 archives found the two hashes on `nitro_body`, `nitro_body_new`, `nitro_perspex_new` **and** on
+`detonator_bomb_normal`, `lightbarrierpanel` (ramp) and the `ship_damage` wreck shards (`nitro_perspex_debris*`), so the 2048 and
+Omega rule is keyed on the family (`skin::NITRO_FAMILIES`, `skin::NITRO_LOOKUPS`), not on the hash alone as HD's is; the weapon and
+the shards are untouched (no role measured there; the shards very probably share the bug, **open**). Pinned by
+`psp2_nitro_hull_ground_truth::every_2048_nitro_hull_paints_its_diffuse` (12 hulls, 24 materials; fails with the family keying
+removed). **Omega: ported** in the same binder: its `_n1` hulls use the same `nitro_body_new` / `nitro_perspex_new` names (13 hulls,
+27 materials in `data01`, `data03`, `data08` of the merged extraction), pinned by `every_omega_nitro_hull_paints_its_diffuse`; the
+earlier "differs by name" read only the DG/`_2` families, which are other materials. Seen in 2048: `--race --team Feisar_n1` on Vineta K
+shows the grey livery with its detail and `Harimau_n1` the black hull with its engine and plates, where before both were a flat
+ramp-dark hull. The white-violet wing rims are `nitro_emissive_outlines`, still the separate open term. **Offered?** 2048's own team
+list is its five 2048 teams; the twelve HD-derived teams, nitro included, are reachable through RACE REMIX's craft title only
+(`GUEST_ROSTER.offered = false`, `docs/formats/2048-dlc.md`), not gated on the Fury pack being mounted; whether the original offers
+`_n1` hulls in 2048 and behind which unlock is unmeasured (**open**).

@@ -403,6 +403,12 @@ pub(crate) struct Cli {
     #[arg(long, requires_all = ["until", "press"])]
     pub(crate) press_until_reached: bool,
 
+    /// With `--until map:EVENT`, press these buttons one after another on the
+    /// map once it is up, one press every 30 ticks, e.g. `right,right,down`;
+    /// `--ticks` then picks the frame after the last of them.
+    #[arg(long, requires = "until")]
+    pub(crate) map_presses: Option<String>,
+
     /// Control scheme: `veteran` or `novice`.
     ///
     /// Overrides `[controls] scheme` for this run without writing it back. The

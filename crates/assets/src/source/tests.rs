@@ -112,6 +112,7 @@ const TITLE: &Title = &Title {
         game_options: oag_title::race::GameOptions::NONE,
         zone_stage_textures: None,
         zone_sky: None,
+        detonator: None,
         // Unread here too: nothing in this crate resolves a team's variant.
         team_variants: None,
         guest_roster: None,
@@ -151,7 +152,9 @@ const TITLE: &Title = &Title {
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::chosen(true),
         launch_normal_is_track_up: oag_title::pre_race::Sourced::chosen(false),
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(false),
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(
+            oag_title::weapons::OwnCraftBox::PlasmaWindow,
+        ),
         opponent_fire: oag_title::pre_race::Sourced::chosen(
             oag_title::weapons::OpponentFire::PULSE,
         ),

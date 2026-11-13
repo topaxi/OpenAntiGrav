@@ -69,6 +69,7 @@ impl CampaignMap {
             return;
         }
         self.cursor.idle = 0.0;
+        self.focus.active = false;
         let (view_w, view_h) = canvas_camera::VIEWPORT;
         let from = self.cursor.at.unwrap_or_else(|| {
             self.face_of(self.selected)

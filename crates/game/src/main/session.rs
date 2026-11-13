@@ -54,6 +54,8 @@ pub(crate) mod phases;
 mod language;
 #[path = "session/launch_keys.rs"]
 mod launch_keys;
+#[path = "session/hosted_map.rs"]
+mod hosted_map;
 #[path = "session/launch2048.rs"]
 mod launch2048;
 #[path = "session/load.rs"]
@@ -679,6 +681,9 @@ pub(crate) struct Session {
     /// every later one, the same way `stage.frontend.held_backdrop` is simply
     /// left behind rather than reset.
     pub(crate) held_menu_backdrop: Option<crate::frontend_stage::HeldFrame>,
+    /// The menus a hosted campaign map was opened from, waiting for the map to
+    /// hand the window back - see `session/hosted_map.rs`.
+    pub(crate) parked_menu: Option<Box<crate::menu_stage::MenuStage>>,
     /// The `--prefetch` worker, when this run started one.
     ///
     /// **On the session and not on the loading stage.** The stage is replaced
@@ -1104,6 +1109,9 @@ pub(crate) struct Shell {
     /// its skins - where [`Self::teams`] is only the id and the label the
     /// RACE page's own row needs.
     pub(crate) team_details: Vec<catalogue::Team>,
+    /// The 2048 campaign map this title's chooser hands off to, when it has
+    /// one - see `oag_game::boot::map_seed`.
+    pub(crate) map: Option<oag_game::boot::map_seed::MapSeed>,
 }
 
 impl Shell {
@@ -1141,7 +1149,7 @@ impl Shell {
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
-            modes: menu::mode_choices(&boot_shell.strings),
+            modes: menu::mode_choices(&boot_shell.strings, title),
             kill_targets: (boot_shell.race_setup.kill_targets.iter())
                 .map(menu::Choice::plain)
                 .collect(),
@@ -1227,6 +1235,7 @@ impl Shell {
             ship_select: boot_shell.ship_select.clone(),
             ship_select_split: boot_shell.ship_select_split.clone(),
             team_details: boot_shell.teams.clone(),
+            map: oag_game::boot::map_seed::MapSeed::of(boot_shell),
         }
     }
 

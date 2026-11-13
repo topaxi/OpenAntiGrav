@@ -334,6 +334,7 @@ impl Frontend {
             .events
             .get(self.campaign.selected)
             .is_some_and(|event| event.forced_craft.is_none())
+            && self.screens.by_name(w2048::TEAM).is_some()
     }
 
     fn press_card_button(&mut self, button: Button3) {

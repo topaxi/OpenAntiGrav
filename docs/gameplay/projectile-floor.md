@@ -449,3 +449,22 @@ the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse` (the grid cra
 captures (`scripts/psp-craft-box-replay.py`): the capture files were scratch and are gone, so only
 the page's records are a Rust test. Open: an opponent's box (75), the travel sweep's own box meeting
 (65), Pure by inheritance.
+
+### The other titles (2026-11-13, lane `own-craft-box-other-titles`)
+
+`Weapons::own_craft_box_hides_track` is now an `OwnCraftBox`, one value per title, each read on the
+title's own executable:
+
+| Title | Value | Confidence | What the executable does | Page |
+| --- | --- | ---: | --- | --- |
+| Pulse | `Falls` | 90 | the box hit is `0x7f`, the fall arm (live) | [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md) |
+| Pure | `Holds` | 84 | Pulse's raycast, gate and box, but the weapons branch on `kind == 1` themselves: a box hit runs neither the fall nor the ride, the bolt keeps its velocity | [own-craft-box.md](../ghidra/functions/psp-pure-usa/own-craft-box.md) |
+| HD | `PlasmaWindow`, chosen | 65 | a box branch with Pulse's consequence, but the box's surface filter and row sign are open | [own-craft-box.md](../ghidra/functions/ps3-hdfury-eu/own-craft-box.md) |
+| 2048 | `Absent` | 84 | the projectile query walks track meshes only | [own-craft-box.md](../ghidra/functions/vita-2048-eu-v104/own-craft-box.md) |
+| Omega | `Absent` | 84 | the same walk, read on its own binary | [own-craft-box.md](../ghidra/functions/ps4-omega-eu/own-craft-box.md) |
+
+`OwnCraftProbe::CraftBoxHolds` (Pure) skips the probe's arms and its cage question on an update the
+box blocks; `OwnCraftProbe::NoBox` (2048, Omega) lets every flyer, the Plasma included, probe from its
+first update, so the chosen 0.04 s window is left only on HD. Pure's probe lengths (Rocket `12.0`) and
+HD's (Plasma `6.0`) differ from the Pulse lengths `oag_weapons` uses for every title; written down on
+the pages, not wired.

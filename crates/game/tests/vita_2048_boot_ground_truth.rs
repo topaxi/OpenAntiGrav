@@ -340,8 +340,7 @@ fn the_campaign_map_draws_the_canvas_prism_not_flat_squares() {
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
-    use oag_ui::frontend::EarnedTier;
-    use oag_ui::frontend::canvas_lattice;
+    use oag_ui::frontend::{EarnedTier, canvas_lattice};
     use oag_ui::pointer::Pointer;
 
     let Some(source) = source() else { return };
@@ -425,6 +424,7 @@ fn the_campaign_map_puts_its_tiles_where_the_canvas_camera_does() {
         frontend.selected_event().map(|event| event.name.as_str()),
         Some("2048 - Event 1")
     );
+    (0..120).for_each(|_| frontend.update(1.0 / 60.0, &mut Input::new(), None).clear());
     // Frame 12: Events 1, 2 and 3 down the diagonal.
     assert_tiles(
         &frontend,
@@ -1070,7 +1070,10 @@ fn every_select_team_hull_builds_with_its_textures() {
         boot::load_shell(&options(&source)).expect("2048's front end walks");
     let roster = title.race.team_variants.expect("2048's native roster");
     let touch = title.front_end.and_then(|front_end| front_end.touch);
-    assert_eq!(touch.map(|t| t.team_model_origin), Some((1400.0, 264.0)));
+    assert_eq!(
+        touch.and_then(|t| t.team_model_origin),
+        Some((1400.0, 264.0))
+    );
     let mut hulls = 0;
     for team in roster.teams {
         for variant in roster.variants {

@@ -82,6 +82,8 @@ pub struct Options {
     pub pressed: u32,
     /// `--press-until-reached`: `pressed` stops once the `--until` state is current.
     pub press_until_reached: bool,
+    /// `--map-presses`: one entry per press, as a button mask.
+    pub map_presses: Vec<u32>,
     /// Which control scheme the race this hands off to is driven with.
     pub scheme: oag_gameplay::ControlScheme,
     /// Print exits as well as entries.
@@ -310,7 +312,7 @@ pub fn run(
     // `--screen` and `--menu-page` both draw one thing and nothing else, so the
     // sequence is not run at all: stepping it would only move the state machine
     // somewhere the capture then ignores.
-    let mut card = card::CardTarget::parse(options.until.as_deref());
+    let mut card = card::CardTarget::parse(options.until.as_deref(), &options.map_presses);
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
@@ -1222,16 +1224,19 @@ pub fn run(
             renderer.inset(),
         );
     }
-    if let (Some(race), Some(craft), Some(touch)) = (
+    if let (Some(race), Some(craft), Some(origin)) = (
         &options.race,
         frontend.team_hull(),
-        title.front_end.and_then(|front_end| front_end.touch),
+        title
+            .front_end
+            .and_then(|front_end| front_end.touch)
+            .and_then(|touch| touch.team_model_origin),
     ) {
         crate::team_hull::TeamHull::new(
             race.source.clone(),
             race.dlc.clone(),
             title.race.ship_dir,
-            touch.team_model_origin,
+            origin,
         )
         .draw(
             &device,

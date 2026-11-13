@@ -325,6 +325,62 @@ was. It is not reached from `Main Menu`'s own redirect (which only names
 so this looks like a companion-overlay or debug surface rather than the
 primary campaign flow - not chased further this pass.
 
+## The 2048 map opens from the chooser
+
+**Wired 2026-11-13** (`oag_ui::frontend::Frontend::hosted_map`, `oag_game::boot::map_seed`,
+`session/hosted_map.rs`; confidence 90 for what is drawn and launched, 40 for how the original
+enters the map, which is not traced in `eboot.bin`). Confirming 2048 at `Campaign Selection`
+parks the menus and shows the **same** `Frontend` map Vita 2048 boots into, in the front end's
+own stage, built from Omega's data:
+
+- `oag_omega::frontend::TOUCH` (`touch: Some(..)` beside HD's `menu`; ADR-0054 does not forbid
+  it): the canvas screen `Cell Selection 2048`, read by its own entry
+  (`Data\Plugins\Frontend\Gui\Campaign2048_Definition.xml`, `Skin.xml` does not include it), the
+  atlas `Data\FE\NewImages\canvasTexture.gnf` and 2048's cell-to-canvas projection. The projection
+  is **chosen, not measured** on Omega: no Omega executable readout of the quad exists, and the
+  events and canvas labels carry 2048's cells.
+- `Data\xml\SP.xml` (115 events with a cell) through the same `map_events` reader.
+- Back (circle, or the shell's home key) returns to the chooser with 2048 still selected; Launch
+  on an event card starts the race through `Session::follow_launch`, as 2048's own does
+  (`drive_ground_truth::omegas_chooser_opens_the_2048_map_and_back_returns_to_it` and
+  `an_event_launched_from_omegas_2048_map_starts_a_race`).
+
+**The canvas atlas is a `.gnf` here and decodes as the same picture** (a `--drive` capture of
+Omega's first map frame against Vita 2048's, 1440x816: mean absolute channel difference 2.6 of 255,
+2.3 % of channels past 24; the lattice and the logo sit at the same pixels).
+
+**Checked, differs - what Omega authors on the screen and this build does not draw.** The
+screen is HD's `CellSelection` frame around the 2048 canvas: a `Flyer`, `SeasonLogo2048/9/50`, a
+rank shield (`RankItem`, `TotalXPBg/Fill`), `GridNum`, `EPoints Title`, bars and brackets, all
+`transition`/`delay` widgets the `Campaign2048` screen type's code in `eboot.bin` drives. Nothing
+here draws them: the gating is unread. It also authors a `Cell Mode Redirect Team` whose `Default`
+goes to HD's `Team Selection` - Change craft on a card is therefore **off on a map hosted
+without a `team` screen** (open: route it to `Team Selection`).
+
+**Pad, focus and highlight: not in the XML, in the code (2026-11-13).** The map is
+`TouchScroll` > `FE3DCanvas` + `TouchCampaign`, as Vita 2048's, and the file carries no focus,
+highlight or pad attribute (grep over the 29,919 bytes). Omega's `TouchCampaign` code adds them:
+the d-pad (with auto-repeat, not the stick) moves focus between per-event canvas buttons by
+130-degree direction cones and nearest distance, never across seasons; a focus change selects the
+event, plays `newGUI_select`, scrolls the view to it, brightens it with a 1.26 s pulse and runs a
+2.5 s ripple over the lattice around it; Triangle opens the event's records. Law, addresses and
+confidence (72 to 84, static reading): [campaign-map-pad.md](../ghidra/functions/ps4-omega-eu/campaign-map-pad.md).
+Cross's launch path is open there. **Wired (2026-11-13) in the shared map, both titles**
+(`oag_ui::frontend::map_focus`): cones, repeat, view glide, pulse and ripple; the right-stick
+arrow and the pointer's `Orange2048` marker stay ours (the marker shows for pointer focus only).
+Chosen, not measured: pulse base grey (the open event's grey), ripple reach, glide speed. Not
+wired: the per-type button footprints (every event takes the default 3 x 2, which cancels out
+of the cone), the start-focus walk, Triangle records. **Season filter**: the map has
+`Frontend::set_map_season` (season from the year in the event name, `event+0x308` unread), but
+Omega's host leaves it off: `Grid Selection 2048` is not wired (`grid_16`..`grid_18` are stubs
+the grid reader skips and it is a 3D flyer carousel), so no season is ever chosen. **Departure:** Omega's map shows all three seasons until the chooser lands (the original shows one).
+Vita 2048 keeps all three seasons by the maintainer's decision.
+
+**Missing art, said in the loader report:** `Data\FE\NewImages\trackscreens\*.gtf` (the event
+cards' track pictures), `Data\FE\NewImages\Demo\*` and each 2048 circuit's
+`TrackSelectEmblem_Fury` are in no Omega archive (`no spelling is held on PS4`), so a card draws
+without its track picture.
+
 ## `mainmenu_definition.xml`: same redirect, new logo, new PlayGo tags
 
 `mainmenu_definition.xml`'s top-level `<Redirect>` is close to line-for-line

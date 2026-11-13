@@ -199,7 +199,7 @@ impl Session {
             tracks,
             teams: team_choices,
             languages: Vec::new(),
-            modes: menu::mode_choices(&strings),
+            modes: menu::mode_choices(&strings, title),
             kill_targets: Vec::new(),
             score_targets: Vec::new(),
             weapons: Vec::new(),
@@ -229,6 +229,7 @@ impl Session {
             ship_select: None,
             ship_select_split: None,
             team_details: Vec::new(),
+            map: None,
             strings,
         });
         self.prefetch_pending = None;

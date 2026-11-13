@@ -743,7 +743,7 @@ pub(super) fn zone_circuit_miss(
 /// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the
 /// mode plausibly wants it.
 pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
-    if mode != Mode::Zone {
+    if !mode.on_zone_mask() {
         return None;
     }
     Some(format!(

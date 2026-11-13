@@ -330,7 +330,8 @@ fn run(cli: Cli) -> Result<()> {
     let mode = oag_race::Mode::from_name(&cli.mode)
         .with_context(|| {
         format!(
-            "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race or head_to_head",
+            "{:?} is not a race mode; try time_trial, speed_lap, zone, single_race, eliminator, \
+             head_to_head or detonator",
             cli.mode
         )
     })?;
@@ -343,7 +344,7 @@ fn run(cli: Cli) -> Result<()> {
         anyhow::ensure!(
             people <= most,
             "{} takes at most {most} people and {people} are seated (--players or \
-             --window-seats): it is two craft, one against the other",
+             --window-seats)",
             mode.name()
         );
     }

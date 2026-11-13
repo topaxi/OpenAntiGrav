@@ -315,20 +315,35 @@ fn canvas_pictures(
     use oag_ui::frontend::{
         canvas_cells as cells, canvas_lattice as lattice, canvas_prism as prism,
     };
-    let blob = match read_front_end_first(archives, atlas) {
-        Ok(blob) => blob,
+    let (held, blob) = match read_front_end_texture(archives, atlas) {
+        Ok(found) => found,
         Err(e) => {
             report.push(format!("lattice atlas {atlas}: {e}"));
             return Vec::new();
         }
     };
-    let decoded = oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
-        let texture = gxt.only()?;
-        let rgba = texture.to_rgba(&blob).ok()?;
-        Some((texture.width, texture.height, rgba))
-    });
+    let decoded = if is_gnf(&held) {
+        oag_texture::gnf::Texture::parse(&blob)
+            .ok()
+            .and_then(|texture| {
+                let rgba = texture.decode(&blob).ok()?;
+                Some((
+                    u16::try_from(texture.width).ok()?,
+                    u16::try_from(texture.height).ok()?,
+                    rgba,
+                ))
+            })
+    } else {
+        oag_texture::gxt::Gxt::parse(&blob).ok().and_then(|gxt| {
+            let texture = gxt.only()?;
+            let rgba = texture.to_rgba(&blob).ok()?;
+            Some((texture.width, texture.height, rgba))
+        })
+    };
     let Some((width, height, rgba)) = decoded else {
-        report.push(format!("lattice atlas {atlas}: did not decode as a .gxt"));
+        report.push(format!(
+            "lattice atlas {atlas}: did not decode as {held}, drawing no lattice"
+        ));
         return Vec::new();
     };
     let rgba: Vec<u8> = rgba.into_iter().flatten().collect();

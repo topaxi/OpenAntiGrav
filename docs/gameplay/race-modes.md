@@ -1452,6 +1452,34 @@ section is what implements it.
 [`oag_race::Mode::weapons_enabled`]: ../../crates/race/src/mode.rs
 [`Mode::ALL`]: ../../crates/race/src/mode.rs
 
+## Detonator
+
+HD/Fury's Fury-pack mode, also on 2048 (its Fury DLC) and Omega: one craft, alone,
+through fourteen stages. **Wired 2026-11-13 as `oag_race::Mode::Detonator`**, offered only
+where a title names its data (`oag_title::RaceDefaults::detonator`: HD, 2048, Omega; the
+RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure refuses).
+
+- **A stage is a lap.** `Detonator_UpdateRace` steps its stage counter on the player's own
+  forward line crossing (never the race's first), opens it at `1` and ends the race at `15`,
+  so fourteen laps on every class. 2048 and Omega run the same law. Confidence 78 (HD),
+  70 (2048, Omega). Evidence: [detonator-mode.md](../ghidra/functions/ps3-hdfury-eu/detonator-mode.md).
+  `detonator_ground_truth.rs` races it on HD and sees stages `1`..`15`, one a lap.
+- **The grade** is Detonator's own table (`detonatormode.effectsettings`, the DLC3 revision on
+  the four Zone circuits) and texture sets, through the same `ZoneGrade` and HD transition
+  sphere Zone uses, stepping on the lap. 2048 reads the circuit's own table and falls back to
+  HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
+  as its Zone grade is not.
+- **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
+  HD flies the Zone handling file, the Zone hover rig with no brakes, and the Zone grid hover
+  (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
+- **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
+  inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
+- **Not here, each named on the evidence page**: the mines and bombs (placed per stage by
+  `FUN_000654e0`), the pulse cannon, the EMP and its pads, the score and the end-of-run
+  percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
+  manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
+  draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
+
 ## What happens when a race ends
 
 **The flag is the player's own last crossing.** `RaceState::finished` is set by

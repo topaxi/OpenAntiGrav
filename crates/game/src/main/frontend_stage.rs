@@ -78,6 +78,23 @@ pub(crate) struct HeldFrame {
 }
 
 impl FrontendStage {
+    /// A stage that shows one front-end screen and nothing else: no movie, no
+    /// boot sequence behind it.
+    pub(crate) fn hosted(renderer: Renderer, frontend: Frontend) -> Self {
+        Self {
+            renderer,
+            frontend,
+            feed: None,
+            pending: Vec::new(),
+            shown: false,
+            backdrop_shown: false,
+            held_backdrop: None,
+            backdrop_in_planes: false,
+            trace: false,
+            team_hull: None,
+        }
+    }
+
     /// Puts `state`'s own movie on screen and in the mixer, if it has one.
     ///
     /// One set of I420 planes serves every movie the front end draws, and one

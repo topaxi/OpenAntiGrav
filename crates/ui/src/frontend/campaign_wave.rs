@@ -17,6 +17,7 @@ use super::canvas_cells;
 use super::canvas_lattice;
 use super::canvas_mesh::{self, Placed, Scene};
 use super::canvas_wave::{self, Wave};
+use super::map_focus;
 use super::*;
 
 /// The levels' band the map follows: band 1, the second lowest of 12 (the bass).
@@ -46,11 +47,24 @@ impl Frontend {
     /// Advances the wave by `dt` seconds: whole 60 Hz steps, the original's
     /// frames. Off the map, or with no levels, it is cleared.
     pub(super) fn step_wave(&mut self, dt: f64) {
-        let Some(band1) = self.campaign.band1.filter(|_| self.on_open_map()) else {
+        if !self.on_open_map() {
+            self.campaign.wave = Wave::default();
+            self.campaign.wave_owed = 0.0;
+            self.campaign.focus.ripple = None;
+            return;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is a fraction of a second"
+        )]
+        self.campaign.focus.tick(dt as f32);
+        // The focus ripple runs without music; the bass only adds to it.
+        if self.campaign.band1.is_none() && self.campaign.focus.ripple.is_none() {
             self.campaign.wave = Wave::default();
             self.campaign.wave_owed = 0.0;
             return;
-        };
+        }
+        let band1 = self.campaign.band1.unwrap_or(0.0);
         let centre = self.wave_centre();
         let priorities = canvas_cells::priorities(&self.canvas_buttons(), &self.season_cards());
         let priority = |cell: (i32, i32)| priorities.get(&cell).copied().unwrap_or(0);
@@ -74,6 +88,15 @@ impl Frontend {
             .collect();
         let flat: Vec<&[(i32, i32)]> = spots.iter().map(|cells| cells.as_slice()).collect();
         for _ in 0..steps {
+            if let Some(ripple) = &mut self.campaign.focus.ripple {
+                ripple.elapsed += canvas_wave::STEP;
+                let (at, radius, elapsed) = (ripple.at, ripple.radius, ripple.elapsed);
+                if elapsed >= map_focus::RIPPLE_SECONDS {
+                    self.campaign.focus.ripple = None;
+                } else {
+                    self.campaign.wave.ripple(at, radius, elapsed, &priority);
+                }
+            }
             self.campaign.wave.step(band1, centre, &priority, &flat);
         }
     }

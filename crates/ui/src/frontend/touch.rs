@@ -343,7 +343,7 @@ impl Frontend {
     }
 
     /// The pad on a touch grid.
-    pub(super) fn update_touch(&mut self, input: &mut Input) {
+    pub(super) fn update_touch(&mut self, dt: f64, input: &mut Input) {
         let Some(current) = self.machine.current().map(str::to_string) else {
             return;
         };
@@ -355,6 +355,9 @@ impl Frontend {
         if current == w2048::NEW_FE_SHELL {
             if self.event_card_open() {
                 self.update_event_card(input);
+                return;
+            }
+            if self.leave_hosted_map(input) {
                 return;
             }
             for (button, target) in [
@@ -371,7 +374,7 @@ impl Frontend {
                     return;
                 }
             }
-            self.update_campaign_map(input);
+            self.update_campaign_map(dt, input);
             return;
         }
         let tiles = self.tiles(&current);

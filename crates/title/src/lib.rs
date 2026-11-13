@@ -98,7 +98,7 @@ pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
 };
 pub use race::{
-    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, GuestRoster, RaceDefaults,
+    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, GuestRoster, RaceDefaults,
     SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant, TeamVariants, TrackBanks,
     VariantJoin, WwiseBank, WwiseCue, WwiseCues, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer,
     ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTeamStep, ZoneTransition,
@@ -767,6 +767,15 @@ pub struct CircuitModel {
 }
 
 impl FrontEnd {
+    /// The touch layout when the touch front end *is* the title's front end
+    /// (2048): it authors no menu of its own vocabulary. A title with both
+    /// (Omega: HD's menus plus 2048's campaign map) returns `None` here, and
+    /// its [`Self::touch`] is only the map.
+    #[must_use]
+    pub fn touch_shell(&self) -> Option<&'static touch::TouchFrontEnd> {
+        self.touch.filter(|_| self.menu.is_none())
+    }
+
     /// Whether this title's circuit screen draws a model per circuit - see
     /// [`Self::circuit_models`].
     #[must_use]

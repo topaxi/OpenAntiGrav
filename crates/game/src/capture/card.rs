@@ -18,16 +18,26 @@ pub(super) struct CardTarget {
     page: Option<usize>,
     /// The event to select, taken (`None`) once the cursor is on it.
     event: Option<String>,
+    /// `--map-presses` still to make, oldest first.
+    presses: std::collections::VecDeque<u32>,
+    /// Ticks since the map came up with nothing else to do.
+    idle: u32,
 }
+
+/// Ticks between two `--map-presses`.
+const PRESS_GAP: u32 = 30;
 
 impl CardTarget {
     /// `None` when `until` is not a `card` or `map` request at all.
-    pub(super) fn parse(until: Option<&str>) -> Option<Self> {
+    pub(super) fn parse(until: Option<&str>, presses: &[u32]) -> Option<Self> {
+        let presses: std::collections::VecDeque<u32> = presses.iter().copied().collect();
         let until = until?;
         if let Some(event) = until.strip_prefix("map:") {
             return Some(Self {
                 page: None,
                 event: Some(event.to_string()),
+                presses,
+                idle: 0,
             });
         }
         let rest = until.strip_prefix("card")?;
@@ -35,6 +45,8 @@ impl CardTarget {
             return Some(Self {
                 page: Some(0),
                 event: None,
+                presses,
+                idle: 0,
             });
         }
         let rest = rest.strip_prefix(':')?;
@@ -45,6 +57,8 @@ impl CardTarget {
         Some(Self {
             page: Some(page.parse().ok()?),
             event,
+            presses,
+            idle: 0,
         })
     }
 
@@ -52,7 +66,7 @@ impl CardTarget {
     pub(super) fn reached(&self, frontend: &Frontend) -> bool {
         match self.page {
             Some(page) => frontend.event_card_page() == Some(page),
-            None => self.event.is_none() && on_the_map(frontend),
+            None => self.event.is_none() && self.presses.is_empty() && on_the_map(frontend),
         }
     }
 
@@ -73,7 +87,18 @@ impl CardTarget {
         Ok(if frontend.event_card_open() {
             Button::Right.bit()
         } else if self.page.is_none() && self.event.is_none() {
-            0
+            // Offered for two ticks, one of which the pulse lets through.
+            self.idle += 1;
+            let due = self.idle % PRESS_GAP;
+            if self.idle >= PRESS_GAP && due <= 1 && !self.presses.is_empty() {
+                let mask = self.presses[0];
+                if due == 1 {
+                    self.presses.pop_front();
+                }
+                mask
+            } else {
+                0
+            }
         } else {
             pressed
         })

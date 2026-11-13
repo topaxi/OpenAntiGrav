@@ -207,6 +207,9 @@ impl Projectiles {
             // moves `position + velocity * dt` and sweeps that segment, with no
             // surface probe, no ride height and no fall. A probe along a seeded
             // world up snapped a round off the muzzle on any banked track.
+            // A probe the box held runs no arm at all (Pure's weapons branch on the hit kind
+            // themselves and have no case for a box, `psp-pure-usa/own-craft-box.md`).
+            let mut held = false;
             let probe = if kind == Weapon::Cannon
                 || matches!(
                     (kind, own_craft),
@@ -224,17 +227,20 @@ impl Projectiles {
                 // The firing craft's own box hides the track from a probe that crosses it
                 // first: the original's code `0x7f`, a fall. The cage below still asks about
                 // the full segment's end, as the original does.
-                let blocked = own_craft == OwnCraftProbe::CraftBox
-                    && ships.get(projectile.owner as usize).is_some_and(|ship| {
-                        ship.active()
-                            && own_box_blocks(
-                                &ship.physics().body,
-                                &ship.dimensions(),
-                                to,
-                                segment_end,
-                                mesh.map(|hit| hit.distance),
-                            )
-                    });
+                let blocked = matches!(
+                    own_craft,
+                    OwnCraftProbe::CraftBox | OwnCraftProbe::CraftBoxHolds
+                ) && ships.get(projectile.owner as usize).is_some_and(|ship| {
+                    ship.active()
+                        && own_box_blocks(
+                            &ship.physics().body,
+                            &ship.dimensions(),
+                            to,
+                            segment_end,
+                            mesh.map(|hit| hit.distance),
+                        )
+                });
+                held = blocked && own_craft == OwnCraftProbe::CraftBoxHolds;
                 if blocked { None } else { mesh }
             };
             // `Collision_SweepSegment` (`0x0883198c`) asks the cage about the
@@ -242,10 +248,12 @@ impl Projectiles {
             // else the full segment's end. Outside is code `4`, whatever the mesh
             // said, so a floor past the tube is a wall to a projectile. The Cannon
             // has no probe.
-            let probe_escape = cage.filter(|_| kind != Weapon::Cannon).and_then(|cage| {
-                let end = probe.map_or(to - projectile.surface * probe_length, |hit| hit.point);
-                cage.outside(end).map(|(boundary, _)| boundary)
-            });
+            let probe_escape = cage
+                .filter(|_| kind != Weapon::Cannon && !held)
+                .and_then(|cage| {
+                    let end = probe.map_or(to - projectile.surface * probe_length, |hit| hit.point);
+                    cage.outside(end).map(|(boundary, _)| boundary)
+                });
             // The branch is on the surface class, the original's collision code.
             // `Collision_SweepSegment` (`0x0883198c`) returns `0` wall, `1` floor,
             // `3` mag floor, `4` outside the collision cage or `0x7f` nothing.
@@ -255,6 +263,7 @@ impl Projectiles {
             // `Plasma_Update` detonates like the Rocket. See [`nearest_hit`] for
             // the sweep half.
             match probe {
+                _ if held => {}
                 // Outside the cage: the Rocket and Plasma go off at the boundary
                 // point, spending no blast as on a wall; the Missile and Shuriken
                 // do nothing this tick, neither riding nor falling.

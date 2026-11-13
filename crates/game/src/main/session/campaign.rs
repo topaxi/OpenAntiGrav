@@ -300,6 +300,8 @@ impl Session {
         let mut confirmed_difficulty = None;
         // A campaign the chooser offers whose grids this source does not carry.
         let mut campaign_unplayable = false;
+        let mut open_map = false;
+        let has_map = self.shell.as_ref().is_some_and(|shell| shell.map.is_some());
         {
             let Stage::Menu(stage) = &mut self.stage else {
                 return;
@@ -314,7 +316,9 @@ impl Session {
                 // Selection`. See `crate::campaign_stage`'s own module doc.
                 (Screen::Selection(model), Event::Confirmed) => {
                     let chosen = model.selected();
-                    campaign_unplayable = !campaign.open_grid_selection(chosen);
+                    // The 2048 campaign is the 2048 map, not HD's grids.
+                    open_map = has_map && campaign.is_map_campaign(chosen);
+                    campaign_unplayable = !open_map && !campaign.open_grid_selection(chosen);
                 }
                 (Screen::Selection(_), Event::Back) => {
                     keep_cursor(&mut self.records, &mut self.selector_phases, campaign);
@@ -398,6 +402,9 @@ impl Session {
                 }
                 (_, Event::DifficultyChanged) => {}
             }
+        }
+        if open_map {
+            self.open_hosted_map();
         }
         if campaign_unplayable {
             self.campaign_notice(

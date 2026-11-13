@@ -672,3 +672,32 @@ pub(super) fn name_circuits(
         }
     }
 }
+
+/// The screens of a campaign map a title's own menus hand off to
+/// ([`oag_title::TouchFrontEnd::canvas_definition`]), parsed with the skin's
+/// globals as fallbacks. `None` on a title whose touch front end is its whole
+/// front end (2048: the root includes the map), and on one that names no
+/// definition; a file that will not read is reported and leaves no map.
+pub(super) fn map_screens(
+    archives: &mut oag_assets::Archives,
+    front_end: &oag_title::FrontEnd,
+    skin: &oag_ui::screen::Screens,
+    report: &mut Vec<String>,
+) -> Option<oag_ui::screen::Screens> {
+    let touch = front_end.touch.filter(|_| front_end.menu.is_some())?;
+    let name = touch.canvas_definition?;
+    match super::load_included_screens(archives, name, skin) {
+        Ok(screens) if screens.by_name(touch.canvas_screen).is_some() => Some(screens),
+        Ok(_) => {
+            report.push(format!(
+                "{name}: no screen {:?} - the campaign map has no canvas",
+                touch.canvas_screen
+            ));
+            None
+        }
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - no campaign map"));
+            None
+        }
+    }
+}

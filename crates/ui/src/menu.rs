@@ -101,13 +101,28 @@ pub fn mode_label(mode: oag_race::Mode, strings: &crate::language::StringTable) 
         .to_string()
 }
 
-/// Every race mode as a row, labelled from `strings`.
+/// Every race mode `title` offers as a row, labelled from `strings`.
 #[must_use]
-pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
+pub fn mode_choices(
+    strings: &crate::language::StringTable,
+    title: &oag_title::Title,
+) -> Vec<Choice> {
     oag_race::Mode::ALL
         .iter()
+        .filter(|mode| mode_offered(**mode, title))
         .map(|mode| Choice::labelled(mode.name(), mode_label(*mode, strings)))
         .collect()
+}
+
+/// Whether `title` offers `mode` at all: a mode that loads data of its own beside the
+/// circuit is offered only where the title names that data. Detonator is the one today
+/// (`oag_title::RaceDefaults::detonator`); every other mode is offered everywhere.
+#[must_use]
+pub fn mode_offered(mode: oag_race::Mode, title: &oag_title::Title) -> bool {
+    match mode {
+        oag_race::Mode::Detonator => title.race.detonator.is_some(),
+        _ => true,
+    }
 }
 
 /// The `HUD Style` skins `title`'s disc lists, valued and shown by the disc's own entry strings.

@@ -637,7 +637,11 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // own with its own `Line1` (`ZoneResults`, `EliminationResults`). What
         // reaches here is HD's field grid, whose own populate for those modes is
         // not read - see `oag_ui_screens::endrace::Headline::Unresolved`'s own doc.
-        oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
+        // HD's Detonator closes on `ER_ZDETONATOR_COM` over a score this build does
+        // not keep (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`).
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator | oag_race::Mode::Detonator => {
+            Headline::Unresolved
+        }
     }
 }
 
@@ -830,7 +834,8 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
             (15, 25)
         }
         oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap => (30, 50),
-        oag_race::Mode::Zone | oag_race::Mode::Eliminator => (10, 20),
+        // Pulse has no Detonator; a title that offers it pays HD's law instead.
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator | oag_race::Mode::Detonator => (10, 20),
     };
     let lap_term = inputs.laps * lap_rate + inputs.perfect_laps * perfect_lap_rate;
     let kill_rate = if inputs.mode == oag_race::Mode::Eliminator {

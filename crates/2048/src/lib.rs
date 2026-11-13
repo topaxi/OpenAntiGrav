@@ -208,7 +208,10 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
-        own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(false),
+        // The projectile query walks track meshes only (`vita-2048-eu-v104/own-craft-box.md`).
+        own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
+            oag_title::weapons::OwnCraftBox::Absent,
+        ),
         // Measured: 2048's `WeaponAi_DecideFireOrAbsorb` equals Omega's law
         // (`vita-2048-eu-v104/weapon-ai-fire.md`).
         opponent_fire: oag_title::pre_race::Sourced::measured(

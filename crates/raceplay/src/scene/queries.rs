@@ -83,6 +83,24 @@ impl Scene {
         let Some(grade) = self.zone_grade.as_mut() else {
             return false;
         };
+        let primary = race.sim.world.primary_race();
+        if primary.mode == oag_race::Mode::Detonator {
+            // Detonator's stage is its lap counter (`Mode::detonator_stage`), and the
+            // step happened on the tick the current lap began.
+            let laps = primary.laps_completed();
+            let stepped = grade.follow_laps(
+                laps,
+                primary.lap_ticks(race.sim.world.tick),
+                race.ship().physics.body.position.to_array(),
+            );
+            if stepped {
+                debug!(
+                    "detonator lap {laps}: the colour grade steps to stage {}",
+                    grade.blend().current
+                );
+            }
+            return stepped;
+        }
         let stepped = grade.show_zone(zone);
         if stepped {
             // Once per stage change, which is at most fifteen times a race -
