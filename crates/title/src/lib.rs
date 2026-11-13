@@ -33,6 +33,7 @@ pub mod autopilot_engine;
 pub mod boot;
 pub mod campaign;
 pub mod craft_laws;
+pub mod demo;
 pub mod effects;
 pub mod eliminator;
 pub mod endrace;
@@ -295,6 +296,8 @@ pub struct Title {
     /// Whether the original plays pad patterns, and so whether the RUMBLE
     /// setting offers `original`. See [`rumble::Rumble`].
     pub rumble: rumble::Rumble,
+    /// The attract demo its main menu starts when left alone. See [`demo::Demo`].
+    pub demo: demo::Demo,
 }
 
 /// Where a title keeps the music its front end and its races play.

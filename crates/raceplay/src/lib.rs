@@ -193,6 +193,7 @@ pub mod countdown;
 #[cfg(feature = "view")]
 mod craft_flash;
 mod cues;
+mod demo;
 #[cfg(feature = "view")]
 mod damage_fx;
 #[cfg(feature = "view")]

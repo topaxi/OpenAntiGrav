@@ -167,6 +167,8 @@ pub const TITLE: &Title = &Title {
         oag_title::rumble::SmallMotor::Sum,
         oag_title::rumble::Triggers::Omega,
     ),
+    // Inherited by lineage, `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::inheriting("HD", oag_title::pre_race::Sourced::inherited(oag_title::demo::Exit::AnyInput, "HD")),
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
     // Omega's copies (HD's own two, or a fourth `_2048`-suffixed pair the way

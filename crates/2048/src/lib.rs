@@ -166,6 +166,8 @@ pub const TITLE: &Title = &Title {
     weather: oag_title::weather::Weather::Unplayed,
     // Ships the 69 files and reads none (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Absent,
+    // Inherited by lineage, `docs/ui/attract-demo.md`.
+    demo: oag_title::demo::Demo::inheriting("HD", oag_title::pre_race::Sourced::inherited(oag_title::demo::Exit::AnyInput, "HD")),
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this
