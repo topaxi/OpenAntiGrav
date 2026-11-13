@@ -340,8 +340,7 @@ pub(super) fn grid(
     options: &crate::Options,
     team: &str,
     available: &[String],
-    hull_variant: Option<&str>,
-    store: oag_gpu::formats::SceneStore,
+    (hull_variant, store): (Option<&str>, oag_gpu::formats::SceneStore),
     report: &mut Vec<String>,
 ) -> anyhow::Result<Grid> {
     let skin = super::skin::resolve(

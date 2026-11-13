@@ -340,8 +340,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options,
         &team,
         &available,
-        hull_variant,
-        store,
+        (hull_variant, store),
         &mut report,
     )?;
     #[cfg(not(feature = "view"))]
