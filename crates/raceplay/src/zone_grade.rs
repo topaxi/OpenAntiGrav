@@ -214,6 +214,9 @@ pub struct ZoneGrade {
     /// The race runs on one of the title's Zone arenas, whose materials
     /// compile the aniso shape. See [`Self::with_arena`].
     arena: bool,
+    /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
+    /// Detonator race. See [`Self::with_lap_stages`].
+    lap_stages: bool,
 }
 
 impl ZoneGrade {
@@ -239,6 +242,7 @@ impl ZoneGrade {
             art,
             scene_art,
             pinned: false,
+            lap_stages: false,
             arena: false,
         })
     }
@@ -270,6 +274,13 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_arena(mut self, arena: bool) -> Self {
         self.arena = arena;
+        self
+    }
+
+    /// Marks the stage as a lap counter's, driven by [`Self::show_stage`]: a Detonator race.
+    #[must_use]
+    pub fn with_lap_stages(mut self) -> Self {
+        self.lap_stages = true;
         self
     }
 
@@ -953,6 +964,10 @@ impl ZoneGrade {
             .next_back()
             .map_or("?", |stage| stage.name.as_str());
         let ladder = match self.stages {
+            None if self.lap_stages => format!(
+                "stepping one stage per completed lap from stage {} (Detonator's stage counter)",
+                self.blend.current,
+            ),
             Some(stages) => format!(
                 "escalating off this title's own {}-record zone-number ladder, starting on \
                  stage {} ({})",

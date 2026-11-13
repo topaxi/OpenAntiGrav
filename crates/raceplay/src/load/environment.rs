@@ -913,7 +913,14 @@ pub(super) fn zone_grade(
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
             .map(|grade| grade.with_transition(race.zone_transition))
-            .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)));
+            .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
+            .map(|grade| {
+                if mode == oag_race::Mode::Detonator {
+                    grade.with_lap_stages()
+                } else {
+                    grade
+                }
+            });
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:
