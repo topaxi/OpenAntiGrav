@@ -15,6 +15,16 @@ use oag_game::demo::{Leave, chain};
 /// Demos of this many ticks: past the countdown (272), so every craft has left the grid.
 const LENGTH: u32 = 700;
 
+/// What a title's demo is expected to show.
+struct Expect {
+    /// The screen over the race reads: `Some(logo)` says whether its logo is on the disc.
+    screen: Option<bool>,
+    /// The grid, where the title's is measured.
+    craft: Option<usize>,
+    /// The spectator director is the camera, and cuts. Only where the circuits author its stations.
+    spectator: bool,
+}
+
 fn demos_on(image: &Path, demos: u32) -> Vec<chain::Report> {
     let source = image.display().to_string();
     let catalogue = oag_game::remix::catalogue(&source).expect("the title's roster");
@@ -37,7 +47,12 @@ fn demos_on(image: &Path, demos: u32) -> Vec<chain::Report> {
 /// Two demos in a row: each has no slot a person flies, every craft on its grid travelled, each
 /// ran its length and ended `Over`, and the second is another circuit. Fails when the race still
 /// seats a person (`humans` is 1) or the camera craft is not flown (`flew` is one short).
-fn a_chain_of_demos_has_nobody_in_it(image: &Path, screen: Option<bool>, craft: Option<usize>) {
+fn a_chain_of_demos_has_nobody_in_it(image: &Path, expect: Expect) {
+    let Expect {
+        screen,
+        craft,
+        spectator,
+    } = expect;
     let reports = demos_on(image, 2);
     assert_eq!(reports.len(), 2, "{reports:#?}");
     for report in &reports {
@@ -65,6 +80,17 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path, screen: Option<bool>, craft: 
         } else {
             assert_eq!(report.screen, None, "{report}");
         }
+        println!(
+            "{report}: {} cut(s), spectator {}",
+            report.cuts, report.spectated
+        );
+        if spectator {
+            assert!(
+                report.spectated,
+                "the spectator director is the camera: {report:?}"
+            );
+            assert!(report.cuts >= 2, "it takes over and cuts: {report:?}");
+        }
         // The race is set up as measured: Flash's eight craft, where the title's grid is measured.
         if let Some(craft) = craft {
             assert_eq!(report.craft, craft, "{report}");
@@ -80,7 +106,14 @@ fn a_chain_of_demos_has_nobody_in_it(image: &Path, screen: Option<bool>, craft: 
 #[ignore = "needs a disc image in data/images/"]
 fn pulse_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("pulse-psp-eu.chd") {
-        a_chain_of_demos_has_nobody_in_it(&image, Some(true), Some(8));
+        a_chain_of_demos_has_nobody_in_it(
+            &image,
+            Expect {
+                screen: Some(true),
+                craft: Some(8),
+                spectator: true,
+            },
+        );
     }
 }
 
@@ -88,7 +121,14 @@ fn pulse_demos_have_nobody_in_them() {
 #[ignore = "needs a disc image in data/images/"]
 fn pure_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("pure-psp-eu.chd") {
-        a_chain_of_demos_has_nobody_in_it(&image, Some(false), None);
+        a_chain_of_demos_has_nobody_in_it(
+            &image,
+            Expect {
+                screen: Some(false),
+                craft: None,
+                spectator: false,
+            },
+        );
     }
 }
 
@@ -96,7 +136,14 @@ fn pure_demos_have_nobody_in_them() {
 #[ignore = "needs a disc image in data/images/"]
 fn hd_demos_have_nobody_in_them() {
     if let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") {
-        a_chain_of_demos_has_nobody_in_it(&image, None, None);
+        a_chain_of_demos_has_nobody_in_it(
+            &image,
+            Expect {
+                screen: None,
+                craft: None,
+                spectator: false,
+            },
+        );
     }
 }
 

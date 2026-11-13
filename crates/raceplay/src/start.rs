@@ -888,6 +888,7 @@ impl Race {
                 wreck_ended_tick: None,
                 restores: 0,
                 photo: None,
+                spectates_from_start: false,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(
                         destroy_stations.clone(),

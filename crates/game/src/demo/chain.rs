@@ -45,6 +45,10 @@ pub struct Report {
     pub leave: Leave,
     /// What the screen over the demo draws, when the title authors one and it read.
     pub screen: Option<ScreenDraws>,
+    /// Times the picture jumped to another shot, and whether the spectator director was the camera.
+    pub cuts: u32,
+    /// Whether the spectator director was the camera at the end.
+    pub spectated: bool,
     /// The loader's lines about that screen.
     pub screen_notes: Vec<String>,
 }
@@ -185,6 +189,8 @@ pub fn run(
             moved,
             ticks: run.ticks(),
             leave,
+            cuts: race.camera_cuts(),
+            spectated: race.spectator_mode().is_some(),
             screen,
             screen_notes,
         });

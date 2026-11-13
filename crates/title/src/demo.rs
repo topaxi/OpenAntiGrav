@@ -175,7 +175,7 @@ impl Demo {
             config: None,
             rules: Rules::inherited(from),
             screen: None,
-            camera: Sourced::chosen(Camera::Chase),
+            camera: Sourced::inherited(Camera::Spectator, from),
         }
     }
 
