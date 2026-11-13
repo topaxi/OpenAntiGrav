@@ -378,6 +378,9 @@ pub(crate) struct Uploads<'a> {
 pub(crate) struct Staging {
     blocks: Vec<(u32, Uniforms)>,
     packed: Vec<u8>,
+    /// `(slot, index into blocks)`, sorted: the order a stable sort of `blocks` by slot gives,
+    /// without the scratch buffer a stable sort allocates on every call.
+    order: Vec<(u32, u32)>,
 }
 
 impl<'a> Uploads<'a> {
@@ -453,16 +456,20 @@ impl<'a> Uploads<'a> {
         let Staging {
             blocks: staged,
             packed,
+            order,
         } = &mut *staging;
-        staged.sort_by_key(|&(slot, _)| slot);
+        order.clear();
+        order.extend(staged.iter().zip(0u32..).map(|(&(slot, _), at)| (slot, at)));
+        order.sort_unstable();
         let stride = mesh_render::UNIFORMS_STRIDE as usize;
         let mut index = 0;
-        while index < staged.len() {
-            let first = staged[index].0;
+        while index < order.len() {
+            let first = order[index].0;
             packed.clear();
             let mut next = first;
-            while index < staged.len() && staged[index].0 <= next {
-                let (slot, uniforms) = &staged[index];
+            while index < order.len() && order[index].0 <= next {
+                let (slot, at) = order[index];
+                let uniforms = &staged[at as usize].1;
                 let at = (slot - first) as usize * stride;
                 packed.resize(at + stride, 0);
                 packed[at..at + std::mem::size_of::<Uniforms>()]
