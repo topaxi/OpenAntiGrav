@@ -428,7 +428,7 @@ hours, M half a day, L a day, XL more than a day (split it).
 Lane 9, desktop part, done: `scripts/stage-official-mods.sh` copies `assets/mods/official/*`
 into `mods` in the AppImage (inside the image, `usr/bin/mods`, found through a second
 search entry beside the program), the Linux tarball, the Windows zip and the macOS app
-(`Contents/MacOS/mods`); `release.yml` checks out with `submodules: true` (nightly.yml calls
+(`Contents/Resources/mods`, moved from `Contents/MacOS/mods` for codesign); `release.yml` checks out with `submodules: true` (nightly.yml calls
 it); `docs/tools/packaging.md`, "Official mods". Verified: a container-built AppImage run
 from outside the checkout, plus `act` on the Linux jobs; the macOS recipe by reading only.
 Android and iOS done: iOS stages into `OpenAntiGrav.app/mods`; Android ships the mods as APK

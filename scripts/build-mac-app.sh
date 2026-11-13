@@ -45,8 +45,14 @@ rm -rf "$work"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$(dirname "$out")"
 
 install -m 755 "$binary" "$app/Contents/MacOS/oag-game"
-# Beside the bundle's executable, which is what `current_exe` resolves.
-"$root/scripts/stage-official-mods.sh" "$app/Contents/MacOS/mods"
+# Contents/MacOS holds code only: codesign treats everything there as code to
+# seal, and a mod's folders, scripts and wasm made `codesign` refuse the bundle
+# ("bundle format unrecognized, invalid, or unsuitable"). Mods are data, so they
+# go in Contents/Resources, which oag_mod::discover::packaged_mods searches for a
+# program inside a bundle. The staged copy loses its executable bits: a mod file
+# is read, never run.
+"$root/scripts/stage-official-mods.sh" "$app/Contents/Resources/mods"
+find "$app/Contents/Resources/mods" -type f -exec chmod a-x {} +
 cp LICENSE-MIT LICENSE-APACHE "$app/Contents/Resources/"
 cp -r licences "$app/Contents/Resources/licences"
 
@@ -94,8 +100,10 @@ fi
 # Nothing extracted can ride along: the same audit every release artifact gets.
 python3 scripts/check-leakage.py --dir "$app"
 
+# The bundle's only code is Contents/MacOS/oag-game, so the seal needs no
+# --deep walk into the data folders; the verify still checks every resource.
 if command -v codesign >/dev/null; then
-    codesign --force --deep -s - "$app"
+    codesign --force -s - "$app"
     codesign --verify --deep --strict "$app"
 fi
 

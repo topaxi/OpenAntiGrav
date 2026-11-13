@@ -35,7 +35,9 @@ Go to Folder...). That is `dirs::data_dir()` joined with `oag/images`, read in
 per-user tree. Note: a Finder-launched app starts with its working directory at
 `/`, so the checkout-relative `data/images` lookup finds nothing, and the
 "next to the executable" lookup resolves to `OpenAntiGrav.app/Contents/MacOS`,
-where a player should not put files (it would break the signature). Searching
+where a player should not put files (it would break the signature). The official
+mods are the exception the build makes: they sit in `Contents/Resources/mods`, sealed
+into the signature, and `oag_mod::discover::packaged_mods` searches there. Searching
 next to the `.app` instead is not done. `ffmpeg` is looked up on `PATH`, which a
 Finder launch does not inherit from a shell, so the optional intro movies need
 `oag-game` started from a terminal until that is checked. See the
@@ -48,10 +50,10 @@ Finder launch does not inherit from a shell, so the optional intro movies need
   `OAG_VERSION_SUFFIX` the Windows job uses, `MACOSX_DEPLOYMENT_TARGET=11.0`.
 - `scripts/build-mac-app.sh` (`just mac-app` runs the build and the script):
   lays out `Contents/MacOS/oag-game` and `Contents/Resources/` (both licences,
-  `licences/`, an `.icns` made with `iconutil` from the engine's own
+  `licences/`, the official mods in `mods/`, an `.icns` made with `iconutil` from the engine's own
   `--write-icon` rasteriser), writes `Info.plist` with `plistlib`, runs
   `scripts/check-leakage.py --dir` over the bundle, ad-hoc signs it with
-  `codesign --force --deep -s -`, and zips it with `ditto -c -k --keepParent`.
+  `codesign --force -s -` (then verifies `--deep --strict`), and zips it with `ditto -c -k --keepParent`.
   Bundle id `org.openantigrav.game`. `CFBundleVersion` is the Cargo version (it
   must be dotted integers); the nightly name is in `CFBundleGetInfoString`.
 - Off macOS the script skips `iconutil`, `codesign`, `ditto` and `plutil` and

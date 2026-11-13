@@ -586,6 +586,43 @@ fn a_plain_program_searches_beside_itself_once() {
     assert_eq!(paths, [PathBuf::from("/opt/oag/mods")]);
 }
 
+#[test]
+fn a_program_in_a_macos_bundle_also_searches_the_resources_folder() {
+    let mut paths = Vec::new();
+    discover::packaged_mods(
+        None,
+        Some(Path::new(
+            "/Applications/OpenAntiGrav.app/Contents/MacOS/oag-game",
+        )),
+        &mut paths,
+    );
+    assert_eq!(
+        paths,
+        [
+            PathBuf::from("/Applications/OpenAntiGrav.app/Contents/MacOS/mods"),
+            PathBuf::from("/Applications/OpenAntiGrav.app/Contents/Resources/mods"),
+        ]
+    );
+    let mut elsewhere = Vec::new();
+    discover::packaged_mods(
+        None,
+        Some(Path::new("/opt/Contents/bin/oag-game")),
+        &mut elsewhere,
+    );
+    discover::packaged_mods(
+        None,
+        Some(Path::new("/opt/oag/MacOS/oag-game")),
+        &mut elsewhere,
+    );
+    assert_eq!(
+        elsewhere,
+        [
+            PathBuf::from("/opt/Contents/bin/mods"),
+            PathBuf::from("/opt/oag/MacOS/mods")
+        ]
+    );
+}
+
 /// `[[pickup.odds]]` rows read into the manifest; a negative or non-finite weight is
 /// refused by name; no rows is no pad odds.
 #[test]
