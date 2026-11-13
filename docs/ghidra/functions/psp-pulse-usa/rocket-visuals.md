@@ -1522,7 +1522,7 @@ first two to four probes fall in the original and ride in ours, gets it too:
    (code `0x7f`): the Rocket and Plasma fall, the Missile and Shuriken do as they do on `None` today.
    The travel sweep (position to projected position) asks the same function: a box nearer than a wall
    hides the wall from a projectile launched inside the box.
-4. Test: the eight records above (red on the `R` frame for the Talons and De Konstruct rows and the
+4. Test: the seven records above (red on the `R` frame for the Talons and De Konstruct rows and the
    mag strip, red without the box for all box rows), then `rocket_floor_trace` and the Outpost 7 ramp
    test re-run; expect the Rocket's first one to three probes to fall on an aligned grid and the
    Plasma's `UNPINNED_SECONDS` constant to go.

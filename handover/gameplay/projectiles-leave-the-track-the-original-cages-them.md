@@ -44,8 +44,11 @@ was not measured.
    (lane `pulse-own-craft-box`, see Done). Open from it: the travel sweep's own box meeting (65: same
    function, no reading of its own), an opponent's box (75), Pure by inheritance (its field is chosen
    `false` until wired), HD/2048/Omega's own probes unread (they keep a chosen 0.04 s Plasma window),
-   and the 56-capture replay as a Rust test (the capture files were scratch and are gone; recapture
-   with `scripts/psp-projectile-sweeps.py --box`, replay with `scripts/psp-craft-box-replay.py`).
+   and the 2,302-probe replay as a Rust test: it cannot be ported until someone re-captures the 56 files
+   (the originals were scratch and are gone; `scripts/psp-projectile-sweeps.py --box ... --out FILE`,
+   checked by `scripts/psp-craft-box-replay.py`). Keep them where a reap does not delete them, e.g.
+   `data/traces/pulse-own-craft-box/` in the main checkout (the replay script's docstring names it).
+   Until then the test is the page's seven records (`projectile/tests/craft_box.rs`).
 7. **Not measured or not read.**
    - The Missile's travel sweep on code `4` (`flags |= 0x14`, no bounce): decompile only, no capture
      produced it. Fire a Missile across a jump lip (Outpost 7 sample 186) to see it.
