@@ -273,3 +273,51 @@ player judges the ribbon blue, the outer layer is the other candidate; it is a o
 `TrailLaw::ribbon_colour`. Checked against HD, 2048 and Omega: not applicable, they author the
 burst and are never lent it; Pure draws Pulse's ribbon law (`oag_pure::race`), not measured
 separately.
+
+## Trail-hit burst reach
+
+With `graphics.trail_hits` on, the lent burst (Pulse and Pure) fires only where the ribbon is
+drawn at 10 % or more of its head's brightness. An enhancement of this project's: the original
+fires nothing here, and HD's own test (the whole tube) is unchanged. Before this the burst fired
+along the whole ten-sample ring, including the back half where the ribbon is drawn at under 10 %
+and the player sees no trail to be in.
+
+**The cut is derived from the fade law, not picked.** The ribbon's colour fade is
+`powf(1 - TRAIL_FADE_STEP * age, 1 / TRAIL_FADE_SHAPE)` (`oag_fx::exhaust::trail_fade_at`,
+`engine-trail` for the PSP bake), read at the preset's scaled age (`Exhaust::shape_age`). Solving
+it for the one constant `TRAIL_HIT_MIN_BRIGHTNESS = 0.1` gives `age = (1 - 0.1^0.3) / 0.1`, 4.99 of
+the original's nine segments (the fade is 0.18 at sample 4 and 0.099 at sample 5), so on a
+ten-sample ring the lit line is the head's first five segments, about 55 % of it. A longer ring
+(`set_trail_samples`, 54 samples) stretches the fade over the whole ring, so the cut scales with
+it (`Exhaust::trail_lit_age`) and stays at the same share of the line.
+
+**The line is truncated, not the answer filtered.** `nearest_on_polyline` ends the line at the cut
+(inside a segment, interpolated) and returns the position along it, so a craft beside the lit part
+is measured against the lit part, never against a faded tail that curves nearer. The same query
+feeds the hit test and the contact point the burst is placed from, so the burst cannot anchor in
+the tail. Leaving the lit part is leaving: the existing `trail_inside` and `trail_hit_rest`
+bookkeeping clears in the tail and the burst fires again on re-entry.
+
+**PS2 needs no cut of its own.** Both laws draw `layer colour x constant x trail_fade_at(shape
+age)`: the PSP's constant is the grey ramp (`Exhaust::layer_alphas`), the PS2's the GS colour scale
+(`PS2_GS_COLOUR_SCALE`), and the PS2 not submitting layer 0 (`TrailLaw::first_layer`) changes which
+layers are drawn, not the fade they share. The constant cancels in a ratio to the head's
+brightness, so the ratio is the same fade on both. (The GS clamps a vertex colour at 1.0 and the
+PS2's scale is 1.64, so its head is saturated and the ribbon looks lit slightly further back than
+10 % of the unclamped head; the cut stays on the fade's own ratio. **Chosen, not measured.**)
+
+**Evidence.** Tests: `oag_fx::exhaust::tests` (`the_lit_age_is_where_the_drawn_fade_reaches_the_floor`,
+`the_lit_age_scales_with_a_longer_ring`, `trail_nearest_stops_at_the_lit_end_of_the_ribbon`,
+`nearest_on_polyline_reports_the_position_along_the_line`) and `tests::trail_hits` in
+`oag-raceplay` (a contact in the faded tail fires nothing and one near the head fires; the cut sits
+at the fade's floor; head, tail, head clears and re-arms; an HD craft deep in the tube still hits).
+Count of lent bursts fired over a fixed race (Pulse PSP EU, `--race --mode single_race --seed N
+--ticks 6000 --hold cross`, HD mounted as the lender, a temporary counter on the spawn, the cut
+switched off by a temporary environment switch for the "before"): seeds 1 to 8, 8,868 bursts
+before, 5,326 after, 40 % fewer; the per-seed range is 29 % (seed 1) to 60 % (seed 2). The
+simulation trace is byte-identical either way (view state only; no simulation, determinism or
+hash change). The same counts on HD (seeds 1 to 3: 3,957, 3,725, 4,056), 2048 (seed 1, 3000 ticks:
+2,071) and Omega (seed 1, 2000 ticks: 1,641) are equal with and without the cut.
+
+**Checked against 2048 and Omega:** ported by construction, not by a second implementation: both
+draw HD's tube (`hd_trail_active`) and test it whole, and the counts above are unchanged on both.
