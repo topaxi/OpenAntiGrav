@@ -31,8 +31,12 @@ Four things cost time and are worth knowing before repeating this:
 1. **`just drive menu` does not stop at the main menu.** Its one mode walks all
    the way into a live Time Trial. Drive the presses directly and poll
    `state_name()` until it reads `Main Menu`.
-2. **The original enters an attract demo after about 120 seconds idle**, which
-   silently invalidates a capture left sitting.
+2. **The original enters an attract demo after 60 seconds idle on the main
+   menu** (front-end time, measured to within one frame twice; the demo then runs
+   120 s per circuit), which silently invalidates a capture left sitting.
+   An earlier reading of this item said "about 120 seconds"; that is the demo's
+   length, not the threshold
+   ([attract-demo.md](../ghidra/functions/psp-pulse-usa/attract-demo.md)).
 3. **Xvfb and PPSSPP must be `setsid`-detached**, or they die with the shell
    that launched them - taking the X server out from under the emulator
    mid-run.
@@ -133,7 +137,7 @@ photographing the X11 root window at every hit - frame-accurate rather than
 wall-clock sampled, so the screenshot cadence cannot alias against the
 animation's own period. A first attempt (breaking on presented frames while
 screenshotting between them, which costs real wall-clock time per frame) idled
-past the documented ~120 s attract-demo threshold partway through and
+past the 60 s attract-demo threshold partway through and
 captured race footage instead of the still menu without any obvious sign in
 the frame indices; it was discarded once a frame midway through showed a
 racing circuit rather than `Main Menu`. The kept run combined "walk to Main

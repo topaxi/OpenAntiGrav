@@ -50,7 +50,15 @@
 0x08812d58	function	InGame_Construct	85	main-loop.md
 0x088130e4	function	InGame_Destruct	85	main-loop.md
 0x08813244	function	InGame_UpdatePauseInput	85	main-loop.md
-0x08818fd8	function	Demo_UpdateAttractMode	80	main-loop.md
+0x08818fd8	function	Demo_UpdateAttractMode	92	attract-demo.md
+0x08818f74	function	DemoSession_Construct	88	attract-demo.md
+0x08818f00	function	DemoSession_IsTrackEligible	86	attract-demo.md
+0x08ac7c20	data	g_demo_session_vtable	85	attract-demo.md
+0x0888e488	function	Definition_IsPresent	75	attract-demo.md
+0x0880569c	function	Game_SetPlayerTeamByName	85	attract-demo.md
+0x088895b8	function	Track_ListDefinitions	80	attract-demo.md
+0x08821ad8	function	Race_DestroyWorld	80	attract-demo.md
+0x08b310b4	data	g_track_definition	88	attract-demo.md
 0x08b30f00	data	g_game	85	main-loop.md
 0x08abf5d4	data	g_display	87	main-loop.md
 0x08b31784	data	g_state_machine	85	main-loop.md
@@ -1010,7 +1018,7 @@
 0x088df820	function	GriefReport_UpdateCancel	78	state-machine.md
 0x088df8b0	function	GriefReport_UpdateSend	78	state-machine.md
 0x08830990	function	AiBatchTest_Construct	80	state-machine.md
-0x088331ac	function	Demo_Construct	80	state-machine.md
+0x088331ac	function	Demo_Construct	88	attract-demo.md
 0x0882c108	function	ArcadeRace_Construct	82	state-machine.md
 0x0882e57c	function	Tournament_Construct	82	state-machine.md
 0x0882d9c0	function	TimeTrial_Construct	82	state-machine.md
