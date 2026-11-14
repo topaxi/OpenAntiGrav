@@ -163,11 +163,14 @@ fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
         })
         .expect("a TARGET FPS row");
     let names: Vec<&str> = values.iter().map(|(value, _)| value.as_str()).collect();
-    assert_eq!(names, ["off", "30", "60", "90", "120", "144", "default"]);
+    assert_eq!(
+        names,
+        ["off", "30", "60", "90", "100", "120", "144", "default"]
+    );
     assert!(
-        values[6].1.eq_ignore_ascii_case("default"),
+        values[7].1.eq_ignore_ascii_case("default"),
         "{}",
-        values[6].1
+        values[7].1
     );
 
     let mut menu = Menu::new(definition);
