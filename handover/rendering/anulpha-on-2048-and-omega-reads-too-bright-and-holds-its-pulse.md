@@ -27,8 +27,9 @@ Programs, addresses and before/after regions: `docs/rendering/hd-track-tone.md`,
    out: the specular (zeroed, frame identical), a different alpha cook (2048's alpha bytes average
    the same as HD's). Lighting `alpha * alpha` would match (road 54, mean grey 14.33) but no
    instruction read squares it. Next: re-read #16 around word 24 for a square of `pa10.w` (an
-   earlier `mul` on the whole texel, or a sampler swizzle/format that decodes alpha), and check how
-   the GXT for `ds_floorplain_cs` declares its format (gamma mode per channel). Omega's right wall
+   earlier `mul` on the whole texel, or a sampler swizzle/format that decodes alpha). The `.gxt`
+   file carries no gamma mode (`oag_texture::gxt` reads none): on the Vita it is set at runtime by
+   `sceGxmTextureSetGammaMode`, so look for that import's callers in 2048's executable. Omega's right wall
    is also brighter (86 against 59), likely the light or exposure there.
 3. **The chevron's `Colour` is held at zero** (chosen): the authored value paints green the
    native-port original never shows; the live value is unread (HD's came off a hooked draw).
