@@ -59,6 +59,7 @@ mod model_livery;
 mod variant;
 #[cfg(feature = "view")]
 mod weapon_models;
+#[cfg(feature = "view")]
 mod zone_livery;
 #[cfg(feature = "view")]
 pub use campaign::load_event;
