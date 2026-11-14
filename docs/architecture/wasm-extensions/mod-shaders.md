@@ -71,6 +71,8 @@ one past the last tick of its tunnel. `between` itself is left running because a
 stage moves by it too. The flag is the player's camera (`Race::camera_cuts` counts the player's slot),
 so a split screen's other seats report their own seat's cut only when it is also the player's.
 
+The cut is per seat: each view's `camera_cut()` is that seat's own (`Race::viewed_camera_cut`, a seat's craft placed anew), true for the other seats on no tick but their own.
+
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it
 gains a tick: `between` is the draw alpha less one, `0` on the tick itself and in a `--screenshot`,
