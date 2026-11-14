@@ -1,5 +1,5 @@
 ---
-status: open
+status: measure
 titles: [2048, omega]
 updated: 2026-11-14
 summary: "Anulpha on 2048/Omega: colour law, chevron mask and centre lane wired; 2048 strips sunlit too bright, pulse Colour and offsets held"
