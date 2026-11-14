@@ -53,11 +53,11 @@ pub struct Options {
     /// Where the craft, HUD and grid roster load from, or `None` for
     /// `source` - today's behaviour, unchanged.
     ///
-    /// **The one thing a Race Remix adds.** `source` still supplies the track
+    /// **The one thing a two-title race adds.** `source` still supplies the track
     /// and everything that goes with it - collision, environment, pads,
     /// weapon tuning; `craft_source`, when it names a different release,
     /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
-    /// [`oag_source::remix::Remix`].
+    /// [`oag_source::pair::SourcePair`].
     pub craft_source: Option<String>,
     /// Directories to look in for downloadable content (`oag_source::dlc`), mounted
     /// behind `source`'s own archives.

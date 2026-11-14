@@ -1,10 +1,10 @@
 //! Where a race's track and its craft come from: the same source for both in
-//! the ordinary case, two different ones for a Race Remix.
+//! the ordinary case, two different ones for a two-title race.
 //!
 //! Lives beside [`crate::title`] rather than on `oag-title`, which stays deliberately
 //! types-only, no title's data: a `Title` value assumes one archive-candidate source,
-//! so it is not the right shape to *represent* a remix, only to be one of the two
-//! things a remix holds.
+//! so it is not the right shape to *represent* a pair, only to be one of the two
+//! things a pair holds.
 //!
 //! Nothing here is a new abstraction over `Title` - two [`Opened`] values
 //! coexisting is unremarkable, plain owned data with no global state
@@ -29,18 +29,18 @@ use oag_title::Title;
 /// race and never in a hot loop.
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
-pub enum Remix {
+pub enum SourcePair {
     /// Track and craft load from the same opened source - today's behaviour,
-    /// and the only case before Race Remix existed.
+    /// and the only case before a two-title race existed.
     Single(Opened),
-    /// A Race Remix: track and craft come from different sources.
+    /// A two-title race: track and craft come from different sources.
     Split { track: Opened, craft: Opened },
 }
 
-impl Remix {
+impl SourcePair {
     /// Opens `source` for the track, and `craft_source` for the craft when it
     /// names something other than `source`. `packs`/`pure_packs` mount
-    /// behind `source` only - a remix does not widen what a DLC pack may be
+    /// behind `source` only - a pair does not widen what a DLC pack may be
     /// mounted behind, on the same terms [`crate::title::open_source`]
     /// already applies to an ordinary race.
     pub fn open(
@@ -70,7 +70,7 @@ impl Remix {
     }
 
     /// Splits into the track's opened source, the craft's own when this is a
-    /// genuine remix (`None` in the ordinary single-source case), and both
+    /// genuine two-title race (`None` in the ordinary single-source case), and both
     /// titles - track first, craft second, equal to each other when `Single`.
     ///
     /// Returned by value rather than through `&mut self` accessors on
@@ -94,9 +94,9 @@ impl Remix {
     }
 }
 
-/// `craft_archives` when this is a genuine remix, `archives` itself
+/// `craft_archives` when this is a genuine two-title race, `archives` itself
 /// otherwise - the one line every craft-governed load in `race/load.rs`
-/// wraps its archive argument in, for the same reason [`Remix::into_parts`]
+/// wraps its archive argument in, for the same reason [`SourcePair::into_parts`]
 /// returns owned values rather than borrows: two short-lived reborrows here
 /// beat one long-lived one there.
 pub fn craft_of<'a>(

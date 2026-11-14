@@ -473,7 +473,7 @@ pub(crate) struct Cli {
     /// A second disc image or extracted directory the craft, HUD and grid
     /// roster load from instead of `source` - a Race Remix from the command
     /// line. Left out, the craft comes from `source` like every other race.
-    /// See `oag_source::remix::Remix`.
+    /// See `oag_source::pair::SourcePair`.
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 

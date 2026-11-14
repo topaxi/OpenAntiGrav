@@ -18,7 +18,7 @@
 //! 1. **No-op regression.** `craft_source: None` and `craft_source:
 //!    Some(<source>)` (the same path, spelled out) must load the same race -
 //!    same track geometry, same grid, same HUD - for every title that races
-//!    today. This is what makes `oag_source::remix::Remix::Single` a true no-op
+//!    today. This is what makes `oag_source::pair::SourcePair::Single` a true no-op
 //!    rather than an accidental behaviour change dressed as a refactor.
 //! 2. **A genuine remix.** Wipeout 2048's own circuit with Wipeout Pure's
 //!    craft: the track loads off 2048, the grid and the HUD off Pure. This is
@@ -70,7 +70,7 @@ fn shape(loaded: &race::Loaded) -> Shape {
 }
 
 /// **The no-op regression.** For every title that races today, naming its own
-/// source as `craft_source` too must change nothing - `oag_source::remix::Remix`
+/// source as `craft_source` too must change nothing - `oag_source::pair::SourcePair`
 /// falls back to `Single` whenever the two paths are equal, and this is the
 /// test that would fail if that fallback ever stopped being exact.
 #[test]
