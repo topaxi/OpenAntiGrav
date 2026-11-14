@@ -78,7 +78,7 @@ fn is_glass(material: &Material) -> bool {
 }
 
 /// The material's file stem: its `.rcsmaterial` name without directory or extension.
-fn file_stem(material: &Material) -> &str {
+pub(super) fn file_stem(material: &Material) -> &str {
     let stem = material
         .name
         .rsplit(['/', '\\'])

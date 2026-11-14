@@ -46,6 +46,7 @@ mod alpha_emissive;
 mod alpha_product;
 mod emissive_add;
 mod glow;
+mod lit_alpha;
 mod normal_map;
 pub mod placement;
 pub mod refraction;
@@ -124,6 +125,8 @@ pub struct Report {
     pub lightmap_misses: usize,
     /// Submeshes lit by their `NOVAColor` vertex stream (a Vita circuit's vertex-lit surfaces).
     pub nova_vertex_submeshes: usize,
+    /// Submeshes whose program lights the albedo's alpha (`lit_alpha`, Anulpha Pass).
+    pub lit_alpha_submeshes: usize,
     /// Textured draws routed to the blended list by their material's state word
     /// (alpha-over, chosen) - see [`transparency`].
     pub blended_draws: usize,
@@ -348,6 +351,14 @@ impl Report {
             format!(
                 "{lightmaps}; {} submesh(es) lit by their NOVAColor vertex stream",
                 self.nova_vertex_submeshes
+            )
+        };
+        let lightmaps = if self.lit_alpha_submeshes == 0 {
+            lightmaps
+        } else {
+            format!(
+                "{lightmaps}; {} submesh(es) light the albedo's alpha",
+                self.lit_alpha_submeshes
             )
         };
         let nodes = if self.node_bound == 0 {
@@ -757,6 +768,18 @@ fn build_planned(
             ),
             None => ([1.0; 4], 1.0, role),
         };
+        // Anulpha Pass's alpha-lit families, read on each title's own programs (`lit_alpha`).
+        let alpha_lit = lit > 0.5
+            && submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .is_some_and(lit_alpha::admits);
+        let role = if alpha_lit {
+            role | crate::mesh::slots::LIT_ALPHA
+        } else {
+            role
+        };
+        report.lit_alpha_submeshes += usize::from(alpha_lit && !place.hidden);
         // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
         // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes
         // `a` on as the sun's mask, and its fragment program adds the two to the sun and
