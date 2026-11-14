@@ -3903,6 +3903,7 @@ dependencies = [
  "log",
  "oag-assets",
  "oag-formats",
+ "oag-gpu",
  "oag-log",
  "oag-mesh",
  "oag-render",
