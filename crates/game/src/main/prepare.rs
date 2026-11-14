@@ -148,7 +148,7 @@ impl Pending {
     pub(crate) fn race_options(&self, source: &str, opponent_teams: Vec<String>) -> race::Options {
         let mut options = race::Options {
             source: source.to_string(),
-            // `None` outside a Race Remix - the ordinary CLI/menu route names
+            // `None` outside a two-title race - the ordinary CLI/menu route names
             // one source, and `race::load` treats that as "craft comes from
             // the same place as the track". See `race::Options::craft_source`.
             craft_source: self.cli.craft_source.clone(),

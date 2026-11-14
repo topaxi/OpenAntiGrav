@@ -151,7 +151,7 @@ pub fn survey(paths: &[PathBuf]) -> Vec<Candidate> {
 
 /// Every playable candidate, one per distinct title.
 ///
-/// Race Remix's own reader of a survey: it wants "which titles can this
+/// A two-title race's own reader of a survey: it wants "which titles can this
 /// machine race today", not "which files are on the search path" - two
 /// pressings of the same title (a US and an EU disc) are one row, the first
 /// one found. Order is `rows`' own, so the same "known names first" rule

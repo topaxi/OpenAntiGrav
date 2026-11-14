@@ -372,7 +372,7 @@ pub fn route_to_host(
         .take()
         .unwrap_or_else(|| options.source.clone());
     let line = format!(
-        "{:?} borrows from the {} disc: racing it as a Race Remix, track from {}, craft from \
+        "{:?} borrows from the {} disc: racing it as a two-title race, track from {}, craft from \
          {craft}",
         track.title,
         disc.title(),

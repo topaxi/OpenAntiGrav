@@ -118,7 +118,7 @@ fn known_title(slug: &str) -> anyhow::Result<&'static oag_title::Title> {
 /// Refuses a track whose art borrows from one title's disc raced with another
 /// title's as the track source: what it borrows by name (host textures, the
 /// sky) resolves only there, and would draw black elsewhere. Another title's
-/// craft fly it as a Race Remix with the host's disc as the track source, which
+/// craft fly it as a two-title race with the host's disc as the track source, which
 /// the game's launches arrange when this machine has that disc.
 ///
 /// # Errors
@@ -133,7 +133,7 @@ pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()
     }
     anyhow::bail!(
         "{:?} borrows its art from the {} disc (track.host = {:?}); this race's track source is \
-         {}. Race it with a {} disc as the track source: on {}'s craft that is a Race Remix \
+         {}. Race it with a {} disc as the track source: on {}'s craft that is a two-title race \
          (the {} disc as the source with --craft-source <{} disc>)",
         track.title,
         host.name,

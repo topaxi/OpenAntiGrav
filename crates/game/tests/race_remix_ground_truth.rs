@@ -1,4 +1,4 @@
-//! Race Remix: a track from one title, a craft from another - and the
+//! A two-title race: a track from one title, a craft from another - and the
 //! regression this must never become, a mixed load that silently drifts from
 //! today's single-title one.
 //!
@@ -243,7 +243,7 @@ fn a_team_variant_races_on_both_join_shapes() {
 }
 
 /// **2048's own copy of Wipeout HD/Fury's roster races, standalone.** No
-/// Race Remix craft split here - `source` alone is 2048's package, exactly
+/// two-title craft split here - `source` alone is 2048's package, exactly
 /// what `--race --source <2048> --team Assegai_c1` does, which is the
 /// `oag_title::RaceDefaults::guest_roster` axis this build did not carry
 /// before: 2048 has one `ship_dir`/`handling_dir` pair, pointed at its own
@@ -277,7 +277,7 @@ fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
             .report
             .iter()
             .any(|line| line == "racing on Wipeout 2048"),
-        "expected 2048's own title in the report, not a Race Remix craft split; was {:#?}",
+        "expected 2048's own title in the report, not a two-title race craft split; was {:#?}",
         loaded.report
     );
 }
@@ -353,7 +353,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
 }
 
 /// **The regression this test exists for**: picking Wipeout 2048 as TRACK
-/// TITLE in Race Remix showed no circuits at all. Root cause -
+/// TITLE in a two-title race showed no circuits at all. Root cause -
 /// `oag_title::Title::plugin_definition` is 2048's *team* plugin
 /// (`Data\Plugins\teams\Definition.xml`, by design: a race needs a roster
 /// before it needs a circuit list, see the field's own doc comment) and

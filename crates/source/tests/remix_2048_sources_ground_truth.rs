@@ -1,5 +1,5 @@
 //! The Vita disc's 2048 craft and Omega's 2048-era craft are two sources
-//! Race Remix offers as two CRAFT TITLE entries when both are mounted. This
+//! a two-title race offers as two CRAFT TITLE entries when both are mounted. This
 //! reads all twenty craft from each and says where they differ.
 //!
 //! **`#[ignore]`d and never run in CI**: needs `data/extracted/vita/PCSF00007`

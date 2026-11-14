@@ -659,7 +659,7 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     for needle in [
         "borrows its art from the Wipeout Pulse disc",
         "track source is Wipeout HD",
-        "Race Remix",
+        "a two-title race",
     ] {
         assert!(why.contains(needle), "refusal lacks {needle:?}: {why}");
     }
