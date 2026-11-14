@@ -63,7 +63,7 @@
 //! authored**: refusing them would refuse two whole hulls over two faces, and
 //! the caller decides what a volume does with them ([`Face::winding`]).
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Length of the header before the first face record.
 pub const HEADER_LEN: usize = 0x50;

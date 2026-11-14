@@ -50,7 +50,7 @@
 //! across the disc, most often 128. Everything above sits inside the smallest of
 //! them.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 pub mod curve;
 mod parameters;

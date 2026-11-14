@@ -26,8 +26,8 @@
 
 use std::path::PathBuf;
 
+use oag_bytes::ByteOrder;
 use oag_disc::DiscImage;
-use oag_formats::ByteOrder;
 use oag_formats::coverage::Coverage;
 use oag_vex::vex::{
     self, CLASS_MESH, CLASS_SECTION, CLASS_SKYCUBE, CLASS_SPEEDUP_PAD, CLASS_WEAPON_PAD,

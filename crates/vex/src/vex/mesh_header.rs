@@ -12,8 +12,7 @@
 //! +0x30  material[material_count], stride 0x14
 //! ```
 
-use super::u16_at;
-use super::u32_at;
+use oag_bytes::le;
 
 /// One material of a mesh, from the stride-`0x14` array at `+0x30`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,14 +56,16 @@ pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
     if payload.len() < 0x30 {
         return Vec::new();
     }
-    let count = usize::from(u16_at(payload, 2));
+    let count = usize::from(
+        le::u16_at(payload, 2).expect("the length check above covers the 0x30-byte header"),
+    );
     (0..count)
         .map(|i| {
             let at = 0x30 + i * 0x14;
-            (at + 0x0c <= payload.len()).then(|| Material {
-                flags: u16_at(payload, at),
-                texture: u32_at(payload, at + 4),
-                second_texture: u32_at(payload, at + 8),
+            Some(Material {
+                flags: le::u16_at(payload, at)?,
+                texture: le::u32_at(payload, at + 4)?,
+                second_texture: le::u32_at(payload, at + 8)?,
             })
         })
         .collect()
@@ -136,8 +137,8 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
     if model_layer != LAYER_SCENE {
         return Some(model_layer);
     }
-    let flags = u16_at(payload, 0);
-    if u16_at(payload, 0x0c) & 0x8 != 0 {
+    let flags = le::u16_at(payload, 0)?;
+    if le::u16_at(payload, 0x0c)? & 0x8 != 0 {
         return Some(LAYER_EARLY);
     }
     if flags & 0x0080 != 0 {
@@ -200,11 +201,11 @@ pub fn mesh_box_centre(payload: &[u8]) -> Option<[f32; 3]> {
     if payload.len() < 0x2c {
         return None;
     }
-    let f = |at: usize| f32::from_bits(u32_at(payload, at));
+    let f = |at: usize| le::f32_at(payload, at);
     Some([
-        (f(0x10) + f(0x20)) * 0.5,
-        (f(0x14) + f(0x24)) * 0.5,
-        (f(0x18) + f(0x28)) * 0.5,
+        (f(0x10)? + f(0x20)?) * 0.5,
+        (f(0x14)? + f(0x24)?) * 0.5,
+        (f(0x18)? + f(0x28)?) * 0.5,
     ])
 }
 
@@ -223,12 +224,12 @@ pub fn mesh_first_vertex_type(payload: &[u8]) -> Option<u16> {
         return None;
     }
     for batch_list in [0u8, 1u8] {
-        let at = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
+        let at = le::u32_at(payload, if batch_list == 0 { 4 } else { 8 })? as usize;
         let terminator = if batch_list == 0 { 1u16 } else { 2 };
-        if at + 0x40 > payload.len() || u16_at(payload, at) & terminator == 0 {
+        if at + 0x40 > payload.len() || le::u16_at(payload, at)? & terminator == 0 {
             continue;
         }
-        return Some(u16_at(payload, at + 0x0a));
+        return le::u16_at(payload, at + 0x0a);
     }
     None
 }

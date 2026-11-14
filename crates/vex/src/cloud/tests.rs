@@ -1,5 +1,5 @@
 use super::*;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 fn le_u32(v: u32) -> [u8; 4] {
     v.to_le_bytes()

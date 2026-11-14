@@ -962,7 +962,7 @@ alpha first. Reversed, HD's `WO_CANNON_SPARKS_DETONATOR` is a white-to-blue
 fade, which is what a pulse cannon looks like.
 
 Strings - the name field, emitter names, texture paths - are byte arrays and
-read as-is. That is why the parser takes an `oag_formats::ByteOrder`
+read as-is. That is why the parser takes an `oag_bytes::ByteOrder`
 *parameter* and never byte-swaps the whole file: a blanket swap would mangle
 every one of them.
 

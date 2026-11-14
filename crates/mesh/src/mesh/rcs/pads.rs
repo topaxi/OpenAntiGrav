@@ -53,7 +53,7 @@ use super::{
 pub(super) fn pad_chunk_hashes<'a>(
     data: &'a [u8],
     nodes: &'a [vex::Node],
-    order: oag_formats::ByteOrder,
+    order: oag_bytes::ByteOrder,
     class_id: u32,
 ) -> impl Iterator<Item = u32> + 'a {
     nodes
@@ -104,7 +104,7 @@ pub(super) fn placed_hashes(
     data: &[u8],
     nodes: &[vex::Node],
     classes: Option<vex::classes::Classes>,
-    order: oag_formats::ByteOrder,
+    order: oag_bytes::ByteOrder,
     model: &rcsmodel::Model,
 ) -> Vec<u32> {
     let mut placed = match classes.and_then(|c| c.mesh) {

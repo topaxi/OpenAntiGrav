@@ -2,7 +2,7 @@
 //! nodes, and the world transforms composed down the chain.
 
 use crate::vex::*;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 #[test]
 fn a_version_word_selects_a_table_and_an_unknown_one_selects_none() {
@@ -101,7 +101,7 @@ fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
 
 /// The same tree, written both ways round, walks to the same nodes.
 ///
-/// A file declares its order in its own magic (`oag_formats::byte_order`). The
+/// A file declares its order in its own magic (`oag_bytes::ByteOrder`). The
 /// negative half matters as much: read the big-endian file little-endian and the
 /// header alone is nonsense.
 #[test]

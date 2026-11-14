@@ -198,6 +198,7 @@ oag-shader-check.workspace = true
 workspace = true
 
 [dev-dependencies]
+oag-bytes.workspace = true
 oag-testdata.workspace = true
 oag-pob.workspace = true
 zip = { version = "9.5.0", default-features = false, features = ["deflate"] }

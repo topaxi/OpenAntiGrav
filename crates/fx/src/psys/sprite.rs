@@ -82,7 +82,7 @@ impl Sprite {
         data: &[u8],
         record: &pob::Emitter,
     ) -> Option<Self> {
-        if system.order != oag_formats::ByteOrder::Little {
+        if system.order != oag_bytes::ByteOrder::Little {
             return None;
         }
         let texture = system.template_texture(data, record)?;
@@ -170,7 +170,7 @@ impl Sprite {
     /// test.
     #[must_use]
     pub fn from_pob(system: &ParticleSystem, data: &[u8], record: &pob::Emitter) -> Option<Self> {
-        if system.order != oag_formats::ByteOrder::Little {
+        if system.order != oag_bytes::ByteOrder::Little {
             return None;
         }
         let texture = system.embedded_texture(data, record)?;

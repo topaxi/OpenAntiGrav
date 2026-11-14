@@ -151,7 +151,7 @@
 //! a live-trace question - `FUN_08916610`'s texture bind, per
 //! `docs/ghidra/functions/psp-pulse-usa/particle-system.md` - not a file-bytes one.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of the header this module reads.
 pub const TEXTURE_HEADER_LEN: usize = 0x20;

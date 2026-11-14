@@ -159,12 +159,13 @@ pub fn stored_textures<'a>(
             continue;
         }
 
-        let width = u16_at(p, 0);
-        let height = u16_at(p, 2);
+        let header = "the 0x10-byte header was checked above";
+        let width = le::u16_at(p, 0).expect(header);
+        let height = le::u16_at(p, 2).expect(header);
         let bits_per_pixel = p[4];
         let mip_count = p[5];
-        let clut_size = u32_at(p, 8) as usize;
-        let texel_size = u32_at(p, 12) as usize;
+        let clut_size = le::u32_at(p, 8).expect(header) as usize;
+        let texel_size = le::u32_at(p, 12).expect(header) as usize;
 
         let end = at + clut_size + texel_size;
         if end > data.len() {

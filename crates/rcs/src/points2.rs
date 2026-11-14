@@ -38,7 +38,7 @@
 //!
 //! Big-endian throughout, like everything else on the PS3.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use crate::rcsmodel::unpack_half;
 

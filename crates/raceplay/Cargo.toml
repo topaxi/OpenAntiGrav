@@ -27,6 +27,7 @@ oag-core.workspace = true
 oag-ballisticng = { workspace = true, optional = true }
 oag-disc.workspace = true
 oag-display.workspace = true
+oag-bytes.workspace = true
 oag-formats.workspace = true
 oag-fx = { workspace = true, optional = true }
 oag-gameplay.workspace = true

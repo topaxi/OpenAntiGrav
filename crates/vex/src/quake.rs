@@ -53,7 +53,7 @@
 //! itself".
 
 use crate::vex::{Error, Node, Result};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Class ID of a `Quake` node, in version 6.
 ///

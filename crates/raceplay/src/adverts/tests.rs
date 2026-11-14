@@ -1,5 +1,5 @@
 use super::*;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Auricom's camera as it ships on Pulse PSP: one key of value `0x5080`,
 /// aspect 2.0, and `camera1` at `(0.4854, 0.4779, 31.832)` looking down -z.

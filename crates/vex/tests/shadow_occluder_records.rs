@@ -203,7 +203,7 @@ fn the_face_records_index_the_vertex_array_and_each_other() {
             let payload = &file.bytes[node.payload()];
             let label = format!("{} {}", file.label, node.name.clone().unwrap_or_default());
             let hull =
-                oag_vex::shadow_occluder::Occluder::parse(payload, oag_formats::ByteOrder::Little)
+                oag_vex::shadow_occluder::Occluder::parse(payload, oag_bytes::ByteOrder::Little)
                     .unwrap_or_else(|| panic!("{label}: does not close"));
 
             for (index, face) in hull.faces.iter().enumerate() {
@@ -385,7 +385,7 @@ fn every_hulls_silhouette_closes_into_rings() {
             let payload = &file.bytes[node.payload()];
             let label = format!("{} {}", file.label, node.name.clone().unwrap_or_default());
             let hull =
-                oag_vex::shadow_occluder::Occluder::parse(payload, oag_formats::ByteOrder::Little)
+                oag_vex::shadow_occluder::Occluder::parse(payload, oag_bytes::ByteOrder::Little)
                     .unwrap_or_else(|| panic!("{label}: does not close"));
 
             for direction in WALK_DIRECTIONS {

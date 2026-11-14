@@ -50,7 +50,7 @@
 //! (`2.4 * (0.3 + 1.7 v)` for the size channel's `v` at `fract(age / 10)`), in
 //! colours `fff5f5ff` walking to `ffe3f2ff` over its life.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{
     Channel, ChannelMode, Emitter, MAX_CHANNEL_KEYS, MAX_EMITTERS, NAME_LEN, parse_channel,

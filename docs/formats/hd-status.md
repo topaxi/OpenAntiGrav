@@ -18,7 +18,7 @@ just view data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
 
 The [roadmap](../overview/roadmap.md#a-circuit-draws-as-of-2026-08-17) is where
 that is accounted for. Three things it is worth knowing here: the
-[`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_formats::ByteOrder`
+[`.psarc` reader](psarc.md) is in `oag-formats` now; `oag_bytes::ByteOrder`
 exists and **neither `vex::nodes` nor `track::parse` takes it as an argument**,
 because each file declares its own order in its own magic; and `--mesh` **now
 draws**, because the container the geometry left for has since been read - see

@@ -96,7 +96,7 @@
 //! reversed back here. Strings are byte arrays and read as-is, which is why
 //! this is a byte-order *parameter* and never a swap of the whole file.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// The container magic.
 pub const MAGIC: &[u8; 4] = b"SYSP";

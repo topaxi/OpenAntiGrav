@@ -40,7 +40,7 @@
 //! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`.
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// The `sound` class: an omnidirectional authored emitter.
 pub const CLASS_SOUND: u32 = 0x3e1;

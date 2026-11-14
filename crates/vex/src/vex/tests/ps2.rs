@@ -177,7 +177,7 @@ fn a_packet_whose_length_disagrees_with_the_batch_is_refused() {
         true,
     )]);
     // Shorten the packet's own declared length by one quadword.
-    let size = u32_at(&payload, 0x30 + 0x40) - 16;
+    let size = le::u32_at(&payload, 0x30 + 0x40).expect("the payload is built longer") - 16;
     payload[0x30 + 0x40..0x30 + 0x44].copy_from_slice(&size.to_le_bytes());
     assert!(matches!(
         mesh_batches(&payload, 0),

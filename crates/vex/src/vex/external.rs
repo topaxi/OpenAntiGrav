@@ -37,7 +37,7 @@ pub fn geometry_is_external(data: &[u8]) -> bool {
     if !vex::has_magic(data) {
         return false;
     }
-    if vex::byte_order(data) == oag_formats::ByteOrder::Big {
+    if vex::byte_order(data) == oag_bytes::ByteOrder::Big {
         return true;
     }
     let Ok(nodes) = vex::nodes(data) else {
@@ -70,7 +70,10 @@ const MATERIALS_AT: usize = 0x34;
 /// (`docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys").
 #[must_use]
 pub fn external_mesh_hash(payload: &[u8]) -> Option<u32> {
-    (payload.len() >= MATERIALS_AT).then(|| vex::le::u32_at(payload, HASH_AT))
+    if payload.len() < MATERIALS_AT {
+        return None;
+    }
+    oag_bytes::le::u32_at(payload, HASH_AT)
 }
 
 /// Every material's texture-transform block of a little-endian
@@ -87,7 +90,9 @@ pub fn external_mesh_tex_transforms(payload: &[u8]) -> Vec<Option<vex::TexTransf
     if payload.len() < MATERIALS_AT {
         return Vec::new();
     }
-    let material_count = usize::from(vex::le::u16_at(payload, 2));
+    let material_count = usize::from(
+        oag_bytes::le::u16_at(payload, 2).expect("the length check above covers the header"),
+    );
     (0..material_count)
         .map(|i| vex::mesh_tex_transform_at(payload, MATERIALS_AT, i))
         .collect()

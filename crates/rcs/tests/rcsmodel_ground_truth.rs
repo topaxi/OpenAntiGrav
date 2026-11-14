@@ -388,7 +388,7 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
         for path in paths {
             let bytes = open.read_path(&path).expect("the entry reads");
             total += 1;
-            let big = oag_formats::ByteOrder::Big;
+            let big = oag_bytes::ByteOrder::Big;
             versioned += usize::from(big.u32(&bytes, 0) == rcsmodel::VERSION);
             let count = big.u32(&bytes, 0x1c) as usize;
             let table = big.u32(&bytes, 0x20) as usize;

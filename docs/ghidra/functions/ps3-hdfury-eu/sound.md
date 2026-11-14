@@ -334,7 +334,7 @@ platform-specific constants, both read from disassembly rather than guessed:
 
 A one-off read, re-run with the new walk
 wired into `Sound::sample_rate` (the walk is selected by the bank's own
-[`ByteOrder`](../../../../crates/formats/src/byte_order.rs), `Big` on every HD
+[`ByteOrder`](../../../../crates/bytes/src/byte_order.rs), `Big` on every HD
 bank):
 
 | | PSP walk (before) | HD's own walk (now) |
