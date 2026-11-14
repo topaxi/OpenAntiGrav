@@ -494,14 +494,11 @@ fn params_at(cpu: &[u8], header_at: usize) -> Vec<Param> {
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
-    if at >= cpu.len() {
+    let text = oag_bytes::cstr_at(cpu, at)?;
+    if text.is_empty() {
         return None;
     }
-    let end = (at..cpu.len()).find(|&k| cpu[k] == 0)?;
-    if end == at {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&cpu[at..end]).into_owned())
+    Some(String::from_utf8_lossy(text).into_owned())
 }
 
 /// Byte-slice suffix comparison, deliberately not `str`-based: [`cstr_at`]

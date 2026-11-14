@@ -309,9 +309,7 @@ fn u16_at(cpu: &[u8], at: usize) -> Option<u16> {
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
-    let bytes = cpu.get(at..)?;
-    let end = bytes.iter().position(|&b| b == 0)?;
-    Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
+    Some(String::from_utf8_lossy(oag_bytes::cstr_at(cpu, at)?).into_owned())
 }
 
 #[cfg(test)]

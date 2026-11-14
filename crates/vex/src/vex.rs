@@ -636,8 +636,7 @@ fn name_at(data: &[u8], at: usize, header_size: usize) -> Option<String> {
 
 /// Reads a NUL-terminated string out of a payload, at a fixed offset.
 fn cstr_at(payload: &[u8], at: usize) -> Option<String> {
-    let bytes = payload.get(at..)?;
-    let text = bytes.split(|&b| b == 0).next()?;
+    let text = oag_bytes::cstr_at_or_end(payload, at)?;
     if text.is_empty() {
         return None;
     }
