@@ -102,8 +102,8 @@ fn screen_filter(uv: vec2<f32>, pixel: vec2<f32>) -> vec3<f32> {
     // a pixel or two and the sampler blurs the border into a slight darkening,
     // which is the right answer there.
     let width = param_gap_width();
-    let border_x = smoothstep(0.0, width, inside.x) * smoothstep(1.0, 1.0 - width, inside.x);
-    let border_y = smoothstep(0.0, width, inside.y) * smoothstep(1.0, 1.0 - width, inside.y);
+    let border_x = smoothstep(0.0, width, inside.x) * (1.0 - smoothstep(1.0 - width, 1.0, inside.x));
+    let border_y = smoothstep(0.0, width, inside.y) * (1.0 - smoothstep(1.0 - width, 1.0, inside.y));
     color *= 1.0 - param_gap() * (1.0 - border_x * border_y);
 
     // The vertical RGB stripe inside each cell, energy-preserving across the
