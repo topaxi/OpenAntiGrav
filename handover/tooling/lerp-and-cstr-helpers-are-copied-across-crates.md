@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-14
-summary: "the shared helpers landed (oag_bytes cstr_at and word readers, oag_core lerp); vex, video and the crates without a dependency path keep their copies"
+summary: "shared helpers landed; ByteOrder moves to oag-bytes and oag-video takes oag-bytes (decided), then the vex and video copies go"
 size: S (30)
 difficulty: easy (40)
 kind: debt
@@ -38,5 +38,11 @@ and the fixed-order `le::` / `be::` forms. `oag_core::math::lerp` is
 
 ## Next Steps
 
-1. Decide whether `oag_formats::ByteOrder` and `oag_bytes::ByteOrder` become one type; then the `vex` forwarders go.
-2. Decide the `oag-video` dependency question.
+Decided by the maintainer (2026-11-14): `ByteOrder` moves to `oag-bytes` (one type;
+`oag_formats::ByteOrder` goes), and `oag-video` may depend on `oag-bytes` (update its row in
+CLAUDE.md's crate table and `docs/architecture/workspace-layout.md`).
+
+1. One `ByteOrder` in `oag_bytes`; `oag-formats` and its users take it; the `vex` forwarders and
+   `vex.rs`'s `le::` readers go, with a bounds check per panicking call site.
+2. `oag-video` takes `oag-bytes` and drops its `u16_at`/`u32_at` copies.
+3. Delete this thread (the `lerp` copies listed above stay, each with its reason).
