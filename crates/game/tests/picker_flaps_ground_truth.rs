@@ -86,6 +86,7 @@ fn check(image: &str) {
                 &entry,
                 None,
                 Some(&race_hull),
+                None,
             )
             .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
             let race_blob = archives.read_name(&race_hull).expect(&race_hull);
@@ -139,6 +140,7 @@ fn an_unseated_front_end_flap_is_far_from_the_race_hull() {
     let (preview, _) = oag_game::preview::variant::model_or_default(
         &mut archives,
         r"Data\Ships\Qirex\ship_FE.vex",
+        None,
         None,
         None,
     )

@@ -54,10 +54,11 @@ mod track_stats;
 #[cfg(feature = "view")]
 mod trail_hits;
 pub use track_stats::authored_length;
+#[cfg(feature = "view")]
+mod model_livery;
 mod variant;
 #[cfg(feature = "view")]
 mod weapon_models;
-#[cfg(feature = "view")]
 mod zone_livery;
 #[cfg(feature = "view")]
 pub use campaign::load_event;

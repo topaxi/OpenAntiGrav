@@ -82,7 +82,7 @@ fn each_variant_directory_has_a_hull_of_its_own() {
             oag_game::preview::variant::variant_location(join, r"Data\Ships\Feisar", variant);
         let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
         let (model, loaded) =
-            oag_game::preview::variant::model_or_default(&mut archives, &entry, None, None)
+            oag_game::preview::variant::model_or_default(&mut archives, &entry, None, None, None)
                 .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
         assert_eq!(loaded, entry, "no fallback for a hull the disc ships");
         shapes.push((model.vertices.len(), model.indices.len()));
@@ -191,7 +191,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
         );
         let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
         let (model, loaded) =
-            oag_game::preview::variant::model_or_default(&mut archives, &entry, None, None)
+            oag_game::preview::variant::model_or_default(&mut archives, &entry, None, None, None)
                 .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
         assert_eq!(loaded, entry);
         shapes.push((model.vertices.len(), model.indices.len()));

@@ -47,15 +47,18 @@ pub(super) fn read(model: &Node) -> Vec<ModelUnlock> {
         .map(|row| {
             let attr = |name: &str| row.attr(name).map(str::trim);
             let number = |name: &str| attr(name).and_then(|value| value.parse::<u32>().ok());
-            let medals = [("MedalCountHD", Some("HD")), ("MedalCountFURY", Some("FURY"))]
-                .into_iter()
-                .chain(std::iter::once(("MedalCount", None)))
-                .find_map(|(name, campaign)| {
-                    Some(MedalCount {
-                        campaign: campaign.map(str::to_string),
-                        at_least: number(name)?,
-                    })
-                });
+            let medals = [
+                ("MedalCountHD", Some("HD")),
+                ("MedalCountFURY", Some("FURY")),
+            ]
+            .into_iter()
+            .chain(std::iter::once(("MedalCount", None)))
+            .find_map(|(name, campaign)| {
+                Some(MedalCount {
+                    campaign: campaign.map(str::to_string),
+                    at_least: number(name)?,
+                })
+            });
             ModelUnlock {
                 team: attr("team").map(str::to_string),
                 loyalty: number("loyalty"),

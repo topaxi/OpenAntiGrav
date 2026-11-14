@@ -28,6 +28,7 @@ impl Default for Options {
             team: None,
             hull_variant: None,
             skin: None,
+            livery: None,
             // Empty for the same reason `dlc` is: the ids come off the
             // player's own disc, and `load` may not invent one. The
             // composition root fills it from the catalogue.

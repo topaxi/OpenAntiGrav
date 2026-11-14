@@ -40,6 +40,7 @@ fn ship_screen(
         None,
         &oag_ui::language::StringTable::default(),
         &crate::records::Store::default(),
+        &crate::unlock::ModelGate::none(),
         pending.mode,
     );
     (

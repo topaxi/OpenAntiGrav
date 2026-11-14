@@ -24,7 +24,7 @@ pub fn build(
     vex: &[u8],
     geometry: &[u8],
 ) -> Result<Option<(Model, String)>> {
-    Ok(build_named(archives, entry, vex, geometry, false)?
+    Ok(build_named(archives, entry, vex, geometry, false, None)?
         .map(|(model, report, _)| (model, report)))
 }
 
@@ -38,6 +38,7 @@ fn build_named(
     vex: &[u8],
     geometry: &[u8],
     keyed: bool,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<Option<(Model, String, Vec<String>)>> {
     if !mesh::rcs::psp2::is_psp2(geometry) {
         return Ok(None);
@@ -55,7 +56,7 @@ fn build_named(
         {
             textures.push(path.to_string());
         }
-        archives.read_name(path).ok()
+        super::read_texture(archives, path, livery)
     })?;
     Ok(Some((model, built.describe(), textures)))
 }
@@ -82,7 +83,7 @@ pub fn model_named(
     {
         let vex = archives.read_name(entry)?;
         if let Some((mut model, report, textures)) =
-            build_named(archives, entry, &vex, &geometry, keyed)
+            build_named(archives, entry, &vex, &geometry, keyed, None)
                 .with_context(|| format!("decoding the card model {entry}"))?
         {
             log::debug!("card model {entry}: {report}");
@@ -216,17 +217,32 @@ fn coverage_from_the_atlas(
 ///
 /// The entry is missing or will not decode.
 pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
+    model_in(archives, entry, None)
+}
+
+/// [`model`] painted from another livery folder of the hull's directory (`SKIN1` on Ship
+/// Select), the swap a race makes ([`oag_livery::LiveryFolder`]).
+///
+/// # Errors
+///
+/// As [`model`].
+pub fn model_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<Model> {
     if let Some(sibling) = mesh::rcs::sibling_name(entry)
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
-        if let Some((mut model, report)) = build(archives, entry, &vex, &geometry)
-            .with_context(|| format!("decoding the selection model {entry}"))?
+        if let Some((mut model, report, _)) =
+            build_named(archives, entry, &vex, &geometry, false, livery)
+                .with_context(|| format!("decoding the selection model {entry}"))?
         {
             log::debug!("selection model {entry}: {report}");
             model.keep_nearest();
             return Ok(model);
         }
     }
-    super::model(archives, entry)
+    super::model_in(archives, entry, livery)
 }

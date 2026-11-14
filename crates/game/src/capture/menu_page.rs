@@ -1085,6 +1085,18 @@ pub(super) fn picker_page(
             entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
             fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
+            livery: match kind {
+                Kind::Ship if !picker.fixed_livery() => {
+                    teams.get(picker.index()).and_then(|team| {
+                        crate::preview::variant::livery_folders(
+                            team,
+                            title.race.team_variants_for(&team.id).map(|v| v.join),
+                            picker.variant().map_or("", |(id, _)| id.as_str()),
+                        )
+                    })
+                }
+                _ => None,
+            },
             race_hull: match kind {
                 Kind::Ship => teams
                     .get(picker.index())

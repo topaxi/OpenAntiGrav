@@ -131,9 +131,10 @@ impl ModelGate {
                 .sum();
             golds >= count.at_least
         });
-        let grid = row.grid.as_deref().is_none_or(|name| {
-            race_campaign::grid_points_met(grids, tiers, name, &medal_of)
-        });
+        let grid = row
+            .grid
+            .as_deref()
+            .is_none_or(|name| race_campaign::grid_points_met(grids, tiers, name, &medal_of));
         loyalty && medals && grid
     }
 }

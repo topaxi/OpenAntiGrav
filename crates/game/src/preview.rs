@@ -538,7 +538,39 @@ pub fn fade_draw(draw: oag_ui::frontend::Draw, alpha: f32) -> oag_ui::frontend::
 ///
 /// The entry is missing, or will not decode as a mesh.
 pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
-    model_named(archives, entry).map(|(model, _)| model)
+    model_in(archives, entry, None)
+}
+
+/// [`model`] painted from another livery folder ([`psp2_scene::model_in`]).
+///
+/// # Errors
+///
+/// As [`model`].
+pub fn model_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<Model> {
+    model_named_in(archives, entry, livery).map(|(model, _)| model)
+}
+
+/// A texture a preview build asks for, read through `livery` when it names one. A texture the
+/// worn folder lacks is `None` (drawn untextured, and logged), never the own folder's paint.
+fn read_texture(
+    archives: &mut oag_assets::Archives,
+    path: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Option<Vec<u8>> {
+    match livery.and_then(|livery| livery.rewrite(path)) {
+        Some(worn) => {
+            let blob = archives.read_name(&worn).ok();
+            if blob.is_none() {
+                log::debug!("preview: {worn} is not on the disc - drawn untextured");
+            }
+            blob
+        }
+        None => archives.read_name(path).ok(),
+    }
 }
 
 /// [`model`], and the `.gtf` path of each texture slot in order - what a caller
@@ -552,6 +584,14 @@ pub fn model_named(
     archives: &mut oag_assets::Archives,
     entry: &str,
 ) -> Result<(Model, Vec<String>)> {
+    model_named_in(archives, entry, None)
+}
+
+fn model_named_in(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
+) -> Result<(Model, Vec<String>)> {
     let blob = archives
         .read_name(entry)
         .with_context(|| format!("reading the preview mesh {entry}"))?;
@@ -560,7 +600,7 @@ pub fn model_named(
     // is why this takes `Archives` rather than a blob. `build` below is the
     // PSP/PS2 path and cannot draw one.
     if oag_vex::vex::geometry_is_external(&blob) {
-        return ps3_model(archives, entry, &blob);
+        return ps3_model(archives, entry, &blob, livery);
     }
     let named = |model| (model, Vec::new());
     let model = oag_mesh::mesh::build(entry, &blob)
@@ -591,6 +631,7 @@ fn ps3_model(
     archives: &mut oag_assets::Archives,
     entry: &str,
     blob: &[u8],
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, Vec<String>)> {
     let sibling = oag_mesh::mesh::rcs::sibling_name(entry)
         .with_context(|| format!("{entry} names no .rcsmodel"))?;
@@ -610,7 +651,7 @@ fn ps3_model(
             {
                 textures.push(path.to_string());
             }
-            archives.read_name(path).ok()
+            read_texture(archives, path, livery)
         },
         // A menu preview draws into a gamma target, whose shaders decode with the plain power.
         Default::default(),

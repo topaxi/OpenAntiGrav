@@ -551,6 +551,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) skin: Option<String>,
 
+    /// The livery folder the player's craft is painted from on Wipeout HD/Fury and Omega: a
+    /// `PI_TeamModel` `texturelocation` other than its directory's own (`livery2` is Feisar's
+    /// `SKIN1`, with `--team Feisar`). What Ship Select's model row writes after the `@` of a
+    /// variant id. A folder that lacks a texture the hull names draws that part untextured and
+    /// says so in the load report.
+    #[arg(long)]
+    pub(crate) livery: Option<String>,
+
     /// What a split-screen race's second and later people fly, one per flag in
     /// seat order: `TEAM` or `TEAM:SKIN` (a `PI_ModelSkin` name). The headless
     /// counterpart of picking on each seat's own Ship Select; with `--players N`,

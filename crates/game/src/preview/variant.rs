@@ -14,10 +14,32 @@ pub fn variant_location(
     location: &str,
     variant: &str,
 ) -> String {
+    // A model in another livery (`"@livery2"`) is read out of its suffix's directory.
+    let (variant, _) = oag_title::race::split_livery(variant);
     match join {
         Some(join) if !variant.is_empty() => join.combine(location, variant),
         _ => location.to_string(),
     }
+}
+
+/// The `(own, worn)` livery folders a stored variant id paints `team`'s hull from: `None` for
+/// an id naming no livery ([`oag_title::race::split_livery`]) or a directory whose own model
+/// authors no `texturelocation`. The own folder is the directory's own model's
+/// ([`oag_raceplay::catalogue::Team::model_for_directory`]), the one the hull's materials name.
+#[must_use]
+pub fn livery_folders(
+    team: &oag_raceplay::catalogue::Team,
+    join: Option<oag_title::VariantJoin>,
+    variant: &str,
+) -> Option<(String, String)> {
+    let (_, worn) = oag_title::race::split_livery(variant);
+    let worn = worn?;
+    let directory = variant_location(join, &team.location, variant);
+    let own = team
+        .model_for_directory(&directory)?
+        .texture_location
+        .clone()?;
+    Some((own, worn.to_string()))
 }
 
 /// [`super::psp2_scene::model`] for a variant's own entry, falling back to `fallback` (the
@@ -36,8 +58,9 @@ pub fn model_or_default(
     entry: &str,
     fallback: Option<&str>,
     race_hull: Option<&str>,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, String)> {
-    let (mut model, loaded) = load(archives, entry, fallback)?;
+    let (mut model, loaded) = load(archives, entry, fallback, livery)?;
     if let Some(race_hull) = race_hull {
         super::seat_flaps(archives, race_hull, &mut model);
     }
@@ -48,8 +71,9 @@ fn load(
     archives: &mut oag_assets::Archives,
     entry: &str,
     fallback: Option<&str>,
+    livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, String)> {
-    match super::psp2_scene::model(archives, entry) {
+    match super::psp2_scene::model_in(archives, entry, livery) {
         Ok(model) => Ok((model, entry.to_string())),
         Err(error) => {
             let Some(fallback) = fallback.filter(|fallback| *fallback != entry) else {
