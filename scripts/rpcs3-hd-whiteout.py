@@ -67,8 +67,11 @@ RING = (0x40000000, 0x20000)
 TARGETS = [(0x02300000, 0x1400 * 180), (0x00CC0000, 0x1400 * 720), (0x00F50000, 0x2800 * 720)]
 
 
-def dump_frame(gdb, out, stem, hook, attempts):
-    """Read the paused frame; `None` when no attempt came out complete."""
+def dump_frame(gdb, out, stem, hook, attempts, accept=None):
+    """Read the paused frame; `None` when no attempt came out complete.
+
+    `accept(out, stem)`, when given, must also hold: a pause lands anywhere in the frame the game is
+    building, so a frame without the effect's own draws is retried like an incomplete one."""
     for attempt in range(attempts):
         for old in out.glob("%s-*.bin" % stem):
             old.unlink()
@@ -87,12 +90,15 @@ def dump_frame(gdb, out, stem, hook, attempts):
                     (out / ("%s-%08x.bin" % (stem, addr))).write_bytes(gdb.read(addr, size))
                 except Exception as error:
                     print("  dump %#x+%#x failed: %s" % (addr, size, error), flush=True)
+        if not retry and accept is not None and not accept(out, stem):
+            retry = True
+            print("  %s: frame holds none of the wanted programs, retry %d" % (stem, attempt), flush=True)
         if not retry:
             return attempt
         print("  %s: incomplete frame, retry %d" % (stem, attempt), flush=True)
         hook.ST.update(stage=0, asked=set())
         gdb.resume()
-        time.sleep(0.5)
+        time.sleep(0.5 if accept is None else 0.08)
         gdb.pause()
     return None
 
@@ -211,6 +217,17 @@ def main():
     ap.add_argument("--frame-gap", type=float, default=0.3)
     ap.add_argument("--start-wait", type=float, default=0.0, help="seconds after the load before the START RACE tap (the prompt ignores an earlier one; 12 worked)")
     ap.add_argument("--quake", action="store_true", help="fire state 2 (Quake) and pause --delay s after the press")
+    ap.add_argument("--fire-state", type=int, default=None,
+                    help="fire pickup state N by press and pause --delay s after the press (0 Rocket, 7 Plasma, "
+                         "8 Cannon: weapons.md, 'The other weapons against the original'); the frame is named "
+                         "fireN-<shot>")
+    ap.add_argument("--behind", action="store_true",
+                    help="--fire-state: put the craft --behind-rival units behind the nearest rival first, so the shot can hit")
+    ap.add_argument("--want-mats", default=None,
+                    help="a directory of rcsmaterial files: retry a dumped frame until one of their fragment "
+                         "blocks (4 instructions or more) is among its draws (scripts/rsx_fp_match.py)")
+    ap.add_argument("--want-name", default="",
+                    help="--want-mats: the matched block's name must also contain this text (e.g. plasmaring)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -278,7 +295,12 @@ def main():
             hook = load("whiteout_hook", args.hook.rsplit("/", 1)[-1])
             hook.ST.update(stage=0, asked=set())
             t = time.time()
-            used = None if args.no_draws else dump_frame(gdb, out, stem, hook, args.attempts)
+            accept = None
+            if args.want_mats:
+                match = load("rsx_fp_match", "rsx_fp_match.py")
+                table = match.disc_blocks(args.want_mats)
+                accept = lambda d, st: any(r["prog"] and args.want_name in r["prog"] for r in match.attribute(str(d), st, args.want_mats, table=table))
+            used = None if args.no_draws else dump_frame(gdb, out, stem, hook, args.attempts, accept)
             shot = drive.screenshot(out / ("%s.png" % stem), trim=True)
             for off, size in ([] if args.leach or args.no_targets else TARGETS):
                 try:
@@ -308,12 +330,13 @@ def main():
 
         for n, delay in enumerate(args.delay):
             gdb.pause()
-            state = 9 if args.bomb else 2 if args.quake else 1
-            by_press = args.bomb or args.quake
+            state = (args.fire_state if args.fire_state is not None
+                     else 9 if args.bomb else 2 if args.quake else 1)
+            by_press = args.bomb or args.quake or args.fire_state is not None
             gdb.write(slot + poll.STATE, struct.pack(">ii", state, state))
             gdb.resume()
             time.sleep(0.5)
-            if not by_press:
+            if not by_press or args.behind:
                 poll.behind_rival(gdb, args.behind_rival)
             session.pad.set("triangle", True)
             time.sleep(0.12)
@@ -330,7 +353,8 @@ def main():
                 continue
             time.sleep(delay)
             gdb.pause()
-            capture(("bomb%d" if args.bomb else "quake%d" if args.quake else "hit%d") % n,
+            capture(("bomb%d" if args.bomb else "quake%d" if args.quake
+                     else "fire%d-%%d" % args.fire_state if args.fire_state is not None else "hit%d") % n,
                     "delay %.3f after %s" % (delay, "the press" if by_press else "pool rise"))
             gdb.resume()
             time.sleep(8.0 if args.quake else 4.0)

@@ -1,12 +1,18 @@
 //! The frame limiter: which limit is in force for what is on screen, and the
 //! schedule that holds the loop to it.
 
+use oag_present::drs::Target;
 use oag_present::perf;
 
 use super::Session;
 use crate::stage::Stage;
 
 /// How often the monitor's refresh report is asked for again.
+const TARGET_FPS: &str = "graphics.target_fps";
+const FOLLOW_VALUE: &str = "default";
+const FRAME_LIMIT: &str = "display.frame_limit";
+const FOLLOW_LIMIT_VALUE: &str = "refresh_rate";
+
 const REPORT_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 /// How many frames old a timed GPU cost may be and still stand for the frame being drawn. The
 /// reading lands a few frames after the work it times.
@@ -27,12 +33,18 @@ impl Session {
         // A wallpaper's own cap holds under every VSYNC value: a desktop background is drawn at
         // its rate or not at all.
         if let Some(limit) = self.demo.limit {
-            return limit.period();
+            return limit.resolve(self.display.hz()).period();
         }
         if self.settings.display.vsync.paces_itself() {
             return None;
         }
         self.active_limit().period()
+    }
+
+    /// The configured frame limit, `refresh_rate` resolved to the output's rate
+    /// (60 while none is known).
+    fn configured_limit(&self) -> perf::FrameLimit {
+        self.settings.display.frame_limit.resolve(self.display.hz())
     }
 
     /// The limit in force for what is on screen: the configured one in a race,
@@ -47,9 +59,9 @@ impl Session {
     /// so the cap is inert there.
     fn active_limit(&self) -> perf::FrameLimit {
         if let Some(limit) = self.demo.limit {
-            return limit;
+            return limit.resolve(self.display.hz());
         }
-        let limit = self.settings.display.frame_limit;
+        let limit = self.configured_limit();
         match self.stage {
             Stage::Race(_) => limit,
             _ => limit.front_end(),
@@ -103,7 +115,7 @@ impl Session {
         // The race's own limit, not `active_limit`: this feeds dynamic
         // resolution's clamp, which is a race concern.
         self.frame_period()
-            .and_then(|_| self.settings.display.frame_limit.hz())
+            .and_then(|_| self.configured_limit().hz())
     }
 
     /// The newest timed GPU cost, or `None` when it is older than a few frames.
@@ -153,11 +165,50 @@ impl Session {
         let shown = self.display.hz();
         if self.logged_display_hz != Some(shown) {
             self.logged_display_hz = Some(shown);
+            let target = self.render_profile().target_fps;
             log::debug!(
-                "display refresh in force: {} (target {} held under it)",
+                "display refresh in force: {} (target {target} held under it)",
                 shown.map_or_else(|| "unknown".to_string(), |hz| format!("{hz} Hz")),
-                self.render_profile().target_fps
             );
+            if target.follows_display() && shown.is_none() {
+                log::debug!(
+                    "target fps default: no refresh rate known, aiming for {}",
+                    Target::FOLLOW_FALLBACK_HZ
+                );
+            }
+            let labels = self.rate_labels();
+            if let Stage::Menu(stage) = &mut self.stage {
+                for (setting, value, label) in &labels {
+                    stage.menu.relabel_choice(setting, value, label);
+                }
+            }
+        }
+    }
+
+    /// What the rows that follow the output's rate draw for that value: the rate
+    /// it resolves to now, as `(setting, value, label)`.
+    fn rate_labels(&self) -> [(&'static str, &'static str, String); 2] {
+        let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
+        let hz = (self.display.hz().unwrap_or(Target::FOLLOW_FALLBACK_HZ)).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).replace("%s", &hz);
+        [
+            (
+                TARGET_FPS,
+                FOLLOW_VALUE,
+                say("OAG_GRAPHICS_TARGET_FPS_DEFAULT", "DEFAULT (%s)"),
+            ),
+            (
+                FRAME_LIMIT,
+                FOLLOW_LIMIT_VALUE,
+                say("OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE", "REFRESH RATE (%s)"),
+            ),
+        ]
+    }
+
+    /// [`Self::rate_labels`] on a menu not yet on screen.
+    pub(super) fn label_rate_rows(&self, model: &mut oag_ui::menu::Menu) {
+        for (setting, value, label) in self.rate_labels() {
+            model.relabel_choice(setting, value, &label);
         }
     }
 

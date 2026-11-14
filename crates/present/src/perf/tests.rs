@@ -828,3 +828,27 @@ fn the_front_end_cap_is_derived_from_the_global_limit() {
         assert_eq!(limit.front_end().to_string(), expected, "limit {limit}");
     }
 }
+
+/// `refresh_rate` is the output's own rate: stored as the word, resolved at the
+/// call site, and 60 when the platform reports none.
+#[test]
+fn refresh_rate_follows_the_display_and_falls_back_to_60() {
+    let follow: FrameLimit = "refresh_rate".parse().expect("a spelling");
+    assert_eq!(follow, FrameLimit::FOLLOW_DISPLAY);
+    assert_eq!(follow.to_string(), "refresh_rate");
+    assert!(follow.follows_display());
+    assert_eq!(
+        follow.hz(),
+        None,
+        "unresolved it is no rate, not a rate of u32::MAX"
+    );
+    assert_eq!(follow.resolve(Some(144)).hz(), Some(144));
+    assert_eq!(follow.resolve(None).hz(), Some(60));
+    assert_eq!(follow.resolve(Some(100_000)).hz(), Some(FrameLimit::MAX));
+    let fixed: FrameLimit = "90".parse().expect("a rate");
+    assert_eq!(fixed.resolve(Some(144)), fixed);
+    assert_eq!(
+        FrameLimit::UNLIMITED.resolve(Some(144)),
+        FrameLimit::UNLIMITED
+    );
+}

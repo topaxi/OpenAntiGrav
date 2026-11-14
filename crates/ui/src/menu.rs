@@ -942,6 +942,12 @@ impl Menu {
         held
     }
 
+    /// [`Definition::relabel_choice`] on a menu already built: the words a row
+    /// draws for one of its options change, the stored value does not.
+    pub fn relabel_choice(&mut self, setting: &str, value: &str, label: &str) {
+        self.definition.relabel_choice(setting, value, label);
+    }
+
     /// The definition, for reporting and for drawing.
     #[must_use]
     pub fn definition(&self) -> &Definition {

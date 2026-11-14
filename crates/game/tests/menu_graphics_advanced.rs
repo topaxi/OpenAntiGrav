@@ -142,3 +142,59 @@ fn confirming_the_advanced_row_opens_the_page() {
     menu.update(&mut input);
     assert_eq!(menu.page().id, "graphics_advanced");
 }
+
+#[test]
+fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
+    let definition = built_in();
+    let page = definition.page("graphics").expect("graphics page");
+    let values: Vec<(String, String)> = page
+        .entries
+        .iter()
+        .find_map(|entry| match entry {
+            Entry::Choice {
+                setting, values, ..
+            } if setting == "graphics.target_fps" => Some(
+                values
+                    .iter()
+                    .map(|v| (v.value.clone(), v.label.clone()))
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .expect("a TARGET FPS row");
+    let names: Vec<&str> = values.iter().map(|(value, _)| value.as_str()).collect();
+    assert_eq!(
+        names,
+        ["off", "30", "60", "90", "100", "120", "144", "default"]
+    );
+    assert!(
+        values[7].1.eq_ignore_ascii_case("default"),
+        "{}",
+        values[7].1
+    );
+
+    let mut menu = Menu::new(definition);
+    menu.relabel_choice("graphics.target_fps", "default", "DEFAULT (144)");
+    let page = menu.definition().page("graphics").expect("graphics page");
+    let labelled = page.entries.iter().any(|entry| match entry {
+        Entry::Choice {
+            setting, values, ..
+        } if setting == "graphics.target_fps" => values
+            .iter()
+            .any(|v| v.value == "default" && v.label == "DEFAULT (144)"),
+        _ => false,
+    });
+    assert!(labelled);
+}
+
+#[test]
+fn frame_limit_ends_with_refresh_rate_and_shows_the_live_rate() {
+    let mut menu = Menu::new(built_in());
+    menu.relabel_choice("display.frame_limit", "refresh_rate", "REFRESH RATE (144)");
+    let found = menu.definition().pages.iter().flat_map(|page| &page.entries).any(|entry| {
+        matches!(entry, Entry::Choice { setting, values, .. }
+            if setting == "display.frame_limit"
+                && values.last().is_some_and(|v| v.value == "refresh_rate" && v.label == "REFRESH RATE (144)"))
+    });
+    assert!(found);
+}

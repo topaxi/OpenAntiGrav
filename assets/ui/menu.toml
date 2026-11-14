@@ -826,6 +826,7 @@ values = [
     "360",
     "480",
     "1000",
+    "refresh_rate",
 ]
 
 # Both are applied by the blit that puts the finished frame on the surface, so
@@ -926,12 +927,16 @@ values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
 # `disabled_by` names a *setting*, and an adapter capability is not one - see
 # `docs/architecture/menus.md`. The row is stored and inert, which is the same
 # thing `restart_required` already means.
+# `default` aims for the refresh rate of the output the window is on and follows
+# it to another monitor; it draws as `DEFAULT (<rate>)` (60 when no rate is
+# known). It has no `warn_when` pair below: its rate is the output's own, which
+# `drs::Target::at_most` already holds the controller to.
 [[page.entry]]
 kind = "choice"
 label = "TARGET FPS"
 string_id = "OAG_GRAPHICS_TARGET_FPS"
 setting = "graphics.target_fps"
-values = ["off", "30", "60", "90", "100", "120", "144"]
+values = ["off", "30", "60", "90", "100", "120", "144", "default"]
 warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "60" },

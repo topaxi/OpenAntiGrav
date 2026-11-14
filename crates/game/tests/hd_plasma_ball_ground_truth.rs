@@ -146,4 +146,11 @@ fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
         with > 60,
         "the bolt's core is not dark: a white disc is the eye read from the origin"
     );
+    // The head's colour tap is decoded on fetch (unit 0 gamma nibble 7,
+    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the bolt
+    // adds 1,024 dark pixels decoded and 569 with the tap raw.
+    assert!(
+        with > 800,
+        "the bolt's colour tap is read raw, as the console does not: {with}"
+    );
 }

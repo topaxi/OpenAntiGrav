@@ -320,6 +320,15 @@ impl FrameLimit {
     /// As fast as the loop can go.
     pub const UNLIMITED: Self = Self(0);
 
+    /// The refresh rate of the output the window is on, whatever that is now.
+    ///
+    /// Not a rate: [`Self::resolve`] turns it into one at the call site, and
+    /// until then it reads as no rate ([`Self::hz`] is `None`).
+    pub const FOLLOW_DISPLAY: Self = Self(u32::MAX);
+
+    /// The rate [`Self::resolve`] limits to when no refresh rate is known.
+    pub const FOLLOW_FALLBACK_HZ: u32 = 60;
+
     /// The fastest limit that can be asked for.
     ///
     /// Not a preference: past about here the limiter is measuring intervals
@@ -362,7 +371,28 @@ impl FrameLimit {
     /// The rate asked for, or `None` for unlimited.
     #[must_use]
     pub fn hz(self) -> Option<u32> {
-        (self.0 > 0).then_some(self.0)
+        (self.0 > 0 && self.0 <= Self::MAX).then_some(self.0)
+    }
+
+    /// Whether this names the output's own rate rather than a fixed one.
+    #[must_use]
+    pub fn follows_display(self) -> bool {
+        self == Self::FOLLOW_DISPLAY
+    }
+
+    /// This limit with [`Self::FOLLOW_DISPLAY`] replaced by `display_hz`, or by
+    /// [`Self::FOLLOW_FALLBACK_HZ`] when the platform reports none. Any other
+    /// limit is returned as it is.
+    #[must_use]
+    pub fn resolve(self, display_hz: Option<u32>) -> Self {
+        if !self.follows_display() {
+            return self;
+        }
+        Self(
+            display_hz
+                .unwrap_or(Self::FOLLOW_FALLBACK_HZ)
+                .clamp(1, Self::MAX),
+        )
     }
 
     /// The frame limit the front end runs under, derived from this one
@@ -412,9 +442,14 @@ impl std::str::FromStr for FrameLimit {
         if text.eq_ignore_ascii_case("unlimited") {
             return Ok(Self::UNLIMITED);
         }
-        let hz: u32 = text
-            .parse()
-            .map_err(|_| format!("{text:?} is not a frame limit; write a rate or \"unlimited\""))?;
+        if text.eq_ignore_ascii_case("refresh_rate") {
+            return Ok(Self::FOLLOW_DISPLAY);
+        }
+        let hz: u32 = text.parse().map_err(|_| {
+            format!(
+                "{text:?} is not a frame limit; write a rate, \"refresh_rate\" or \"unlimited\""
+            )
+        })?;
         // Zero is rejected rather than accepted as a second spelling of
         // unlimited: two spellings for one value is how a settings file and a
         // menu row start disagreeing about what is selected.
@@ -432,6 +467,7 @@ impl std::fmt::Display for FrameLimit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.hz() {
             Some(hz) => write!(f, "{hz}"),
+            None if self.follows_display() => f.write_str("refresh_rate"),
             None => f.write_str("unlimited"),
         }
     }

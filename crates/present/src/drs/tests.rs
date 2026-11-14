@@ -325,6 +325,48 @@ fn a_fresh_install_has_no_controller_running() {
     assert!(!Target::default().is_on());
 }
 
+/// `default` is the output's own rate: stored as the word, resolved to a rate
+/// at the call site, and never a rate the controller has to guess.
+#[test]
+fn default_follows_the_display_and_falls_back_to_60() {
+    let follow: Target = "default".parse().expect("a spelling");
+    assert_eq!(follow, Target::FOLLOW_DISPLAY);
+    assert_eq!(follow.to_string(), "default");
+    assert_eq!(String::from(follow), "default");
+    assert!(follow.follows_display());
+    assert!(
+        !follow.is_on(),
+        "unresolved it is no rate, not a rate of u32::MAX"
+    );
+    assert_eq!(
+        follow.at_most(Some(60)),
+        follow,
+        "an unresolved target is not clamped to 60"
+    );
+
+    assert_eq!(follow.resolve(Some(144)).hz(), Some(144));
+    assert_eq!(follow.resolve(Some(59)).hz(), Some(59));
+    assert_eq!(follow.resolve(None).hz(), Some(60));
+    assert!(!follow.resolve(Some(144)).follows_display());
+    assert_eq!(
+        follow.resolve(Some(100_000)).hz(),
+        Some(Target::MAX),
+        "a display faster than the controller is built for is held to its ceiling"
+    );
+
+    let fixed: Target = "90".parse().expect("a rate");
+    assert_eq!(fixed.resolve(Some(144)), fixed);
+    assert_eq!(Target::OFF.resolve(Some(144)), Target::OFF);
+}
+
+/// The resolved target is what reaches the controller's bounds.
+#[test]
+fn a_resolved_default_budgets_one_display_period() {
+    let target = Target::FOLLOW_DISPLAY.resolve(Some(144));
+    assert_eq!(limits(target).target().hz(), Some(144));
+    assert!(target.period().expect("on") < Target::OFFERED[3].period().expect("on"));
+}
+
 /// One cheap frame is not headroom, and a run of them is.
 ///
 /// The regression this pins was found in a running game rather than here: a

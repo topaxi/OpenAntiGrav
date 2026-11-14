@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-09
+updated: 2026-11-14
 summary: "HD fidelity queue: bitangent sign and hull/mine/bomb LOD bias wired (pads open), Bomb, weapon taps, Amphiseum scene, exposure"
 difficulty: medium (35)
 ---
@@ -75,10 +75,15 @@ with pink, no rays; nozzle box down 1.5-5.9 grey on 12 of 13 pairs), the trail t
 (`hd-race/talons-pack` whole 46.47 to 46.12) and the Bomb's fireball (yellow where it was near white); the Bomb's
 shockwave ring reads raw on the console too (nibble 0), so its white burn is the console's law. Evidence:
 engine-trail.md, "The flame's colour tap is decoded on fetch" and "The trail's colour taps are decoded on fetch";
-hd-unlit-programs.md, "The Bomb's units, read live". **Still unread**: the Missile blast's three programs, the
-LeachBall and its ring, the Plasma trio, the rocket smoke, the absorb shell, the light cone. Method: one
-`rsx-draw-list.py --samplers` of a frame that draws them (the stored dumps under `data/reference/hd-flame-tap/` hold
-none of these), read unit 0's nibble, decode in `shade.wesl` on `encoded_out` only.
+hd-unlit-programs.md, "The Bomb's units, read live". **Read 2026-11-14 (`hd-weapon-taps`, hd-unlit-programs.md, "The weapon units, read live")**: the Missile
+blast's core and rays 7 (wired), its shockwave ring 0; the LeachBall and its ring 7 (ball wired, ring on the
+authored path, decodes already); the Plasma head 7 (wired), sphere 7, halo 7, ring 0; the Rocket smoke 7 on both
+taps (wired; reverses `rocket-trail.md`'s WCB-off film note); the track light cone was read live before and is
+decoded. **Still open**: the Plasma ring reads raw but ours lights it through the authored path, so a raw ring
+needs its unlit clock-scroll program written whole (as `BOMB_SHOCK` is); a second Plasma explosion read; the
+absorb shell's landing; Omega's and 2048's sampler state (their programs are recooked GCN / Vita; "checked,
+applies, not wired" for the models they ship). Tools: `rpcs3-hd-whiteout.py --fire-state N
+--behind --want-mats DIR`, `rsx_fp_match.py` (attribute a dumped draw to the disc program it runs).
 
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
 textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which is WebGPU's and GL's ceiling. A seventh material
