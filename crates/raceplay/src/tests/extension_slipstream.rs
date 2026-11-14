@@ -352,6 +352,16 @@ fn a_race_hands_its_module_the_picks_its_source_carries() {
 /// The real module's commands for the first `ticks` after a fire by a person at 360 km/h on
 /// a 4000 unit lap from progress 3900, flying on, with the QUALITY pick `option`.
 fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
+    portal_commands_ending(module, option, ticks, None)
+}
+
+/// `portal_commands`, with the engine's transit-end event for the person on tick `end`.
+fn portal_commands_ending(
+    module: &Module,
+    option: u8,
+    ticks: usize,
+    end: Option<usize>,
+) -> Vec<Command> {
     let crafts: Vec<Craft> = (0..8)
         .map(|slot| Craft {
             pickup: if slot == 0 {
@@ -385,6 +395,8 @@ fn portal_commands(module: &Module, option: u8, ticks: usize) -> Vec<Command> {
                     ahead: 30.0,
                 },
             ]
+        } else if end == Some(tick) {
+            vec![Event::TransitEnd { slot }]
         } else {
             Vec::new()
         };
@@ -471,4 +483,35 @@ fn the_real_module_draws_each_quality_as_specified_and_plays_the_same_race() {
             .iter()
             .any(|c| matches!(c, Command::Transit { .. }))
     );
+}
+
+/// The tunnel's tick count (`fx/wormhole.wgsl`'s `phase`) is the ticks since the entrance and
+/// takes every value from the entrance to the end of the tail: the exit tick, which cuts the
+/// camera, is the tick after the last one in the tunnel, not two after it.
+#[test]
+fn the_tunnels_tick_count_never_skips_a_tick_through_the_exit() {
+    let Some(slipstream) = open() else { return };
+    let module = compiled(&slipstream);
+    // The craft reaches the entrance on tick 6; the transit is 60 ticks.
+    let entrance = 6;
+    let exit = entrance + 60;
+    let commands = portal_commands_ending(&module, 0, exit + 4, Some(exit));
+    let phases: Vec<f32> = commands
+        .iter()
+        .filter_map(|c| match c {
+            Command::SetShaderParam {
+                shader,
+                index: 0,
+                value,
+                ..
+            } if shader.as_str() == "wormhole" => Some(*value),
+            _ => None,
+        })
+        .collect();
+    assert!(phases.len() > 60, "the tunnel is told its count: {phases:?}");
+    for pair in phases.windows(2) {
+        assert_eq!(pair[1] - pair[0], 1.0, "a tick skipped in {phases:?}");
+    }
+    assert_eq!(phases[0], 0.0, "the entrance tick");
+    assert_eq!(phases[60], 60.0, "the exit tick follows the last tunnel tick, 59");
 }
