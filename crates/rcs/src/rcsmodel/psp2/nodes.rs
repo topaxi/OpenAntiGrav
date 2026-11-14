@@ -62,7 +62,7 @@
 //! authored box for the same mesh *in its `Anim Transform`'s space*, to the
 //! float, and none of them equals it in world space.
 
-use super::container::u32_at as u32_or_err;
+use oag_bytes::le::{u16_at, u32_at};
 
 /// Where the node count sits in the file header, on both widths.
 const NODE_COUNT: usize = 0x10;
@@ -297,15 +297,6 @@ fn pointer_at(cpu: &[u8], at: usize, layout: Layout) -> Option<usize> {
     } else {
         u32_at(cpu, at).map(|v| v as usize)
     }
-}
-
-fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {
-    u32_or_err(cpu, at, "node table").ok()
-}
-
-fn u16_at(cpu: &[u8], at: usize) -> Option<u16> {
-    cpu.get(at..at + 2)
-        .map(|b| u16::from_le_bytes(b.try_into().expect("two bytes")))
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {

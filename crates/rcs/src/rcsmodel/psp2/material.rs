@@ -510,11 +510,6 @@ fn ends_with_ci(s: &str, suffix: &str) -> bool {
     sb.len() >= xb.len() && sb[sb.len() - xb.len()..].eq_ignore_ascii_case(xb)
 }
 
-fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {
-    cpu.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-}
-
 /// Whether a string starts at `at`: the byte before it is `0`, or it is the section's first.
 /// A word that merely holds an address inside a longer path would otherwise read back as a
 /// truncated path no material names.
@@ -642,6 +637,8 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
 
 mod ps4_params;
 
+use oag_bytes::le::{u32_at, u64_at};
+
 /// Bytes from the start of a PS4 sampler entry to its texture pointer.
 const PS4_SAMPLER_POINTER: usize = 0x18;
 /// Bytes per PS4 sampler entry. Consecutive entries of one material sit this
@@ -728,11 +725,6 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> (Vec<String>, Option<S
         found.into_iter().map(|(_, _, path)| path).collect(),
         lightmap.map(|(_, path)| path),
     )
-}
-
-fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
-    cpu.get(at..at + 8)
-        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
 /// Where a PS4 file states its material count: a 64-bit word at this offset of

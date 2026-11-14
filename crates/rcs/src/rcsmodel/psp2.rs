@@ -108,6 +108,7 @@
 use std::fmt;
 
 use container::u32_at;
+use oag_bytes::le::f32_at;
 
 pub mod container;
 pub mod lighting_only;
@@ -794,7 +795,11 @@ fn one(
     let mut positions = Vec::with_capacity(vertex_count);
     for v in 0..vertex_count {
         let at = vertex_at + v * stride;
-        positions.push([f32_at(file, at), f32_at(file, at + 4), f32_at(file, at + 8)]);
+        positions.push([
+            f32_at(file, at)?,
+            f32_at(file, at + 4)?,
+            f32_at(file, at + 8)?,
+        ]);
     }
     // Read raw here and validated against the material table in `parse`,
     // which is the only place that knows how many entries the table has.
@@ -841,7 +846,7 @@ fn one(
             for v in 0..vertex_count {
                 let at = vertex_at + v * stride + off;
                 let uv = if width == 8 {
-                    [f32_at(file, at), f32_at(file, at + 4)]
+                    [f32_at(file, at)?, f32_at(file, at + 4)?]
                 } else {
                     unpack_texcoord([file[at], file[at + 1], file[at + 2], file[at + 3]])
                 };
@@ -1028,10 +1033,6 @@ impl Declarations {
             .get(&target)
             .filter(|decl| decl.stride == stride)
     }
-}
-
-fn f32_at(file: &[u8], at: usize) -> f32 {
-    f32::from_le_bytes(file[at..at + 4].try_into().expect("four bytes"))
 }
 
 #[cfg(test)]
