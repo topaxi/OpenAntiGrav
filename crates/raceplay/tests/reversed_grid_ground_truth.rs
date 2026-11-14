@@ -1,5 +1,5 @@
 //! The reversed grid lands on the track too, same as
-//! `race_ground_truth.rs::the_whole_grid_lands_on_the_track` checks for the
+//! `race_grid_ground_truth.rs::the_whole_grid_lands_on_the_track` checks for the
 //! forward one.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project

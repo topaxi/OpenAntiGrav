@@ -126,7 +126,7 @@ makes no request after loading itself.
   wasm, behind `cfg(target_arch = "wasm32")`: the race scene build
   (`race_build::BuildWorker`, which is GPU work and wgpu's web types belong to
   the page's thread), dropping a parked race (GPU resources again), and the
-  boot's media (`boot::MediaWorker`; a movie's open is a demux, and its decode
+  boot's media (`boot::worker::MediaWorker`; a movie's open is a demux, and its decode
   is the browser's own and asynchronous, so it has nothing slow to move). A CHD read is serial when `available_parallelism`
   fails, which it does here. The circuit-length worker uses `std::thread`, which
   this target refuses even with atomics, so it fails to spawn and logs it, as it
@@ -1082,7 +1082,7 @@ requires the menus with no report.
   2026-10-19, not re-measured in a browser), and the rest inflate and sprite
   sheets. The music survey stays inline in the browser
   (`MusicDiscs::survey_in_background` surveys in place there).
-- **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
+- **Dropping a parked race**, and `boot::worker::MediaWorker`, inline as before.
 
 ### Freezes after the threads
 

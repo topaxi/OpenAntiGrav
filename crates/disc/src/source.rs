@@ -19,7 +19,7 @@ pub const SECTOR_SIZE: usize = 2048;
 ///
 /// `Send` is a supertrait because an opened image gets moved onto a worker
 /// thread: the game loads its movies off one while the window it is about to
-/// fill is already open (`oag_game::boot::MediaWorker`). Both implementors are
+/// fill is already open (`oag_game::boot::worker::MediaWorker`). Both implementors are
 /// a file handle and a decompression buffer, so this costs nothing and is
 /// stated here rather than discovered as an error at the one call site that
 /// needs it. It is deliberately **not** `Sync`: one thread owns a source at a

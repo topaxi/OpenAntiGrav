@@ -61,7 +61,7 @@ pub use oag_pulse::loading::{GLOW_STRIP_ENTRY, TIPS_ENTRY};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     /// The boot's own movies, on every windowed start. See
-    /// [`crate::boot::MediaWorker`].
+    /// [`crate::boot::worker::MediaWorker`].
     ///
     /// Carries what the current load is doing, because that is the difference
     /// between a wait nobody notices and eighty seconds of one - see

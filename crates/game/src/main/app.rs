@@ -45,7 +45,7 @@ pub(crate) struct App {
     ///
     /// Joined by [`Session::finish_loading`], which is also where the two
     /// halves become a `boot::Boot`.
-    pub(crate) media: Option<boot::MediaWorker>,
+    pub(crate) media: Option<boot::worker::MediaWorker>,
     /// `--overlay`, applied to the sequence once it exists.
     pub(crate) boot_overlay: bool,
     /// `--pick-language`: show the picker even when the settings name one.

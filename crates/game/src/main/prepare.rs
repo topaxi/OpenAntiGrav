@@ -70,7 +70,7 @@ pub(crate) struct Prepared {
     /// The cheap half of the boot - 0.05 s on the EU disc, against 4.9 s for
     /// the movies still decoding on [`Self::media`].
     pub(crate) boot_shell: boot::Shell,
-    pub(crate) media: boot::MediaWorker,
+    pub(crate) media: boot::worker::MediaWorker,
     pub(crate) shell: Shell,
     pub(crate) loading_assets: loading::Assets,
     pub(crate) race_options: race::Options,
@@ -378,7 +378,7 @@ impl Pending {
         // Read before the media worker takes the archives: 2048's main menu
         // grows two tiles when its update is mounted.
         let updated = !archives.patch.is_empty();
-        let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
+        let media = boot::worker::MediaWorker::spawn(archives, &boot_shell, &options);
 
         // Every team the player's own source declares, in the definition's file
         // order, DLC packs included. `livery::teams_for_slots` decides which

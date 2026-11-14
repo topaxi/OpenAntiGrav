@@ -205,7 +205,7 @@ struct Landed {
 }
 
 /// One soundtrack track being located and decoded on its own thread, the shape
-/// of `oag_raceplay::worker::LoadWorker` and `oag_game::boot::MediaWorker`.
+/// of `oag_raceplay::worker::LoadWorker` and `oag_game::boot::worker::MediaWorker`.
 ///
 /// **Every race track goes through one**, so the frame thread never reads a
 /// listing or decodes a track: the race hand-off (`Session::launch_race`),

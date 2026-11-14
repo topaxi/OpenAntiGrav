@@ -27,7 +27,7 @@ them - see [pickups](../gameplay/pickups.md) for the trigger, the draw and the
 recovered-versus-ours split. Its trigger volumes are carried on
 `oag_raceplay::Setup::weapon_pads` and consumed by `Race::test_weapon_pads`.
 
-`crates/game/tests/race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
+`crates/game/tests/race_weapons_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
 is what makes "drawn where they trigger" a fact rather than a hope: the geometry
 comes through the **mesh** path and the volumes through the **payload** path,
 neither knows about the other, and the test asserts every volume has drawn

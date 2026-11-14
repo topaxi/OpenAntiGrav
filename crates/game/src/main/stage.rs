@@ -84,7 +84,7 @@ impl Stage {
     pub(crate) fn loading(
         gpu: &Gpu,
         shell: boot::Shell,
-        media: Option<boot::MediaWorker>,
+        media: Option<boot::worker::MediaWorker>,
         assets: &loading::Assets,
         trace: bool,
         // The player's chosen language, so this screen's own invented prose

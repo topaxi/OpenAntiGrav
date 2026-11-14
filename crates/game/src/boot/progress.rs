@@ -12,13 +12,13 @@ use std::sync::Mutex;
 /// [`crate::prefetch::Progress`]: the loading screen polls it from the frame
 /// loop it already has and holds no lock while it draws.
 ///
-/// There is no `finished` here because [`MediaWorker::is_finished`] already
+/// There is no `finished` here because [`super::worker::MediaWorker::is_finished`] already
 /// answers that, and the thread is what knows - `done == total` is true for the
 /// moment between the last load returning and the thread handing back its
 /// [`Media`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MediaProgress {
-    /// What [`MediaPlan::loads`] counted, or `0` before the phase starts.
+    /// What [`super::worker::MediaPlan::loads`] counted, or `0` before the phase starts.
     pub total: usize,
     /// Loads that have returned, successfully or not.
     pub done: usize,
@@ -47,7 +47,7 @@ pub(super) fn starting(progress: &Mutex<MediaProgress>, what: &str) {
     at.step = None;
 }
 
-/// Counts a load that has returned, however it returned. See [`MediaPlan::loads`].
+/// Counts a load that has returned, however it returned. See [`super::worker::MediaPlan::loads`].
 pub(super) fn loaded(progress: &Mutex<MediaProgress>) {
     lock_media(progress).done += 1;
 }

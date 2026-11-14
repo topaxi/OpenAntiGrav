@@ -5036,13 +5036,13 @@ pickup, so in a race the two are the same tick.
 | The controller steers back toward its line, brakes for a corner, is damped by its own turn rate | `oag-ai`'s own tests, against a synthetic circle and straight | yes |
 | Curvature reads `1/radius` on a circle | `line::tests::curvature_approximates_one_over_the_radius` | yes |
 | Every opponent is stepped with controls a driver chose | `race::tests::the_opponents_are_driven_rather_than_parked` | yes |
-| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
-| Two runs of one race stay identical, drivers included | `race_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
-| The field is placed, and being further round earns a better place | `race_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| A grid of eight leaves the line, goes the right way, and is still on the track after ten seconds | `race_field_ground_truth::the_ai_drives_the_field_along_the_track` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| Two runs of one race stay identical, drivers included | `race_field_ground_truth::a_driven_field_replays_identically` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
+| The field is placed, and being further round earns a better place | `race_field_ground_truth::the_field_is_placed_by_how_far_round_it_is` | **no** - needs a disc image. **Run and passing as of 2026-08-11.** |
 | Seven seeded drivers hold seven different parts of the corridor, and the field strings out | `oag-ai`'s `closed_loop::a_field_of_seeded_drivers_does_not_drive_one_line` and `..._strings_out`, on the oval with an invented corridor | yes |
 | A seeded driver stays inside the corridor, and the same seed drives the same race | `oag-ai`'s `closed_loop::a_seeded_driver_stays_inside_the_corridor`, `the_same_seed_drives_the_same_race` | yes |
 | The drift is smooth, bounded, and different per seed | `noise::tests`, five of them | yes |
-| The field spreads across the **disc's own** corridor, both sides of the line | `race_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
+| The field spreads across the **disc's own** corridor, both sides of the line | `race_field_ground_truth::the_field_spreads_across_the_ai_corridor` | **no** - needs a disc image. **Run and passing as of 2026-08-11**: seven craft spread **16.6 units** across a corridor with 10.5 to spare either side of the line. |
 | The differential holds a corner the steering alone cannot, and does not ring | `closed_loop::a_differential_holds_a_corner_the_steering_alone_cannot` and `..._does_not_ring`, on a 60-unit oval with the airbrake fixture | yes |
 | And stays out of the way where the craft could already make the corner | `closed_loop::a_differential_barely_touches_a_corner_the_craft_can_already_make` | yes |
 | The differential brakes the side the nose is turning toward, is dead inside its deadband, waits for the loop to run out of lock, and never acts on corner exit | four tests in `driver::tests` | yes |
@@ -5078,7 +5078,7 @@ pickup, so in a race the two are the same tick.
 | A driver fires at a craft ahead and inside its cone, and not at one beside it, out of range, at point-blank, or round a corner | six tests in `driver::tests` | yes |
 | A trigger-happy driver fires sooner than a cautious one, and a provoked one sooner than it did calm | two tests in `driver::tests` | yes |
 | **An opponent's rocket is owned by the slot that fired it** | `race::tests::an_opponents_rocket_is_owned_by_the_slot_that_fired_it` | yes |
-| **The aiming gates actually open on real geometry** | `race_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
+| **The aiming gates actually open on real geometry** | `race_field_ground_truth::an_opponent_fires_at_a_craft_ahead_on_a_real_circuit` | **no** - needs a disc image. **Run and passing 2026-08-11**: 159 rockets from six of seven opponents in two minutes. |
 | A pilot file round-trips, and one with an impossible commitment, a reversed range, an unknown key or a bad lean is rejected **by name** | six tests in `pilots::tests` | yes |
 | The roster is sorted by name rather than by the filesystem, and a file may replace a built-in | two tests in `pilots::tests` | yes |
 | Two pilots differing in one number digest differently, and no built-in digests to zero | two tests in `pilots::tests` | yes |

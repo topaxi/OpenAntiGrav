@@ -126,7 +126,7 @@ pub(super) fn heading(phase: Phase, progress: &Progress, strings: &StringTable) 
 ///
 /// **`false` is now the rare case, and it is the honest one.** Both of the
 /// screen's waits count what they are doing - the media phase from
-/// [`crate::boot::MediaPlan::loads`], the prefetch worker from its own planning
+/// [`crate::boot::worker::MediaPlan::loads`], the prefetch worker from its own planning
 /// pass - so a total of zero means there is genuinely nothing to count: a title
 /// whose chain names no movie, on a run with no `--prefetch`. Drawing the row
 /// anyway gave `0 / 0` beside a full bar reading `100%`, which describes nothing

@@ -225,7 +225,7 @@ fn a_boot_with_nothing_to_convert_draws_no_bar_and_no_counts() {
 
 /// **The ordinary boot draws the bar again**, because the media phase now
 /// counts its own loads: `Session::loading_progress` folds
-/// [`crate::boot::MediaWorker::progress`] in, and a plan naming both movies
+/// [`crate::boot::worker::MediaWorker::progress`] in, and a plan naming both movies
 /// and a backdrop is five loads rather than nothing.
 ///
 /// The regression this pins is the one that removed it: the phase reported

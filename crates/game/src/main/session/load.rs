@@ -218,7 +218,7 @@ impl Session {
         };
         let media = media
             .as_mut()
-            .map(boot::MediaWorker::join)
+            .map(boot::worker::MediaWorker::join)
             .unwrap_or_default();
         oag_raceplay::loader_log::lines(&media.report);
         let mut loaded = boot::assemble(shell, media);

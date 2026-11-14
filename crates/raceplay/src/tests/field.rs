@@ -209,7 +209,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
 }
 
 /// the AI landed. That the field then goes somewhere is
-/// `race_ground_truth::the_ai_drives_the_field_along_the_track`, on real
+/// `race_field_ground_truth::the_ai_drives_the_field_along_the_track`, on real
 /// geometry, where it can be true.
 ///
 /// # This fixture has a horizon, and it is [`STALL_TICKS`] long
