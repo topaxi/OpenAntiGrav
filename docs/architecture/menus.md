@@ -90,7 +90,7 @@ the release rather than of this project:
 | TRACK | `Data\Plugins\PI001\Definition.xml`, and the label from the language's string table |
 | LANGUAGE | the language plugins `PI008`-`PI012` |
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
-| SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page (the official mod `oag.remix`, [mods](../tools/mods.md#official-mods-assetsmodsofficial)) it is `values_from = { query = "speed_classes_union" }` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
+| SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_on_race_page`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page (the official mod `oag.remix`, [mods](../tools/mods.md#official-mods-assetsmodsofficial)) it is `values_from = { query = "speed_classes_union" }` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_display::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_present::perf`, pinned the same way |
@@ -197,8 +197,9 @@ offered on the RACE REMIX page only.
 Decided 2026-09-05 (maintainer: "the ordinary page offers four on every title"); 2048's `SUPERPHANTOM` followed on
 2026-10-12 (chosen, not measured), since no ordinary page of that title offers it (it has no race box).
 
-The mechanism is `oag_title::SpeedClasses::is_offered_outside_remix`, which reads the ladder's own
-`remix_only` list (Pure: `VECTOR`; 2048: `SUPERPHANTOM`), layered
+The mechanism is `oag_title::SpeedClasses::is_offered_on_race_page` (named `is_offered_outside_remix`, with
+the field `remix_only`, until the engine's Remix vocabulary was removed; ADR-0082 and the older ADRs cite the old
+names), which reads the ladder's own `union_only` list (Pure: `VECTOR`; 2048: `SUPERPHANTOM`), layered
 on top of `is_selectable` rather than replacing it: `is_selectable` still says
 `true` for `VECTOR`, which is what keeps RACE REMIX's union, `oag-trace`'s
 `--class` spell-check and every resolution path exactly as they were. Only the

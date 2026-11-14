@@ -244,7 +244,7 @@ impl Session {
     /// contains five names and this row offers all five.
     ///
     /// **This row is not where `VECTOR` is confined to the union - it is the
-    /// union row.** `oag_title::SpeedClasses::is_offered_outside_remix` is a
+    /// union row.** `oag_title::SpeedClasses::is_offered_on_race_page` is a
     /// *different*, narrower filter the ordinary RACE page's own row applies
     /// instead (`super::menus::speed_class_choices`), so a Pure-only boot's
     /// RACE page still offers four while this one offers five. See

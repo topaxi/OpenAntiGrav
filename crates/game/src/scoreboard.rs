@@ -185,7 +185,7 @@ pub fn class_table(
 /// falls back to `oag_tables::handling::SpeedClass::ALL`, which is this build's own
 /// list rather than some other title's measurement.
 ///
-/// **Confined to `oag_title::SpeedClasses::is_offered_outside_remix`, not
+/// **Confined to `oag_title::SpeedClasses::is_offered_on_race_page`, not
 /// `selectable()` alone.** A Pure boot's own ladder carries `VECTOR`, and
 /// this build can race it - but only RACE REMIX offers it, by choice. See that function's doc comment and
 /// `docs/architecture/menus.md` for why offering it here too would diverge

@@ -7,19 +7,19 @@ use super::*;
 /// The four rungs every title measured so far shares.
 const FOUR: SpeedClasses = SpeedClasses {
     names: SpeedClasses::PULSE_LADDER,
-    remix_only: &[],
+    union_only: &[],
 };
 
 /// Wipeout Pure's shape: the same four with `VECTOR` ahead of them.
 const FIVE: SpeedClasses = SpeedClasses {
     names: SpeedClasses::PURE_LADDER,
-    remix_only: &[SpeedClasses::VECTOR],
+    union_only: &[SpeedClasses::VECTOR],
 };
 
 /// Wipeout 2048's native shape: the four with `SUPERPHANTOM` above.
 const FIVE_ABOVE: SpeedClasses = SpeedClasses {
     names: SpeedClasses::WIPEOUT_2048_LADDER,
-    remix_only: &[SpeedClasses::SUPER_PHANTOM],
+    union_only: &[SpeedClasses::SUPER_PHANTOM],
 };
 
 /// The axis exists because the two disagree in **cardinality**, so that is
@@ -125,21 +125,21 @@ fn selectable_agrees_with_the_predicate() {
     assert!(FIVE.selectable().all(SpeedClasses::is_selectable));
 }
 
-/// `is_offered_outside_remix` confines what the ladder's `remix_only` names to
+/// `is_offered_on_race_page` confines what the ladder's `union_only` names to
 /// RACE REMIX without touching `is_selectable` - the ordinary RACE page's
 /// narrower question, layered on top of the engine's own answer.
 #[test]
-fn is_offered_outside_remix_confines_the_ladders_remix_only_rungs_and_nothing_else() {
-    assert!(!FIVE.is_offered_outside_remix(SpeedClasses::VECTOR));
-    assert!(!FIVE.is_offered_outside_remix("vector"));
-    assert!(!FIVE_ABOVE.is_offered_outside_remix(SpeedClasses::SUPER_PHANTOM));
+fn is_offered_on_race_page_confines_the_ladders_union_only_rungs_and_nothing_else() {
+    assert!(!FIVE.is_offered_on_race_page(SpeedClasses::VECTOR));
+    assert!(!FIVE.is_offered_on_race_page("vector"));
+    assert!(!FIVE_ABOVE.is_offered_on_race_page(SpeedClasses::SUPER_PHANTOM));
     for name in SpeedClasses::PULSE_LADDER {
-        assert!(FIVE.is_offered_outside_remix(name), "{name}");
-        assert!(FIVE_ABOVE.is_offered_outside_remix(name), "{name}");
-        assert!(FOUR.is_offered_outside_remix(name), "{name}");
+        assert!(FIVE.is_offered_on_race_page(name), "{name}");
+        assert!(FIVE_ABOVE.is_offered_on_race_page(name), "{name}");
+        assert!(FOUR.is_offered_on_race_page(name), "{name}");
     }
     // A rung the ladder does not carry is not offered by it at all.
-    assert!(!FOUR.is_offered_outside_remix(SpeedClasses::VECTOR));
+    assert!(!FOUR.is_offered_on_race_page(SpeedClasses::VECTOR));
 
     // Every measured rung stays selectable - the confinement is a menu-page
     // rule on top of engine capability, not a narrower version of it.

@@ -28,7 +28,7 @@ use super::{Session, picker, queries};
 /// RECORDS page's own per-class table, and this binary's `session` module is
 /// not reachable from the library crate that lives in. See that function's
 /// own doc for the full reasoning, including the `oag_title::SpeedClasses::
-/// is_offered_outside_remix` confinement.
+/// is_offered_on_race_page` confinement.
 pub(crate) use oag_game::scoreboard::speed_class_choices;
 
 /// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
@@ -50,7 +50,7 @@ pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
 /// when a Pure source is mounted) saved under it, or edited by hand. Such a
 /// value is one this page's own row no longer lists (see
 /// [`speed_class_choices`]'s confinement to
-/// [`oag_title::SpeedClasses::is_offered_outside_remix`]). `Menu::supply`
+/// [`oag_title::SpeedClasses::is_offered_on_race_page`]). `Menu::supply`
 /// only ever changes the widget's own display index, never the stored
 /// setting, so without this check the row would *display* the fallback
 /// (`"venom"`) while [`Session::handle_menu`]'s `LaunchRace` arm launched
@@ -884,7 +884,7 @@ mod tests {
     /// **The confinement, on the title that made it matter.** Wipeout Pure's
     /// own ladder carries `VECTOR`, and this build can race it - but the
     /// ordinary RACE page is not where that is offered. See
-    /// `oag_title::SpeedClasses::is_offered_outside_remix` and
+    /// `oag_title::SpeedClasses::is_offered_on_race_page` and
     /// `docs/architecture/menus.md` for why.
     #[test]
     fn a_pure_boots_race_page_offers_four_and_not_vector() {

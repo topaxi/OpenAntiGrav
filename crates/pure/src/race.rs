@@ -144,7 +144,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PURE_LADDER,
-        remix_only: &[oag_title::SpeedClasses::VECTOR],
+        union_only: &[oag_title::SpeedClasses::VECTOR],
     }),
 };
 

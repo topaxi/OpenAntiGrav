@@ -1,4 +1,4 @@
-//! The speed-class ladder one title authors, and the union RACE REMIX offers.
+//! The speed-class ladder one title authors, and the union a two-title race page offers.
 
 /// The speed-class ladder one title authors, slowest first.
 ///
@@ -37,15 +37,15 @@ pub struct SpeedClasses {
     /// Uppercase as the XML writes; matching is case-insensitive everywhere, the
     /// case is kept so a row compares against its file without transformation.
     pub names: &'static [&'static str],
-    /// The names among [`Self::names`] only RACE REMIX offers; the ordinary
+    /// The names among [`Self::names`] only a two-title race page offers; the ordinary
     /// per-title RACE page draws the rest.
     ///
-    /// **Chosen, not measured**, per rung: `VECTOR` is confined to RACE REMIX and
+    /// **Chosen, not measured**, per rung: `VECTOR` is confined to a two-title race page and
     /// 2048's `SUPERPHANTOM` follows (no ordinary page of that title offers it, it
     /// has no race box); `docs/architecture/menus.md`, "SPEED CLASS: `VECTOR` is
     /// confined to RACE REMIX". Data on the ladder so a rung is added or confined
     /// without a name check in code.
-    pub remix_only: &'static [&'static str],
+    pub union_only: &'static [&'static str],
 }
 
 impl SpeedClasses {
@@ -140,8 +140,8 @@ impl SpeedClasses {
     /// resolves it against the authoring file, so nothing is filtered (see
     /// [`Self::VECTOR`]).
     ///
-    /// Kept as a function because every caller (RACE REMIX's union, the ordinary
-    /// RACE page via [`Self::is_offered_outside_remix`], tests) asks the question
+    /// Kept as a function because every caller (a two-title race page's union, the ordinary
+    /// RACE page via [`Self::is_offered_on_race_page`], tests) asks the question
     /// here, so the next authored-but-unraceable rung has somewhere to go. The
     /// invariant: **a class this rejects is drawn nowhere, on either page**, not
     /// greyed or locked. An option that races on another class's tuning is the
@@ -154,7 +154,7 @@ impl SpeedClasses {
     /// The subset of [`Self::names`] this build can put a ship on: engine
     /// capability ([`Self::is_selectable`]), from which a `speed_classes_union` row is
     /// built (`Session::speed_classes_union`). The ordinary RACE page narrows it through
-    /// [`Self::is_offered_outside_remix`].
+    /// [`Self::is_offered_on_race_page`].
     pub fn selectable(&self) -> impl Iterator<Item = &'static str> + use<> {
         self.names
             .iter()
@@ -163,21 +163,21 @@ impl SpeedClasses {
     }
 
     /// Whether `name` belongs on the ordinary per-title RACE page, as opposed to
-    /// only RACE REMIX: it is on this ladder and not in [`Self::remix_only`].
+    /// only a two-title race page: it is on this ladder and not in [`Self::union_only`].
     ///
-    /// **`VECTOR` is confined to RACE REMIX** by decision, and 2048's
+    /// **`VECTOR` is confined to a two-title race page** by decision, and 2048's
     /// `SUPERPHANTOM` follows (chosen, not measured). Making a rung selectable at
     /// all made a Pure boot's ordinary RACE page offer five classes, wider than
     /// asked; `docs/architecture/menus.md`, "SPEED CLASS: `VECTOR` is confined to
     /// RACE REMIX", has the reasoning and the deliberate divergence.
     ///
-    /// A **menu-page** rule on top of [`Self::is_selectable`]: RACE REMIX's union
+    /// A **menu-page** rule on top of [`Self::is_selectable`]: a two-title race page's union
     /// still offers the rung, only the ordinary page's row stops listing it.
     #[must_use]
-    pub fn is_offered_outside_remix(&self, name: &str) -> bool {
+    pub fn is_offered_on_race_page(&self, name: &str) -> bool {
         Self::is_selectable(name)
             && self.names.iter().any(|n| n.eq_ignore_ascii_case(name))
-            && !self.remix_only.iter().any(|n| n.eq_ignore_ascii_case(name))
+            && !self.union_only.iter().any(|n| n.eq_ignore_ascii_case(name))
     }
 
     /// The rungs of this ladder the ordinary RACE page draws, slowest first.
@@ -185,12 +185,12 @@ impl SpeedClasses {
         self.names
             .iter()
             .copied()
-            .filter(|name| self.is_offered_outside_remix(name))
+            .filter(|name| self.is_offered_on_race_page(name))
     }
 
     /// Every class any of `ladders` authors, as one ladder, slowest first.
     ///
-    /// What RACE REMIX offers: a grid that mixes titles is not restricted to one
+    /// What a two-title race page offers: a grid that mixes titles is not restricted to one
     /// title's rungs. The ordinary per-title RACE page offers its own ladder only.
     ///
     /// # The merge preserves every ladder's own order

@@ -127,7 +127,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::WIPEOUT_2048_LADDER,
-        remix_only: &[oag_title::SpeedClasses::SUPER_PHANTOM],
+        union_only: &[oag_title::SpeedClasses::SUPER_PHANTOM],
     }),
 };
 
