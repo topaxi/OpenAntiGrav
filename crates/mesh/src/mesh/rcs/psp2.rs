@@ -59,6 +59,7 @@ mod transparency;
 mod twin_blend;
 mod uv_keys;
 
+pub use chevron::PLASMA_COMBINE;
 pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 

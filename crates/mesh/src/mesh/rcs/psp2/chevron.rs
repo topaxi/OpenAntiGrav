@@ -1,4 +1,5 @@
-//! Anulpha Pass's chevron glow on 2048 and Omega: the emissive mask and the wave, added unlit.
+//! Anulpha Pass's chevron and centre-lane glows on 2048 and Omega: an emissive mask and the
+//! wave, added unlit.
 //!
 //! Both titles' chevron programs (`cf_chevron_pulse`, `cf_chevron_pulse_time`,
 //! `cf_chevron_pulse_displacement2out`) end, after the albedo-alpha light (`super::lit_alpha`):
@@ -21,6 +22,13 @@
 //! value is unread on both titles (HD's was read off a hooked draw), and the authored one (Omega
 //! `(0, 1.49, 0)`, 2048 `(0, 1, 0)`) paints every chevron plate and wall panel green at Omega's
 //! grid, where the native-port original shows no green in any of its seven frames.
+//!
+//! **The centre lane, `cf_centre_plasma_pulse`**, lights its colour as every other surface does
+//! and adds `E.a * W.rgb` (`E` the `Normal_EmissMask` sampler, a normal map whose alpha is the
+//! mask; Omega `data01` `@0xb404`, `@0x320` to `@0x374`; 2048 #16 words 21 and 30, `W * W`). That
+//! is HD's chevron glow with a white tint, so its entry's second lane is [`PLASMA_COMBINE`] and
+//! carries no `LIT_ALPHA`; the normal map rides the fifth binding for its alpha and the wave the
+//! sixth, at the same held offset.
 
 use std::sync::Arc;
 
@@ -38,6 +46,13 @@ pub const LINEAGE_COMBINE: f32 = 1.0;
 
 /// `Colour` as drawn: held at zero (see the module's doc).
 const HELD_COLOUR: [f32; 3] = [0.0; 3];
+
+/// [`Emissive::program`]'s second lane on a [`PROGRAM_CHEVRON`] entry: the centre lane,
+/// `E.a * tint * W` after the light, with the surface lit by its colour.
+pub const PLASMA_COMBINE: f32 = 2.0;
+
+/// `~crc32("Normal_EmissMask")`: the centre lane's normal map, whose alpha is its mask.
+const NORMAL_EMISS_MASK: u32 = 0xe4ee_aa66;
 
 /// One admitted material: its glow-table slot (entry index plus one) and its two pictures.
 pub(super) struct Pulse {
@@ -68,20 +83,21 @@ impl Plan {
     }
 }
 
-/// The emask's and the wave's paths and `UVScale`, when `material` is an alpha-lit chevron that
-/// binds all three and authors `Colour`.
-fn reads(material: &Material) -> Option<(&str, &str, f32)> {
-    if !super::lit_alpha::admits(material)
-        || !super::refraction::file_stem(material)
-            .to_ascii_lowercase()
-            .contains("chevron_pulse")
-    {
-        return None;
-    }
+/// The mask's and the wave's paths, `UVScale` and the entry's `(tint, second lane)`, when
+/// `material` is an alpha-lit chevron that authors `Colour`, or the centre lane.
+fn reads(material: &Material) -> Option<(&str, &str, f32, ([f32; 3], f32))> {
+    let stem = super::refraction::file_stem(material).to_ascii_lowercase();
     let path = |hash| material.sampler(hash).filter(|p| !p.is_empty());
-    material.param(COLOUR).filter(|c| c.len() >= 3)?;
     let scale = *material.param(SCALE)?.first()?;
-    Some((path(EMISSIVE_SAMPLER)?, path(WAVE_SAMPLER)?, scale))
+    let (mask, combine) = if stem == "cf_centre_plasma_pulse" {
+        (path(NORMAL_EMISS_MASK)?, ([1.0; 3], PLASMA_COMBINE))
+    } else if super::lit_alpha::admits(material) && stem.contains("chevron_pulse") {
+        material.param(COLOUR).filter(|c| c.len() >= 3)?;
+        (path(EMISSIVE_SAMPLER)?, (HELD_COLOUR, LINEAGE_COMBINE))
+    } else {
+        return None;
+    };
+    Some((mask, path(WAVE_SAMPLER)?, scale, combine))
 }
 
 /// Admits each chevron material whose two pictures decode, writing its glow-table entry into
@@ -98,7 +114,7 @@ pub(super) fn plan(
         std::collections::HashMap::new();
     for material in &decoded.materials {
         out.pulses.push(None);
-        let Some((emask_path, wave_path, scale)) = reads(material) else {
+        let Some((emask_path, wave_path, scale, (tint, combine))) = reads(material) else {
             continue;
         };
         let at = out.pulses.len() - 1;
@@ -136,11 +152,11 @@ pub(super) fn plan(
         };
         #[allow(clippy::cast_precision_loss)]
         let entry = Emissive {
-            tint: HELD_COLOUR,
+            tint,
             offset: row as f32,
             scale,
             rate: 0.0,
-            program: [PROGRAM_CHEVRON, LINEAGE_COMBINE],
+            program: [PROGRAM_CHEVRON, combine],
         };
         let index = emissive.iter().position(|e| *e == entry).or_else(|| {
             (emissive.len() + 1 < crate::mesh::rcs::EMISSIVE_LIMIT).then(|| {
@@ -170,5 +186,6 @@ mod tests {
         assert_eq!(COLOUR, name_hash("Colour"));
         assert_eq!(SCALE, name_hash("UVScale"));
         assert_eq!(OFFSET, name_hash("offset"));
+        assert_eq!(NORMAL_EMISS_MASK, name_hash("Normal_EmissMask"));
     }
 }

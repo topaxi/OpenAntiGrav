@@ -19,7 +19,7 @@
 use std::path::Path;
 
 use oag_mesh::mesh::rcs::psp2;
-use oag_mesh::mesh::{Model, PROGRAM_TWIN_BLEND, slots};
+use oag_mesh::mesh::{Model, PROGRAM_CHEVRON, PROGRAM_TWIN_BLEND, slots};
 
 const VITA: [&str; 3] = [
     "vita/PCSF00007/base/PSP2/data.psarc",
@@ -246,6 +246,23 @@ fn check_lit_alpha(name: &str, model: &Model, report: &psp2::Report) {
             report.lit_alpha_submeshes >= 10 && flagged > 0,
             "{name}: {} alpha-lit submesh(es), {flagged} vertices",
             report.lit_alpha_submeshes
+        );
+        // The centre lane's glow entry, and its `Uvset1` coordinate: Omega's lane vertices
+        // vary across the picture rather than sampling one texel.
+        let lane: Vec<[f32; 2]> = model
+            .vertices
+            .iter()
+            .filter(|v| {
+                let index = slots::material_index(v.slots) as usize;
+                index != 0
+                    && model.emissive[index - 1].program == [PROGRAM_CHEVRON, psp2::PLASMA_COMBINE]
+            })
+            .map(|v| v.texcoord)
+            .collect();
+        assert!(!lane.is_empty(), "{name}: no centre-lane vertex");
+        assert!(
+            lane.iter().any(|t| *t != lane[0]),
+            "{name}: the centre lane's coordinate is constant"
         );
         // The chevrons bind their emissive mask and wave (`psp2`'s `chevron`).
         assert!(
