@@ -646,8 +646,9 @@ pub fn parse_chunks(payload: &[u8], order: ByteOrder) -> Result<CollisionGeometr
         return Err(Error::TooShort { got: payload.len() });
     }
 
-    let version = u32_at(order, payload, 0);
-    let object_count = u32_at(order, payload, 4) as usize;
+    let header = "the header length was checked above";
+    let version = oag_bytes::u32_at(payload, 0, order).expect(header);
+    let object_count = oag_bytes::u32_at(payload, 4, order).expect(header) as usize;
 
     // The count is a u32 out of a file, so not a capacity: an object is at least
     // its chunk count.
@@ -678,7 +679,9 @@ fn parse_object(
         OBJECT_HEADER_LEN,
         payload.len(),
     )?;
-    let chunk_count = u32_at(order, payload, at) as usize;
+    let chunk_count = oag_bytes::u32_at(payload, at, order)
+        .expect("`end_of` kept the object header inside the payload")
+        as usize;
 
     let capacity = chunk_count.min((payload.len() - cursor) / CHUNK_HEADER_LEN);
     let mut chunks: Vec<Chunk> = Vec::with_capacity(capacity);
@@ -692,9 +695,10 @@ fn parse_object(
             payload.len(),
         )?;
 
-        let kind = u32_at(order, payload, cursor);
-        let declared = u16_at(order, payload, cursor + 4);
-        let count = usize::from(u16_at(order, payload, cursor + 6));
+        let in_header = "`end_of` kept the chunk header inside the payload";
+        let kind = oag_bytes::u32_at(payload, cursor, order).expect(in_header);
+        let declared = oag_bytes::u16_at(payload, cursor + 4, order).expect(in_header);
+        let count = usize::from(oag_bytes::u16_at(payload, cursor + 6, order).expect(in_header));
 
         let stride = chunk_stride(kind).ok_or(Error::UnknownChunk { object, kind })?;
         // Checking the unused declared stride makes a drifting walk fail here
@@ -723,6 +727,7 @@ fn parse_object(
         cursor = end;
     }
 
+    let whole_record = "`as_chunks` yields whole fixed-size records";
     let find = |kind: u32| chunks.iter().find(|c| c.kind == kind);
 
     let vertices = find(CHUNK_VERTICES).map_or_else(Vec::new, |chunk| {
@@ -732,9 +737,9 @@ fn parse_object(
             .iter()
             .map(|v| {
                 [
-                    f32_at(order, v, 0),
-                    f32_at(order, v, 4),
-                    f32_at(order, v, 8),
+                    oag_bytes::f32_at(v, 0, order).expect(whole_record),
+                    oag_bytes::f32_at(v, 4, order).expect(whole_record),
+                    oag_bytes::f32_at(v, 8, order).expect(whole_record),
                 ]
             })
             .collect()
@@ -747,9 +752,9 @@ fn parse_object(
             .iter()
             .map(|t| {
                 [
-                    u16_at(order, t, 0),
-                    u16_at(order, t, 2),
-                    u16_at(order, t, 4),
+                    oag_bytes::u16_at(t, 0, order).expect(whole_record),
+                    oag_bytes::u16_at(t, 2, order).expect(whole_record),
+                    oag_bytes::u16_at(t, 4, order).expect(whole_record),
                 ]
             })
             .collect()
@@ -785,7 +790,7 @@ fn parse_object(
                 .as_chunks::<SCALAR_STRIDE>()
                 .0
                 .iter()
-                .map(|s| f32_at(order, s, 0))
+                .map(|s| oag_bytes::f32_at(s, 0, order).expect(whole_record))
                 .collect()
         }
         None => vec![DEFAULT_VERTEX_SCALAR; vertices.len()],
@@ -890,18 +895,6 @@ fn end_of(what: &'static str, object: usize, at: usize, bytes: usize, len: usize
         });
     }
     Ok(end)
-}
-
-fn u16_at(order: ByteOrder, data: &[u8], at: usize) -> u16 {
-    order.u16(data, at)
-}
-
-fn u32_at(order: ByteOrder, data: &[u8], at: usize) -> u32 {
-    order.u32(data, at)
-}
-
-fn f32_at(order: ByteOrder, data: &[u8], at: usize) -> f32 {
-    order.f32(data, at)
 }
 
 #[cfg(test)]

@@ -486,22 +486,16 @@ pub fn start_position(payload: &[u8], order: ByteOrder) -> Option<StartPosition>
     if payload.len() < START_POSITION_LEN {
         return None;
     }
-    let row = |r: usize| {
-        [
-            f32_at(order, payload, r * 16),
-            f32_at(order, payload, r * 16 + 4),
-            f32_at(order, payload, r * 16 + 8),
-        ]
-    };
+    let row = |r: usize| vec3_at(order, payload, r * 16);
 
     let up = [0.0, 1.0, 0.0];
-    let authored = row(2);
+    let authored = row(2)?;
     // Gram-Schmidt against exactly `+y`: the projection is the y component.
     let forward = normalize([authored[0], 0.0, authored[2]])?;
     let left = cross(up, forward);
 
     Some(StartPosition {
-        position: row(3),
+        position: row(3)?,
         left,
         up,
         forward,
@@ -590,7 +584,8 @@ pub fn cage_flag(payload: &[u8]) -> bool {
     let Some(order) = byte_order(payload) else {
         return false;
     };
-    payload.len() >= HEADER_LEN && u32_at(order, payload, 0x18) & 1 == 1
+    payload.len() >= HEADER_LEN
+        && oag_bytes::u32_at(payload, 0x18, order).is_some_and(|word| word & 1 == 1)
 }
 
 /// [`cage_flag`] of a whole `.vex` file's `WO Track` node; `false` for a file with none.
@@ -664,13 +659,14 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
             magic: ByteOrder::Little.u32(payload, 0),
         });
     };
-    let version = u32_at(order, payload, 4);
+    let header = "the header length was checked above";
+    let version = oag_bytes::u32_at(payload, 4, order).expect(header);
     if version < MIN_VERSION {
         return Err(Error::UnsupportedVersion { version });
     }
 
-    let path_count = u32_at(order, payload, 8) as usize;
-    let junction_count = u32_at(order, payload, 12) as usize;
+    let path_count = oag_bytes::u32_at(payload, 8, order).expect(header) as usize;
+    let junction_count = oag_bytes::u32_at(payload, 12, order).expect(header) as usize;
 
     let paths_at = HEADER_LEN + reserved_len(version);
     let junctions_at = end_of("paths", paths_at, path_count, PATH_LEN, payload.len())?;
@@ -687,7 +683,8 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
     let mut counts = Vec::with_capacity(path_count.min(payload.len() / PATH_LEN));
     let mut at = points_at;
     for i in 0..path_count {
-        let count = u32_at(order, payload, paths_at + i * PATH_LEN) as usize;
+        let count = oag_bytes::u32_at(payload, paths_at + i * PATH_LEN, order)
+            .expect("`end_of` kept the path array inside the payload") as usize;
         at = end_of(
             "control points",
             at,
@@ -725,7 +722,8 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
 
         paths.push(Path {
             points,
-            max_spacing: f32_at(order, payload, base + 4),
+            max_spacing: oag_bytes::f32_at(payload, base + 4, order)
+                .expect("`end_of` kept the path array inside the payload"),
             entry: index_at(order, payload, base + 0x0c, "path entry", junction_count)?,
             exit: index_at(order, payload, base + 0x10, "path exit", junction_count)?,
         });
@@ -762,7 +760,11 @@ fn index_at(
     what: &'static str,
     count: usize,
 ) -> Result<Option<usize>> {
-    let raw = u32_at(order, payload, at);
+    let raw = oag_bytes::u32_at(payload, at, order).ok_or(Error::OutOfBounds {
+        what,
+        end: at.saturating_add(4),
+        len: payload.len(),
+    })?;
     if raw == NULL_INDEX {
         return Ok(None);
     }
@@ -779,17 +781,25 @@ fn index_at(
 fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> SplinePoint {
     let short = version >= SHORT_POINT_VERSION;
     let section_at = if short { 0x5c } else { 0x60 };
+    let word = |offset: usize| {
+        oag_bytes::f32_at(payload, at + offset, order)
+            .expect("`end_of` kept every control point inside the payload")
+    };
+    let vec3 = |offset: usize| {
+        vec3_at(order, payload, at + offset)
+            .expect("`end_of` kept every control point inside the payload")
+    };
     SplinePoint {
-        pos: vec3_at(order, payload, at),
-        tangent: vec3_at(order, payload, at + 0x10),
-        down: vec3_at(order, payload, at + 0x20),
-        lateral: vec3_at(order, payload, at + 0x30),
-        progress: f32_at(order, payload, at + 0x40),
-        half_width_left: f32_at(order, payload, at + 0x44),
-        half_width_right: f32_at(order, payload, at + 0x48),
-        ai_bound_left: f32_at(order, payload, at + 0x4c),
-        ai_bound_right: f32_at(order, payload, at + 0x50),
-        racing_line: f32_at(order, payload, at + 0x54),
+        pos: vec3(0),
+        tangent: vec3(0x10),
+        down: vec3(0x20),
+        lateral: vec3(0x30),
+        progress: word(0x40),
+        half_width_left: word(0x44),
+        half_width_right: word(0x48),
+        ai_bound_left: word(0x4c),
+        ai_bound_right: word(0x50),
+        racing_line: word(0x54),
         section_id: payload[at + section_at],
         flags: payload[at + section_at + 1],
         light_scale: if (LIGHT_SCALE_VERSION..SHORT_POINT_VERSION).contains(&version) {
@@ -830,20 +840,12 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> Spline
 /// a compare against `0x103`).
 pub const LIGHT_SCALE_VERSION: u32 = 0x103;
 
-fn vec3_at(order: ByteOrder, payload: &[u8], at: usize) -> [f32; 3] {
-    [
-        f32_at(order, payload, at),
-        f32_at(order, payload, at + 4),
-        f32_at(order, payload, at + 8),
-    ]
-}
-
-fn u32_at(order: ByteOrder, data: &[u8], at: usize) -> u32 {
-    order.u32(data, at)
-}
-
-fn f32_at(order: ByteOrder, data: &[u8], at: usize) -> f32 {
-    order.f32(data, at)
+fn vec3_at(order: ByteOrder, payload: &[u8], at: usize) -> Option<[f32; 3]> {
+    Some([
+        oag_bytes::f32_at(payload, at, order)?,
+        oag_bytes::f32_at(payload, at + 4, order)?,
+        oag_bytes::f32_at(payload, at + 8, order)?,
+    ])
 }
 
 #[cfg(test)]

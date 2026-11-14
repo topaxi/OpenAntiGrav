@@ -532,33 +532,17 @@ impl Node {
     }
 }
 
-/// Little-endian reads, for the parts of this module that are PSP and PS2 only.
-///
-/// The file header and node walk go through [`byte_order`] instead, because a
-/// PS3 `.vex` has those. It has no geometry: a PS3 `Mesh` node is a bounding-box
-/// pair and a reference into a `.rcsmodel`, so every batch, vertex and
-/// embedded-texture decoder below runs on little-endian files.
-///
-/// **That is a claim about these decoders, not the format**: [`anim_transform`]
-/// was once written little-endian on that strength, and HD's 5,518 nodes of the
-/// class all decoded to nothing.
-mod le {
-    use oag_bytes::ByteOrder;
-
-    pub fn u16_at(data: &[u8], at: usize) -> u16 {
-        ByteOrder::Little.u16(data, at)
-    }
-
-    pub fn u32_at(data: &[u8], at: usize) -> u32 {
-        ByteOrder::Little.u32(data, at)
-    }
-
-    pub fn f32_at(data: &[u8], at: usize) -> f32 {
-        ByteOrder::Little.f32(data, at)
-    }
-}
-
-use le::{f32_at, u16_at, u32_at};
+// Little-endian reads, for the parts of this module that are PSP and PS2 only.
+//
+// The file header and node walk go through [`byte_order`] instead, because a
+// PS3 `.vex` has those. It has no geometry: a PS3 `Mesh` node is a bounding-box
+// pair and a reference into a `.rcsmodel`, so every batch, vertex and
+// embedded-texture decoder below runs on little-endian files.
+//
+// **That is a claim about these decoders, not the format**: [`anim_transform`]
+// was once written little-endian on that strength, and HD's 5,518 nodes of the
+// class all decoded to nothing.
+use oag_bytes::le;
 
 /// Which way round a file's words are, from its own magic: `VEXX` on the PSP and
 /// PS2, `XXEV` on the PS3 (the same exporter on a big-endian host). A file with
@@ -892,7 +876,9 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
     if payload.len() < 0x30 {
         return Vec::new();
     }
-    let material_count = usize::from(u16_at(payload, 2));
+    let material_count = usize::from(
+        le::u16_at(payload, 2).expect("the length check above covers the 0x30-byte header"),
+    );
     (0..material_count)
         .map(|i| mesh_tex_transform_at(payload, MATERIALS_AT, i))
         .collect()
@@ -921,13 +907,13 @@ fn mesh_tex_transform_at(
     if payload.len() < materials_at {
         return None;
     }
-    let material_count = usize::from(u16_at(payload, 2));
+    let material_count = usize::from(le::u16_at(payload, 2)?);
     if material_index >= material_count {
         return None;
     }
     // The engine's gate.
     let material = materials_at + material_index * 0x14;
-    if material + 2 > payload.len() || u16_at(payload, material) & 0x10 == 0 {
+    if material + 2 > payload.len() || le::u16_at(payload, material)? & 0x10 == 0 {
         return None;
     }
     let base = materials_at + material_count * 0x14;
@@ -935,8 +921,8 @@ fn mesh_tex_transform_at(
     if block + 0x30 > payload.len() {
         return None;
     }
-    let offset_count = usize::from(u16_at(payload, block));
-    let scale_count = usize::from(u16_at(payload, block + 2));
+    let offset_count = usize::from(le::u16_at(payload, block)?);
+    let scale_count = usize::from(le::u16_at(payload, block + 2)?);
     if offset_count == 0 && scale_count == 0 {
         return None;
     }
@@ -945,28 +931,31 @@ fn mesh_tex_transform_at(
     // `16_Track`'s two-material hologram panels (material 1 resolves to real keys
     // off the array base and noise off its own block).
     let track = |count: usize, times_rel: usize, values_rel: usize| {
-        let times_at = base + u32_at(payload, block + times_rel) as usize;
-        let values_at = base + u32_at(payload, block + values_rel) as usize;
+        let times_at = base + le::u32_at(payload, block + times_rel)? as usize;
+        let values_at = base + le::u32_at(payload, block + values_rel)? as usize;
         if times_at + count * 2 > payload.len() || values_at + count * 4 > payload.len() {
             return None;
         }
         Some(TexTransformTrack {
             times: (0..count)
-                .map(|i| u16_at(payload, times_at + i * 2))
-                .collect(),
+                .map(|i| le::u16_at(payload, times_at + i * 2))
+                .collect::<Option<_>>()?,
             values: (0..count)
                 .map(|i| {
                     let at = values_at + i * 4;
-                    (u16_at(payload, at) as i16, u16_at(payload, at + 2) as i16)
+                    Some((
+                        le::u16_at(payload, at)? as i16,
+                        le::u16_at(payload, at + 2)? as i16,
+                    ))
                 })
-                .collect(),
+                .collect::<Option<_>>()?,
         })
     };
-    let loop_word = u32_at(payload, block + 0x2c);
+    let loop_word = le::u32_at(payload, block + 0x2c)?;
     Some(TexTransform {
         offset: track(offset_count, 0x04, 0x10)?,
         scale: track(scale_count, 0x08, 0x14)?,
-        seconds_per_key: f32::from_bits(u32_at(payload, block + 0x0c)),
+        seconds_per_key: f32::from_bits(le::u32_at(payload, block + 0x0c)?),
         loop_seconds: f32::from_bits(loop_word),
         step: loop_word & 1 != 0,
     })
@@ -980,15 +969,24 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         return Err(Error::TooShort { got: payload.len() });
     }
 
+    let header_u16 = |at: usize| {
+        le::u16_at(payload, at).expect("the loop condition keeps a 0x40-byte header in range")
+    };
+    let header_f32 = |at: usize| {
+        le::f32_at(payload, at).expect("the loop condition keeps a 0x40-byte header in range")
+    };
+
     // File offsets from the payload start (the loader relocates them to pointers).
-    let list_offset = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
+    let list_offset = le::u32_at(payload, if batch_list == 0 { 4 } else { 8 })
+        .expect("the length check above covers the 0x30-byte header")
+        as usize;
     let terminator = if batch_list == 0 { 1u16 } else { 2 };
 
     let mut out = Vec::new();
     let mut at = list_offset;
 
     while at + 0x40 <= payload.len() {
-        let pass_mask = u16_at(payload, at);
+        let pass_mask = header_u16(at);
         if pass_mask & terminator == 0 {
             break;
         }
@@ -996,13 +994,13 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         let flags = payload[at + 3];
         let header_size = if flags & 0x40 != 0 { 0x80 } else { 0x40 };
 
-        let use_alternate = u16_at(payload, at + 6) != 0;
-        let vertex_count = usize::from(u16_at(payload, at + if use_alternate { 6 } else { 4 }));
+        let use_alternate = header_u16(at + 6) != 0;
+        let vertex_count = usize::from(header_u16(at + if use_alternate { 6 } else { 4 }));
         let primitive_type = payload[at + if use_alternate { 9 } else { 8 }];
-        let vertex_type = u16_at(payload, at + 0x0a);
-        let payload_size = usize::from(u16_at(payload, at + 0x0c));
-        let alternate_offset = usize::from(u16_at(payload, at + 0x0e));
-        let scale = f32_at(payload, at + 0x10);
+        let vertex_type = header_u16(at + 0x0a);
+        let payload_size = usize::from(header_u16(at + 0x0c));
+        let alternate_offset = usize::from(header_u16(at + 0x0e));
+        let scale = header_f32(at + 0x10);
 
         // A PS2 batch's payload is a VIF packet, with float bounds already in
         // position space. See `is_vif_batch`.
@@ -1016,9 +1014,9 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             }
             let corner = |off: usize| {
                 [
-                    f32_at(payload, at + off),
-                    f32_at(payload, at + off + 4),
-                    f32_at(payload, at + off + 8),
+                    header_f32(at + off),
+                    header_f32(at + off + 4),
+                    header_f32(at + off + 8),
                 ]
             };
             let vertices = vif_vertices(
@@ -1074,7 +1072,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             vertex_type,
             scale,
             vertices,
-            declared_vertex_count: u16_at(payload, at + 4),
+            declared_vertex_count: header_u16(at + 4),
             bounds,
             header_flags: flags,
             depth_bias,
@@ -1092,6 +1090,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
 }
 
 fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> Vertex {
+    let in_range = "the batch's vertices were checked against their stride";
     let p = at + layout.position;
     let component = |o: usize| f32::from(i16::from_le_bytes([data[o], data[o + 1]]));
 
@@ -1111,13 +1110,16 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
             f32::from(data[at + o]) / 128.0,
             f32::from(data[at + o + 1]) / 128.0,
         ],
-        TexcoordFormat::F32 => [f32_at(data, at + o), f32_at(data, at + o + 4)],
+        TexcoordFormat::F32 => [
+            le::f32_at(data, at + o).expect(in_range),
+            le::f32_at(data, at + o + 4).expect(in_range),
+        ],
     });
 
     let colour = layout.colour.map(|(o, format)| {
         let raw = match format.size() {
-            2 => u32::from(u16_at(data, at + o)),
-            _ => u32_at(data, at + o),
+            2 => u32::from(le::u16_at(data, at + o).expect(in_range)),
+            _ => le::u32_at(data, at + o).expect(in_range),
         };
         format.to_rgba(raw)
     });
@@ -1221,16 +1223,20 @@ pub fn vif_vertices(
     if base + VIF_REGION_HEADER + VIF_TAG_LEN > payload.len() {
         return Err(packet("region header runs past the payload"));
     }
-    let size = u32_at(payload, base) as usize;
+    let size = le::u32_at(payload, base).expect("the region header check above") as usize;
     // Three exact framing checks: region length + 16 is the declared payload, the
     // DMA tag's quadword count spans the packet, the vertex type repeats.
     if size + VIF_REGION_HEADER != payload_size {
         return Err(packet("packet length disagrees with the batch header"));
     }
-    if u32_at(payload, base + 4) != u32::from(vertex_type) {
+    if le::u32_at(payload, base + 4).expect("the region header check above")
+        != u32::from(vertex_type)
+    {
         return Err(packet("packet vertex type disagrees with the batch header"));
     }
-    let qwc = (u32_at(payload, base + VIF_REGION_HEADER) & 0xffff) as usize;
+    let qwc = (le::u32_at(payload, base + VIF_REGION_HEADER)
+        .expect("the region header check above")
+        & 0xffff) as usize;
     if VIF_TAG_LEN + qwc * 16 != size {
         return Err(packet("DMA tag quadword count disagrees with the packet"));
     }
@@ -1360,28 +1366,24 @@ fn emit_vif_chunk(
         Format::Bits32,
         "normal array has the wrong shape",
     )?;
+    let in_packet = |at: usize| {
+        le::f32_at(payload, at)
+            .expect("`check` kept every array inside the packet, which ends inside the payload")
+    };
     let positions = start + position.data.start;
     let position_stride = 4 * position.components;
 
     for i in 0..count {
         let p = positions + i * position_stride;
         out.push(Vertex {
-            position: [
-                f32_at(payload, p),
-                f32_at(payload, p + 4),
-                f32_at(payload, p + 8),
-            ],
+            position: [in_packet(p), in_packet(p + 4), in_packet(p + 8)],
             normal: normal.map(|o| {
                 let n = o + i * 12;
-                [
-                    f32_at(payload, n),
-                    f32_at(payload, n + 4),
-                    f32_at(payload, n + 8),
-                ]
+                [in_packet(n), in_packet(n + 4), in_packet(n + 8)]
             }),
             texcoord: texcoord.map(|o| {
                 let t = o + i * 8;
-                [f32_at(payload, t), f32_at(payload, t + 4)]
+                [in_packet(t), in_packet(t + 4)]
             }),
             colour: colour.map(|o| {
                 let c = o + i * 4;
