@@ -67,6 +67,8 @@
 
 use std::fmt;
 
+use oag_bytes::be;
+
 use flate2::{Decompress, FlushDecompress, Status};
 
 mod md5;
@@ -243,19 +245,21 @@ impl Header {
         if magic != MAGIC {
             return Err(Error::BadMagic { found: magic });
         }
-        let entry_len = u32_at(data, 0x10);
+        let u16_at = |at| be::u16_at(data, at).expect("HEADER_LEN bytes checked above");
+        let u32_at = |at| be::u32_at(data, at).expect("HEADER_LEN bytes checked above");
+        let entry_len = u32_at(0x10);
         if entry_len as usize != ENTRY_LEN {
             return Err(Error::UnknownEntryLen { entry_len });
         }
         Ok(Self {
-            version_major: u16_at(data, 0x04),
-            version_minor: u16_at(data, 0x06),
+            version_major: u16_at(0x04),
+            version_minor: u16_at(0x06),
             compression: data[8..12].try_into().expect("four bytes"),
-            toc_len: u32_at(data, 0x0c),
+            toc_len: u32_at(0x0c),
             entry_len,
-            entry_count: u32_at(data, 0x14),
-            block_size: u32_at(data, 0x18),
-            flags: u32_at(data, 0x1c),
+            entry_count: u32_at(0x14),
+            block_size: u32_at(0x18),
+            flags: u32_at(0x1c),
         })
     }
 
@@ -324,7 +328,7 @@ impl Directory {
             let e = &toc[at..at + ENTRY_LEN];
             entries.push(Entry {
                 digest: e[0..16].try_into().expect("sixteen bytes"),
-                first_block: u32_at(e, 0x10),
+                first_block: be::u32_at(e, 0x10).expect("ENTRY_LEN bytes sliced above"),
                 size: u40_at(e, 0x14),
                 offset: u40_at(e, 0x19),
             });
@@ -715,14 +719,6 @@ fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)>
         table_len: rest.len(),
         highest_block: highest,
     })
-}
-
-fn u16_at(data: &[u8], at: usize) -> u16 {
-    u16::from_be_bytes([data[at], data[at + 1]])
-}
-
-fn u32_at(data: &[u8], at: usize) -> u32 {
-    u32::from_be_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
 }
 
 /// A 40-bit big-endian field, of which the format has two.
