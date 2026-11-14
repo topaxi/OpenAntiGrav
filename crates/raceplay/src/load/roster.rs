@@ -1,5 +1,8 @@
 //! Which teams the grid may fly, when the caller named none itself.
 
+#[cfg(feature = "view")]
+mod model_livery;
+
 /// The team the player races as, resolved to `craft_title`'s own default
 /// when the caller named none - the first point the title is known, and
 /// craft content, so it follows `craft_title` rather than the track's own
@@ -352,7 +355,7 @@ pub(super) fn grid(
         report,
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
-    let player_livery = super::model_livery::resolve(
+    let player_livery = model_livery::resolve(
         archives,
         craft_title,
         team,
