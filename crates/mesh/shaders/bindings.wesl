@@ -96,12 +96,12 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 // The Zone stage's `zoneMode<n>.gtf`, sampled through `zone_sampler` on the
 // same coordinate as `zone_tex`, for a chunk without `ZONE_TRACK` - see
-// `zone_set`. Numbered past the shadow map because it was bound later.
+// `zone_set`.
 @group(2) @binding(10) var zone_scene_tex: texture_2d_array<f32>;
 
-// Bindings 11 and 12 held the stage-transition sphere's Outer half of the two textures above;
-// it is now layer 1 of `zone_tex` and `zone_scene_tex` (`mesh_render::zone::layered`), which frees
-// two of the fragment stage's sampled textures for the material group's six.
+// Bindings 11 and 12 are free: the stage-transition sphere's Outer half is layer 1 of `zone_tex`
+// and `zone_scene_tex` (`mesh_render::zone::layered`), which leaves two of the fragment stage's
+// sampled textures for the material group's six.
 
 // The per-craft sun-occlusion maps, one layer per craft, read through the
 // coverage map's own clamped filtering sampler - see `sun_occlusion` and

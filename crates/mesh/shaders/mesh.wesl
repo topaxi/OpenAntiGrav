@@ -203,7 +203,7 @@ fn fs_blend_cutout_depth(in: VertexOutput) -> @location(0) vec4<f32> {
 // blended - `discard` is what lets the pixels below the threshold contribute
 // neither colour nor depth, so surfaces behind a cutout's "empty" corners
 // still show through and still get occluded correctly by whatever the
-// cutout's solid pixels do draw. `shaded.a` is now the texture's alpha times
+// cutout's solid pixels do draw. `shaded.a` is the texture's alpha times
 // the vertex colour's, per `lit_texel` above; measured directly against every
 // alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
 // this path carries baked alpha at or below `ALPHA_TEST_THRESHOLD`, so this

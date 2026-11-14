@@ -101,8 +101,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // the texel colour dims linearly with radius while keeping its
     // saturated hue. Splitting the falloff between rgb and alpha the same
     // way the sprite does is what keeps the bright part of a spark small -
-    // a flat-rgb quad reads twice as wide at the same alpha curve, which
-    // was the reported "too big, not line-like" look.
+    // a flat-rgb quad reads twice as wide at the same alpha curve, too big
+    // and not line-like.
     //
     // **The colour is the palette's, never whitened.** A
     // `mix(rgb, white, pow(shape, 8.0) * 0.85)` term, fitted to the same dump's

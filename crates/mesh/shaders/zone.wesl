@@ -214,9 +214,9 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
 //
 // **Its own derivative-uniformity diagnostic is off**, as `lit_texel`'s is.
 // The attribute on a caller covers only the caller's own body, and Chrome's
-// Tint (154) reports a `textureSample` in a callee against the callee, so the
-// fetches below were rejected at module creation and every mesh pipeline
-// was invalid in a browser. The argument is `lit_texel`'s: `slots` is a flat
+// Tint (154) reports a `textureSample` in a callee against the callee, so
+// without it the fetches below fail module creation and every mesh pipeline
+// is invalid in a browser. The argument is `lit_texel`'s: `slots` is a flat
 // varying, every lane of a 2x2 quad takes the same side of the `holo`
 // early-return that makes the analysis give up, and the band sample and the
 // visualiser lookup keep the neighbours they need.
