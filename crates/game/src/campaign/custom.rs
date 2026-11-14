@@ -310,9 +310,9 @@ pub struct Custom {
     /// The medal tiers, best first: the title's gold, silver and bronze unless the campaign
     /// declares its own.
     pub tiers: MedalTiers,
-    /// The mod's own `strings/english.toml`, the words a tier's `string_id` names: laid over the
-    /// screens' strings by [`layer_words`].
-    pub words: Option<String>,
+    /// The mod's own `strings/<language>.toml` files, the words a tier's `string_id` names: laid
+    /// over the screens' strings by [`layer_words`].
+    pub words: Words,
     /// The tiers.
     pub grids: Vec<Grid>,
     /// Each cell's extras, by cell name.
@@ -434,7 +434,7 @@ pub struct Launch {
     /// See [`Custom::tiers`].
     pub tiers: MedalTiers,
     /// See [`Custom::words`].
-    pub words: Option<String>,
+    pub words: Words,
     /// What each tier asks of this event ([`Event::tier_targets`]).
     pub tier_targets: TierTargets,
     /// Whose driver flies.
@@ -445,13 +445,62 @@ pub struct Launch {
     pub pilot: Option<oag_raceplay::pilots::Entry>,
 }
 
-/// Lays a campaign mod's own words (`words`, its `strings/english.toml`) over `table`, so a
-/// medal tier's `string_id` resolves. A file that does not parse leaves the table as it was.
-pub fn layer_words(table: &mut oag_ui::language::StringTable, words: Option<&str>) {
-    if let Some(text) = words
-        && let Err(reason) = oag_ui::strings::overlay_text(table, text)
-    {
-        log::warn!("campaign words: {reason}");
+/// A campaign mod's `strings/<language>.toml` files, by lower-case language name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Words(BTreeMap<String, String>);
+
+impl Words {
+    /// Every `strings/<language>.toml` the mod carries.
+    #[must_use]
+    pub fn read(module: &oag_mod::Mod) -> Self {
+        Self(
+            module
+                .files_under("strings", "toml")
+                .into_iter()
+                .filter_map(|file| {
+                    let language = file
+                        .rsplit('/')
+                        .next()?
+                        .strip_suffix(".toml")?
+                        .to_ascii_lowercase();
+                    let text = module.strings(&language).ok().flatten()?;
+                    Some((language, text))
+                })
+                .collect(),
+        )
+    }
+
+    /// The words of `files`, each a `(language, toml text)`.
+    #[must_use]
+    pub fn of<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+        Self(
+            files
+                .into_iter()
+                .map(|(language, text)| (language.to_ascii_lowercase(), text.to_string()))
+                .collect(),
+        )
+    }
+}
+
+/// Lays a campaign mod's own words over `table`, so a medal tier's `string_id` resolves:
+/// `english.toml` first, then `language`'s file (`None` is English) over it, so a word the
+/// language leaves out stays English. A file that does not parse is skipped.
+pub fn layer_words(
+    table: &mut oag_ui::language::StringTable,
+    words: &Words,
+    language: Option<&str>,
+) {
+    let language = language.map_or_else(|| "english".to_string(), str::to_ascii_lowercase);
+    let wanted = ["english", language.as_str()];
+    for (index, name) in wanted.into_iter().enumerate() {
+        if index == 1 && name == "english" {
+            break;
+        }
+        if let Some(text) = words.0.get(name)
+            && let Err(reason) = oag_ui::strings::overlay_text(table, text)
+        {
+            log::warn!("campaign words ({name}): {reason}");
+        }
     }
 }
 
@@ -679,7 +728,7 @@ pub fn compile(
             .collect(),
         records_title: records_title(title, mod_id, &info.id),
         tiers,
-        words: None,
+        words: Words::default(),
         grids,
         events,
     })
@@ -1195,7 +1244,7 @@ impl Installed {
                 });
                 match compiled {
                     Ok(Some(mut custom)) => {
-                        custom.words = module.strings("english").ok().flatten();
+                        custom.words = Words::read(module);
                         installed.campaigns.push(custom);
                     }
                     Ok(None) => {}

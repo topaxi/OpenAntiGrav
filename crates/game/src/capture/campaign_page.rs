@@ -226,10 +226,10 @@ pub(super) fn campaign_page(
         None => None,
     };
     let with_words;
-    let strings = match custom.as_ref().and_then(|custom| custom.words.as_deref()) {
+    let strings = match custom.as_ref().map(|custom| &custom.words) {
         Some(words) => {
             let mut table = strings.clone();
-            crate::campaign::custom::layer_words(&mut table, Some(words));
+            crate::campaign::custom::layer_words(&mut table, words, None);
             with_words = table;
             &with_words
         }

@@ -149,6 +149,8 @@ use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 #[cfg(test)]
 mod cell_field_tests;
 #[cfg(test)]
+mod target_rows_tests;
+#[cfg(test)]
 mod tests;
 
 pub mod cell_brackets;
@@ -528,6 +530,15 @@ pub fn hd_cell_draw_list(
     ));
     let targets_visible = true;
     let targets = cell.targets_for_difficulty(model.difficulty());
+    // A campaign that names its own tiers lists the best three the cell awards, as Pulse's
+    // screen does; the title's own three rows otherwise.
+    let tier_rows = model.target_rows();
+    let row_value = |row: usize, own: i64| match &tier_rows {
+        Some(rows) => rows
+            .get(row)
+            .map(|(_, target)| hd_target_value(*target, cell, strings)),
+        None => Some(hd_target_value(own, cell, strings)),
+    };
 
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
@@ -566,9 +577,9 @@ pub fn hd_cell_draw_list(
             "Target Title" if targets_visible => {
                 Some(hd_target_title(cell, strings, model.difficulty()))
             }
-            "Target0" if targets_visible => Some(hd_target_value(targets.gold, cell, strings)),
-            "Target1" if targets_visible => Some(hd_target_value(targets.silver, cell, strings)),
-            "Target2" if targets_visible => Some(hd_target_value(targets.bronze, cell, strings)),
+            "Target0" if targets_visible => row_value(0, targets.gold),
+            "Target1" if targets_visible => row_value(1, targets.silver),
+            "Target2" if targets_visible => row_value(2, targets.bronze),
             "Target Title" | "Target0" | "Target1" | "Target2" => None,
             // `RC_POINTSTOUNL`'s own template carries a raw `%d` this file
             // has no game-side `printf` to substitute - `strings.get_or_id`
@@ -632,11 +643,21 @@ pub fn hd_cell_draw_list(
         let Some(name) = image.name.as_deref() else {
             continue;
         };
-        let target_medal_tier = match name {
+        let own_tier = match name {
             "Target0 Medal" => Some(Medal::Gold),
             "Target1 Medal" => Some(Medal::Silver),
             "Target2 Medal" => Some(Medal::Bronze),
             _ => None,
+        };
+        let target_medal_tier = match (&tier_rows, own_tier) {
+            (Some(rows), Some(_)) => {
+                let row = usize::from(name.as_bytes()[6] - b'0');
+                let Some((medal, _)) = rows.get(row) else {
+                    continue;
+                };
+                Some(*medal)
+            }
+            (_, own) => own,
         };
         let is_target_widget = target_medal_tier.is_some() || name == "Target Title Arrow";
         if is_target_widget && targets_visible {

@@ -143,7 +143,7 @@ fn own_tier(
 ) -> Result<(
     Option<Medal>,
     Option<oag_tables::race_campaign::MedalTier>,
-    Option<String>,
+    crate::campaign::custom::Words,
 )> {
     let mods = crate::mods::Mods::load_for_profile()?;
     let installed = mods.installed_for(title, &|_| true);
@@ -360,10 +360,10 @@ fn endrace_page(
         EndRaceKind::Rewards { medal, tier } => {
             let (medal, tier, words) = match tier {
                 Some((key, name)) => own_tier(title, &key, &name)?,
-                None => (medal, None, None),
+                None => (medal, None, Default::default()),
             };
             let mut with_words = strings.clone();
-            crate::campaign::custom::layer_words(&mut with_words, words.as_deref());
+            crate::campaign::custom::layer_words(&mut with_words, &words, None);
             let strings = &with_words;
             // The trophy is a 3D pass after the draw list, the one the
             // live `EndRaceRuntime::draw` makes - see

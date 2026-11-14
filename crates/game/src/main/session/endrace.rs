@@ -165,7 +165,11 @@ impl Session {
 
         let mut strings = shell.strings.clone();
         if let Some(launch) = stage.campaign_custom.as_ref() {
-            oag_game::campaign::custom::layer_words(&mut strings, launch.words.as_deref());
+            oag_game::campaign::custom::layer_words(
+                &mut strings,
+                &launch.words,
+                self.settings.language.as_deref(),
+            );
         }
         let skin_line_height = shell.menu_font.as_ref().unwrap_or(&shell.font).line_height;
         let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, skin_line_height);

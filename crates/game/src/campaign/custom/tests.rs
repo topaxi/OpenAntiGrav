@@ -963,7 +963,7 @@ fn a_launch_keeps_a_tier_by_name_and_names_the_tiers_the_title_has_no_phrase_for
     let launch = Launch {
         records_title: custom.records_title.clone(),
         tiers: custom.tiers.clone(),
-        words: None,
+        words: Words::default(),
         tier_targets: custom.events["grid0_1_1"].tier_targets.clone(),
         ai: Ai::Original,
         level: None,
@@ -1140,4 +1140,53 @@ fn an_atlas_that_does_not_cut_into_its_rows_keeps_the_swatch() {
             .unwrap_err()
             .contains("not a PNG")
     );
+}
+
+const WORDS_ENGLISH: &str = "[strings]\nTIER_A = { text = \"PLATINUM\", human = true }\nTIER_B = { text = \"ONLY ENGLISH\", human = true }\n";
+const WORDS_FRENCH: &str = "[strings]\nTIER_A = { text = \"PLATINE\", human = true }\n";
+
+fn said(words: &Words, language: Option<&str>, id: &str) -> String {
+    let mut table = oag_ui::language::StringTable::default();
+    layer_words(&mut table, words, language);
+    table.get_or_id(id).to_string()
+}
+
+#[test]
+fn a_mods_tier_words_follow_the_active_language_and_fall_back_to_english() {
+    let words = Words::of([("english", WORDS_ENGLISH), ("french", WORDS_FRENCH)]);
+    assert_eq!(
+        said(&words, None, "TIER_A"),
+        "PLATINUM",
+        "no language is English"
+    );
+    assert_eq!(said(&words, Some("French"), "TIER_A"), "PLATINE");
+    assert_eq!(
+        said(&words, Some("French"), "TIER_B"),
+        "ONLY ENGLISH",
+        "a word the language leaves out stays English"
+    );
+    assert_eq!(
+        said(&words, Some("German"), "TIER_A"),
+        "PLATINUM",
+        "a language the mod has no file for reads English"
+    );
+}
+
+#[test]
+fn a_mod_folders_strings_files_are_read_by_language() {
+    let dir = std::env::temp_dir().join(format!("oag-words-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("strings")).unwrap();
+    std::fs::write(
+        dir.join("oag-mod.toml"),
+        "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/mod.tosd\", version = \"1.0.0\" }\n[mod]\nid = \"oag.words\"\nname = \"Words\"\nversion = \"1.0.0\"\nauthors = [\"t\"]\nlicense = \"MIT\"\ndescription = \"d\"\ntitles = [\"wipeout-pulse\"]\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("strings/english.toml"), WORDS_ENGLISH).unwrap();
+    std::fs::write(dir.join("strings/french.toml"), WORDS_FRENCH).unwrap();
+    let module = oag_mod::Mod::open(&dir).unwrap_or_else(|e| panic!("{e}"));
+    let words = Words::read(&module);
+    assert_eq!(said(&words, Some("french"), "TIER_A"), "PLATINE");
+    assert_eq!(said(&words, Some("french"), "TIER_B"), "ONLY ENGLISH");
+    let _ = std::fs::remove_dir_all(&dir);
 }
