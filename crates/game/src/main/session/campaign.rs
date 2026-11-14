@@ -86,7 +86,11 @@ impl Session {
             .as_ref()
             .and_then(|key| shell.custom_campaigns.get(key).cloned());
         if let Some(custom) = &custom {
-            oag_game::campaign::custom::layer_words(&mut strings, custom.words.as_deref());
+            oag_game::campaign::custom::layer_words(
+                &mut strings,
+                &custom.words,
+                self.settings.language.as_deref(),
+            );
         }
         let installed = shell.custom_campaigns.clone();
         if let Some(key) = &self.custom_campaign
