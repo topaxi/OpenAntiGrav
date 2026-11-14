@@ -133,7 +133,6 @@ BASELINE = {
     # prep for the `oag-ui` extraction, which cannot name a type that lives in
     # the composition root.
     "crates/game/src/movie.rs": 1715,
-    "crates/trace/src/main.rs": 1543,
 }
 
 # Inline `#[cfg(test)]` modules over `TEST_LIMIT`, keyed `<file>::<module>`.
