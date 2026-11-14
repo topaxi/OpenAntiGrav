@@ -340,6 +340,12 @@ where they drew yellow (the frame test was re-derived on the new build). No orig
 the blast exists: an RPCS3 capture of the rings at about 1.8 s is the falsifier. The fireball
 program reads its texels raw as light, as `holo.wesl` did before its units were read live,
 so its source may be too strong.
+**Colour taps (2026-11-14, `hd-weapon-taps`).** Read live, unit 0's gamma nibble: the Missile blast's core
+and rays, the LeachBall and its ring, the Plasma head and halo and the Rocket's smoke decode on fetch (7); the
+Missile's shockwave ring and the Plasma ring read raw (0) (M, [hd-unlit-programs.md](../rendering/hd-unlit-programs.md#the-weapon-units-read-live-2026-11-14-hd-weapon-taps)).
+Wired: the Missile core and rays, the LeachBall and Plasma head taps, so the fireball's "too strong" source
+above is decoded too; not wired: the Rocket's smoke (an earlier film reads the decoded smoke grey) and the
+Plasma ring (no frame of ours draws it through the edited branch).
 
 ### Sound
 

@@ -388,6 +388,88 @@ programs are GCN and unread and its scene blends linearly (`hd-track-tone.md`), 
 ported. **2048**: not checkable from the file (a `.gxt` header carries no gamma field) and no
 Vita3K draw state of a blast has been read.
 
+### The weapon units, read live (2026-11-14, `hd-weapon-taps`)
+
+**Claim**: of the weapon programs the Bomb page left unread, the Missile blast's core and rays,
+the LeachBall and its ring, the Plasma head and halo and the Rocket's smoke read their colour
+tap **decoded on fetch** (unit 0's gamma nibble 7); the Missile's shockwave ring and the Plasma
+ring read it **raw** (nibble 0). **Confidence 85** for the Missile blast (two shots agree draw
+for draw), **80** for the LeachBall and ring, the Plasma head and the Rocket smoke (two frames
+each), **70** for the Plasma ring and halo (one explosion). Falsifier written before the first
+capture: a draw attributed to the program whose unit 0 reads another nibble than the one
+claimed, or a draw that cannot be attributed (it stays unread).
+
+**Method.** RPCS3 on the EU disc, Racebox Single Race on Talon's Junction with Weapons On
+(`hd-racebox-talons-venom-weapons-grid` state), the player given the pickup and, for a hit,
+put 6 to 12 units behind the nearest rival at its heading and speed:
+
+```sh
+uv run --with evdev python3 scripts/rpcs3-hd-whiteout.py --image <iso> --out <dir> \
+    [--fire-state N --behind | --leach] --delay 0.25 --no-targets --no-baseline \
+    --attempts 14 --want-mats <dir of the effect's rcsmaterial files>
+python3 scripts/rsx_fp_match.py <dir> <frame> <rcsmaterial dir>
+```
+
+A pause lands anywhere in the frame the game is building, so a dump may stop before the effect's
+draws. `--want-mats` keeps the pause-and-dump going (resume 0.08 s, pause) until the frame holds a
+draw of one of the named programs; `--want-name` narrows it to one material. `rsx_fp_match.py`
+attributes each draw by its **fragment program**: it disassembles the live program out of the
+dump, strips the constants and compares it with every fragment block of the effect's
+`.rcsmaterial` (`psarc.py cat <image>:<archive> <path>`), so a draw is named by what it runs,
+not by its order. Blocks of under four instructions are skipped (the one-tap copies read the
+same in every material). The LeachBall's two copies (`DATA00`, `DATA02`) are both matched; the
+live draws match the `DATA00` copy, as the race's own archive order says.
+
+**Control**: the Bomb, frame by frame the same as the 2026-10-26 read (fireball and core 7,
+bloom disc 7, first ring 0), draws 556 to 559 of 678.
+
+| Program | Frame, draws (of N) | Unit 0 address word | Nibble | In ours |
+| --- | --- | --- | --- | --- |
+| Missile core, `hd_missile_explosion_core_glow` | 0.067 s, 553 of 702; 0.117 s, 689 of 833 | `0x60710101` | **7** | decoded (`missile_core`) |
+| Missile `bloom` and `rays`, `hd_missile_explosion_lightrays_glow` | 554, 555 of 702; 690, 691 of 833 | `0x60710101` | **7** | decoded (`missile_rays`) |
+| Missile shockwave ring, `hd_missile_explosion_shockwaves_glow` | 556 of 702; 692 of 833 | `0x60010101` | **0** | raw, unchanged |
+| LeachBall, `hd_leachbeam_ball_glow` (`RIM_GLOW`) | held beam, 937, 939, 941 of 1048; the Missile head (the same material) 472, 474 of 610 | `0x60710101` | **7** | decoded (`rim_c`) |
+| LeachBall ring, `hd_leachbeam_bloomring` | 938, 940, 942 of 1048; 473, 475 of 610 | `0x60710101` | **7** | generic emissive path, decodes already |
+| Plasma head, `plasmasphere_subtractive_glow` (`RIM_EDGE`) | in flight, 351, 352 of 455; 636, 637 of 735 | `0x60710101` | **7** | decoded (`rim_c`) |
+| Plasma explosion halo, `hd_plasmahalo_glow` | 769 of 882 | `0x60710101` | **7** | generic combine, decodes already |
+| Plasma explosion ring, `hd_plasmaring_glow` | 765, 766 of 882 | `0x60010101` | **0** | decoded by the generic combine, **not changed** (below) |
+| Rocket smoke ribbon, `hd_rockettrail` | 486, 488, 490 of 623; 560, 562, 564 of 711, both units | `0x60710101` | **7**, both taps | raw, **not changed** (below) |
+| Engine light cone, `dc_lightcone` | Amphiseum draws 724, 730 (`rcsmaterial.md`, "HD's light cone") | `0x60710101`, `0x60750102` | **7** | decoded already |
+
+Format and size of the units (`rect` word, width then height): core `000b8829` 32x1024, rays
+`00018829` 256x64, Missile shockwave `00018829` 256x256, ball and ring `00098829` 256x128, Plasma
+ring `00098829` 256x256, Plasma halo `000a8829` 256x512, smoke `00018829` 1024x128, all DXT45.
+
+What it changes:
+
+- **Decoded now, on HD's encoded store only** (`encoded_out`, as the flame's, the trail's and the
+  fireball's are): the Missile blast's core and rays, and the one `rim_c` tap both rim programs
+  (LeachBall and Missile head, Plasma head) share. Alphas stay raw. On the same scenes: the Missile
+  frame's mean saturation 8.8 to 15.5 %, whole-frame luma 233.5 to 229.9 at 0.2 s; the LeachBall's
+  box 1,518 near-white pixels to 1,330; the Plasma bolt adds 569 dark pixels to its box and now
+  1,024. Pinned by `hd_missile_blast_ground_truth`, `hd_leach_ball_ground_truth` and
+  `hd_plasma_ball_ground_truth`.
+- **The Plasma ring reads raw on the console and the generic combine decodes it.** An edit that
+  skipped the decode for the ring's slot bit moved no pixel of ours' Plasma explosion frame
+  (tick 487; a probe that returned pure red and green for the ring's and the halo's slot bits
+  moved one pixel), so the ring and the halo are not drawn through that branch in any frame ours
+  makes, and the change was dropped unverified. **Open**: which path draws them.
+- **The Rocket's smoke reads 7 on both taps, but ours stays raw** (`beam.wesl`, `decodes_source`
+  false): `rocket-trail.md` found a decoded smoke grey against the film's white, and no Rocket
+  film is on this host to settle it, so the nibble is recorded and nothing is wired (the absorb
+  shell's precedent). Falsifier for a later lane: a Rocket pair with the decode on.
+- **The Missile's mean saturation moved up and the 3-frame film does not close on the original's
+  in every age** (`hit0` ages 0.08, 0.15, 0.33 s, whole-frame mean saturation original 36.9, 33.4,
+  62.2 %, before 46.0, 35.0, 57.6, after 52.1, 56.9, 63.4; luma original 222.8, 224.1, 199.7,
+  before 231.4, 248.5, 226.2, after 228.9, 245.2, 221.4): luma is nearer the original at all three
+  ages, saturation only at 0.33 s. The frames are framed by a camera moved from the original's
+  relative to the blast, so this is a direction, not a score.
+
+**Omega and 2048**: checked, applies, not wired for the three title-neutral findings. Omega ships
+the same textures as `.gnf` (`ChannelType::Srgb`) and its programs are GCN and unread; 2048's
+`.gxt` header carries no gamma field and no Vita3K draw of these effects has been read. The decode
+is therefore left on HD's measured store (`encoded_out`); neither title's frame changed.
+
 ## Open
 
 - **Not written:** the Repulser field and mag floor. (The Bomb's blast is

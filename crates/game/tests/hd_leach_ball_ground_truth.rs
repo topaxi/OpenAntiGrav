@@ -125,4 +125,11 @@ fn the_leach_ball_glows_face_on_from_the_real_eye() {
         with > without + 800,
         "the ball is not glowing face-on: its eye is the world's origin again"
     );
+    // The ball's colour tap is decoded on fetch (unit 0 gamma nibble 7,
+    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the
+    // box reads 1,330 near-white pixels decoded and 1,518 with the tap raw.
+    assert!(
+        with < 1450,
+        "the ball's colour tap is read raw, as the console does not: {with}"
+    );
 }
