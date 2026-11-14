@@ -17,11 +17,16 @@ early-return the older note cited moved with it.
 
 ## Open
 
-- The orbit guard has no test: `rg -c '#\[test\]' crates/view` finds none.
-  `crates/view/src/offscreen.rs` already reads a frame back headless, so a
-  test may not need a window; unconfirmed.
+- The orbit guard has no test and cannot get one as the code stands. It is
+  inside `Session::frame`, which needs a winit window and surface;
+  `crates/view/src/offscreen.rs` is a texture readback (`capture(asset, path)`)
+  and draws no model. The headless model draw is `oag_mesh::capture_pixels_from`
+  (`crates/mesh/src/capture.rs:371`, the twin guard), which is a different
+  call site.
 
 ## Next Steps
 
-- Build an `OrbitView` over a model with no vertices and draw one frame
-  through the offscreen path; assert no panic.
+- Either split the render pass out of `Session::frame` into a function taking a
+  device, queue and `Model` and test it through an offscreen target (in the
+  `gpu-vram` group), or test the twin in `capture.rs` with an empty `Model`
+  and accept that `orbit.rs:560` itself stays unguarded by a test.
