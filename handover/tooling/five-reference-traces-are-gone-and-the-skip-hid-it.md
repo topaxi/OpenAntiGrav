@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse]
 updated: 2026-11-14
-summary: "maglock_ground_truth and yaw_authority_ground_truth still skip on tracked traces; a stale comment says the -omega capture was never committed"
+summary: "yaw_authority_ground_truth still skips on steer-left/right, which are untracked; allowlist and commit them to make absence a panic"
 difficulty: easy (25)
 ---
 
@@ -21,20 +21,15 @@ tracks a trace a test names. The doc question on `-omega` is settled in
 
 ## Open
 
-- `crates/raceplay/tests/maglock_ground_truth.rs` `rows()` and its doc comment
-  (about lines 130-185) still say the capture "was never committed" and "no
-  checkout has" it, and skip when absent. It is tracked, so absence is a broken
-  tree and should panic like `chase_camera_ground_truth.rs::require_capture`.
-  `the_capture_is_still_on_the_allowlist` can stay.
-- `crates/trace/tests/yaw_authority_ground_truth.rs` `capture_path` (about line
-  133) skips on a missing `steer-left`/`steer-right` capture unless
-  `OAG_REQUIRE_GAME_DATA` is set; both are tracked, so it should panic
-  unconditionally. Check the other `skipping:` sites in `crates/trace/tests`
-  (`pads_ground_truth.rs:30`, `lap_capture_ground_truth.rs:93`) are disc images,
-  which may keep skipping.
+- `maglock_ground_truth.rs` now panics on a missing capture (done).
+- `crates/trace/tests/yaw_authority_ground_truth.rs` `capture_path` still skips
+  on a missing `talons-junction-steer-left.csv` / `-steer-right.csv`: those two
+  are NOT tracked (`.gitignore` has no `!` line for them; they exist only in the
+  maintainer's `data/traces/`). To make the skip a panic, allowlist both in
+  `.gitignore` and commit them (42 KB each, ADR-0046), then apply the
+  `require_capture` shape. The other `skipping:` sites in `crates/trace/tests`
+  (`pads_ground_truth.rs:30`, `lap_capture_ground_truth.rs:93`) were not checked.
 
 ## Next Steps
 
-1. Replace those two skips with the `require_capture` shape and rewrite the
-   stale `maglock_ground_truth.rs` comment. Under an hour; `oag-raceplay` and
-   `oag-trace` test files only.
+1. Decide: allowlist and commit the two steer captures, then drop the skip.
