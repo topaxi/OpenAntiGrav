@@ -264,6 +264,7 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        model_unlocks: Some(campaign::DEFINITION_ENTRY),
         // Not wired, not measured absent: Omega's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,

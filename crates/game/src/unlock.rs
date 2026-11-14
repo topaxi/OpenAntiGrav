@@ -28,6 +28,9 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod model_gate;
+pub use model_gate::ModelGate;
+
 use oag_tables::race_campaign::{self, Grid, Medal};
 
 use crate::records::{self, Store};

@@ -165,7 +165,10 @@ pub use fresh::FreshVariant;
 pub use lineage::CircuitLineage;
 pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks, WwiseBank, WwiseCue, WwiseCues};
 pub use transition::ZoneTransition;
-pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
+pub use variants::{
+    GuestRoster, HullVariant, LIVERY_SEPARATOR, TeamVariant, TeamVariants, VariantJoin, livery_variant,
+    split_livery,
+};
 pub use zone_circuit::ZoneCircuit;
 
 /// The circuit and team a race falls back to on one title.

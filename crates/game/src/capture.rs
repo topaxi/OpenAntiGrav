@@ -692,6 +692,10 @@ pub fn run(
                     }
                     _ => None,
                 };
+                // The live screen's model gate, off the same source (`unlock::ModelGate`).
+                let model_gate = archives.as_mut().map_or_else(crate::unlock::ModelGate::none, |archives| {
+                    crate::unlock::ModelGate::read(title, archives)
+                });
                 let (stills, mode3d_model) = picker_stills(
                     kind,
                     &options.settings,
@@ -714,6 +718,7 @@ pub fn run(
                     title,
                     &tracks,
                     &teams,
+                    &model_gate,
                     &strings,
                     frame,
                     &skin,
@@ -744,6 +749,7 @@ pub fn run(
                         title,
                         &tracks,
                         &teams,
+                        &model_gate,
                         &strings,
                         None,
                         &skin,
@@ -763,6 +769,7 @@ pub fn run(
                         title,
                         &tracks,
                         &teams,
+                        &model_gate,
                         &strings,
                         None,
                         &skin,

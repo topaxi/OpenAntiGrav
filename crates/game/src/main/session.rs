@@ -1109,6 +1109,8 @@ pub(crate) struct Shell {
     /// its skins - where [`Self::teams`] is only the id and the label the
     /// RACE page's own row needs.
     pub(crate) team_details: Vec<catalogue::Team>,
+    /// What gates [`Self::team_details`]' models on Ship Select (`oag_game::unlock::ModelGate`).
+    pub(crate) model_gate: oag_game::unlock::ModelGate,
     /// The 2048 campaign map this title's chooser hands off to, when it has
     /// one - see `oag_game::boot::map_seed`.
     pub(crate) map: Option<oag_game::boot::map_seed::MapSeed>,
@@ -1235,6 +1237,7 @@ impl Shell {
             ship_select: boot_shell.ship_select.clone(),
             ship_select_split: boot_shell.ship_select_split.clone(),
             team_details: boot_shell.teams.clone(),
+            model_gate: boot_shell.model_gate.clone(),
             map: oag_game::boot::map_seed::MapSeed::of(boot_shell),
         }
     }

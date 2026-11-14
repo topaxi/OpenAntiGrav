@@ -285,6 +285,7 @@ pub const TITLE: &Title = &Title {
         main_row: Some(campaign::MAIN_ROW),
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        model_unlocks: None,
         // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are
         // `MedalCount`, `Track` + `medal` and `Tournament` + `class` + `medal`,
         // which the list campaign evaluates itself.

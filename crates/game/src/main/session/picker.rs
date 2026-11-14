@@ -311,7 +311,9 @@ impl Session {
     /// or HD's own ship screen, which prints the running loyalty total no other title that
     /// gates nothing shows.
     fn shows_loyalty(&self, seat: usize) -> bool {
-        self.shell.as_ref().is_some_and(|shell| unlock::gates_variants(shell.title))
+        self.shell.as_ref().is_some_and(|shell| {
+            unlock::gates_variants(shell.title) || shell.model_gate.gates()
+        })
             || self.ship_layout(seat).is_some_and(|layout| layout.hd.is_some())
     }
 
@@ -348,6 +350,7 @@ impl Session {
                     details,
                     &shell.strings,
                     records,
+                    &shell.model_gate,
                     mode,
                 );
                 let join = title.race.join_for(&choice.value);
