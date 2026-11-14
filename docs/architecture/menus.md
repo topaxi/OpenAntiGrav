@@ -270,6 +270,41 @@ list's last value) while that class is chosen; the `pinned` class list in the mo
 `Options::no_driver_for_class` carries it to `Race::start`, which fields an
 empty grid. Campaign launches clear it.
 
+## AI DIFFICULTY keeps our four levels on every title
+
+**A deliberate divergence, and a decision rather than a gap.** The race box's
+AI DIFFICULTY row (`ai.difficulty`, `assets/ui/menu.toml`) offers
+`novice`/`skilled`/`elite`/`ace` on every title. The disc's counts differ:
+Pulse PSP, Pulse PS2 and HD author three (`Easy`/`Medium`/`Hard`, persisted as
+`global="SkillLevel"`); Pure authors none anywhere
+([race-setup.md](../formats/race-setup.md), "Pulse - `Single Player`"). The
+count is not moved onto a title axis because opponent behaviour is a design
+axis tuned for a good race, not a thing to be faithful to
+(`crates/ai/src/difficulty.rs`; the four are **chosen, not measured**). The
+per-title counts above are the evidence for what was passed over, so nobody
+later "fixes" the row back to three.
+
+## The race-box flow is re-entrant, not a wizard
+
+Pulse's `Track Creation` and `Team Selection` screens serve three callers:
+custom race, tournament and the custom grid (`RB_EDIT_GRID`). They are told
+apart only by a `<Redirect>` keyed on another screen's current value
+(`<Entry Item="Racebox->RBMode" equals="RB_EDIT_GRID" goto="Cell Setup">`).
+HD does the same for its online leg, and for split screen it visits
+`Team Selection` twice, once per player. A fixed three-page wizard cannot
+express that, so whichever page opens another carries "who called me and where
+do I return" as a parameter. The tree stays ours; this is the shape the
+disc's evidence rules out, not a mandate to copy its flow.
+
+## Laps are not a race-box row
+
+No title offers a lap count on its race-setup page (four independent
+measurements, confidence 88:
+[race-setup.md](../formats/race-setup.md), "Nobody offers a lap count").
+Laps are a real race parameter, set by the mode and the circuit. A LAPS row
+would therefore be **ours** and would have to be marked as ours the way
+MONITOR is; none exists today.
+
 ## RACE REMIX: CUSTOM tracks
 
 > **Own-format tracks are in every build; Workshop tracks are not (maintainer, 2026-10-27).** CUSTOM is one

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-04
+updated: 2026-11-14
 summary: "RACE REMIX is already a mod; the engine still names Remix in modules, a title field, a source type and comments. Rename, nothing left to move."
 size: M (35)
 difficulty: easy (25)
@@ -9,6 +9,15 @@ kind: debt
 ---
 
 # Remix vocabulary out of the engine
+
+**Rechecked 2026-11-14 on `main` at 98f8985c8: every cluster below is still open**
+(`crates/game/src/remix.rs`, `session/remix.rs`, `crates/source/src/remix.rs` exist; `remix_only` and
+`is_offered_outside_remix` have 29 hits in `crates`; "Race Remix" is still in
+`crates/game/src/custom_tracks.rs:375` and `crates/raceplay/src/foreign.rs:136`; the two test files
+and the `[remix]` comment at `crates/game/src/settings/race.rs:1` are unchanged; `rg -il remix crates`
+lists 82 files). The only item that moved is `docs/tools/modding.md`'s false "a mod cannot add a
+page" sentence, fixed 2026-11-14 (docs half of C5). The rest is a rename lane of about half a day, not
+a one-hour wire.
 
 Scout census, 2026-11-04, `main` at f9bb72ea2, branch `remix-scout`. Confidences
 in brackets are the scout's own estimates of size and difficulty, not measurements.
@@ -73,7 +82,7 @@ Counts, measured with `rg -in remix crates` split by path: 52 non-test files und
 | `docs/architecture/adr/0078`, `0058`, `0077`, `0057`, `0022`, `0083`, `adr/README.md` | 2, 2, 1, 1, 1, 1, 1 | **keep**: immutable, or the index line. |
 | `docs/architecture/workspace-layout.md:78` | 1 | **fix** with C3: "a race's track and craft sources (`remix::Remix`)". |
 | `docs/architecture/wasm-extensions/README.md:682, 1478` | 2 | **keep**: a design note that uses "Race Remix" as an example race; not an engine name. |
-| `docs/tools/modding.md:125` | (not in the scope list) | **fix** with C5: "a mod cannot add a page, a setting or a ..." is false since ADR-0082. |
+| `docs/tools/modding.md:125` | 1 | fixed 2026-11-14. |
 
 ### C1. Session module named `remix_menu` holds the generic query answers (rename)
 
@@ -289,11 +298,10 @@ page, settings and policy rows, not the two-source rules (the old thread's Open 
 3. The ADR citations of `oag_source::remix::Remix::Split` and `is_offered_outside_remix`
    (ADR-0034, ADR-0035, ADR-0082) go stale with C3 and C4. ADRs are immutable: note the
    new names in `docs/architecture/menus.md` and `workspace-layout.md`, do not edit the ADRs.
-4. `docs/tools/modding.md:125` is false today (C5). Fix with the first lane.
 
 ## Next Steps
 
-1. Fix C5's stale comments and `docs/tools/modding.md:125`. One commit, `just check-docs`.
+1. Fix C5's stale comments (the `modding.md` half is done). One commit.
 2. Land C1 and C2 together: rename `oag_game::remix` to `title_lists`, then `remix_menu` to
    `queries`, moving `settle` into `menus.rs`. Gate with `just gate-affected`.
 3. Land C4: `remix_only` to `union_only`, `is_offered_outside_remix` to

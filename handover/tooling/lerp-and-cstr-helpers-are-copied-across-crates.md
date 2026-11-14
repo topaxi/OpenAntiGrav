@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-02
+updated: 2026-11-14
 summary: "lerp is private in a dozen places and cstr in four; one shared helper each, with the float-order differences checked"
 size: S (30)
 difficulty: easy (40)
@@ -18,6 +18,11 @@ different float order), `crates/vex/src/probes.rs:127` (array form), `crates/ui/
 NUL-terminated string readers: `crates/rcs/src/rcsmodel/material.rs:549`,
 `crates/rcs/src/rcsmodel/psp2/material.rs:496`, `crates/rcs/src/rcsmodel/psp2/nodes.rs:302`,
 `crates/vex/src/vex.rs:712`, while `oag_bytes::Reader::cstr` (`crates/bytes/src/reader.rs:240`) exists.
+
+Rechecked 2026-11-14: nothing has landed. `oag-core` and `oag-bytes` still have no `lerp` or
+slice-form `cstr_at`/`u*_at`; the `cstr` copies are now `vex/src/vex.rs:638`, `rcs/src/rcsmodel/psp2/nodes.rs:311`,
+`psp2/material.rs:496`, `rcs/src/rcsmodel/material.rs:549`; `fn (u16|u32|f32)_at` still has 22 non-test hits.
+Line numbers elsewhere in this note drift.
 
 2026-11-02 addition: the same copying holds for offset readers. `rg 'fn (u16|u32|f32)_at'`
 finds 22 non-test definitions: `crates/vex/src/vex.rs:622,626,630` (panics), `vex/src/track.rs:841,845`
