@@ -167,17 +167,17 @@ Add a crate only when its milestone opens; no placeholder crates.
 
 | Crate | Purpose |
 | --- | --- |
-| `oag-bytes` | Endian-aware byte reading. |
+| `oag-bytes` | Endian-aware byte reading, and the workspace's one `ByteOrder`. |
 | `oag-core` | Deterministic `f32` math (no SIMD), `TickClock`, seeded `Rng`, state hashing. Everything depends on it. |
 | `oag-disc` | CHD and raw ISO readers, ISO 9660, platform identification. |
 | `oag-display` | Screen/shape/pixel/brightness vocabulary and a source's layout coordinate space. Depends on `oag-disc` and `serde` only. |
-| `oag-formats` | Containers and sound: WAD, PSARC, LZSS, sound banks, magic triage, byte order, GE swizzle. Split by format family ([ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md)). |
+| `oag-formats` | Containers and sound: WAD, PSARC, LZSS, sound banks, magic triage, GE swizzle. Split by format family ([ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md)). |
 | `oag-rcs` | `RCSMODEL` scene (PS3/Vita): models, materials, visibility sets, Vita shader programs. |
 | `oag-vex` | `.vex` scene tree and its payloads: geometry, collision, spline, pads, PVS, fog, lights, emitters, shadow hulls, PS2 VIF, 2048 collision. |
-| `oag-pob` | `.pob` particle system. Depends on `oag-formats` only. |
+| `oag-pob` | `.pob` particle system. Depends on `oag-formats` and `oag-bytes` only. |
 | `oag-texture` | Every pixel format decoded to RGBA8888, plus a PNG writer. |
 | `oag-tables` | XML-authored tables (handling, weapons, campaign, load manifests, lighting). Zero dependencies. |
-| `oag-video` | `.PMF`, `IPUF`, Bink, and the IVF/AV1 cache. No workspace dependencies. |
+| `oag-video` | `.PMF`, `IPUF`, Bink, and the IVF/AV1 cache. Depends on `oag-bytes` only. |
 | `oag-unity` | Generic Unity asset-bundle reader; knows no game; depends on `oag-bytes` only ([ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md)). |
 | `oag-ballisticng` | BallisticNG Workshop content on `oag-unity`: `.wtrk`, `.csf`, track data as typed structs. Reads; maps nothing into this engine. |
 | `oag-trackfile` | Own custom-track format: glTF 2.0 binary plus TOML manifest; refuses an unknown major by name. The BallisticNG importer is `oag_raceplay::foreign`. Forbidden to gameplay crates ([ADR-0063](docs/architecture/adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md)). |

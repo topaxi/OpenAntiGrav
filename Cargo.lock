@@ -3887,6 +3887,7 @@ name = "oag-video"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-bytes",
  "oag-disc",
  "oag-testdata",
  "re_rav1d",

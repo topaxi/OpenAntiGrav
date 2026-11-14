@@ -36,7 +36,7 @@
 //! `80 07 00 00` and the picture really is 1920 pixels wide, not 0x80070000.
 //! The container is the authoring tool's, written once on a PC and shipped
 //! unchanged, so this module takes no `oag_bytes::ByteOrder` and never will -
-//! which is why this crate does not depend on `oag-formats` at all.
+//! which is why it reads words with the fixed-order `oag_bytes::le` readers.
 //!
 //! # What is measured
 //!
@@ -48,6 +48,8 @@
 //! it can only agree if the audio-track arrays were sized and ordered right, so
 //! it validates the variable-length middle of the header rather than its ends.
 //! Confidence **92**; see `docs/formats/bik.md`.
+
+use oag_bytes::le;
 
 /// The three bytes every Bink 1 file starts with, before its revision byte.
 ///
@@ -219,15 +221,6 @@ impl Header {
     }
 }
 
-fn u32_at(blob: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes([
-        blob[offset],
-        blob[offset + 1],
-        blob[offset + 2],
-        blob[offset + 3],
-    ])
-}
-
 /// Whether `blob` starts like a Bink file.
 ///
 /// The dispatch test, and it is deliberately three bytes rather than four: the
@@ -259,19 +252,21 @@ pub fn parse(blob: &[u8]) -> Result<Header, Error> {
         return Err(Error::NotBink);
     }
 
-    let width = u32_at(blob, 0x14);
-    let height = u32_at(blob, 0x18);
+    let fixed =
+        |at: usize| le::u32_at(blob, at).expect("the fixed header length was checked above");
+    let width = fixed(0x14);
+    let height = fixed(0x18);
     if width == 0 || height == 0 {
         return Err(Error::ZeroDimension { width, height });
     }
 
-    let frame_rate = (u32_at(blob, 0x1c), u32_at(blob, 0x20));
+    let frame_rate = (fixed(0x1c), fixed(0x20));
     if frame_rate.1 == 0 {
         return Err(Error::ZeroFrameRate);
     }
 
-    let frame_count = u32_at(blob, 0x08) as usize;
-    let track_count = u32_at(blob, 0x28) as usize;
+    let frame_count = fixed(0x08) as usize;
+    let track_count = fixed(0x28) as usize;
 
     // Computed before anything reads at these offsets, and in `usize` with
     // checked arithmetic throughout: a track count of 0xffffffff off a corrupt
@@ -305,24 +300,26 @@ pub fn parse(blob: &[u8]) -> Result<Header, Error> {
             // flag word in the high one, little-endian like everything else
             // here.
             let at = flags_at + 4 * i;
+            let in_arrays = "the header length check above covers the audio arrays";
             AudioTrack {
-                id: u32_at(blob, ids_at + 4 * i),
-                sample_rate: u32::from(u16::from_le_bytes([blob[at], blob[at + 1]])),
-                flags: u16::from_le_bytes([blob[at + 2], blob[at + 3]]),
-                max_decoded_len: u32_at(blob, FIXED_HEADER_LEN + 4 * i) as usize,
+                id: le::u32_at(blob, ids_at + 4 * i).expect(in_arrays),
+                sample_rate: u32::from(le::u16_at(blob, at).expect(in_arrays)),
+                flags: le::u16_at(blob, at + 2).expect(in_arrays),
+                max_decoded_len: le::u32_at(blob, FIXED_HEADER_LEN + 4 * i).expect(in_arrays)
+                    as usize,
             }
         })
         .collect();
 
     Ok(Header {
         revision: blob[3],
-        declared_len: u64::from(u32_at(blob, 0x04)) + 8,
+        declared_len: u64::from(fixed(0x04)) + 8,
         frame_count,
-        largest_frame: u32_at(blob, 0x0c) as usize,
+        largest_frame: fixed(0x0c) as usize,
         width,
         height,
         frame_rate,
-        video_flags: u32_at(blob, 0x24),
+        video_flags: fixed(0x24),
         audio,
         header_len,
     })
@@ -343,7 +340,7 @@ pub fn first_frame_offset(blob: &[u8], header: &Header) -> Option<usize> {
     if blob.len() < at + 4 {
         return None;
     }
-    Some(u32_at(blob, at) as usize & !1)
+    Some(le::u32_at(blob, at)? as usize & !1)
 }
 
 #[cfg(test)]

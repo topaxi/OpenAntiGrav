@@ -35,6 +35,8 @@
 //! Nothing here reads the file's frame rate, because the container declares
 //! none. That is the decoder's problem and it is discussed on the format page.
 
+use oag_bytes::le;
+
 /// The four bytes an IPF file starts with.
 pub const MAGIC: [u8; 4] = *b"IPUF";
 
@@ -173,19 +175,6 @@ impl Ipf<'_> {
     }
 }
 
-fn u16_at(blob: &[u8], offset: usize) -> u32 {
-    u32::from(u16::from_le_bytes([blob[offset], blob[offset + 1]]))
-}
-
-fn u32_at(blob: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes([
-        blob[offset],
-        blob[offset + 1],
-        blob[offset + 2],
-        blob[offset + 3],
-    ])
-}
-
 /// Reads an IPF's header and cuts out every frame's payload.
 ///
 /// # Errors
@@ -200,15 +189,16 @@ pub fn parse(blob: &[u8]) -> Result<Ipf<'_>, Error> {
         return Err(Error::NotIpf);
     }
 
-    let width = u16_at(blob, 4);
-    let height = u16_at(blob, 6);
+    let header = "the header length was checked above";
+    let width = u32::from(le::u16_at(blob, 4).expect(header));
+    let height = u32::from(le::u16_at(blob, 6).expect(header));
     if width == 0 || height == 0 {
         return Err(Error::ZeroDimension { width, height });
     }
 
-    let frame_count = u32_at(blob, 8) as usize;
-    let frame_stride = u32_at(blob, 12) as usize;
-    let alignment = u32_at(blob, 16);
+    let frame_count = le::u32_at(blob, 8).expect(header) as usize;
+    let frame_stride = le::u32_at(blob, 12).expect(header) as usize;
+    let alignment = le::u32_at(blob, 16).expect(header);
 
     if frame_stride <= FRAME_HEADER_LEN {
         return Err(Error::StrideTooShort {
@@ -240,7 +230,8 @@ pub fn parse(blob: &[u8]) -> Result<Ipf<'_>, Error> {
     let mut frames = Vec::with_capacity(frame_count);
     for index in 0..frame_count {
         let slot = HEADER_LEN + index * frame_stride;
-        let claimed = u32_at(blob, slot) as usize;
+        let claimed =
+            le::u32_at(blob, slot).expect("the truncation check above covers every slot") as usize;
         if claimed > available {
             return Err(Error::PayloadTooLong {
                 index,
@@ -396,7 +387,7 @@ mod tests {
         let claimed = 0xffffu32;
         blob[HEADER_LEN..HEADER_LEN + 4].copy_from_slice(&claimed.to_le_bytes());
 
-        let stride = u32_at(&blob, 12) as usize;
+        let stride = le::u32_at(&blob, 12).unwrap() as usize;
         assert_eq!(
             parse(&blob).unwrap_err(),
             Error::PayloadTooLong {
