@@ -18,7 +18,7 @@ use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
-use super::{Session, picker, remix_menu};
+use super::{Session, picker, queries};
 
 /// Moved to `oag_game::scoreboard::speed_class_choices`, re-exported here
 /// under its own name so every call site in this module (and
@@ -497,7 +497,7 @@ impl Session {
             &shell.team_details,
             &oag_game::records::load(),
         );
-        remix_menu::settle(&mut self.settings.race.variant, &choices);
+        queries::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
         }
@@ -1053,7 +1053,7 @@ impl Session {
                 &shell.team_details,
                 &oag_game::records::load(),
             );
-        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        queries::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);
         // The booted title's own ladder, filtered to the rungs this build can
         // put a ship on. `None` means the title's per-team handling files have

@@ -1,5 +1,5 @@
 //! What launching with the RACE page's VARIANT row's pick means; the row's own
-//! choices are `oag_game::livery_row`. Shared with RACE REMIX - see `super::remix`.
+//! choices are `oag_game::livery_row`. Shared with the two-title race pickers - see `super::queries`.
 //!
 //! Split out of `menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.

@@ -1,15 +1,16 @@
-//! Race Remix's own CRAFT TITLE/TRACK TITLE/TEAM rows, and its launch.
+//! The CRAFT TITLE/TRACK TITLE/TEAM rows' query answers, for the RACE page and a
+//! mod's two-title race page alike.
 //!
 //! Split out of [`super::menus`] under this project's 1,000-line ceiling
 //! (`scripts/check-file-size.py`) - a move, with no behaviour change, except
 //! for the CRAFT TITLE/TEAM/VARIANT guest-roster fold this file introduced
 //! alongside the split. [`oag_game::livery_row::variant_choices`]/
 //! [`super::menus::combine_variant`] stay there: they are shared with the
-//! ordinary RACE page's own VARIANT row, not Race Remix's alone.
+//! ordinary RACE page's own VARIANT row, not this module's alone.
 
 use log::warn;
 
-use oag_game::remix;
+use oag_game::title_lists;
 use oag_ui::{menu, strings};
 
 use crate::stage::Stage;
@@ -22,7 +23,7 @@ use super::Session;
 /// when the list is empty. `Menu::seed` can only move a row to a value its list
 /// carries and `supply` resets an unmatched row to index 0, so without this the
 /// row would show one value while the setting a launch reads holds another
-/// (`oag_game::remix::settle_queries` is the same rule for a mod's picks).
+/// (`oag_game::title_lists::settle_queries` is the same rule for a mod's picks).
 pub(super) fn settle(stored: &mut String, offered: &[menu::Choice]) {
     if !offered.iter().any(|choice| choice.value == *stored) {
         *stored = offered
@@ -116,7 +117,7 @@ fn query_lists(
     custom: &oag_game::custom_tracks::Scan,
     strings: &oag_ui::language::StringTable,
     query: menu::Query,
-    args: remix::QueryArgs<'_>,
+    args: title_lists::QueryArgs<'_>,
 ) -> Option<Vec<menu::Choice>> {
     match query {
         menu::Query::TracksOf if args.title == oag_game::custom_tracks::CUSTOM => {
@@ -129,26 +130,26 @@ fn query_lists(
         menu::Query::TeamsOf => {
             let title = resolve_craft_backing(titles, args.title)?.playable()?;
             let catalogue = craft_catalogue(titles, args.title, args.companion.unwrap_or(""))?;
-            remix::query_choices(query, &catalogue, title, None)
+            title_lists::query_choices(query, &catalogue, title, None)
         }
         menu::Query::VariantsOf => {
             let candidate = resolve_craft_backing(titles, args.title)?;
             let title = candidate.playable()?;
             let catalogue = match args.companion {
-                Some(_) => remix::Catalogue {
+                Some(_) => title_lists::Catalogue {
                     tracks: Vec::new(),
                     teams: Vec::new(),
                     multiplayer_teams: Vec::new(),
                 },
                 None => craft_catalogue(titles, args.title, "")?,
             };
-            remix::query_choices(query, &catalogue, title, args.companion)
+            title_lists::query_choices(query, &catalogue, title, args.companion)
         }
         _ => {
             let candidate = titles.iter().find(|candidate| candidate.title() == args.title)?;
             let title = candidate.playable()?;
-            match remix::catalogue(&candidate.source) {
-                Ok(catalogue) => remix::query_choices(query, &catalogue, title, args.companion),
+            match title_lists::catalogue(&candidate.source) {
+                Ok(catalogue) => title_lists::query_choices(query, &catalogue, title, args.companion),
                 Err(e) => {
                     warn!("{}: {e:#}", candidate.source);
                     None
@@ -187,14 +188,14 @@ fn custom_track_choices(
 
 impl Session {
     /// Re-lists the rows whose `values_from` carries an `of`, for the values the settings they
-    /// read hold now, and settles the mod picks under them (`remix::settle_queries`).
+    /// read hold now, and settles the mod picks under them (`title_lists::settle_queries`).
     /// `changed` limits it to the queries that read that setting.
     pub(crate) fn resupply_queries(&mut self, changed: Option<&str>) {
         let strings = strings::project_table(self.settings.language.as_deref());
         let (titles, custom) = (&self.titles, &self.custom_tracks);
         let mod_settings = &mut self.settings.mod_settings;
         if let Stage::Menu(stage) = &mut self.stage {
-            remix::settle_queries(&mut stage.menu, mod_settings, changed, |query, args| {
+            title_lists::settle_queries(&mut stage.menu, mod_settings, changed, |query, args| {
                 query_lists(titles, custom, &strings, query, args)
             });
         }
@@ -204,7 +205,7 @@ impl Session {
     pub(crate) fn resolve_menu_queries(&mut self, model: &mut menu::Menu) {
         let strings = strings::project_table(self.settings.language.as_deref());
         let (titles, custom) = (&self.titles, &self.custom_tracks);
-        remix::settle_queries(model, &mut self.settings.mod_settings, None, |query, args| {
+        title_lists::settle_queries(model, &mut self.settings.mod_settings, None, |query, args| {
             query_lists(titles, custom, &strings, query, args)
         });
     }
@@ -242,8 +243,8 @@ impl Session {
     /// filters nothing here: with a Pure image present the *union* genuinely
     /// contains five names and this row offers all five.
     ///
-    /// **This row is not where `VECTOR` is confined to remix - it is the
-    /// remix row.** `oag_title::SpeedClasses::is_offered_outside_remix` is a
+    /// **This row is not where `VECTOR` is confined to the union - it is the
+    /// union row.** `oag_title::SpeedClasses::is_offered_outside_remix` is a
     /// *different*, narrower filter the ordinary RACE page's own row applies
     /// instead (`super::menus::speed_class_choices`), so a Pure-only boot's
     /// RACE page still offers four while this one offers five. See
@@ -294,9 +295,9 @@ pub(super) fn craft_catalogue(
     titles: &[oag_game::launcher::Candidate],
     requested: &str,
     class: &str,
-) -> Option<remix::Catalogue> {
+) -> Option<title_lists::Catalogue> {
     let candidate = resolve_craft_backing(titles, requested)?;
-    let mut catalogue = match remix::catalogue(&candidate.source) {
+    let mut catalogue = match title_lists::catalogue(&candidate.source) {
         Ok(catalogue) => catalogue,
         Err(e) => {
             warn!("{}: {e:#}", candidate.source);
@@ -320,7 +321,7 @@ pub(super) fn craft_catalogue(
     // **A team whose files do not author the chosen class is hidden**
     // (chosen, not measured; `oag_title::RaceDefaults::team_races_class`).
     // Pure's VECTOR and 2048's SUPERPHANTOM are on one title's ladder or
-    // one roster only, and a remix can pair them with a craft title whose
+    // one roster only, and a two-title race can pair them with a craft title whose
     // teams author neither: the TEAM row narrows, possibly to nothing,
     // rather than offering a team that fails to load.
     if let Some(title) = candidate.playable() {
@@ -341,5 +342,5 @@ fn is_guest_team(guest: &oag_title::GuestRoster, id: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "remix/tests.rs"]
+#[path = "queries/tests.rs"]
 mod tests;

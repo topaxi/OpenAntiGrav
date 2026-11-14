@@ -104,7 +104,7 @@ fn layouts(reversed: bool) -> Vec<(String, String)> {
     let only: Option<Vec<String>> = std::env::var("OAG_SWEEP_ONLY")
         .ok()
         .map(|v| v.split(',').map(str::to_string).collect());
-    oag_game::remix::catalogue(&image.display().to_string())
+    oag_game::title_lists::catalogue(&image.display().to_string())
         .expect("cataloguing the source")
         .tracks
         .into_iter()

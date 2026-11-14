@@ -54,8 +54,8 @@ fn remix_options(track_image: &str, craft_image: &str, class: &str) {
     let [track, craft] = playable[..] else {
         panic!("the survey found {} playable titles, not two", playable.len());
     };
-    let track_catalogue = remix::catalogue(&track.source).expect("the track disc's catalogue");
-    let craft_catalogue = remix::catalogue(&craft.source).expect("the craft disc's catalogue");
+    let track_catalogue = title_lists::catalogue(&track.source).expect("the track disc's catalogue");
+    let craft_catalogue = title_lists::catalogue(&craft.source).expect("the craft disc's catalogue");
     let circuit = track_catalogue.tracks.last().map(|(t, _)| t.id.clone()).unwrap();
     let team = craft_catalogue.teams.last().unwrap().value.clone();
 

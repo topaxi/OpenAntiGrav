@@ -3,7 +3,7 @@
 //! against the lists (ADR-0082). The disc-backed tests run both Pulse and Pure; the fixture
 //! ones need no images.
 
-use oag_game::{boot, remix};
+use oag_game::{boot, title_lists};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Choice, Definition, Menu, Query, Value};
 
@@ -37,7 +37,7 @@ fn listed(menu: &Menu) -> Vec<String> {
     values.iter().map(|v| v.value.clone()).collect()
 }
 
-fn lists(_: Query, args: remix::QueryArgs<'_>) -> Option<Vec<Choice>> {
+fn lists(_: Query, args: title_lists::QueryArgs<'_>) -> Option<Vec<Choice>> {
     match args.title {
         "Alpha" => Some(vec![Choice::plain("a1"), Choice::plain("a2")]),
         "Beta" => Some(vec![Choice::plain("b1")]),
@@ -50,10 +50,10 @@ fn a_row_is_relisted_when_the_setting_it_names_changes() {
     let mut menu = menu_with(&tracks_row());
     assert!(listed(&menu).is_empty(), "no list until the engine answers");
     menu.seed("mod.t.title", &Value::Text("Alpha".into()));
-    remix::resolve_queries(&mut menu, None, lists);
+    title_lists::resolve_queries(&mut menu, None, lists);
     assert_eq!(listed(&menu), ["a1", "a2"]);
     menu.seed("mod.t.title", &Value::Text("Beta".into()));
-    remix::resolve_queries(&mut menu, Some("mod.t.title"), lists);
+    title_lists::resolve_queries(&mut menu, Some("mod.t.title"), lists);
     assert_eq!(listed(&menu), ["b1"]);
 }
 
@@ -61,9 +61,9 @@ fn a_row_is_relisted_when_the_setting_it_names_changes() {
 fn another_setting_changing_leaves_the_list_alone() {
     let mut menu = menu_with(&tracks_row());
     menu.seed("mod.t.title", &Value::Text("Alpha".into()));
-    remix::resolve_queries(&mut menu, None, lists);
+    title_lists::resolve_queries(&mut menu, None, lists);
     menu.seed("mod.t.title", &Value::Text("Beta".into()));
-    remix::resolve_queries(&mut menu, Some("race.mode"), lists);
+    title_lists::resolve_queries(&mut menu, Some("race.mode"), lists);
     assert_eq!(listed(&menu), ["a1", "a2"]);
 }
 
@@ -71,8 +71,8 @@ fn another_setting_changing_leaves_the_list_alone() {
 fn a_title_that_cannot_be_opened_keeps_the_row_on_its_list() {
     let mut menu = menu_with(&tracks_row());
     menu.seed("mod.t.title", &Value::Text("Alpha".into()));
-    remix::resolve_queries(&mut menu, None, lists);
-    remix::resolve_queries(&mut menu, None, |_, _| None);
+    title_lists::resolve_queries(&mut menu, None, lists);
+    title_lists::resolve_queries(&mut menu, None, |_, _| None);
     assert_eq!(listed(&menu), ["a1", "a2"]);
 }
 
@@ -107,7 +107,7 @@ values_from = { query = "variants_of", of = "mod.t.title", team = "mod.t.team" }
 
 /// Alpha's teams are `a-slow`/`a-fast` per class, Beta's `b1`/`b2`; a team's variants are
 /// its name with `-1` and `-2`.
-fn chain_lists(query: Query, args: remix::QueryArgs<'_>) -> Option<Vec<Choice>> {
+fn chain_lists(query: Query, args: title_lists::QueryArgs<'_>) -> Option<Vec<Choice>> {
     match query {
         Query::TeamsOf => Some(match (args.title, args.companion) {
             ("Alpha", Some(class)) => vec![Choice::plain(format!("a-{class}"))],
@@ -140,7 +140,7 @@ fn saved<'a>(
 fn a_fresh_profile_saves_what_every_row_shows_with_a_default_standing_for_an_unsaved_pick() {
     let mut menu = chain();
     let mut table = oag_game::settings::mod_settings::ModSettings::default();
-    assert!(remix::settle_queries(
+    assert!(title_lists::settle_queries(
         &mut menu,
         &mut table,
         None,
@@ -176,7 +176,7 @@ fn a_saved_pick_survives_a_reopen_and_a_change_relists_down_the_chain() {
         menu.seed(&key, &value);
     }
     assert!(
-        !remix::settle_queries(&mut menu, &mut table, None, chain_lists),
+        !title_lists::settle_queries(&mut menu, &mut table, None, chain_lists),
         "nothing moves"
     );
     assert_eq!(menu.value_of("mod.t.team"), Some("b2"));
@@ -184,7 +184,7 @@ fn a_saved_pick_survives_a_reopen_and_a_change_relists_down_the_chain() {
     // TITLE to Alpha: TEAM is re-listed for the saved class, VARIANT for the team it falls to.
     oag_game::settings::mod_settings::set(&mut table, "mod.t.title", "Alpha");
     menu.seed("mod.t.title", &Value::Text("Alpha".into()));
-    assert!(remix::settle_queries(
+    assert!(title_lists::settle_queries(
         &mut menu,
         &mut table,
         Some("mod.t.title"),
@@ -195,7 +195,7 @@ fn a_saved_pick_survives_a_reopen_and_a_change_relists_down_the_chain() {
     // CLASS, TEAM's companion, re-lists TEAM too.
     oag_game::settings::mod_settings::set(&mut table, "mod.t.class", "fast");
     menu.seed("mod.t.class", &Value::Text("fast".into()));
-    remix::settle_queries(&mut menu, &mut table, Some("mod.t.class"), chain_lists);
+    title_lists::settle_queries(&mut menu, &mut table, Some("mod.t.class"), chain_lists);
     assert_eq!(saved(&table, "team"), Some("a-fast"));
     assert_eq!(saved(&table, "variant"), Some("a-fast-1"));
 }
@@ -205,7 +205,7 @@ fn a_row_left_with_no_list_keeps_its_saved_pick() {
     let mut table = oag_game::settings::mod_settings::ModSettings::default();
     oag_game::settings::mod_settings::set(&mut table, "mod.t.team", "b2");
     let mut menu = chain();
-    remix::settle_queries(&mut menu, &mut table, None, |_, _| None);
+    title_lists::settle_queries(&mut menu, &mut table, None, |_, _| None);
     assert_eq!(saved(&table, "team"), Some("b2"));
 }
 
@@ -249,8 +249,8 @@ fn race_list(source: &str) -> Vec<(String, String)> {
 }
 
 fn query_list(source: &str, title: &'static oag_title::Title) -> Vec<(String, String)> {
-    let catalogue = remix::catalogue(source).expect("catalogue");
-    remix::query_choices(Query::TracksOf, &catalogue, title, None)
+    let catalogue = title_lists::catalogue(source).expect("catalogue");
+    title_lists::query_choices(Query::TracksOf, &catalogue, title, None)
         .expect("tracks_of answers")
         .into_iter()
         .map(|c| (c.value, c.label))
@@ -296,13 +296,13 @@ fn a_mod_row_lists_the_circuits_of_the_title_its_setting_names() {
         HEADER
     );
     let mut menu = Menu::new(Definition::parse(&text, &StringTable::default()).expect("parses"));
-    let answer = |query: Query, args: remix::QueryArgs<'_>| {
+    let answer = |query: Query, args: title_lists::QueryArgs<'_>| {
         let (source, t) = if args.title == pulse_name {
             (&pulse, oag_pulse::TITLE)
         } else {
             (&pure, oag_pure::TITLE)
         };
-        remix::query_choices(query, &remix::catalogue(source).ok()?, t, None)
+        title_lists::query_choices(query, &title_lists::catalogue(source).ok()?, t, None)
     };
     let ids = |menu: &Menu| -> Vec<String> {
         let oag_ui::menu::Entry::Choice { values, .. } = &menu.definition().pages[0].entries[2]
@@ -312,7 +312,7 @@ fn a_mod_row_lists_the_circuits_of_the_title_its_setting_names() {
         values.iter().map(|v| v.value.clone()).collect()
     };
     menu.seed("mod.t.which", &Value::Text(pulse_name.into()));
-    remix::resolve_queries(&mut menu, None, answer);
+    title_lists::resolve_queries(&mut menu, None, answer);
     let on_pulse = ids(&menu);
     assert_eq!(
         on_pulse,
@@ -322,7 +322,7 @@ fn a_mod_row_lists_the_circuits_of_the_title_its_setting_names() {
             .collect::<Vec<_>>()
     );
     menu.seed("mod.t.which", &Value::Text(pure_name.into()));
-    remix::resolve_queries(&mut menu, Some("mod.t.which"), answer);
+    title_lists::resolve_queries(&mut menu, Some("mod.t.which"), answer);
     let on_pure = ids(&menu);
     assert_eq!(
         on_pure,

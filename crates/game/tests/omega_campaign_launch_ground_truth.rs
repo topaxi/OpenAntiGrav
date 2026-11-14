@@ -15,7 +15,7 @@ use oag_tables::race_campaign::{self, Cell};
 /// by the team/track plugin definition, kept only where the archive set holds
 /// the geometry. This mirrors `boot::roster::load_tracks` and
 /// `load_zone_tracks` (both private to the boot), because
-/// `oag_game::remix::catalogue` answers only the raceable list and the Zone
+/// `oag_game::title_lists::catalogue` answers only the raceable list and the Zone
 /// split is half of what a cell needs resolved.
 struct Catalogue {
     race: Vec<oag_raceplay::catalogue::Track>,

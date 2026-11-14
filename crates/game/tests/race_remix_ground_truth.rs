@@ -23,11 +23,11 @@
 //! 2. **A genuine remix.** Wipeout 2048's own circuit with Wipeout Pure's
 //!    craft: the track loads off 2048, the grid and the HUD off Pure. This is
 //!    the spec's own example (see `race_remix_prompt.md`, not committed).
-//! 3. **The RACE REMIX menu page's own data source**, `remix::catalogue`,
+//! 3. **The RACE REMIX menu page's own data source**, `title_lists::catalogue`,
 //!    independent of the menus themselves - which need a window this suite
 //!    cannot open.
 
-use oag_game::remix;
+use oag_game::title_lists;
 use oag_raceplay as race;
 use std::path::{Path, PathBuf};
 
@@ -282,7 +282,7 @@ fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
     );
 }
 
-/// `remix::catalogue` - the RACE REMIX page's own reader - offers HD's real
+/// `title_lists::catalogue` - the RACE REMIX page's own reader - offers HD's real
 /// circuits and roster, independent of the menu machinery that calls it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -290,7 +290,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
     let Some(image) = image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let catalogue = remix::catalogue(&image.display().to_string())
+    let catalogue = title_lists::catalogue(&image.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", image.display()));
 
     assert!(!catalogue.tracks.is_empty(), "HD declares circuits");
@@ -325,7 +325,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
     // keyed by a track's plugin id (`01_Track`), so a direct
     // `strings.get(&track.id)` resolves nothing and every label fell back to
     // the raw id on this page until `crate::boot::load_circuit_names` was
-    // wired into `remix::catalogue` - see its own doc comment. Talon's
+    // wired into `title_lists::catalogue` - see its own doc comment. Talon's
     // Junction is this project's reference circuit and is always present.
     let talons_junction = catalogue
         .tracks
@@ -357,7 +357,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
 /// `oag_title::Title::plugin_definition` is 2048's *team* plugin
 /// (`Data\Plugins\teams\Definition.xml`, by design: a race needs a roster
 /// before it needs a circuit list, see the field's own doc comment) and
-/// `remix::catalogue` read `PI_Track` nodes off that same file - which has
+/// `title_lists::catalogue` read `PI_Track` nodes off that same file - which has
 /// none, since 2048 splits into three plugin files where every other title
 /// ships one. Fixed by `oag_title::Title::track_plugin_definition`, `None`
 /// everywhere the two agree, `Some` naming 2048's own tracks plugin.
@@ -373,7 +373,7 @@ fn the_catalogue_offers_2048s_own_track_list() {
         println!("skipping: 2048 package not extracted under data/extracted/vita/");
         return;
     }
-    let catalogue = remix::catalogue(&source.display().to_string())
+    let catalogue = title_lists::catalogue(&source.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
 
     // The ten circuits the base package ships - see

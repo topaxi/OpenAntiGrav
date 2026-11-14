@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use log::{error, info, warn};
 
 use oag_game::launcher::Candidate;
-use oag_game::remix;
+use oag_game::title_lists;
 use oag_raceplay::{Options, catalogue};
 use oag_ui::{menu, strings};
 
@@ -19,7 +19,7 @@ use crate::settings::{self, Settings};
 
 use super::Session;
 use super::menus::combine_variant;
-use super::remix_menu::{craft_catalogue, resolve_craft_backing};
+use super::queries::{craft_catalogue, resolve_craft_backing};
 
 /// Every input of a launch, read out of the settings. An empty string is an input the
 /// row did not name.
@@ -187,7 +187,7 @@ pub(crate) fn apply_two_source(
 
     // A CUSTOM track is a file, not a circuit of the source's, so no name is looked up.
     if custom.is_none() {
-        match remix::catalogue(&track_candidate.source) {
+        match title_lists::catalogue(&track_candidate.source) {
             Ok(catalogue) => {
                 let chosen = catalogue
                     .track(&inputs.track)
@@ -223,7 +223,7 @@ pub(crate) fn apply_two_source(
         }
     };
     let craft_catalogue_source = craft_source.unwrap_or(track_candidate.source);
-    match remix::catalogue(&craft_catalogue_source) {
+    match title_lists::catalogue(&craft_catalogue_source) {
         Ok(catalogue) => match catalogue.team(&inputs.team) {
             Some(team) => {
                 let team = team.to_string();

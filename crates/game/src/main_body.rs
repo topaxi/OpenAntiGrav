@@ -529,7 +529,7 @@ fn run(cli: Cli) -> Result<()> {
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
         let mut options = pending.race_options(&source, Vec::new());
-        let catalogue = oag_game::remix::catalogue(&source)?;
+        let catalogue = oag_game::title_lists::catalogue(&source)?;
         let config = oag_source::title::open_source(&source, Vec::new(), Vec::new())
             .ok()
             .and_then(|mut opened| {

@@ -34,7 +34,7 @@ fn check(title: &'static oag_title::Title, source: &std::path::Path) {
     let installed = Installed::for_title(&mods, &[], title, &|_| false);
     assert!(installed.failed.is_empty(), "{:?}", installed.failed);
     let [custom]: [Custom; 1] = installed.campaigns.try_into().expect("one campaign");
-    let catalogue = oag_game::remix::catalogue(&source.display().to_string())
+    let catalogue = oag_game::title_lists::catalogue(&source.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
     let has_team = |team: &str| {
         catalogue
@@ -189,10 +189,10 @@ fn editor_choices(
     source: &std::path::Path,
 ) -> (
     oag_game::campaign::editor::Choices,
-    oag_game::remix::Catalogue,
+    oag_game::title_lists::Catalogue,
 ) {
     use oag_game::campaign::editor::{Choices, Pick};
-    let catalogue = oag_game::remix::catalogue(&source.display().to_string())
+    let catalogue = oag_game::title_lists::catalogue(&source.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
     let mut archives =
         oag_source::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())

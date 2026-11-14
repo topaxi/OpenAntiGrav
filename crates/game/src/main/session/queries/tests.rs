@@ -237,7 +237,7 @@ fn settle_clears_against_an_empty_list() {
 }
 
 /// RACE REMIX's speed-class row, over the *real* title packages rather than a
-/// shaped fixture - the composition `Session::remix_speed_classes` performs,
+/// shaped fixture - the composition the SPEED CLASS union row performs,
 /// with the survey list supplied directly so no disc has to be present.
 fn union_over(titles: &[&'static oag_title::Title]) -> Vec<&'static str> {
     let ladders = titles.iter().filter_map(|title| title.race.speed_classes);
@@ -497,7 +497,7 @@ fn super_phantom_hides_the_hd_teams_and_vector_hides_every_2048_team() {
     let Some(vita) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    let catalogue = oag_game::remix::catalogue(&vita.display().to_string()).expect("opens");
+    let catalogue = oag_game::title_lists::catalogue(&vita.display().to_string()).expect("opens");
     let race = &oag_2048::TITLE.race;
     let races = |class: &str| -> Vec<String> {
         catalogue

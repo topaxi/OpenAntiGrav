@@ -88,8 +88,7 @@ mod pause_menu;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
-// unaliased above, and a sibling module of the same name would shadow it,
-// the same reason `remix_menu` below is not called `remix`.
+// unaliased above, and a sibling module of the same name would shadow it.
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
 #[path = "session/custom_tracks.rs"]
@@ -139,11 +138,8 @@ mod wallpaper;
 mod tournament;
 #[path = "session/stutter.rs"]
 mod stutter;
-// Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
-// unaliased throughout `session::menus`, and a sibling module of the same
-// name would shadow it at every one of those call sites.
-#[path = "session/remix.rs"]
-mod remix_menu;
+#[path = "session/queries.rs"]
+mod queries;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {

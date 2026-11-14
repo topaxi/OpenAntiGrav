@@ -85,7 +85,7 @@ pub mod prompts;
 pub mod race_capture;
 pub mod race_seed;
 pub mod records;
-pub mod remix;
+pub mod title_lists;
 pub mod render;
 pub mod replay_view;
 pub mod replays;
