@@ -91,6 +91,8 @@ The gate is the most expensive thing this skill does.
 
 **Never merge into the main checkout while the lead's gate is running on it**: the gate compiles the tree as it finds it, and a mid-run merge gave six bogus `E0425`/`E0599` errors. Hold the merge, or gate a detached worktree (`git worktree add --detach ../OpenAntiGrav-worktrees/lead-gate <sha>`, then `just link-data`). A red gate that overlapped a merge proves nothing; re-run.
 
+**A merged submodule commit is not on origin until pushed**, so `git submodule update` in `lead-gate` fails on it and stops before the next submodule, leaving both stale (the extension tests then go red on old guests). Push the submodule first, or `git -C <submodule> fetch <main checkout's submodule path> main` in `lead-gate`, then `git status --porcelain` must be empty before gating. Its origin is HTTPS; push it over SSH (`git push git@github.com:OpenAntiGrav/<repo>.git main`).
+
 **The `lead-gate` worktree holds one gate at a time.** Before `git checkout` there, check no gate runs in it (`pgrep -af 'flock -o .*gate.lock'`); two chains once produced `E0599` against code that compiled and wrote the same logs.
 
 Prefer `nice -n 10 ionice -c 3` for the lead's own gate: it is never on the critical path.
