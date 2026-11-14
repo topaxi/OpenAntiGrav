@@ -192,6 +192,18 @@ target_fps = \"default\"
     assert_eq!(read(&written).render_profiles[&key].target_fps, target);
 }
 
+#[test]
+fn a_refresh_rate_frame_limit_round_trips_as_the_word() {
+    let settings = read("[display]\nframe_limit = \"refresh_rate\"\n");
+    assert!(settings.display.frame_limit.follows_display());
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(
+        written.contains("frame_limit = \"refresh_rate\""),
+        "{written}"
+    );
+    assert!(read(&written).display.frame_limit.follows_display());
+}
+
 /// The already-migrated case, where something has put an old key back: the
 /// new spelling is the one the player last saw on the menu, so it wins.
 #[test]

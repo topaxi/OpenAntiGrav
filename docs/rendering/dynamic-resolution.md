@@ -606,6 +606,12 @@ apply on top. The row draws as `DEFAULT (144)` with the rate in force, set
 when the menus open and again when the rate changes. No `warn_when` pair is
 declared for it: its rate is the output's own.
 
+The FRAME LIMIT row ends with the same idea, `refresh_rate` (drawn
+`REFRESH RATE (144)`): `perf::FrameLimit::resolve` in
+`crates/game/src/main/session/pacing.rs` limits the loop to the output's
+rate, or 60 when none is known. The audio buffer sizing at startup reads the
+configured limit before a window exists, so it treats it as unlimited.
+
 ### The target is held to the frame limiter and to the display
 
 Aiming above the limiter asks for frames the loop is not allowed to produce. At

@@ -252,6 +252,8 @@ OAG_GRAPHICS_RENDER_SCALE = { text = "RENDER SCALE", human = false }
 OAG_GRAPHICS_TARGET_FPS = { text = "TARGET FPS", human = false }
 # The `default` value of the TARGET FPS row: %s is the refresh rate the window is on.
 OAG_GRAPHICS_TARGET_FPS_DEFAULT = { text = "DEFAULT (%s)", human = false }
+# The `refresh_rate` value of the FRAME LIMIT row: %s is the refresh rate the window is on.
+OAG_DISPLAY_FRAME_LIMIT_REFRESH_RATE = { text = "REFRESH RATE (%s)", human = false }
 OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "MINIMUM RESOLUTION", human = false }
 OAG_GRAPHICS_RECONSTRUCTION = { text = "RECONSTRUCTION", human = false }
 OAG_GRAPHICS_UPSCALER_SHARPNESS = { text = "UPSCALER SHARPNESS", human = false }

@@ -183,3 +183,15 @@ fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
     });
     assert!(labelled);
 }
+
+#[test]
+fn frame_limit_ends_with_refresh_rate_and_shows_the_live_rate() {
+    let mut menu = Menu::new(built_in());
+    menu.relabel_choice("display.frame_limit", "refresh_rate", "REFRESH RATE (144)");
+    let found = menu.definition().pages.iter().flat_map(|page| &page.entries).any(|entry| {
+        matches!(entry, Entry::Choice { setting, values, .. }
+            if setting == "display.frame_limit"
+                && values.last().is_some_and(|v| v.value == "refresh_rate" && v.label == "REFRESH RATE (144)"))
+    });
+    assert!(found);
+}

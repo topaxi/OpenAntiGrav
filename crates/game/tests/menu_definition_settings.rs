@@ -1014,10 +1014,11 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
+    let mut offered = oag_present::perf::FrameLimit::OFFERED.to_vec();
+    offered.push(oag_present::perf::FrameLimit::FOLLOW_DISPLAY);
     assert_eq!(
-        limits,
-        oag_present::perf::FrameLimit::OFFERED,
-        "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
+        limits, offered,
+        "the frame-limit rows are `FrameLimit::OFFERED` then `refresh_rate`"
     );
 
     let vsync: Vec<oag_present::perf::Vsync> = values("display.vsync")

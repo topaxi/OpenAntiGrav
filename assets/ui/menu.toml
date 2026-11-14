@@ -826,6 +826,7 @@ values = [
     "360",
     "480",
     "1000",
+    "refresh_rate",
 ]
 
 # Both are applied by the blit that puts the finished frame on the surface, so
