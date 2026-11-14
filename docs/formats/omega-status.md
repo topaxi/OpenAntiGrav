@@ -864,8 +864,10 @@ albedo's alpha and tint the specular with its colour, as HD does, and the chevro
 `max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` that is not HD's emissive (programs, addresses and before/after
 regions: [`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)).
 **Ported** with 2048: `slots::LIT_ALPHA` is set on both titles; the cyan bars and purple stripes are gone
-(road plate dB/G +0.180 to -0.047, whole-frame mean grey 30.28 to 29.57). The emissive is read and not drawn
-(its wave offset's curve is unread), so the chevron lanes read dark where the original glows.
+(road plate dB/G +0.180 to -0.047). The chevron's mask is drawn with `Colour` held at zero (the authored
+value paints green the original never shows), and the cyan centre lanes, `cf_centre_plasma_pulse`, draw
+their `E.a * wave` and their own `Uvset1` coordinate, which the PS4 reader had refused (the lane sampled one
+texel): whole-frame mean grey 30.28 to **25.03**.
 
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 

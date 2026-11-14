@@ -508,14 +508,39 @@ track model draws it.
 The sampler's sRGB format decodes the RGB and not the alpha, so the grey surface is the raw alpha
 and the tint the decoded colour, as on HD. Confidence 85.
 
-**The chevron emissive, read and not drawn.** Both titles' chevron programs add, after the
-light, `max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` with `E` the emissive mask (`Emiss_Mask`,
-squared on 2048) and `W` the wave sampled at `uv * UVScale + offset` (2048 #3 words 12 to 28;
-Omega `@0x105c4` `@0xcfc`, `@0xd40` to `@0xdd0`; `data08` `@0xc84`, `@0xd90` to `@0xda4`). That is
-not HD's (`light * (DS.a + E.rgb) + E.a * Colour * wave`). Its wave offset animates by a curve
-nobody has read on either title, so it is not wired.
+**The chevron emissive.** Both titles' chevron programs add, after the light,
+`max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` with `E` the emissive mask (`Emiss_Mask`, squared
+on 2048) and `W` the wave sampled at `uv * UVScale + offset` (2048 #3 words 12 to 28; Omega
+`@0x105c4` `@0xcfc`, `@0xd40` to `@0xdd0`; `data08` `@0xc84`, `@0xd90` to `@0xda4`). That is not
+HD's (`light * (DS.a + E.rgb) + E.a * Colour * wave`). Drawn with the authored `Colour` (Omega
+`(0, 1.49, 0)`, 2048 `(0, 1, 0)`) it paints every chevron plate and wall panel green at Omega's
+grid (whole-frame mean grey 29.57 to 30.95), where the native-port original shows no green in any
+of its seven frames; the live value is unread on both titles (HD's was read off a hooked draw).
+So `Colour` is **held at zero, chosen**, which draws the term's lower bound `E.rgb`: the blue
+circuit on the plates and panels (mean grey 29.57 to 29.35). The `offset` uniform animates by a
+curve unread on both titles, so it is held at the authored value (Omega 0.0139; 2048 authors
+none, 0).
 
-**What landed.** `oag_mesh::mesh::rcs::psp2`'s `lit_alpha` admits the five file stems
+**The centre lane, `cf_centre_plasma_pulse`** (not one of HD's alpha-lit families; it lights its
+colour). Omega `data01` `@0xb404` (samplers `Diffuse_Specular`, `Normal_EmissMask`, `Wave`,
+`lightmap`): `light * D.rgb + spec * D.a * pow + E.a * W.rgb` (`@0x320` to `@0x374`; `E` the
+normal map, its alpha the mask, sampled `@0x118`; `W` at `uv * UVScale + offset`, `@0x158`,
+`@0x1a8`). 2048 #16 is the same with `W * W` (words 21 and 30; `pa6.w` keeps the normal map's
+alpha). That is HD's chevron glow with a white tint; it is wired as such. Omega's lane drew dark
+navy for another reason: its vertex programs take one coordinate, `Uvset1` (`0x49f76806`, an `f32`
+pair; `gcn_dump --summary`: 72 of 75 programs `in [position, normal, tangent, Uvset1, ...]`), and
+the PS4 reader's diffuse fallback refused an `f32` pair not named `uv1`, so the lane sampled one
+texel. `oag_rcs::rcsmodel::psp2::vertex_decl` now names `Uvset1`; a census of every circuit model
+of `data00` to `data04` (`psp2_uv_census` pointed at the hash, comparing the old fallback's
+attribute with `Uvset1`'s) finds the coordinate changes for Anulpha's 167 lane submeshes (85
+forward, 82 reversed) and for no other declaration: the magstrip families that also declare
+`Uvset1` declare it as a half pair, which the fallback already took.
+
+**What landed.** `oag_mesh::mesh::rcs::psp2`'s `chevron` gives the alpha-lit chevrons a
+`PROGRAM_CHEVRON` glow entry with second lane 1 (the `max` combine, `Colour` held at zero) and the
+centre lanes one with second lane 2 (HD's `E.a * tint * W`, tint white, no `LIT_ALPHA`), the mask
+on the fifth binding and the wave on the sixth at a held `AnimTrack::Held` offset row; `shade.wesl`
+and `mesh.wesl` read the lane. `lit_alpha` admits the five file stems
 (`reversed_diffuse_specular_normal`, `cf_chevron_pulse`, `cf_chevron_pulse_time`,
 `track_surface_displaced2out`, `cf_chevron_pulse_displacement2out`) on a lit submesh whose
 material binds a picture, and sets `slots::LIT_ALPHA`; `shade.wesl` is unchanged (its `decode` is
@@ -539,18 +564,32 @@ regions are `WxH+X+Y` in the pair's own frame):
 | `2048-vita/anulpha-pass`, whole frame | -0.190 | +0.152 | -0.211 | +0.015 |
 
 Whole-frame mean grey difference (the tool's metric): Omega 30.28 to 29.57, 2048 15.13 to 17.31.
-Every other Omega pair (twelve HD-lineage and eight 2048-lineage circuits) and every other
-2048-vita pair is unchanged to the decimal.
 
-**What remains.** (1) Omega's chevron lanes read dark navy where the original glows cyan
-(`srgb` 35, 49, 60 against 34, 91, 107): the unwired emissive above. (2) The surfaces read
-brighter than the originals (2048 road plate G 95 against 57, Omega right wall 85 against 59):
-the raw alpha is what both programs light, so the excess is in the light or the exposure, not
-this law. (3) 2048's floor-chevron strips stay bright (G 139 against 59) with the chromaticity
-now matched: the strips' own light term is too strong there; the specular is not it (zeroing it
-leaves the frame identical). The chevron submeshes bind the same lightmap atlas as the plain
-floor (`nova_mesh_combine_track_12-lmap.gxt`) over their own region (`lmuv` 0 to 0.62 by 0.67 to
-0.75).
+With the chevron mask and the centre lane (same regions, ours minus theirs):
+
+| Pair, region | dR/G | dB/G | ours `srgb` | theirs `srgb` |
+| --- | ---: | ---: | --- | --- |
+| `omega/anulpha-pass`, road plate | +0.035 | -0.008 | 116, 162, 173 | 129, 178, 187 |
+| `omega/anulpha-pass`, right wall | +0.002 | -0.021 | 50, 86, 93 | 31, 59, 65 |
+| `omega/anulpha-pass`, chevron lane | -0.030 | +0.028 | 38, 113, 133 | 34, 91, 107 |
+| `omega/anulpha-pass`, whole frame | -0.063 | -0.004 | 56, 91, 104 | 61, 92, 105 |
+| `2048-vita/anulpha-pass`, road plate | -0.062 | -0.006 | 47, 98, 103 | 31, 57, 62 |
+| `2048-vita/anulpha-pass`, left wall | -0.014 | +0.049 | 18, 24, 24 | 14, 18, 18 |
+| `2048-vita/anulpha-pass`, right wall | -0.159 | 0.000 | 27, 39, 40 | 20, 26, 27 |
+| `2048-vita/anulpha-pass`, chevron strip | -0.090 | -0.002 | 67, 140, 144 | 31, 59, 61 |
+
+Whole-frame mean grey: Omega **30.28 to 25.03** (RMSE 0.206 to 0.173), 2048 15.13 to 17.67.
+Every other Omega pair (twelve HD-lineage and eight 2048-lineage circuits), every other
+2048-vita pair and every HD pair (`hd/*`, `hd-race/talons-pack`) is unchanged to the decimal.
+
+**What remains.** (1) The alpha-lit surfaces read brighter than the originals (2048 road plate
+G 98 against 57, Omega right wall 86 against 59): both programs light the raw alpha, so the excess
+is in the light or the exposure, not this law. (2) 2048's floor-chevron strips stay bright (G 140
+against 59) with the chromaticity matched. Not the specular (zeroing it leaves the frame
+identical) and not the baked colour: the strips' atlas region (`nova_mesh_combine_track_12-lmap.gxt`,
+`lmuv` 0 to 0.62 by 0.67 to 0.75) is dark in RGB and mostly sunlit in alpha (mean 169 of 255),
+so ours lights them with the full sun where the original reads them dim. (3) The chevron's live
+`Colour` and both families' `offset` curves are unread.
 
 ## The LOD bias, wired and held (2026-10-21, `hd-lod-bias`)
 
