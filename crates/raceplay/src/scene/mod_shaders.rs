@@ -62,7 +62,7 @@ impl Scene {
                 // The offset and the flyby are the world meshes' epoch; a mod counts race time.
                 time: self.anim_clock.get() - race.world_clock_offset() - race.flyby_seconds(),
                 draw_alpha: race.draw_alpha(),
-                cut: race.camera_cut(),
+                cut: race.viewed_camera_cut(),
                 fill: race.mod_fill(),
                 surfaces: &race.mod_surfaces(right, up, eye),
                 params: &race.mod_shader_params(),

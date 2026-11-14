@@ -421,6 +421,21 @@ impl Race {
             .is_some_and(|previous| previous.camera.key != self.camera_key())
     }
 
+    /// [`Self::camera_cut`] for the view being drawn: the player's own, or an extra seat's chase
+    /// camera, which jumps when that craft is placed anew (a respawn, a jump, a transit's exit)
+    /// and for nothing else of the player's. The transit's entrance moves no seat's camera.
+    #[must_use]
+    pub fn viewed_camera_cut(&self) -> bool {
+        let Some(slot) = self.extra_viewpoint() else {
+            return self.camera_cut();
+        };
+        self.view
+            .poses
+            .previous
+            .as_ref()
+            .is_some_and(|previous| previous.ships[slot].key.respawns != self.placements_of(slot))
+    }
+
     /// A view matrix at the draw alpha: `current` is this tick's, `previous`
     /// picks the same matrix out of the previous tick's camera.
     pub(super) fn view_between(

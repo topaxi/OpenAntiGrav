@@ -185,6 +185,39 @@ fn a_transit_reports_a_camera_cut_on_its_exit_tick_alone() {
     assert_eq!(cuts, [false, false, true, false, false]);
 }
 
+/// In split screen each view reads its own seat's cut: only slot 1 transits, so the view
+/// drawn for slot 1 reports the cut on its exit tick and the player's view never does; with
+/// slot 0 transiting instead, its view cuts and slot 1's does not.
+#[test]
+fn a_seat_reports_its_own_camera_cut_not_the_players() {
+    for (moved, other) in [(1, 0), (0, 1)] {
+        let mut race = moving();
+        assert_eq!(race.set_viewport_count(2), 2);
+        race.begin_transit(moved, 3, Distance::Units(20.0), 1.0)
+            .unwrap();
+        let mut seen = vec![Vec::new(); 2];
+        for _ in 0..5 {
+            race.tick(&PlayerInputs::none());
+            for (view, slot) in [(0, 0), (1, 1)] {
+                if slot == 0 {
+                    race.reset_viewpoint();
+                } else {
+                    race.set_viewpoint(slot);
+                }
+                assert_eq!(race.viewed_slot(), slot);
+                seen[view].push(race.viewed_camera_cut());
+            }
+            race.reset_viewpoint();
+        }
+        assert_eq!(
+            seen[moved],
+            [false, false, true, false, false],
+            "slot {moved} transits"
+        );
+        assert_eq!(seen[other], [false; 5], "slot {other} does not");
+    }
+}
+
 /// Its triggers are held: a craft frozen out of the world banks no dwell.
 #[test]
 fn a_craft_in_transit_has_its_reset_triggers_held() {
