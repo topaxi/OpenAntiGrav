@@ -1,7 +1,7 @@
 //! A Wipeout HD/Fury-era `PI_TeamModel`'s `<Unlock>` row, read into what it asks for.
 //!
 //! The attribute names are the ones the `<Unlock>` parser compares
-//! (`docs/ghidra/functions/ps4-omega-eu/model-unlock.md`): `Team`, `Grid`, `MedalCount`,
+//! (`docs/ghidra/functions/ps3-hdfury-eu/model-unlock.md`): `Team`, `Grid`, `MedalCount`,
 //! `MedalCountHD`, `MedalCountFURY`, `Loyalty`, case-insensitively. Whether a row holds is
 //! `oag_game::unlock::ModelGate`'s, which needs the profile's records.
 
