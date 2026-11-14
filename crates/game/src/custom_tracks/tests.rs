@@ -454,7 +454,7 @@ fn title_of(source: &str) -> Option<&'static oag_title::Title> {
 /// (ADR-0076 decision 13). On Pulse it is left alone, and with no Pulse disc it
 /// is refused naming the title it needs.
 #[test]
-fn a_pinned_track_launched_on_another_title_becomes_a_remix_on_its_hosts_disc() {
+fn a_pinned_track_launched_on_another_title_becomes_a_two_title_race_on_its_hosts_disc() {
     let discs = || {
         vec![
             disc(oag_hd::TITLE),

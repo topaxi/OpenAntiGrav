@@ -44,7 +44,7 @@ mod race_end_photo_load_ground_truth;
 mod race_field_ground_truth;
 mod race_grid_ground_truth;
 mod race_ground_truth;
-mod race_remix_ground_truth;
+mod race_two_title_ground_truth;
 mod race_weapons_ground_truth;
 mod record_readout_ground_truth;
 mod render_bench_ground_truth;
