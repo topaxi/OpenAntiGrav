@@ -37,7 +37,8 @@ struct ModFrame {
     between: f32,
     // 1.0 where the engine texture holds a picture for this view.
     engine_bound: f32,
-    pad: f32,
+    // 1.0 on a frame whose tick cut the camera.
+    cut: f32,
     // The tangents of half the view's field, across and up.
     lens: vec2<f32>,
     pad_lens: vec2<f32>,
@@ -67,6 +68,12 @@ fn engine_texture(uv: vec2<f32>) -> vec4<f32> {
 // Whether `engine_texture` holds a picture.
 fn engine_texture_bound() -> bool {
     return oag_frame.engine_bound > 0.5;
+}
+
+// Whether this frame's tick cut the camera (a craft put elsewhere on it: a `transit`'s exit),
+// so the picture is not blended with the tick before while `input.between` still runs -1..0.
+fn camera_cut() -> bool {
+    return oag_frame.cut > 0.5;
 }
 
 // Where `world` lands in the engine texture, through the camera that drew it.
@@ -99,7 +106,7 @@ fn mod_fragment(input: ModInput) -> vec4<f32> {
     // The helpers above are the contract, so nothing may strip them from this text.
     let unused = mod_texture(vec2<f32>(0.0)) * 0.0 + engine_texture(engine_uv(vec3<f32>(0.0))) * 0.0
         + vec4<f32>(craft_frame()[3].xyz + eye_ray(vec2<f32>(0.5)), view_aspect()) * 0.0;
-    return input.colour + unused * select(0.0, 1.0, engine_texture_bound());
+    return input.colour + unused * select(0.0, 1.0, engine_texture_bound() || camera_cut());
 }
 
 struct Varying {

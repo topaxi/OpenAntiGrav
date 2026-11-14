@@ -46,6 +46,7 @@ struct ModInput {
 fn mod_texture(uv: vec2<f32>) -> vec4<f32>      // the header's PNG, opaque white with none
 fn engine_texture(uv: vec2<f32>) -> vec4<f32>   // the engine's picture for this view, gamma-authored and opaque; transparent black with none
 fn engine_texture_bound() -> bool               // whether this view has one
+fn camera_cut() -> bool                         // whether this tick cut the camera: no blend with the tick before
 fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
 fn craft_frame() -> mat4x4<f32>                 // the view's own craft in eye space: right, up, back, place
 fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32>   // the ray through that point of the view, eye space, z -1
@@ -58,12 +59,17 @@ is `eye_ray(input.screen_uv) * d`, and the craft's frame is rigid (no scale, lea
 craft in a transit the frame is the line it is flown along ("A craft's own transit" below).
 `fx/wormhole.wgsl` of `oag.slipstream` draws a tunnel round the craft with the two.
 
-**At a cut.** A craft put elsewhere on a tick (a `transit`'s entry or exit) has its camera cut, not
-blended, while `between` still runs -1..0 for that tick's frames, so a scalar that counts ticks and
-is read as `param_x() + rate * input.between` is a tick behind the picture on them. A guest that
-must not show the far side early skips the count that would: `oag.slipstream`'s `Flight::Through`
-never takes the value one past the last tick of its tunnel. (The shader is not told a frame is a
-cut.)
+**At a cut.** A craft put elsewhere on a tick has its camera cut, not blended: a `transit`'s exit is
+one (its entrance is not: the camera flies on, `transit_camera.rs`), as are a respawn and the destroy,
+spectator and flyby cameras. `between` still runs -1..0 for that tick's frames, so a scalar that counts
+ticks and is read as `param_x() + rate * input.between` is a tick behind the picture on them.
+`camera_cut()` is true on every frame of such a tick, whatever the draw alpha, and false on the ticks
+either side: it is `Race::camera_cut`, the comparison the engine's own between-ticks blend skips on
+(`oag_raceplay::between_ticks`). A guest that must not show the far side early takes `0.0` for `between`
+when it holds, or skips the count that would: `oag.slipstream`'s `Flight::Through` never takes the value
+one past the last tick of its tunnel. `between` itself is left running because a particle's vertex
+stage moves by it too. The flag is the player's camera (`Race::camera_cuts` counts the player's slot),
+so a split screen's other seats report their own seat's cut only when it is also the player's.
 
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it

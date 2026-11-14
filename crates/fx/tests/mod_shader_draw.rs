@@ -198,6 +198,7 @@ fn frame<'a>(
         view_projection: IDENTITY,
         time: 2.0,
         draw_alpha: 1.0,
+        cut: false,
         engine_view_projection: None,
         craft: IDENTITY,
         lens: [1.0, 1.0],
@@ -233,6 +234,29 @@ fn mod_fragment(input: ModInput) -> vec4<f32> {
     let sent = [[Some(1.0), None, None, None]];
     let texels = render(&gpu, &mut stage, &frame(fill, &[], &sent));
     assert_eq!(at(&texels, 32, 32)[2], 255);
+}
+
+#[test]
+fn a_shader_tells_a_cut_frame_from_a_blended_one() {
+    let Some(gpu) = gpu() else { return };
+    let text = "fn mod_fragment(input: ModInput) -> vec4<f32> {
+    return select(vec4<f32>(0.0, 0.0, 1.0, 1.0), vec4<f32>(1.0, 0.0, 0.0, 1.0), camera_cut());
+}\n";
+    let mut stage = stage(&gpu, &[shader(text)]);
+    let fill = Some(Fill {
+        shader: 0,
+        colour: [0.0, 0.0, 0.0, 1.0],
+    });
+    let mut drawn = |cut: bool| {
+        let viewed = Frame {
+            cut,
+            draw_alpha: 0.5,
+            ..frame(fill, &[], &[])
+        };
+        at(&render(&gpu, &mut stage, &viewed), 32, 32)
+    };
+    assert_eq!(drawn(true)[..3], [255, 0, 0], "a cut frame");
+    assert_eq!(drawn(false)[..3], [0, 0, 255], "a blended frame");
 }
 
 fn quad(colour: [f32; 4]) -> Vec<GpuVertex> {
