@@ -334,8 +334,15 @@ fn default_follows_the_display_and_falls_back_to_60() {
     assert_eq!(follow.to_string(), "default");
     assert_eq!(String::from(follow), "default");
     assert!(follow.follows_display());
-    assert!(!follow.is_on(), "unresolved it is no rate, not a rate of u32::MAX");
-    assert_eq!(follow.at_most(Some(60)), follow, "an unresolved target is not clamped to 60");
+    assert!(
+        !follow.is_on(),
+        "unresolved it is no rate, not a rate of u32::MAX"
+    );
+    assert_eq!(
+        follow.at_most(Some(60)),
+        follow,
+        "an unresolved target is not clamped to 60"
+    );
 
     assert_eq!(follow.resolve(Some(144)).hz(), Some(144));
     assert_eq!(follow.resolve(Some(59)).hz(), Some(59));

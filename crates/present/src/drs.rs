@@ -352,7 +352,9 @@ impl std::str::FromStr for Target {
             return Ok(Self::FOLLOW_DISPLAY);
         }
         let hz: u32 = text.parse().map_err(|_| {
-            format!("{text:?} is not a dynamic-resolution target; write a rate, \"default\" or \"off\"")
+            format!(
+                "{text:?} is not a dynamic-resolution target; write a rate, \"default\" or \"off\""
+            )
         })?;
         // Zero is rejected rather than accepted as a second spelling of off,
         // the reason `FrameLimit` rejects it: two spellings for one value is

@@ -151,23 +151,34 @@ fn target_fps_offers_default_after_the_fixed_rates_and_shows_the_live_rate() {
         .entries
         .iter()
         .find_map(|entry| match entry {
-            Entry::Choice { setting, values, .. } if setting == "graphics.target_fps" => Some(
-                values.iter().map(|v| (v.value.clone(), v.label.clone())).collect(),
+            Entry::Choice {
+                setting, values, ..
+            } if setting == "graphics.target_fps" => Some(
+                values
+                    .iter()
+                    .map(|v| (v.value.clone(), v.label.clone()))
+                    .collect(),
             ),
             _ => None,
         })
         .expect("a TARGET FPS row");
     let names: Vec<&str> = values.iter().map(|(value, _)| value.as_str()).collect();
     assert_eq!(names, ["off", "30", "60", "90", "120", "144", "default"]);
-    assert!(values[6].1.eq_ignore_ascii_case("default"), "{}", values[6].1);
+    assert!(
+        values[6].1.eq_ignore_ascii_case("default"),
+        "{}",
+        values[6].1
+    );
 
     let mut menu = Menu::new(definition);
     menu.relabel_choice("graphics.target_fps", "default", "DEFAULT (144)");
     let page = menu.definition().page("graphics").expect("graphics page");
     let labelled = page.entries.iter().any(|entry| match entry {
-        Entry::Choice { setting, values, .. } if setting == "graphics.target_fps" => {
-            values.iter().any(|v| v.value == "default" && v.label == "DEFAULT (144)")
-        }
+        Entry::Choice {
+            setting, values, ..
+        } if setting == "graphics.target_fps" => values
+            .iter()
+            .any(|v| v.value == "default" && v.label == "DEFAULT (144)"),
         _ => false,
     });
     assert!(labelled);
