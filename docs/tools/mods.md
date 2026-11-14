@@ -83,7 +83,9 @@ per-difficulty = true               # one block of three tiers per difficulty
   (`best_difficulty`: easy, medium, hard from the top, 183 px apart); a medal with no saved
   difficulty draws the middle block (`CellSelection::medal_block_at`, the rule HD's Cell Selection
   shares; chosen, not measured). Grid Selection's tier hexagons keep the title's colour swatch:
-  HD's Grid Selection has no tier medal hexagons. Without it, the first block.
+  HD's Grid Selection has no tier medal hexagons. Without it, the first block. Pulse's Cell
+  Selection target rows also keep the colour swatch in each tier's colour (the atlas fills the
+  hexagons only); on an HD-dialect title the target rows carry the medal widget, one per listed tier.
 - **`tiers`**: names the tier of each atlas row, top to bottom, by the names a campaign's tiers
   carry (`gold`, `silver`, `bronze`, or a `[[medal-tier]]` of a campaign's own,
   [custom-campaign.md](../formats/custom-campaign.md)), each once; absent, gold, silver, bronze. A
