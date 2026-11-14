@@ -123,11 +123,6 @@ BASELINE = {
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
-    # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
-    # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
-    # prep for the `oag-ui` extraction, which cannot name a type that lives in
-    # the composition root.
-    "crates/game/src/movie.rs": 1715,
 }
 
 # Inline `#[cfg(test)]` modules over `TEST_LIMIT`, keyed `<file>::<module>`.
