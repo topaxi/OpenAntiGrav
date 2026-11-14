@@ -232,3 +232,6 @@ pub fn ship_livery(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod model_tests;

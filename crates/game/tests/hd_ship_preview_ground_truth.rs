@@ -145,6 +145,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
         19,
         "twelve HD-era teams, the two Tigrons and the five 2048-era teams"
     );
+    the_model_row_follows_the_discs_unlock_rows(&shell, &mut archives, title);
     // Every craft a team offers: the HD-era directories, and the 2048-era teams' four
     // numbered ones, whose hull is `<Team>\<n>\ship.vex` (the bare team directory has none).
     let mut hulls = 0;
@@ -246,6 +247,7 @@ fn the_screens_own_fit_lands_feisar_where_the_original_draws_it() {
         .and_then(|screen| screen.ship_model)
         .expect("the ShipModel widget");
     assert!(widget.obey_safe_zone, "ObeySafeZone is authored");
+    the_model_row_follows_the_discs_unlock_rows(&shell, &mut archives, title);
 
     // Every model that authors ratings authors a length, eight values in all.
     let mut lengths: Vec<u16> = shell
@@ -785,4 +787,152 @@ fn omega_lights_its_craft_from_its_own_front_end_file() {
     assert_eq!(light.sun, sun.map(|c| c * intensity));
     assert_eq!(light.output_scale, 1.0, "no halved lit output on Omega");
     assert_eq!(light.nova, 1.0, "Omega's own prelit combination");
+}
+
+/// Ship Select's model row on HD and Omega follows each `PI_TeamModel`'s own `<Unlock>` row
+/// (`oag_game::unlock::ModelGate`, the boot's own gate): Feisar on a fresh profile offers
+/// `concept1` (`_c1`) and `normal` (`""`) alone; its own loyalty of 4000 adds `SKIN1`
+/// (`livery2`), 8000 `SKIN2` (`livery3`); gold on all 87 cells of the `HD` campaign's grids adds
+/// `chrome` (`livery4`), gold on all 80 of `Fury`'s adds `chrome_c1` and (`grid8`'s points met)
+/// `nitro`. Every one of the twelve HD-era teams carries the same seven rows.
+fn the_model_row_follows_the_discs_unlock_rows(
+    shell: &oag_game::boot::Shell,
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+) {
+    use oag_game::records::{Medal, Store};
+    let gate = &shell.model_gate;
+    assert!(gate.gates(), "{}: the model rows are evaluated", title.name);
+    let feisar = shell
+        .teams
+        .iter()
+        .find(|team| team.id == "Feisar")
+        .expect("Feisar");
+    let rows: Vec<(&str, Option<&str>, String)> = feisar
+        .models
+        .iter()
+        .filter(|model| !model.name.starts_with("vr_"))
+        .map(|model| {
+            let row = model.unlock.first();
+            (
+                model.name.as_str(),
+                model.texture_location.as_deref(),
+                format!(
+                    "{:?} {:?} {:?}",
+                    row.and_then(|row| row.loyalty),
+                    row.and_then(|row| row.medals.as_ref())
+                        .map(|medals| (medals.campaign.clone(), medals.at_least)),
+                    row.and_then(|row| row.grid.clone()),
+                ),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                "chrome_c1",
+                Some("livery4"),
+                r#"None Some((Some("FURY"), 80)) None"#.to_string()
+            ),
+            (
+                "nitro",
+                Some("livery1"),
+                r#"None None Some("grid8")"#.to_string()
+            ),
+            ("concept1", Some("livery1"), "None None None".to_string()),
+            ("normal", Some("livery1"), "None None None".to_string()),
+            ("SKIN1", Some("livery2"), "Some(4000) None None".to_string()),
+            ("SKIN2", Some("livery3"), "Some(8000) None None".to_string()),
+            (
+                "chrome",
+                Some("livery4"),
+                r#"None Some((Some("HD"), 87)) None"#.to_string()
+            ),
+        ],
+        "{}",
+        title.name
+    );
+    let offered = |records: &Store| -> Vec<String> {
+        oag_game::livery_row::gated_variant_choices(title, "Feisar", &shell.teams, records, gate)
+            .into_iter()
+            .map(|choice| choice.value)
+            .collect()
+    };
+    assert_eq!(offered(&Store::default()), ["_c1", ""], "{}", title.name);
+    let mut loyal = Store::default();
+    loyal.record_loyalty(title, "Feisar", 4000);
+    assert_eq!(offered(&loyal), ["_c1", "", "@livery2"], "{}", title.name);
+    loyal.record_loyalty(title, "Feisar", 4000);
+    assert_eq!(
+        offered(&loyal),
+        ["_c1", "", "@livery2", "@livery3"],
+        "{}",
+        title.name
+    );
+
+    let grids = oag_game::campaign::read_grids(
+        archives,
+        title.campaign.model_unlocks.expect("a grids definition"),
+        title.campaign.grid_archive,
+    )
+    .expect("the campaign grids read");
+    let campaign = oag_game::records::campaign_title(title, archives.layout.platform);
+    let golds = |which: &str| {
+        let mut records = Store::default();
+        let mut cells = 0;
+        for grid in grids.iter().filter(|grid| {
+            grid.campaign
+                .as_deref()
+                .is_some_and(|c| c.eq_ignore_ascii_case(which))
+        }) {
+            for cell in &grid.cells {
+                records.record_campaign(&campaign, &cell.name, Some(Medal::Gold), None);
+                cells += 1;
+            }
+        }
+        (records, cells)
+    };
+    let (hd, cells) = golds("HD");
+    assert_eq!(cells, 87, "{}: the HD campaign's cells", title.name);
+    assert_eq!(offered(&hd), ["_c1", "", "@livery4"], "{}", title.name);
+    let (fury, cells) = golds("Fury");
+    assert_eq!(cells, 80, "{}: the Fury campaign's cells", title.name);
+    assert_eq!(
+        offered(&fury),
+        ["_c1@livery4", "_n1", "_c1", ""],
+        "{}",
+        title.name
+    );
+
+    // The same seven rows on every HD-era team, the threshold against its own name.
+    let mut hd_era = 0;
+    for team in &shell.teams {
+        let names: Vec<&str> = team
+            .models
+            .iter()
+            .map(|model| model.name.as_str())
+            .collect();
+        if !names.contains(&"SKIN1") || team.models.iter().all(|model| model.unlock.is_empty()) {
+            continue;
+        }
+        hd_era += 1;
+        let skin1 = team
+            .models
+            .iter()
+            .find(|model| model.name == "SKIN1")
+            .expect("SKIN1");
+        assert_eq!(
+            skin1.unlock[0].team.as_deref(),
+            Some(team.id.as_str()),
+            "{}",
+            team.id
+        );
+        assert_eq!(skin1.unlock[0].loyalty, Some(4000), "{}", team.id);
+    }
+    assert_eq!(
+        hd_era, 12,
+        "{}: twelve HD-era teams gate their models",
+        title.name
+    );
 }

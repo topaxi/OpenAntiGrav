@@ -502,7 +502,7 @@ fn one(
                     .filter(|_| ctx.mode != Mode::Zone)
                     .map(|folder| zone_livery::Swap::new(folder.own, folder.worn));
                 let mut textures =
-                    zone_livery::Reads::new(zone.as_ref().or(worn.as_ref()), zone.is_none());
+                    zone_livery::Reads::new(zone.as_ref().or(worn.as_ref()), zone.is_some());
                 let built = if mesh::rcs::psp2::is_psp2(&geometry) {
                     mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                         textures.read(archives, path)
