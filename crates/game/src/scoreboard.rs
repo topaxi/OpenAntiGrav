@@ -187,7 +187,7 @@ pub fn class_table(
 ///
 /// **Confined to `oag_title::SpeedClasses::is_offered_on_race_page`, not
 /// `selectable()` alone.** A Pure boot's own ladder carries `VECTOR`, and
-/// this build can race it - but only RACE REMIX offers it, by choice. See that function's doc comment and
+/// this build can race it - but only a two-title race page offers it, by choice. See that function's doc comment and
 /// `docs/architecture/menus.md` for why offering it here too would diverge
 /// wider than asked, even though it is what Pure's own front end does.
 ///

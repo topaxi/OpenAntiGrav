@@ -76,7 +76,7 @@
 //! `crate::main::session::frame`'s own comment for why that is the one
 //! place both can land before the menus first read either. From there the
 //! existing [`oag_title::RaceDefaults::team_variants_for`]/`combine_variant`
-//! machinery `Session::launch_race` and the RACE/REMIX pages already use
+//! machinery `Session::launch_race` and the RACE page and a mod's race page already use
 //! settles it into a real `race::Options::team`, unchanged by this module.
 //! The skin list is not drawn and reaches nothing: `teamskin_touch`'s three
 //! values (`1`/`2`/`3`) do not obviously map onto `race::Options::skin`'s

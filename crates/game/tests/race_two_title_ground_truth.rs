@@ -20,10 +20,10 @@
 //!    same track geometry, same grid, same HUD - for every title that races
 //!    today. This is what makes `oag_source::pair::SourcePair::Single` a true no-op
 //!    rather than an accidental behaviour change dressed as a refactor.
-//! 2. **A genuine remix.** Wipeout 2048's own circuit with Wipeout Pure's
+//! 2. **A genuine two-title race.** Wipeout 2048's own circuit with Wipeout Pure's
 //!    craft: the track loads off 2048, the grid and the HUD off Pure. This is
-//!    the spec's own example (see `race_remix_prompt.md`, not committed).
-//! 3. **The RACE REMIX menu page's own data source**, `title_lists::catalogue`,
+//!    the spec's own example (from the original brief, not committed).
+//! 3. **the two-title race page's own data source**, `title_lists::catalogue`,
 //!    independent of the menus themselves - which need a window this suite
 //!    cannot open.
 
@@ -87,24 +87,24 @@ fn naming_the_same_source_as_craft_source_changes_nothing() {
             source: source.clone(),
             ..race::Options::default()
         });
-        let remixed = load(race::Options {
+        let paired = load(race::Options {
             source: source.clone(),
             craft_source: Some(source.clone()),
             ..race::Options::default()
         });
         assert_eq!(
             shape(&plain).track_triangles,
-            shape(&remixed).track_triangles,
+            shape(&paired).track_triangles,
             "{label}: naming craft_source as the same source moved the track"
         );
         assert_eq!(
             shape(&plain).grid,
-            shape(&remixed).grid,
+            shape(&paired).grid,
             "{label}: naming craft_source as the same source moved the grid"
         );
         assert_eq!(
             shape(&plain).hud_layout,
-            shape(&remixed).hud_layout,
+            shape(&paired).hud_layout,
             "{label}: naming craft_source as the same source moved the HUD"
         );
         assert!(
@@ -115,16 +115,16 @@ fn naming_the_same_source_as_craft_source_changes_nothing() {
             "{label}: a single-source race must not report a craft source"
         );
         assert!(
-            !remixed
+            !paired
                 .report
                 .iter()
                 .any(|line| line.starts_with("craft from")),
-            "{label}: craft_source equal to source is still not a remix"
+            "{label}: craft_source equal to source is still not a two-title race"
         );
     }
 }
 
-/// **A genuine remix**, and the spec's own example: a Wipeout 2048 circuit
+/// **A genuine two-title race**, and the spec's own example: a Wipeout 2048 circuit
 /// with a Wipeout Pure craft. The track is 2048's own Altima; the grid, the
 /// livery and the HUD are Pure's.
 #[test]
@@ -282,7 +282,7 @@ fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
     );
 }
 
-/// `title_lists::catalogue` - the RACE REMIX page's own reader - offers HD's real
+/// `title_lists::catalogue` - the two-title race page's own reader - offers HD's real
 /// circuits and roster, independent of the menu machinery that calls it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

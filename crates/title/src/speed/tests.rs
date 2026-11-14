@@ -126,7 +126,7 @@ fn selectable_agrees_with_the_predicate() {
 }
 
 /// `is_offered_on_race_page` confines what the ladder's `union_only` names to
-/// RACE REMIX without touching `is_selectable` - the ordinary RACE page's
+/// a two-title race page without touching `is_selectable` - the ordinary RACE page's
 /// narrower question, layered on top of the engine's own answer.
 #[test]
 fn is_offered_on_race_page_confines_the_ladders_union_only_rungs_and_nothing_else() {
@@ -157,7 +157,7 @@ fn a_five_rung_ladders_race_page_row_is_four() {
     }
 }
 
-/// RACE REMIX unions every mounted ladder: Pure's `VECTOR` first, 2048's
+/// A two-title race page unions every mounted ladder: Pure's `VECTOR` first, 2048's
 /// `SUPERPHANTOM` last, whichever order the titles arrive in.
 #[test]
 fn the_union_spans_vector_below_and_super_phantom_above() {

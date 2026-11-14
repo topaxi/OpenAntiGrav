@@ -102,7 +102,7 @@ pub(crate) struct RaceStage {
     /// not lose that write; it only stops it from blocking the next one.
     pub(crate) result_saved: bool,
     /// The campaign cell this race was launched against, or `None` for an
-    /// ordinary RACE-page/RACE REMIX/`--race` launch. Drained from
+    /// ordinary RACE-page/two-title race page/`--race` launch. Drained from
     /// `Session::campaign_cell` into here the moment this stage is built
     /// (`crate::main::session::load::finish_loading`) - the mirror of
     /// `DAT_08b30ffc`, per

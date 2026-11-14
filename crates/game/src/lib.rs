@@ -85,7 +85,6 @@ pub mod prompts;
 pub mod race_capture;
 pub mod race_seed;
 pub mod records;
-pub mod title_lists;
 pub mod render;
 pub mod replay_view;
 pub mod replays;
@@ -98,6 +97,7 @@ pub mod sound;
 pub mod split_screen;
 pub mod team_hull;
 pub mod texture_pack;
+pub mod title_lists;
 pub mod track_panel;
 pub mod unlock;
 

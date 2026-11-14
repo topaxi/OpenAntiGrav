@@ -82,7 +82,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     opponent_autopilot: oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY,
     // The campaign's events fly the original opponent (the maintainer's AI
-    // mode 3); race box and remix keep this project's driver.
+    // mode 3); race box and a two-title race keep this project's driver.
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     // Unread on this title: `data.psarc` is not extracted in this tree, so
@@ -116,7 +116,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The native roster's ladder, read off its five teams' `handlingstats.xml`
     // (`oag-tables`' `speed_ladder_ground_truth`). The title ships no race box -
     // racing is entered from the campaign event grid - so no menu authors a
-    // ladder; this one is the files'. `SUPERPHANTOM` is confined to RACE REMIX
+    // ladder; this one is the files'. `SUPERPHANTOM` is confined to a two-title race page
     // the way Pure's `VECTOR` is (chosen, not measured). The twelve HD teams
     // 2048 reships author four: see `GUEST_ROSTER`.
     //

@@ -267,7 +267,7 @@ impl Session {
         )
     }
 
-    /// RACE REMIX's AI DIFFICULTY options: the four tiers and a `none` option
+    /// A two-title race page's AI DIFFICULTY options: the four tiers and a `none` option
     /// the row is pinned to while the chosen class has no controller
     /// (`oag_ai::coverage`), labelled with the reason.
     pub(super) fn ai_difficulties(&self) -> Vec<menu::Choice> {

@@ -90,7 +90,7 @@ pub struct Screen {
 pub struct Resolved {
     /// The disc image the track and rules come from.
     pub source: String,
-    /// Where the craft come from, when that is another release (RACE REMIX).
+    /// Where the craft come from, when that is another release (a two-title race page).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub craft_source: Option<String>,
     /// The title the source is, once loaded (`stage=race`).

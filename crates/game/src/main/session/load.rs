@@ -69,7 +69,7 @@ impl Session {
         self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
-        // The mods' tracks join RACE REMIX's CUSTOM list (`docs/tools/mods.md`).
+        // The mods' tracks join a two-title race page's CUSTOM list (`docs/tools/mods.md`).
         self.custom_tracks
             .set_mod_files(&prepared.shell.custom_campaigns.tracks);
         self.shell = Some(prepared.shell);
@@ -486,7 +486,7 @@ impl Session {
         let options_mode = options.mode;
         let options_track = options.foreign_track.clone();
         // **Refreshed here, not trusted from whenever `race_options` was last
-        // built or mutated** (boot, RACE REMIX, a campaign cell launch): the
+        // built or mutated** (boot, a two-title race page, a campaign cell launch): the
         // OPTIONS page's LANGUAGE row writes `self.settings.language` without
         // touching `race_options` at all, and every launch path funnels
         // through this one function, so this is the one place a launch
@@ -494,7 +494,7 @@ impl Session {
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
         options.hud_style = self.settings.display.hud_style_choice();
-        // A track file that borrows from another title's disc races as a remix
+        // A track file that borrows from another title's disc races as a two-title race
         // with that disc as the track source (ADR-0076 decision 13); RACE, a
         // campaign event and RACE AGAIN all launch here.
         let titles = &self.titles;
@@ -607,7 +607,7 @@ impl Session {
     /// The loading screen for `options` and the worker that reads the circuit: the half of a
     /// launch that is the same for a race a player set up and a recording being watched.
     ///
-    /// `options_track` is the track file the launch was asked for, before a remix routed it
+    /// `options_track` is the track file the launch was asked for, before a two-title race routed it
     /// anywhere; the loading screen is its own.
     pub(crate) fn start_race_loading(
         &mut self,

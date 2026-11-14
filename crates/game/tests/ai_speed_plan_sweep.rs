@@ -95,7 +95,7 @@ fn image() -> Option<PathBuf> {
 }
 
 /// `(id, entry name)` for every layout in one direction, off the title's own
-/// plugin definition (the RACE REMIX page's reader, which knows each title's
+/// plugin definition (the two-title race page's reader, which knows each title's
 /// file), narrowed by `OAG_SWEEP_ONLY`.
 fn layouts(reversed: bool) -> Vec<(String, String)> {
     let Some(image) = image() else {

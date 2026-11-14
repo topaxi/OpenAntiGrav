@@ -61,7 +61,7 @@
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
-//! build's own race box, the pages mods attach under it (RACE REMIX when the
+//! build's own race box, the pages mods attach under it (a two-title race page when the
 //! official `oag.remix` is on) and MULTIPLAYER from its own front end. So they are
 //! appended **after** the four authored tiles, never mixed into
 //! `Screen::touch_buttons`, labelled as the menu tree labels those rows, and drawn as the

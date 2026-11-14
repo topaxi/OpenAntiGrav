@@ -117,7 +117,7 @@ impl Session {
             // if the player actually touched it" way the language above is -
             // `None` on every title without a touch front end, and on this
             // one until `Home`'s own tiles are visited at all. Applied
-            // before `open_menus` below, which is what seeds the RACE/REMIX
+            // before `open_menus` below, which is what seeds the RACE and a mod's race
             // pages' own TEAM row and the Team screen's campaign-launch
             // team from `settings.race.team`/`variant` - after it, the row
             // would already be built off the untouched value. See

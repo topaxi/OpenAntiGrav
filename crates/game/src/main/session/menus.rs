@@ -31,7 +31,7 @@ use super::{Session, picker, queries};
 /// is_offered_on_race_page` confinement.
 pub(crate) use oag_game::scoreboard::speed_class_choices;
 
-/// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
+/// [`speed_class_choices`]' shared tail, so the per-title row and a two-title race page's
 /// union spell a class exactly the same way.
 pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
     names
@@ -764,8 +764,8 @@ impl Session {
         self.apply_race_team(&mut race_options);
         // Carried as a **name**, and checked against this page's own
         // row - see [`resolve_race_page_class`] for why: `race.class`
-        // is one setting shared with RACE REMIX, so a class settled
-        // there (`VECTOR`, offered only in remix) can sit in storage
+        // is one setting shared with a two-title race page, so a class settled
+        // there (`VECTOR`, offered only in a two-title race) can sit in storage
         // while this page's row was never on it. An empty setting
         // still leaves the previous class in place, as it always did.
         if let Some(class) = resolve_race_page_class(
@@ -895,7 +895,7 @@ mod tests {
             !names
                 .iter()
                 .any(|name| name.eq_ignore_ascii_case(oag_title::SpeedClasses::VECTOR)),
-            "VECTOR is a RACE REMIX offering, not this page's: {names:?}"
+            "VECTOR is a two-title race page offering, not this page's: {names:?}"
         );
     }
 
@@ -908,7 +908,7 @@ mod tests {
     }
 
     /// **The hazard `resolve_race_page_class` exists for.** `race.class` is
-    /// shared with RACE REMIX, whose own row can settle it to `"vector"` -
+    /// shared with a two-title race page, whose own row can settle it to `"vector"` -
     /// this page's row cannot, since the confinement above took it out. A
     /// stored `"vector"` reaching this page's own launch must not survive
     /// unclamped: it must fall back to the same first entry the row itself
@@ -1043,7 +1043,7 @@ impl Session {
         model.supply(menu::ValueSource::Teams, &shell.teams);
         // Scoped to whichever team `race.team` already names, the same
         // reason the CIRCUIT row above is seeded from `race.mode`, and
-        // settled against that list for the reason RACE REMIX's own rows are
+        // settled against that list for the reason a two-title race page's own rows are
         // below - `race.variant` defaults to empty, which is a real value
         // only on the titles whose first variant is the unsuffixed one.
         let race_variants =

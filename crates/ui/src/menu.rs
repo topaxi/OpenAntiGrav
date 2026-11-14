@@ -157,7 +157,7 @@ pub fn safe_area_choices(title: &oag_title::Title) -> Vec<Choice> {
 
 /// `modes` with every mode that takes fewer than `people` people marked unusable, `reason`
 /// saying why from the cap. A mode is still offered and the row can step onto it: it draws
-/// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable remix option
+/// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable two-title race option
 /// does. A value that names no mode (a stored token from another build) is left alone.
 #[must_use]
 pub fn cap_modes(modes: &[Choice], people: usize, reason: impl Fn(usize) -> String) -> Vec<Choice> {

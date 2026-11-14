@@ -123,7 +123,7 @@ fn known_title(slug: &str) -> anyhow::Result<&'static oag_title::Title> {
 ///
 /// # Errors
 ///
-/// As [`host_title`], and the mismatch, naming both titles and the remix.
+/// As [`host_title`], and the mismatch, naming both titles and the two-title race.
 pub fn check_host(track: &Track, source: &oag_title::Title) -> anyhow::Result<()> {
     let Some(host) = host_title(track)? else {
         return Ok(());

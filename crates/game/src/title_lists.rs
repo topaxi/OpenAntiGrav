@@ -2,7 +2,7 @@
 //! through the source pair's source pair rather than the front end's boot.
 //!
 //! The source pair itself - which loader reads track content and which reads craft
-//! content - is `oag_source::remix`; this half is the pickers.
+//! content - is `oag_source::pair`; this half is the pickers.
 
 use anyhow::Context;
 

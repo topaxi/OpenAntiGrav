@@ -1095,7 +1095,7 @@ pub struct Installed {
     /// (`true`) rather than not installed. What the MODS page's NEEDS line says.
     pub needs: Vec<(String, String, bool)>,
     /// Every `tracks/*.track.toml` of a folder mod for this title, raced from
-    /// RACE REMIX's CUSTOM title as well as from a campaign.
+    /// a two-title race page's CUSTOM title as well as from a campaign.
     pub tracks: Vec<std::path::PathBuf>,
     /// The medal art each mod that is on and carries `[campaign-medals]` for this title asks
     /// the campaign screens to draw ([`Self::medals_for`] picks one).
@@ -1153,7 +1153,7 @@ impl Installed {
         let mut installed = Self::default();
         let slug = title.slug();
         let mods: Vec<&oag_mod::Mod> = mods.into_iter().collect();
-        // Tracks race on every title (RACE REMIX's CUSTOM); campaigns only
+        // Tracks race on every title (a two-title race page's CUSTOM); campaigns only
         // where the hex grid draws.
         for module in mods.iter().filter(|module| module.is_for(&slug)) {
             installed.tracks.extend(

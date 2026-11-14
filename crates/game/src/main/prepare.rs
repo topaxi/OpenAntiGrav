@@ -284,7 +284,7 @@ impl Pending {
             camera: self.camera,
             demo: false,
         };
-        // A track file that borrows from another title's disc races as a remix
+        // A track file that borrows from another title's disc races as a two-title race
         // with that disc as the track source (ADR-0076 decision 13).
         match oag_game::custom_tracks::route_to_host(
             &mut options,

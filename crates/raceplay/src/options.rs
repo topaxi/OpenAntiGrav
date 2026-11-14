@@ -378,7 +378,7 @@ pub struct Options {
     pub people: u8,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
-    /// the race box, RACE REMIX and the command line; a campaign launch leaves
+    /// the race box, a two-title race page and the command line; a campaign launch leaves
     /// it `false` because its own controller (the original's) is chosen by the
     /// tables its title authors for the class.
     pub no_driver_for_class: bool,
