@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import http.server
 import json
+import os
 import re
 import shutil
 import socket
@@ -202,6 +203,17 @@ def magick(*args):
     return r.stdout
 
 
+def magick_to(out: Path, *args):
+    """Run magick writing `out` through a temporary file renamed into place, so a concurrent
+    run (the --serve watcher beside compare-rerender-ours) never reads a half-written PNG."""
+    tmp = out.with_name(f".{out.stem}.{os.getpid()}.tmp.png")
+    try:
+        magick(*args, f"png:{tmp}")
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def dims(p: Path) -> tuple[int, int]:
     w, h = magick("identify", "-format", "%w %h", str(p) + "[0]").split()
     return int(w), int(h)
@@ -246,7 +258,7 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         args = [str(src) + "[0]"]
         if crop:
             args += ["-crop", crop, "+repage"]
-        magick(*args, "-alpha", "off", str(out))
+        magick_to(out, *args, "-alpha", "off")
     # One size for every slot: the aspect of the first slot, never stretched; a slot
     # of another aspect is fitted inside it and padded, so a mismatch stays visible.
     w, h = dims(files[ref_slot])
@@ -254,10 +266,10 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         cw, ch = dims(out)
         if (cw, ch) != (w, h):
             if abs(cw / ch - w / h) < 0.01:
-                magick(str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}!", str(out))
+                magick_to(out, str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}!")
             else:
-                magick(str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}", "-background", "black",
-                       "-gravity", "center", "-extent", f"{w}x{h}", str(out))
+                magick_to(out, str(out), "-filter", "Lanczos", "-resize", f"{w}x{h}", "-background", "black",
+                          "-gravity", "center", "-extent", f"{w}x{h}")
         sizes[slot] = [w, h]
     rec = {s: f"img/{files[s].name}" for s in files}
     diffs = {}
@@ -266,8 +278,8 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
         if a in files and b in files:
             d = img / f"{entry['id']}-{a}-{b}-diff-{key}.png"
             if not d.exists():
-                magick(str(files[a]), str(files[b]), "-compose", "difference", "-composite",
-                       "-evaluate", "multiply", "2", str(d))
+                magick_to(d, str(files[a]), str(files[b]), "-compose", "difference", "-composite",
+                          "-evaluate", "multiply", "2")
             diffs[f"{a}|{b}"] = f"img/{d.name}"
     caption = {k: entry[k] for k in CAPTION_KEYS if k in entry}
     return {
@@ -307,8 +319,8 @@ def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
     # Drop images no entry references any more, so a rebuilt page carries nothing stale.
     used = {Path(p).name for r in records for p in [*r["images"].values(), *r["diffs"].values()]}
     for f in img.glob("*.png"):
-        if f.name not in used:
-            f.unlink()
+        if f.name not in used and not f.name.startswith("."):
+            f.unlink(missing_ok=True)
     page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records,
             "metric_hints": {key: hint for key, _, _, hint in compare_env.METRICS},
             "metric_bands": compare_env.METRIC_BANDS}
