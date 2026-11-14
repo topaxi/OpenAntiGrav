@@ -69,8 +69,8 @@ either side: it is `Race::camera_cut`, the comparison the engine's own between-t
 when it holds: `oag.slipstream`'s `fx/wormhole.wgsl` reads `param_phase() + select(input.between, 0.0,
 camera_cut())`, so its tick count runs through the exit (59 the last tick in the tunnel, 60 the exit tick)
 and the exit tick's frames show the far side from the first. `between` itself is left running because a particle's vertex
-stage moves by it too. The flag is the player's camera (`Race::camera_cuts` counts the player's slot),
-so a split screen's other seats report their own seat's cut only when it is also the player's.
+stage moves by it too. The flag is the drawn seat's own cut (a respawn, a jump or a transit's exit),
+so each seat of a split screen reports its own.
 
 `time` runs with the frames. A scalar a module sets is stepped once a tick, so one that moves
 (a count of ticks, a radius) is read as `param_x() + rate * input.between`, `rate` being what it
