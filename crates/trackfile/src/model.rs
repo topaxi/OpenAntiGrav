@@ -38,7 +38,7 @@ pub struct Track {
     /// Required when the art borrows anything ([`crate::art::Art::borrows_from_a_disc`]);
     /// `None` for a track that borrows nothing, which runs on any title. A track
     /// that names one is pinned to that disc: raced on another title it runs as
-    /// a Race Remix with the host's disc as the track source (ADR-0076,
+    /// a two-title race with the host's disc as the track source (ADR-0076,
     /// decision 13).
     pub host: Option<String>,
     /// The titles the author offers the track on, slugs as [`Self::host`];

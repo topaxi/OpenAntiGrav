@@ -9,7 +9,7 @@ use super::Session;
 impl Session {
     /// Sets `options.foreign_track` to what the command line named, or none. Run
     /// by every launch that picks its own circuit (RACE, a campaign cell, a
-    /// remix) so a CUSTOM pick never carries into the next one, while RACE AGAIN
+    /// a two-title race) so a CUSTOM pick never carries into the next one, while RACE AGAIN
     /// relaunches `race_options` untouched and so races the same track.
     pub(super) fn inherit_cli_foreign_track(&self, options: &mut oag_raceplay::Options) {
         options.foreign_track.clone_from(&self.cli_foreign_track);

@@ -18,7 +18,7 @@ use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
-use super::{Session, picker, remix_menu};
+use super::{Session, picker, queries};
 
 /// Moved to `oag_game::scoreboard::speed_class_choices`, re-exported here
 /// under its own name so every call site in this module (and
@@ -28,10 +28,10 @@ use super::{Session, picker, remix_menu};
 /// RECORDS page's own per-class table, and this binary's `session` module is
 /// not reachable from the library crate that lives in. See that function's
 /// own doc for the full reasoning, including the `oag_title::SpeedClasses::
-/// is_offered_outside_remix` confinement.
+/// is_offered_on_race_page` confinement.
 pub(crate) use oag_game::scoreboard::speed_class_choices;
 
-/// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
+/// [`speed_class_choices`]' shared tail, so the per-title row and a two-title race page's
 /// union spell a class exactly the same way.
 pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
     names
@@ -50,7 +50,7 @@ pub(super) fn to_choices(names: Vec<&'static str>) -> Vec<menu::Choice> {
 /// when a Pure source is mounted) saved under it, or edited by hand. Such a
 /// value is one this page's own row no longer lists (see
 /// [`speed_class_choices`]'s confinement to
-/// [`oag_title::SpeedClasses::is_offered_outside_remix`]). `Menu::supply`
+/// [`oag_title::SpeedClasses::is_offered_on_race_page`]). `Menu::supply`
 /// only ever changes the widget's own display index, never the stored
 /// setting, so without this check the row would *display* the fallback
 /// (`"venom"`) while [`Session::handle_menu`]'s `LaunchRace` arm launched
@@ -497,7 +497,7 @@ impl Session {
             &shell.team_details,
             &oag_game::records::load(),
         );
-        remix_menu::settle(&mut self.settings.race.variant, &choices);
+        queries::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RaceVariant, &choices);
         }
@@ -764,8 +764,8 @@ impl Session {
         self.apply_race_team(&mut race_options);
         // Carried as a **name**, and checked against this page's own
         // row - see [`resolve_race_page_class`] for why: `race.class`
-        // is one setting shared with RACE REMIX, so a class settled
-        // there (`VECTOR`, offered only in remix) can sit in storage
+        // is one setting shared with a two-title race page, so a class settled
+        // there (`VECTOR`, offered only in a two-title race) can sit in storage
         // while this page's row was never on it. An empty setting
         // still leaves the previous class in place, as it always did.
         if let Some(class) = resolve_race_page_class(
@@ -884,7 +884,7 @@ mod tests {
     /// **The confinement, on the title that made it matter.** Wipeout Pure's
     /// own ladder carries `VECTOR`, and this build can race it - but the
     /// ordinary RACE page is not where that is offered. See
-    /// `oag_title::SpeedClasses::is_offered_outside_remix` and
+    /// `oag_title::SpeedClasses::is_offered_on_race_page` and
     /// `docs/architecture/menus.md` for why.
     #[test]
     fn a_pure_boots_race_page_offers_four_and_not_vector() {
@@ -895,7 +895,7 @@ mod tests {
             !names
                 .iter()
                 .any(|name| name.eq_ignore_ascii_case(oag_title::SpeedClasses::VECTOR)),
-            "VECTOR is a RACE REMIX offering, not this page's: {names:?}"
+            "VECTOR is a two-title race page offering, not this page's: {names:?}"
         );
     }
 
@@ -908,7 +908,7 @@ mod tests {
     }
 
     /// **The hazard `resolve_race_page_class` exists for.** `race.class` is
-    /// shared with RACE REMIX, whose own row can settle it to `"vector"` -
+    /// shared with a two-title race page, whose own row can settle it to `"vector"` -
     /// this page's row cannot, since the confinement above took it out. A
     /// stored `"vector"` reaching this page's own launch must not survive
     /// unclamped: it must fall back to the same first entry the row itself
@@ -1043,7 +1043,7 @@ impl Session {
         model.supply(menu::ValueSource::Teams, &shell.teams);
         // Scoped to whichever team `race.team` already names, the same
         // reason the CIRCUIT row above is seeded from `race.mode`, and
-        // settled against that list for the reason RACE REMIX's own rows are
+        // settled against that list for the reason a two-title race page's own rows are
         // below - `race.variant` defaults to empty, which is a real value
         // only on the titles whose first variant is the unsuffixed one.
         let race_variants =
@@ -1053,7 +1053,7 @@ impl Session {
                 &shell.team_details,
                 &oag_game::records::load(),
             );
-        remix_menu::settle(&mut self.settings.race.variant, &race_variants);
+        queries::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);
         // The booted title's own ladder, filtered to the rungs this build can
         // put a ship on. `None` means the title's per-team handling files have

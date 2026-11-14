@@ -446,7 +446,7 @@ fn the_super_phantom_field_runs_square_clean() {
     }
 }
 
-/// A RACE REMIX style race on Super Phantom, which this project's driver is
+/// A two-title race page style race on Super Phantom, which this project's driver is
 /// not verified on, fields no opponents; the same race on Phantom fields all
 /// seven. (`oag_ai::coverage`; the campaign's own controller is separate.)
 #[test]

@@ -44,6 +44,8 @@ no CUSTOM title; campaign events and `--ballisticng-track` still race custom tra
 
 ## Open
 
+**Items 1-5 below landed (lanes 2a to 8); they stay as the record of the pre-landing state. The engine's Remix names were removed afterwards: `oag_game::remix` is `title_lists`, the session's `remix_menu` is `queries`, `oag_source::remix::Remix` is `pair::SourcePair`, `remix_only` is `union_only` (`docs/architecture/workspace-layout.md`, "Naming"). What is still open is in Next Steps: AUR PKGBUILDs, web delivery, a drive test of a mod campaign's Hillside event.**
+
 **The blockers are the mod vocabulary and one LAN rule, not the Remix code.**
 Today a mod cannot own a page, a setting, a launch or a parameterised choice row,
 and the LAN fingerprint counts every mod that is on.

@@ -130,7 +130,7 @@ fn every_page_can_be_left_from_its_own_rows() {
 /// message names the menu.
 ///
 /// **Every matching row, not the first.** This used to `find_map`, which only
-/// ever reached the RACE page's `race.class` row and left RACE REMIX's own
+/// ever reached the RACE page's `race.class` row and left a two-title race page's own
 /// copy of the same setting unchecked - so a change to one and not the other
 /// passed silently. `race.class` is authored twice on purpose, with two
 /// different value sources, which is exactly the shape that needs all of them
@@ -1261,7 +1261,7 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
             "{stays} dropped on Pulse"
         );
     }
-    // RECORDS and RACE REMIX keep their own circuit rows.
+    // RECORDS and a two-title race page keep their own circuit rows.
     let elsewhere = pulse
         .pages
         .iter()
@@ -1411,7 +1411,7 @@ fn head_to_head_greys_weapons_ai_difficulty_and_kills() {
 }
 
 /// **The maintainer's report, 2026-10-26**: "when doing a zone race, I'm no longer able to select
-/// my team". The RACE page's TEAM row is live in Zone (RACE REMIX's, in the official mod, is
+/// my team". The RACE page's TEAM row is live in Zone (a two-title race page's, in the official mod, is
 /// checked in `official_remix.rs`): the team is the one the race and its loyalty credit use,
 /// and on some titles the paint on the shared hull. The VARIANT row stays greyed there - the hull has no variant to pick - which is the mode turning a
 /// row off, not the hide rule's "nothing to choose".

@@ -121,7 +121,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     }),
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
-        remix_only: &[],
+        union_only: &[],
     }),
 };
 

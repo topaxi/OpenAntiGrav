@@ -215,7 +215,7 @@ pub(super) fn load_teams(
 /// table, for the fallback and for the reverse marker - see
 /// [`oag_raceplay::catalogue::label`].
 ///
-/// `pub(crate)` rather than `pub(super)`: `crate::remix::catalogue` reuses it
+/// `pub(crate)` rather than `pub(super)`: `crate::title_lists::catalogue` reuses it
 /// too, for the same reason the front end does - a track's real name is
 /// never simply `strings.get(&track.id)`, on Wipeout HD least of all.
 pub(crate) fn load_circuit_names(

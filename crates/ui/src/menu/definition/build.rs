@@ -6,7 +6,7 @@
 //! keeps the ones the title's own main menu opens, in the disc's order
 //! ([`oag_title::MainMenu`]), then merges each mod's `menu.toml`: a row names
 //! where it goes with `parent` (a top-level row's id, or `top`) and, optionally,
-//! `after` a sibling. The project's own rows (REMIX, RECORDS, QUIT, and RACEBOX or
+//! `after` a sibling. The project's own rows (RECORDS, QUIT, and RACEBOX or
 //! OPTIONS where the original has none) arrive the same way, from the built-in
 //! `oag-extras`. ADR-0066 has the model.
 

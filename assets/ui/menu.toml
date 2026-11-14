@@ -936,7 +936,7 @@ kind = "choice"
 label = "TARGET FPS"
 string_id = "OAG_GRAPHICS_TARGET_FPS"
 setting = "graphics.target_fps"
-values = ["off", "30", "60", "90", "120", "144", "default"]
+values = ["off", "30", "60", "90", "100", "120", "144", "default"]
 warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "60" },
@@ -946,6 +946,11 @@ warn_when = [
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
         { setting = "graphics.target_fps", value = "90" },
         { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75"] },
+        { setting = "display.vsync", values = ["off", "smooth"] },
+    ] },
+    { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [
+        { setting = "graphics.target_fps", value = "100" },
+        { setting = "display.frame_limit", values = ["30", "60", "70", "72", "75", "90"] },
         { setting = "display.vsync", values = ["off", "smooth"] },
     ] },
     { message = "HELD TO THE FRAME LIMIT, WHICH IS LOWER THAN THIS", all = [

@@ -13,7 +13,7 @@ use oag_ui::frontend::Draw;
 use oag_tables::demo_config::DemoConfig;
 
 use super::{Leave, Pick, Run, Timing, authored_circuit, chain_seed, pick};
-use crate::remix::Catalogue;
+use crate::title_lists::Catalogue;
 
 /// What a demo's screen draws once it has settled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

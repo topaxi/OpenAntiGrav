@@ -1,15 +1,15 @@
-//! What the RACE REMIX page offers: the circuits and the roster a title has, read
-//! through [`oag_source::remix::Remix`]'s source pair rather than the front end's boot.
+//! What a two-title race page offers: the circuits and the roster a title has, read
+//! through the source pair's source pair rather than the front end's boot.
 //!
 //! The source pair itself - which loader reads track content and which reads craft
-//! content - is `oag_source::remix`; this half is the page's own pickers.
+//! content - is `oag_source::pair`; this half is the pickers.
 
 use anyhow::Context;
 
 use oag_ui::menu;
 
-/// The circuits and the roster a title offers, for the RACE REMIX page's
-/// title-scoped pickers.
+/// The circuits and the roster a title offers, for a two-title race
+/// page's title-scoped pickers.
 ///
 /// Tracks carry the label alongside the full [`oag_raceplay::catalogue::Track`]
 /// rather than as a `menu::Choice` outright, the same asymmetry the
@@ -52,7 +52,7 @@ impl Catalogue {
 /// plugin definition, one language's string table and its circuit names,
 /// nothing else - not a full menu shell, which additionally builds a font
 /// atlas, a sprite sheet and a menu frame off that title's own front end. A
-/// remix picker draws in the *booted* title's chrome regardless of which
+/// two-title picker draws in the *booted* title's chrome regardless of which
 /// title TRACK TITLE or CRAFT TITLE names, so none of that is needed here.
 ///
 /// **A track's real name is never simply `strings.get(&track.id)`.**

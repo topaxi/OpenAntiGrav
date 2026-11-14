@@ -40,7 +40,7 @@ pub enum Source {
     /// A 2048 campaign event and its authored AI, `None` for one with no `ai`
     /// block (Elimination), which keeps this project's driver.
     Event2048(Option<EventAi>),
-    /// Anything else with opponents: race box, remix, a direct `--race`. The
+    /// Anything else with opponents: race box, a two-title race, a direct `--race`. The
     /// race's `[ai] difficulty` stands in for the rung.
     Free(oag_ai::Difficulty),
 }

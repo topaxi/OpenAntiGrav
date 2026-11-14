@@ -1,8 +1,7 @@
-//! The `[race]` and `[remix]` sections: what the RACE and RACE REMIX pages
-//! last chose.
+//! The `[race]` section: what the RACE page last chose.
 //!
-//! Its own module rather than two more blocks in [`crate::settings`] for the
-//! same reason [`crate::settings::Controls`] has one: the pair is a
+//! Its own module rather than another block in [`crate::settings`] for the
+//! same reason [`crate::settings::Controls`] has one: it is a
 //! self-contained unit, here a menu-picked launch configuration rather than a
 //! pilot preference.
 

@@ -41,7 +41,7 @@ pub struct GuestRoster {
     /// The team ids, their variant suffixes and how they join.
     pub variants: &'static TeamVariants,
     /// The title whose roster this reships, by [`crate::Title::name`]. A race
-    /// remix that wants that title's craft and has no source for it falls back
+    /// a two-title race that wants that title's craft and has no source for it falls back
     /// to a title carrying this roster.
     pub reships: &'static str,
     /// The CRAFT TITLE entry's own name when [`Self::reships`] is *also*
@@ -57,7 +57,7 @@ pub struct GuestRoster {
     /// five 2048-era teams, whose `PI_Team` is declared in the same definition as the
     /// HD-era ones and has no craft of its own under the bare id. `false` leaves a
     /// declared guest team out of the list: 2048's HD-derived twelve are
-    /// reachable through RACE REMIX's craft title only, and what the original's
+    /// reachable through a two-title race page's craft title only, and what the original's
     /// own team list does with them is unmeasured.
     pub offered: bool,
     /// The speed classes this roster's teams author, slowest first, as their
@@ -289,9 +289,9 @@ impl RaceDefaults {
     /// Whether `team` can race `class`: `Some(false)` when its ladder is read
     /// and does not name the class, `None` when it is unread.
     ///
-    /// RACE REMIX hides a team that answers `Some(false)` - **chosen, not
+    /// A two-title race page hides a team that answers `Some(false)` - **chosen, not
     /// measured** (the class row is shared with every other page, so the
-    /// team row, which RACE REMIX already re-supplies when the craft title
+    /// team row, which a two-title race page already re-supplies when the craft title
     /// moves, is the one that narrows). An unread ladder hides nothing: the
     /// load names what the files do carry.
     #[must_use]

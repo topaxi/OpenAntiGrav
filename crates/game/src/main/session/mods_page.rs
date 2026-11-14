@@ -2,7 +2,7 @@
 //!
 //! A switch saves `settings::Mods::disabled` and rebuilds what the mods make, the way
 //! a boot builds it (`crate::prepare::mods_menu` and `crate::prepare::finish_definition`):
-//! the menu tree with its rows, the MODS listing, the mod campaigns and RACE REMIX's
+//! the menu tree with its rows, the MODS listing, the mod campaigns and a two-title race page's
 //! mod tracks. The menu model is built again on the new tree with the same
 //! [`Session::menu_model`] the menus open with, and reopened where the player stood:
 //! the MODS page, on the same mod, BACK leading where it led.

@@ -427,7 +427,7 @@ pub(crate) struct Cli {
     pub(crate) overlay: bool,
 
     /// With `--screenshot`: leave out what this build adds to the disc's own front end
-    /// (2048's RACEBOX, REMIX and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
+    /// (2048's RACEBOX, a mod's race page and MULTIPLAYER tiles on `GameModeChoice`, and the pad focus
     /// on its touch grids), so a frame can be compared against a capture of the original's menu definition. A player always has them.
     #[arg(long)]
     pub(crate) original_menu: bool,
@@ -471,9 +471,9 @@ pub(crate) struct Cli {
     pub(crate) race: bool,
 
     /// A second disc image or extracted directory the craft, HUD and grid
-    /// roster load from instead of `source` - a Race Remix from the command
+    /// roster load from instead of `source` - a two-title race from the command
     /// line. Left out, the craft comes from `source` like every other race.
-    /// See `oag_source::remix::Remix`.
+    /// See `oag_source::pair::SourcePair`.
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 

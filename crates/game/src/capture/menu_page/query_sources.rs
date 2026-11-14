@@ -43,7 +43,7 @@ pub(super) fn supply(
         .iter()
         .map(|team| Choice::labelled(&team.id, strings.get_or_id(&team.id)))
         .collect();
-    crate::remix::resolve_queries(model, None, |query, args| match query {
+    crate::title_lists::resolve_queries(model, None, |query, args| match query {
         Query::TracksOf if args.title == CUSTOM => {
             scan.wait();
             Some(scan.choices(strings))

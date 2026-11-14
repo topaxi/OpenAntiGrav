@@ -589,7 +589,7 @@ impl App {
             shell: self.shell.clone(),
             race_title: self.race_title,
             race_platform: self.race_platform,
-            // Race Remix's title pickers - see the field's own doc comment
+            // A two-title race's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),
             // The search path's tracks, then the mods' that are on (`docs/tools/mods.md`).

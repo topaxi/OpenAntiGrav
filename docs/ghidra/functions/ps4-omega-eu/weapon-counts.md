@@ -48,12 +48,12 @@ engine, tilt) was not walked.
   [`2048-status.md`](../../../formats/2048-status.md)).
 - **Pulse, Pure, PS2 Pulse, HD**: **checked, differs**: neither string is in the executable (`BOOT.BIN`, `SCES_547.48`,
   `EBOOT.elf`), and no team file of Pure, HD or Pulse's default team authors the element
-  (`remix_2048_sources_ground_truth::the_other_titles_author_no_weapon_counts`). Their fixed three rockets and five mines
+  (`two_title_2048_sources_ground_truth::the_other_titles_author_no_weapon_counts`). Their fixed three rockets and five mines
   are the same numbers as this default.
 - **Omega patch 1.07**: the string moved to `0x01876b62` / `0x01876b74` with the rest of the patch; not re-read.
 
 ## What the data says
 
 Read by `oag_weapons::counts::WeaponCounts::from_stats` over all twenty native craft on both sources
-(`remix_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`): Fighter 3 / 5 (default), Agility 2 / 4, Speed 1 / 3 on all
+(`two_title_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`): Fighter 3 / 5 (default), Agility 2 / 4, Speed 1 / 3 on all
 five teams; Prototype AG Systems 2 / 4, Feisar and Piranha 1 / 3, Auricom and Qirex the default 3 / 5. Omega's equal 2048's.

@@ -53,11 +53,11 @@ pub struct Options {
     /// Where the craft, HUD and grid roster load from, or `None` for
     /// `source` - today's behaviour, unchanged.
     ///
-    /// **The one thing a Race Remix adds.** `source` still supplies the track
+    /// **The one thing a two-title race adds.** `source` still supplies the track
     /// and everything that goes with it - collision, environment, pads,
     /// weapon tuning; `craft_source`, when it names a different release,
     /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
-    /// [`oag_source::remix::Remix`].
+    /// [`oag_source::pair::SourcePair`].
     pub craft_source: Option<String>,
     /// Directories to look in for downloadable content (`oag_source::dlc`), mounted
     /// behind `source`'s own archives.
@@ -378,7 +378,7 @@ pub struct Options {
     pub people: u8,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
-    /// the race box, RACE REMIX and the command line; a campaign launch leaves
+    /// the race box, a two-title race page and the command line; a campaign launch leaves
     /// it `false` because its own controller (the original's) is chosen by the
     /// tables its title authors for the class.
     pub no_driver_for_class: bool,
