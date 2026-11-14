@@ -112,6 +112,17 @@ pool and the occupied slice of ships; `oag_raceplay::tick` passes
 `oag-weapons`, the lowest crate that needs it, and `oag_gameplay::MAX_SHIPS` is
 that constant.
 
+## Shared helpers and the copies that stay
+
+`oag-bytes` owns `ByteOrder`, the `Option` word readers (`u16_at`, `u32_at`,
+`u64_at`, `f32_at`, and the fixed-order `le::` / `be::` forms) and `cstr_at`;
+`oag_core::math::lerp` is `a + (b - a) * t`. A one-line `lerp` stays local where
+sharing it would add a dependency edge for one function: `oag-tables`
+(`track_stats.rs` has zero dependencies; `ai_race_stats.rs` uses
+`a * (1 - t) + t * b`, which rounds differently, so it must not move), `oag-vex`
+(`probes.rs`, `fog.rs`: no `oag-core` edge) and `oag-ui-screens` (`hex.rs`,
+`pulse.rs`: no `oag-core` edge).
+
 ## Title packages
 
 [ADR-0022](adr/0022-title-packages.md) splits two questions that used to be one.
