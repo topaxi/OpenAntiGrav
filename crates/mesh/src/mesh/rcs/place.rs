@@ -18,7 +18,7 @@ use oag_vex::vex;
 /// and the word at `+0x30` is the `.rcsmodel` chunk's own first word.
 pub(super) fn node_geometry(
     payload: &[u8],
-    order: oag_formats::ByteOrder,
+    order: oag_bytes::ByteOrder,
 ) -> Option<(u32, [f32; 3], [f32; 3])> {
     if payload.len() < 0x34 {
         return None;

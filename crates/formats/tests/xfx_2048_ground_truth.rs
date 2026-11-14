@@ -17,7 +17,7 @@
 use std::collections::BTreeSet;
 
 use oag_assets::psarc::Archive;
-use oag_formats::byte_order::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_formats::sblk::{self, Bank};
 use oag_formats::xfx::Xfx;
 

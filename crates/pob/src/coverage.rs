@@ -111,7 +111,7 @@ pub fn coverage(data: &[u8]) -> Coverage {
 fn claim_modifiers(
     seen: &mut Coverage,
     data: &[u8],
-    order: oag_formats::ByteOrder,
+    order: oag_bytes::ByteOrder,
     base: usize,
     modifiers: &[crate::Modifier],
     emitter_offset: usize,

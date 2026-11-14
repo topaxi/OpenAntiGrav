@@ -3,7 +3,7 @@
 //! Split out of `vex.rs` for size alone. Everything here is row-major with
 //! the translation in row 3 - the row-vector convention, `v' = v * M`.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{Node, byte_order, classes_of};
 

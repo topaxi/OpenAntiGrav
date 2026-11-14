@@ -3000,6 +3000,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "log",
+ "oag-bytes",
  "oag-disc",
  "oag-formats",
  "oag-pulse",
@@ -3109,8 +3110,8 @@ dependencies = [
  "bytemuck",
  "naga",
  "oag-assets",
+ "oag-bytes",
  "oag-core",
- "oag-formats",
  "oag-gpu",
  "oag-mesh",
  "oag-pob",
@@ -3145,6 +3146,7 @@ dependencies = [
  "oag-ai",
  "oag-assets",
  "oag-audio",
+ "oag-bytes",
  "oag-core",
  "oag-disc",
  "oag-display",
@@ -3333,6 +3335,7 @@ dependencies = [
  "bytemuck",
  "log",
  "oag-assets",
+ "oag-bytes",
  "oag-core",
  "oag-formats",
  "oag-gpu",
@@ -3453,6 +3456,7 @@ name = "oag-pob"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-bytes",
  "oag-disc",
  "oag-formats",
  "oag-testdata",
@@ -3538,6 +3542,7 @@ dependencies = [
  "oag-assets",
  "oag-audio",
  "oag-ballisticng",
+ "oag-bytes",
  "oag-core",
  "oag-disc",
  "oag-display",
@@ -3732,6 +3737,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "oag-assets",
+ "oag-bytes",
  "oag-disc",
  "oag-formats",
  "oag-pulse",

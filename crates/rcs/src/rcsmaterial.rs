@@ -28,7 +28,7 @@
 //! guess it: [`Features`] is a set the caller completes.
 
 use crate::rcsmodel::VertexDecl;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// The `~crc32` this format hashes names with.
 ///

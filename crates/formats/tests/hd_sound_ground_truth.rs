@@ -21,7 +21,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::byte_order::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_formats::sblk::{self, Bank};
 
 /// The seven PSARC archives on the disc.

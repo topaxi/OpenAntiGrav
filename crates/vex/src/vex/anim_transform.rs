@@ -349,7 +349,7 @@ fn quaternion_matrix([x, y, z, w]: [f32; 4]) -> [f32; 16] {
 /// arrays run past the payload, and every node decodes to `None` and falls back
 /// to the identity, the Pulse defect exactly.
 #[must_use]
-pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<AnimTransform> {
+pub fn anim_transform(payload: &[u8], order: oag_bytes::ByteOrder) -> Option<AnimTransform> {
     if payload.len() < 0x50 {
         return None;
     }

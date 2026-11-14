@@ -79,7 +79,7 @@ Independently confirmed: `ffprobe` reads the same tracks as
 **This is the one thing about the file a reader of this repository will expect
 to be wrong.** Every other HD payload is Pulse's format byte-swapped - `XXEV`
 against `VEXX`, `WOtd` against `dtOW`, which is the finding
-[hd-status](hd-status.md#the-headline) is built on - and `oag_formats::ByteOrder`
+[hd-status](hd-status.md#the-headline) is built on - and `oag_bytes::ByteOrder`
 exists to carry that. A `.bik` is not: `+0x14` reads `80 07 00 00` and the
 picture really is 1920 pixels wide.
 

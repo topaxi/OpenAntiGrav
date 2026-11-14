@@ -55,7 +55,7 @@
 //! `oag_render::pvs`'s business.
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use std::fmt;
 
 /// The hard cap on sections, from the 64-bit mask width.

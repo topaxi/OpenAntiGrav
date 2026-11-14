@@ -1468,7 +1468,7 @@ there, each with a ground-truth test against the disc:
 1. **[`oag_formats::psarc`](../formats/psarc.md)** - the container, ported from
    `scripts/psarc.py`. 11,664 of 11,664 entries carry the MD5 of their own
    uppercased path.
-2. **[`oag_formats::ByteOrder`](../formats/hd-status.md)**, and both files that
+2. **[`oag_bytes::ByteOrder`](../formats/hd-status.md)**, and both files that
    need it read big-endian. Neither `vex::nodes` nor `track::parse` gained an
    argument: **each file declares its own order in its own magic** - `VEXX`
    against `XXEV`, `dtOW` against `WOtd` - so the order is read from the data,

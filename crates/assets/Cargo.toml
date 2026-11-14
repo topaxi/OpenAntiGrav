@@ -22,6 +22,7 @@ thiserror.workspace = true
 workspace = true
 
 [dev-dependencies]
+oag-bytes.workspace = true
 oag-testdata.workspace = true
 oag-vex.workspace = true
 flate2.workspace = true

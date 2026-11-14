@@ -6,7 +6,7 @@
 //! hold-and-blend rule and the composition order.
 
 use super::*;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Builds a payload in the layout the module doc states.
 struct Builder {

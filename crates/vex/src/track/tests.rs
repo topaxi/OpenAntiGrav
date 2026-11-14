@@ -3,7 +3,7 @@
 //! refuses.
 
 use super::*;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Builds a payload with `paths` control-point counts, one junction per
 /// path, wired as a ring.

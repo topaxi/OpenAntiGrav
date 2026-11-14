@@ -98,7 +98,7 @@ pub const ATLAS_HEADER_LEN: usize = 0x40;
 
 pub use oag_formats::swizzle::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, SWIZZLE_BLOCK_ROWS};
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Something wrong with a font.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -10,7 +10,7 @@
 //! pose the tick left behind, rather than being recorded during the step. See
 //! `docs/architecture/determinism.md`.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 use oag_physics::collide::{Ray, Raycaster, Surface};
 use oag_render::shadow::{self, Placement};
 use oag_vex::shadow_occluder::Occluder;

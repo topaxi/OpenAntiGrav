@@ -27,8 +27,8 @@
 //! triggers (`0x40` bytes each), then `layers * 0x830` bytes of layers, then
 //! the layer pointer table of `layers * 4` bytes, which is the end of the file.
 
-use crate::byte_order::ByteOrder;
 use crate::coverage::Coverage;
+use oag_bytes::ByteOrder;
 
 pub const MAGIC: [u8; 4] = *b"XFDX";
 

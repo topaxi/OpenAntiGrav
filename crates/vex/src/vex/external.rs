@@ -37,7 +37,7 @@ pub fn geometry_is_external(data: &[u8]) -> bool {
     if !vex::has_magic(data) {
         return false;
     }
-    if vex::byte_order(data) == oag_formats::ByteOrder::Big {
+    if vex::byte_order(data) == oag_bytes::ByteOrder::Big {
         return true;
     }
     let Ok(nodes) = vex::nodes(data) else {

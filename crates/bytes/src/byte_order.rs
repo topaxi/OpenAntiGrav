@@ -23,7 +23,8 @@
 //! Wipeout HD's 24 circuits with no error. [`ByteOrder::u64`] reads the eight
 //! bytes as one quantity so the question never arises.
 
-/// Which end of a multi-byte field comes first.
+/// Which end of a multi-byte field comes first: a byte order as a value, for a
+/// format that names its own at run time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ByteOrder {
     /// PSP and PS2: least significant byte first.

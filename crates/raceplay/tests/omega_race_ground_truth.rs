@@ -119,7 +119,7 @@ fn tech_de_ra_authors_a_spline_this_project_already_reads() {
     assert_eq!(ai.encoded_len(), payload.len());
     assert_eq!(
         track::byte_order(payload),
-        Some(oag_formats::ByteOrder::Little)
+        Some(oag_bytes::ByteOrder::Little)
     );
 }
 

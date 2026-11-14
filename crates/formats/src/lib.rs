@@ -14,9 +14,9 @@
 //! Collection's Audiokinetic banks. [`xfx`] is the table HD drives a ship's
 //! engine note with.
 //!
-//! [`byte_order`] and [`swizzle`] sit under all of them: byte *layout*, which is
-//! why they are here and not with the decoders that consume them (three crates
-//! undo the same swizzle).
+//! [`swizzle`] sits under all of them: byte *layout*, which is why it is here
+//! and not with the decoders that consume it (three crates undo the same
+//! swizzle).
 //!
 //! The decoders live in sibling crates, split by format family per
 //! [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md):
@@ -29,7 +29,6 @@
 //! garbage. This crate has no features, so it is the only one in every
 //! combination.
 
-pub mod byte_order;
 pub mod coverage;
 pub mod crc32;
 pub mod entropy;
@@ -45,5 +44,4 @@ pub mod wad;
 pub mod wwise;
 pub mod xfx;
 
-pub use byte_order::ByteOrder;
 pub use signature::{Signature, identify};

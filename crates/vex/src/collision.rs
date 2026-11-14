@@ -87,7 +87,7 @@ use std::fmt;
 use std::ops::Range;
 
 use crate::vex;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of payload header before the first object.
 pub const HEADER_LEN: usize = 8;

@@ -36,7 +36,7 @@
 //!
 //! Confidence 85 on the record and the relocation, 80 on bit 0's meaning.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use super::{Error, Mesh, Model, Result};
 

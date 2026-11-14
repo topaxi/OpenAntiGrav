@@ -10,7 +10,7 @@
 //! `+0x20`-then-`+0xc` pointer is non-null. That pointer is what
 //! [`Curve::parse`] reads.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 use crate::edgeanim;
 

@@ -518,7 +518,7 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
             );
             assert_eq!(
                 pob::byte_order(&blob),
-                oag_formats::ByteOrder::Big,
+                oag_bytes::ByteOrder::Big,
                 "{entry}: a PS3 blob that is not big-endian"
             );
             blobs.push((blobs.len(), blob));

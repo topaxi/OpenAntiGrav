@@ -641,7 +641,7 @@ fn data02_banks_are_the_old_container_and_wwise_refuses_them() {
         );
         let order = oag_formats::sblk::byte_order_of(&blob)
             .unwrap_or_else(|| panic!("{path}: an SBlk container in one of its two byte orders"));
-        orders[usize::from(order == oag_formats::ByteOrder::Big)] += 1;
+        orders[usize::from(order == oag_bytes::ByteOrder::Big)] += 1;
         oag_formats::sblk::Bank::parse_as(&blob, order)
             .unwrap_or_else(|e| panic!("{path}: the existing reader reads it: {e}"));
     }

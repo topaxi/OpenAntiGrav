@@ -12,6 +12,7 @@ autotests = false
 # `oag-formats` for the GE block swizzle, which is byte layout rather than
 # pixel format and so stays at the container layer. Nothing else.
 [dependencies]
+oag-bytes.workspace = true
 oag-formats.workspace = true
 # Reads a texture pack's replacement pictures (`replacer`).
 png.workspace = true

@@ -44,7 +44,7 @@
 //! Missing the scale makes every model a uniform wrong size, which looks like
 //! a units problem.
 
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of file header before the node tree.
 pub const FILE_HEADER_LEN: usize = 16;
@@ -543,7 +543,7 @@ impl Node {
 /// was once written little-endian on that strength, and HD's 5,518 nodes of the
 /// class all decoded to nothing.
 mod le {
-    use oag_formats::ByteOrder;
+    use oag_bytes::ByteOrder;
 
     pub fn u16_at(data: &[u8], at: usize) -> u16 {
         ByteOrder::Little.u16(data, at)

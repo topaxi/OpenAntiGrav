@@ -79,7 +79,7 @@
 use std::fmt;
 
 use crate::vex;
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Bytes of `WO Track` header.
 pub const HEADER_LEN: usize = 0x20;

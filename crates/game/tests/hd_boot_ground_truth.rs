@@ -414,7 +414,7 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
     let blob = archives.read_name(name).expect("HD's body face reads");
     assert_eq!(
         oag_texture::fnt::byte_order(&blob),
-        Some(oag_formats::ByteOrder::Big),
+        Some(oag_bytes::ByteOrder::Big),
         "a PS3 .fnt is the PSP layout with its words the other way round"
     );
     assert_eq!(&blob[..4], b"TNF\x01", "the magic is a swapped word");

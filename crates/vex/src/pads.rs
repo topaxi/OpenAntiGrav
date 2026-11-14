@@ -31,7 +31,7 @@
 //! Evidence and confidence scores: `docs/formats/pads.md`.
 
 use crate::vex::{self, Node};
-use oag_formats::ByteOrder;
+use oag_bytes::ByteOrder;
 
 /// Where the bounding-box minimum sits in a pad's payload.
 const MIN: usize = 0x10;
