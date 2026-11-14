@@ -8,7 +8,7 @@ import package::types::{ZoneSet};
 // `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`:
 //
 //     zoneUV  = zoneColourTint.xy * (1 - meshUV)
-//     rim     = 1 - dot(N, toEye)
+//     rim     = 1 - |dot(N, toEye)|
 //     surface = zoneTex(zoneUV).rgb * zoneEffect.rgb
 //             + zoneBase.rgb    * rim^10
 //             + zoneBaseAlt.rgb * rim^5

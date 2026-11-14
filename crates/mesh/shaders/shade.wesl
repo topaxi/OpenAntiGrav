@@ -975,7 +975,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if zone_on != 0.0 {
         let zone_to_eye = normalize(scene.fog.camera - in.world);
         let zone_colours = zone_set(in.slots, in.world);
-        let zone_rim = 1.0 - dot(n, zone_to_eye);
+        // `1 - |N.V|`: the microcode's `ADD rim, -|dot|, 1`, so a face turned
+        // away from the eye rims like one turned towards it (`zone-shader.md`,
+        // "The rim is two-sided").
+        let zone_rim = 1.0 - abs(dot(n, zone_to_eye));
         let zone = zone_sample(in.texcoord, in.slots, in.world);
         if scene.zone.shape.x > 0.5 {
             // The arena shape: `surface = albedo + zoneCol * (1 - blackMask)`,

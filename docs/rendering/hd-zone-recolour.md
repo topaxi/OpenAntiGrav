@@ -26,7 +26,7 @@ fragment microcode (82) and reproduced in `crates/mesh/src/mesh.wgsl`:
 
 ```text
 zoneUV  = zoneColourTint.xy * (1 - meshUV)
-rim     = 1 - dot(N, toEye)
+rim     = 1 - |dot(N, toEye)|
 inside  = distance(worldPos, zoneOrigin) < zoneColourTint.w
 surface = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
         + zoneBase<I|O>.rgb    * rim^10

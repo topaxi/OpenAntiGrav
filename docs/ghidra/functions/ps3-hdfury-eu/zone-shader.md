@@ -69,7 +69,7 @@ test, the rim exponents - is unaffected and was read in both forms.
 
 ```text
 zoneUV    = zoneColourTint.xy * (1 - meshUV)
-rim       = 1 - dot(N, -V)
+rim       = 1 - |dot(N, -V)|
 band      = zoneTex<I|O>Nearest(zoneUV).a
 zoneCol   = zoneTex<I|O>(zoneUV).rgb * E.rgb
             + 2 * zoneAnisoPalette<|Outer>[ pow(rim, zoneAnisoPower.<x|y>) ]
@@ -159,7 +159,7 @@ twice with *opposite* compiler polarity in the two materials - the same rule
 both times, which is the check that separates a real read from a sign slip.
 
 `zoneAnisoPower` is a **float2**: `.x` and `.y` are the inner and outer
-exponents of `pow(1 - dot(N,-V), p)`, which indexes `zoneAnisoPalette` and
+exponents of `pow(1 - |dot(N,-V)|, p)`, which indexes `zoneAnisoPalette` and
 `zoneAnisoPaletteOuter` respectively. Confidence 82.
 
 **A second, independent confirmation that `zoneColourTint.w` is the radius -
@@ -219,10 +219,16 @@ No original frame shows the band yet: the RPCS3 `burst-1` frame (radius
 road. What supports it is the maintainer's report of a white terminator on a
 stage change and this engine's headless sweep.
 
-**Open, same block**: `@0x12` is `ADD R3.w, |-R0|, 1`, so by the same
-abs-then-negate rule the rim is `1 - |dot(N, -V)|`, not `1 - dot(N, -V)` as
-the formulas above and `shade.wesl`'s `zone_rim` have it. It differs only
-where the dot is negative; not yet changed.
+### The rim is two-sided
+
+`@0x12` is `ADD R3.w, |-R0|, 1` on the `DP3` of `N` against `-V`, so by the
+same abs-then-negate rule the rim is `1 - |dot(N, -V)|`. Every Zone block of
+`01_vineta_k/materials/cf_constantcolourglow.rcsmaterial` (the arena shape,
+blocks 7-19) computes its rim the same way (block 9: `@0x04 DP3 R0.w, R0,
+-R1`, `@0x05 ADD R0.w, |-R0|, 1`). A face turned away from the eye rims as
+one turned towards it. Confidence 82. Ported in `shade.wesl` (`zone_rim`);
+headless it changes 133 pixels of a Talon's Junction frame and 21 of a
+`zone_1` one (ImageMagick AE at 2 % fuzz), so few Zone faces turn away.
 Ported in `crates/mesh/shaders/zone.wesl` (`zone_glow`).
 
 ## Two findings that change what the artists were doing
