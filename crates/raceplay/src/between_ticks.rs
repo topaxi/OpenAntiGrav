@@ -409,6 +409,18 @@ impl Race {
             .then_some((&previous.camera, poses.alpha))
     }
 
+    /// Whether the latest tick cut the camera: the shot, the view or the imposed pose changed
+    /// from the tick before, which is exactly when [`Self::camera_between`] draws the current
+    /// tick as it is. Whatever the draw alpha, so a draw at `1.0` reports it too.
+    #[must_use]
+    pub fn camera_cut(&self) -> bool {
+        self.view
+            .poses
+            .previous
+            .as_ref()
+            .is_some_and(|previous| previous.camera.key != self.camera_key())
+    }
+
     /// A view matrix at the draw alpha: `current` is this tick's, `previous`
     /// picks the same matrix out of the previous tick's camera.
     pub(super) fn view_between(

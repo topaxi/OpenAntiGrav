@@ -23,7 +23,7 @@ struct Uniforms {
     time: f32,
     between: f32,
     engine_bound: f32,
-    pad: f32,
+    cut: f32,
     lens: [f32; 2],
     pad_lens: [f32; 2],
 }
@@ -61,6 +61,8 @@ pub struct Frame<'a> {
     pub time: f32,
     /// [`crate::psys`]'s draw alpha.
     pub draw_alpha: f32,
+    /// Whether the tick this frame draws cut the camera: `camera_cut()`.
+    pub cut: bool,
     /// What `engine_uv` projects with in this view; `None` is no picture for this view.
     pub engine_view_projection: Option<[[f32; 4]; 4]>,
     /// `craft_frame`: the view's own craft in eye space, rigid, as it is drawn.
@@ -511,7 +513,7 @@ impl Stage {
                 time: frame.time,
                 between: frame.draw_alpha - 1.0,
                 engine_bound: f32::from(u8::from(frame.engine_view_projection.is_some())),
-                pad: 0.0,
+                cut: f32::from(u8::from(frame.cut)),
                 lens: frame.lens,
                 pad_lens: [0.0; 2],
             };

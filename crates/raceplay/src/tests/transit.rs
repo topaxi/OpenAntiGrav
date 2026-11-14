@@ -161,6 +161,30 @@ fn a_transit_to_a_place_on_the_lap_comes_out_there() {
     assert!(off < 4.0, "came out {off} units from the place asked");
 }
 
+/// The player's camera flies on through the entrance of a transit and is cut at its exit, the
+/// one tick `camera_cut` (a shader's `camera_cut()`) is true, whatever the draw alpha.
+#[test]
+fn a_transit_reports_a_camera_cut_on_its_exit_tick_alone() {
+    let mut race = moving();
+    for alpha in [1.0, 0.5] {
+        race.set_draw_alpha(alpha);
+        assert!(!race.camera_cut(), "before, at alpha {alpha}");
+    }
+    race.begin_transit(0, 3, Distance::Units(20.0), 1.0)
+        .unwrap();
+    let mut cuts = Vec::new();
+    for _ in 0..5 {
+        race.tick(&PlayerInputs::none());
+        let at_one = race.camera_cut();
+        race.set_draw_alpha(0.5);
+        assert_eq!(race.camera_cut(), at_one, "the draw alpha does not matter");
+        race.set_draw_alpha(1.0);
+        cuts.push(at_one);
+    }
+    // Ticks 1 and 2 are the entrance and the flight (the camera flies on), 3 puts it out.
+    assert_eq!(cuts, [false, false, true, false, false]);
+}
+
 /// Its triggers are held: a craft frozen out of the world banks no dwell.
 #[test]
 fn a_craft_in_transit_has_its_reset_triggers_held() {
