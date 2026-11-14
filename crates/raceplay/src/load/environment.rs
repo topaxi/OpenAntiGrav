@@ -751,7 +751,11 @@ pub(super) fn staging(
         .map(|params| bloom::for_title(params, title));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
-        .flatten();
+        .flatten()
+        .map(|params| oag_post::omega_tonemap::Params {
+            store: bloom::store_of(title, true),
+            ..params
+        });
     Staging {
         light,
         authored_fog,

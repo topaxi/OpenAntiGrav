@@ -902,6 +902,12 @@ pub struct Looks {
     /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
     /// combine encoded values").
     pub blends_encoded: Rule,
+    /// The race scene decodes a gamma-authored texel with the piecewise sRGB curve (the
+    /// texture unit's, for an sRGB-typed texture) while storing the value as computed.
+    /// Omega's: 3,115 of the 3,234 circuit pictures of `data01` and `data02` are
+    /// `ChannelType::Srgb` GNF (`docs/rendering/hd-track-tone.md`, "Omega's texels decode with
+    /// the sRGB curve").
+    pub texels_srgb: Rule,
     /// The race's final composite reads the scaled scene half a source texel
     /// off, `(0.5 / width, 0.5 / height)` of the scaled source (so it follows the
     /// dynamic width), bilinearly: each output pixel is the mean of four source
@@ -985,6 +991,7 @@ impl Looks {
             batch_back_face_cull: Rule::UNREAD,
             batch_back_face_cull_carried: Rule::UNREAD,
             blends_encoded: Rule::UNREAD,
+            texels_srgb: Rule::UNREAD,
             final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
         }

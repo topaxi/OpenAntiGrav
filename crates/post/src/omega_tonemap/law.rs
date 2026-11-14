@@ -32,6 +32,8 @@ pub struct Params {
     pub end_angle: f32,
     /// The race composite's terms that follow the curve.
     pub composite: Composite,
+    /// What the scene target the chain reads stores, which every draw into it is built for.
+    pub store: oag_gpu::formats::SceneStore,
 }
 
 /// The output end of the curve under SDR video out. `ToneMap_ApplyEnvSettings`

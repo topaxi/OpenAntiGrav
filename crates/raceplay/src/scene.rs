@@ -615,7 +615,7 @@ impl Scene {
         let (wo, format) = hd_chain::build_wo(device, format, caller_format, size, wo_composite);
         // What the scene target stores, which every pipeline drawing into it is
         // built for: HD's chain or 2048's says (`oag_gpu::formats::SceneStore`).
-        let store = hd_chain::store(hd.as_ref(), wo.is_some());
+        let store = hd_chain::store(hd.as_ref(), omega.as_ref(), wo.is_some());
         // **The Zone stage's own texture, bound once per model.** The showing
         // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is

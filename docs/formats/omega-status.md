@@ -869,6 +869,15 @@ value paints green the original never shows), and the cyan centre lanes, `cf_cen
 their `E.a * wave` and their own `Uvset1` coordinate, which the PS4 reader had refused (the lane sampled one
 texel): whole-frame mean grey 30.28 to **25.03**.
 
+### The texel decode is the sRGB curve (2026-11-14, `anulpha-tone`)
+
+**Ported from HD.** 3,115 of the 3,234 circuit pictures of `data01` and `data02` are `ChannelType::Srgb` GNF and
+the lightmap atlases `Unorm`, so the texture unit decodes the pictures with the sRGB curve; ours used the `2.2`
+power. `Looks::texels_srgb` selects `SceneStore::SrgbTexels` on Omega: every Omega race pair's mean grey fell or
+held (Metropia 35.36 to 34.63, the largest), census and table in
+[`hd-track-tone.md`](../rendering/hd-track-tone.md#omegas-texels-decode-with-the-srgb-curve-2026-11-14-anulpha-tone).
+**2048: checked, differs** (its programs square the texel, no sRGB unit).
+
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 
 Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,

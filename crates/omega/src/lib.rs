@@ -242,6 +242,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // The texture unit decodes Omega's sRGB-typed circuit pictures with the sRGB curve
+        // (`docs/rendering/hd-track-tone.md`, "Omega's texels decode with the sRGB curve").
+        texels_srgb: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // HD's shield law with the cockpit-floored target alpha; the colour is each team's own
         // `ShieldColour` (`docs/ghidra/functions/ps4-omega-eu/shield.md`).
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {

@@ -52,6 +52,11 @@ pub enum SceneStore {
     /// the `2.2` power, and the race composite's square root is the encode
     /// (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`).
     Squared,
+    /// The value as computed, with a gamma-authored texel decoded by the piecewise sRGB curve,
+    /// as the texture unit decodes an sRGB-typed texture: Omega's float scene, whose circuit
+    /// pictures are `ChannelType::Srgb` GNF (`docs/rendering/hd-track-tone.md`, "Omega's texels
+    /// decode with the sRGB curve").
+    SrgbTexels,
     /// A 5-6-5 colour card, not a scene: Wipeout HD's 512 x 256 advert and gantry
     /// cards hold linear light rounded to 31, 63 and 31 levels
     /// (`docs/rendering/start-gantry.md`, "The card is 5-6-5 in linear light"). Drawn
@@ -72,7 +77,7 @@ impl SceneStore {
     pub fn texel_decode(self, v: f32) -> f32 {
         let v = v.clamp(0.0, 1.0);
         match self {
-            Self::Encoded => {
+            Self::Encoded | Self::SrgbTexels => {
                 if v <= 0.04045 {
                     v / 12.92
                 } else {
@@ -97,7 +102,7 @@ impl SceneStore {
             return 1.0;
         }
         match self {
-            Self::Encoded => {
+            Self::Encoded | Self::SrgbTexels => {
                 if c <= 0.003_130_8 {
                     c * 12.92
                 } else {
@@ -114,10 +119,11 @@ impl SceneStore {
 mod tests {
     use super::SceneStore;
 
-    const STORES: [SceneStore; 3] = [
+    const STORES: [SceneStore; 4] = [
         SceneStore::Encoded,
         SceneStore::Computed,
         SceneStore::Squared,
+        SceneStore::SrgbTexels,
     ];
 
     /// The piecewise sRGB EOTF written out here independently of the code under test.

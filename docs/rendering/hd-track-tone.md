@@ -2329,7 +2329,8 @@ lift of the deepest shadows, nothing else.
 
 **Cross-title.**
 
-- **Omega: checked, applies, not wired.** Its textures are `ChannelType::Srgb` GNFs
+- **Omega: ported 2026-11-14**, below ("Omega's texels decode with the sRGB curve"). Before:
+  its textures are `ChannelType::Srgb` GNFs
   ([gnf.md](../formats/gnf.md)), which the PS4's sampler decodes with the sRGB curve, its lightmap
   atlases are UNORM, and its scanout encode is the sRGB curve
   ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md), "The output encode"); ours decodes
@@ -2340,3 +2341,33 @@ lift of the deepest shadows, nothing else.
 - **2048: checked, differs.** Its lit programs decode a texel by squaring it and the composite's
   square root is the encode ([exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md)):
   already one curve both ways, and no hardware sRGB unit is involved.
+
+### Omega's texels decode with the sRGB curve (2026-11-14, `anulpha-tone`)
+
+**The census** (every `.gnf` under `Data/environments/` of Omega's `data01` and `data02`, the
+`word1` channel type at descriptor `+0x04` bits 26 to 29, `ChannelType` in
+`oag_texture::gnf`; role by file name): pictures **3,115 `Srgb`** (9), 73 `Unorm` (several of them
+normal maps named `_Norm`) and 46 float (7, the displacement panels); lightmap atlases **661
+`Unorm`** (one more named `lmap` is a water normal map, `Srgb`); normal maps 206 `Unorm`, 45
+`Srgb`; emissive masks 18 `Srgb`. The PS4's texture unit decodes an `Srgb`-typed texel with the
+piecewise sRGB curve, and Omega's pixel programs read the sample as linear light (the lightmap's
+`log`, `* power`, `exp` runs on the raw UNORM sample, `data01` `Reversed_Diffuse_Specular_Normal`
+`@0xad04`). Confidence 80: the descriptors are read, the decode is the hardware's documented
+behaviour for the number format, not observed on a running console.
+
+**Wired.** `Looks::texels_srgb` (Omega, measured) selects `SceneStore::SrgbTexels`: the float
+scene stores the value as computed, and `target.wesl`'s `decode` / `encode` take the sRGB curve
+(`srgb_texels` override), the CPU twins `texel_decode` / `texel_encode` too. Lightmaps do not go
+through `decode`. Omega's tone-map chain carries the store as HD's bloom chain does
+(`omega_tonemap::Params::store`). The 73 `Unorm` pictures still take the same decode (one curve
+per scene; they were taking the `2.2` power before).
+
+**Result**, whole-frame mean grey difference on every Omega race pair, before to after: Altima
+37.52 to 37.10, Anulpha Pass 25.03 to 24.78, Arena 35.37 to 35.15, Capital Reach 47.72 to 47.57,
+Chenghou 30.10 to 29.88, Downtown 29.77 to 29.52, Empire Climb 44.54 to 44.23, Metro Park 45.02
+to 44.65, Metropia 35.36 to 34.63, Moa Therma 38.53 to 38.12, Modesto Heights 40.77 to 40.71,
+Queen's Mall 50.62 to 50.22, Sebenco Climb 40.20 to 39.72, Sol 2 33.17 to 33.05, Sol 45.99 to
+45.79, Square 28.70 to 28.41, Subway 40.49 to 40.14, Talon's Junction 32.41 to 31.95, Tech de Ra
+32.57 to 32.26, Amphiseum 56.55 to 56.03, Ubermall 21.14 to 21.14, Vineta K 29.22 to 28.84: none
+rises. Every 2048-vita pair is unchanged (2048: checked, differs, above).
+

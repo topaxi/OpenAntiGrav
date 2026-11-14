@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, omega]
-updated: 2026-11-13
-summary: "HD's texel decode is sRGB (wired) and the CPU encodes follow it; left: the adaptation's encode, Omega's decode (trial lowers both pairs)"
+updated: 2026-11-14
+summary: "HD's and Omega's texel decodes are sRGB (wired) and the CPU encodes follow; left: the adaptation's encode"
 difficulty: easy (60)
 ---
 
@@ -14,11 +14,8 @@ lane measured and did not ship:
 
 ## Open
 
-1. **Omega decodes its sRGB GNF texels with a `2.2` power.** Swapping `decode` to `srgb_decode` on
-   Omega's scene (`SceneStore::Computed` with `linear_out`) lowered both race pairs
-   (`omega/anulpha-pass` 33.00 to 31.95, `omega/vineta-k` 28.36 to 27.94). Needs a census of the
-   GNF channel type per bound unit (albedo `Srgb`, lightmap UNORM is documented) and a store or
-   override that says so.
+1. ~~Omega decodes its sRGB GNF texels with a `2.2` power~~ landed 2026-11-14 (`docs/rendering/hd-track-tone.md`,
+   "Omega's texels decode with the sRGB curve"): every Omega race pair's mean grey fell or held.
 2. **The adaptation's encode** in `hd_bloom.wesl` `fs_reduce_first` is the `2.2` power; the bytes the
    original averages are sRGB. Swapped: Anulpha mean grey 3.79 to 4.09 with its mean bias moving
    toward zero. Read the original's adapted value (`FunkLayer + 0x25c`) beside ours' on one frame
@@ -31,4 +28,3 @@ lane measured and did not ship:
 ## Next Steps
 
 1. Item 2: one RPCS3 pause with the PPU readback and the scene dump, then one shader line.
-2. Item 1: the census, then the override.
