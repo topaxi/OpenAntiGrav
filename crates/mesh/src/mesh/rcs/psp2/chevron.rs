@@ -83,21 +83,37 @@ impl Plan {
     }
 }
 
-/// The mask's and the wave's paths, `UVScale` and the entry's `(tint, second lane)`, when
-/// `material` is an alpha-lit chevron that authors `Colour`, or the centre lane.
-fn reads(material: &Material) -> Option<(&str, &str, f32, ([f32; 3], f32))> {
+/// What one admitted material reads: its mask's and wave's paths, `UVScale`, and its entry's
+/// tint and second lane.
+struct Reads<'m> {
+    mask: &'m str,
+    wave: &'m str,
+    scale: f32,
+    tint: [f32; 3],
+    combine: f32,
+}
+
+/// What `material` reads, when it is an alpha-lit chevron that authors `Colour`, or the centre
+/// lane.
+fn reads(material: &Material) -> Option<Reads<'_>> {
     let stem = super::refraction::file_stem(material).to_ascii_lowercase();
     let path = |hash| material.sampler(hash).filter(|p| !p.is_empty());
     let scale = *material.param(SCALE)?.first()?;
-    let (mask, combine) = if stem == "cf_centre_plasma_pulse" {
-        (path(NORMAL_EMISS_MASK)?, ([1.0; 3], PLASMA_COMBINE))
+    let (mask, tint, combine) = if stem == "cf_centre_plasma_pulse" {
+        (path(NORMAL_EMISS_MASK)?, [1.0; 3], PLASMA_COMBINE)
     } else if super::lit_alpha::admits(material) && stem.contains("chevron_pulse") {
         material.param(COLOUR).filter(|c| c.len() >= 3)?;
-        (path(EMISSIVE_SAMPLER)?, (HELD_COLOUR, LINEAGE_COMBINE))
+        (path(EMISSIVE_SAMPLER)?, HELD_COLOUR, LINEAGE_COMBINE)
     } else {
         return None;
     };
-    Some((mask, path(WAVE_SAMPLER)?, scale, combine))
+    Some(Reads {
+        mask,
+        wave: path(WAVE_SAMPLER)?,
+        scale,
+        tint,
+        combine,
+    })
 }
 
 /// Admits each chevron material whose two pictures decode, writing its glow-table entry into
@@ -114,7 +130,14 @@ pub(super) fn plan(
         std::collections::HashMap::new();
     for material in &decoded.materials {
         out.pulses.push(None);
-        let Some((emask_path, wave_path, scale, (tint, combine))) = reads(material) else {
+        let Some(Reads {
+            mask: emask_path,
+            wave: wave_path,
+            scale,
+            tint,
+            combine,
+        }) = reads(material)
+        else {
             continue;
         };
         let at = out.pulses.len() - 1;

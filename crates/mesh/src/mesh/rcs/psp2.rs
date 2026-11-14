@@ -1028,6 +1028,16 @@ fn build_planned(
     Ok((model, report))
 }
 
+/// The readings whose bindings ride beside a draw's picture.
+type Plans<'a> = (
+    &'a glow::Plan,
+    &'a twin_blend::Plan,
+    &'a normal_map::Plan,
+    &'a emissive_add::Plan,
+    &'a tarmac::Plan,
+    &'a chevron::Plan,
+);
+
 /// Binds each draw to its own submesh's material's texture.
 ///
 /// **One decode per distinct material, not per draw.** Altima's circuit has
@@ -1038,14 +1048,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac, chevron): (
-        &glow::Plan,
-        &twin_blend::Plan,
-        &normal_map::Plan,
-        &emissive_add::Plan,
-        &tarmac::Plan,
-        &chevron::Plan,
-    ),
+    (glow, twin, normals, emissive_add, tarmac, chevron): Plans<'_>,
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
