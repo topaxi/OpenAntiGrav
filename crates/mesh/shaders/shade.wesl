@@ -1587,7 +1587,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.5 * clock),
         );
-        return vec4<f32>(core_tap.rgb * in.colour.rgb, min(core_tap.a * in.sun_mask, 1.0));
+        // **The colour tap is sRGB-decoded on fetch on HD's race target**: the blast's
+        // core draw binds unit 0 with gamma nibble 7 (`0x60710101`), the alpha raw
+        // (docs/rendering/hd-unlit-programs.md, "The weapon units, read live").
+        let core_rgb = mix(core_tap.rgb, decode(core_tap.rgb), encoded_out * linear_out);
+        return vec4<f32>(core_rgb * in.colour.rgb, min(core_tap.a * in.sun_mask, 1.0));
     }
     if missile_rays {
         let rays_tap = textureSample(albedo, albedo_sampler, vec2<f32>(in.texcoord.x, clock));
@@ -1595,7 +1599,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let rays_rim_5 = rays_rim * rays_rim * rays_rim * rays_rim * rays_rim;
         let rays_base = clamp(0.9 - 0.9 * rays_rim_5, 0.0, 1.0);
         let rays_fade = rays_base * rays_base * rays_base * rays_base * rays_base;
-        return vec4<f32>(rays_fade * rays_tap.rgb, min(rays_tap.a, 1.0));
+        // Nibble 7 on both of its draws (`bloom` and `rays` share the program).
+        let rays_rgb = mix(rays_tap.rgb, decode(rays_tap.rgb), encoded_out * linear_out);
+        return vec4<f32>(rays_fade * rays_rgb, min(rays_tap.a, 1.0));
     }
     if missile_shock {
         let wave_n = textureSample(
@@ -1686,7 +1692,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         vec2<f32>(in.texcoord.x, in.texcoord.y + 0.0001 * scene.time.x),
     ).a;
     let rim_tap = in.texcoord + vec2<f32>(0.2 * rim_noise + 0.4 * scene.time.x);
-    let rim_c = textureSample(albedo, albedo_sampler, rim_tap).rgb;
+    // **The colour tap is sRGB-decoded on fetch on HD's race target** for both rim
+    // programs: the LeachBall's (and the Missile head's) and the Plasma head's unit 0
+    // read gamma nibble 7 (`0x60710101`); the noise tap's alpha is raw
+    // (docs/rendering/hd-unlit-programs.md, "The weapon units, read live").
+    let rim_texel = textureSample(albedo, albedo_sampler, rim_tap).rgb;
+    let rim_c = mix(rim_texel, decode(rim_texel), encoded_out * linear_out);
     let rim_angle = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
     // `LG2`/`MUL 5`/`EX2` in the program: `rim^5`, multiplied out so `0^5` is
     // `0` rather than whatever `pow(0, 5)` answers on a given backend.

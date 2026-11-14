@@ -137,6 +137,41 @@ fn a_missile_that_reaches_a_craft_draws_its_explosion() {
     );
 }
 
+/// Mean saturation `(max - min) / max` of the frame, in percent.
+fn saturation(frame: &[[u8; 3]]) -> f64 {
+    let total: f64 = frame
+        .iter()
+        .map(|p| {
+            let (hi, lo) = (
+                p.iter().max().copied().unwrap(),
+                p.iter().min().copied().unwrap(),
+            );
+            f64::from(hi - lo) / f64::from(hi.max(1))
+        })
+        .sum();
+    100.0 * total / frame.len() as f64
+}
+
+/// The core and the rays read their colour tap decoded on fetch, the shockwave ring raw.
+///
+/// Unit 0's gamma nibble on a live blast, two shots (`docs/rendering/hd-unlit-programs.md`,
+/// "The weapon units, read live"): core and rays 7, ring 0. At 0.2 s from the chase camera the
+/// frame's mean saturation is 15.5 % decoded and 8.8 % with the core and rays raw (pale cream
+/// where the original's is saturated orange).
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_explosions_core_and_rays_read_their_taps_decoded() {
+    let Some(frame) = frame_of(302) else {
+        return;
+    };
+    let saturation = saturation(&frame);
+    println!("mean saturation at 0.2 s: {saturation:.2} %");
+    assert!(
+        saturation > 12.0,
+        "the core and rays read their colour taps raw: {saturation:.2} %"
+    );
+}
+
 /// Where the blast is on Talon's Junction in the scenario above, and a camera looking at
 /// it from 130 units along +z and 60 above: `eye,forward,up` for `--camera-pose`.
 fn side_camera() -> String {

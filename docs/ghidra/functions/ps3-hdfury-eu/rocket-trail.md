@@ -235,7 +235,10 @@ race `time * 0.3` is long past 1, so the picture is `Texture2` alone. The
 second dump read entry 10's vector as `(0.8, 0.8, 0.8, 1)` live. The program
 has no transfer function, so this renderer adds the texture undecoded, as it
 does for HD's engine tube and magstrip wake; decoded, the smoke read grey
-against the film's white.
+against the film's white. **Reversed 2026-11-14 (`hd-weapon-taps`)**: both of the smoke's units carry
+gamma nibble 7 on two live shots, and that film was taken before `Write Color Buffers` was on
+(too bright by about 1.74x), so the texel is now decoded on fetch on HD's encoded store
+([hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), "The weapon units, read live").
 Confidence 80 (the slot table is
 [renderer.md](renderer.md)'s "The engine's own parameter table").
 
