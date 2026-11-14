@@ -1677,9 +1677,8 @@ see [hd-status.md](../formats/hd-status.md#the-roster-is-declared-and-under-hds-
 
 What this does **not** touch is the per-team paint: each `PI_Team` declares six
 `PI_TeamModel` variants (`normal`, `SKIN1`, `SKIN2`, `chrome`, `zone`,
-`detonator`) naming a `texturelocation`, and nothing collects or draws them -
-the same gap the Pulse roadmap item above records. Nor is `Unlock` read on any
-title, so everything declared is offered.
+`detonator`) naming a `texturelocation`. (Since 2026-11-14 the skins are raced,
+each gated by its own `<Unlock>`: [race-setup.md](../formats/race-setup.md#hd-era-model-unlocks).)
 
 #### Textures land, the same day
 

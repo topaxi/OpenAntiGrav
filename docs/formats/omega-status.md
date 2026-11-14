@@ -363,13 +363,15 @@ have no ship or no handling stats").
 
 **What opens.** `oag_omega::race::TEAM_VARIANTS`: the twelve HD-era teams, `""`, `_c1`, `_n1` joined as a suffix, labelled with the
 models' own names (`Normal`, `Concept`, `Nitro`; **measured**: `normal` is at `hdships\<Team>`, `concept1` at `<Team>_c1` and
-`nitro` at `<Team>_n1`). That is three open cells per team, in the rows `nitro`, `concept1` and `normal`; the other six are padlocks (two
-`<Unlock>`-gated skins, `chrome`, `chrome_c1`, and the two PSVR models, which this build never offers),
-by `Team::hex_cells`' existing rule. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
+`nitro` at `<Team>_n1`). Since 2026-11-14 the rows open by each model's own `<Unlock>` (HD's rule and rows, ported:
+[race-setup.md](race-setup.md#hd-era-model-unlocks)): a fresh profile opens `concept1` and `normal`, loyalty and
+campaign golds open `nitro`, `SKIN1`, `SKIN2`, `chrome` and `chrome_c1`, each racing its own livery folder; the
+two PSVR models stay padlocks (no directory of the variant table), by `Team::hex_cells`. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
 now resolves every combined id's hull, `.rcsmodel` and tuning (24 more than before) and holds Feisar's
 ratings. `Tigron_x` and `Tigron` carry no `_c1`/`_n1` directory (their models all name one folder), so they sit outside the table
 and `Team::own_directory_variant` gives their screen the one row their own directory is: of the models sharing it
-(none is `<Unlock>`-gated) the one named `normal` opens (`Team::model_for_directory`; the first in file order was `chrome_c1`
+(none is `<Unlock>`-gated) the one named `normal` opens, and since 2026-11-14 their three skins
+(`SKIN1`, `SKIN2`, `chrome`, in their own livery folders) open beside it (`Team::model_for_directory`; the first in file order was `chrome_c1`
 with the wrong ratings), `Tigron_x` rated 10/7.5/7/7 and `Tigron` (the disc's "VanUber") 8.5/9/10/6.5 (pinned in the ground
 truth; walked 2026-10-14, one open cell each). **Chosen, not
 measured**: `opponents_match_player_variant` is `false` (HD's `true` was read off HD's executable, Omega's `Ship_Construct` is unread)

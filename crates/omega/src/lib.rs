@@ -251,8 +251,8 @@ pub const TITLE: &Title = &Title {
         })
     },
     // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),
-    // read through its own `load_omega`; no grids file is read on its own and no
-    // unlock row is wired.
+    // read through its own `load_omega`; its grids are read on their own for the model rows
+    // (`model_unlocks`) only.
     main_menu: main_menu::MAIN_MENU,
     pause_menu: Some(pause_menu::PAUSE_MENU),
     campaign: &oag_title::Campaign {
@@ -265,7 +265,7 @@ pub const TITLE: &Title = &Title {
         circuit_unlocks: false,
         loyalty_unlocks: false,
         model_unlocks: Some(campaign::DEFINITION_ENTRY),
-        // Not wired, not measured absent: Omega's unlock rows are unread here.
+        // The `PI_TeamModel` rows are read (`model_unlocks`); the circuit and team rows are not.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
         screen_archive: None,

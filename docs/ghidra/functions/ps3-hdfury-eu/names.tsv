@@ -968,3 +968,5 @@
 0x00013098	function	PI_Cell_ReadSave	75	cell-medal-award.md
 0x001e1590	function	PI_Cell_ParseElement	90	cell-medal-award.md
 0x009201d8	data	PI_Cell_ModeNameTable	95	cell-medal-award.md
+0x00166210	function	Definition_ParseUnlock	80	model-unlock.md
+0x008ab8e0	data	Unlock_ConditionNameTable	75	model-unlock.md

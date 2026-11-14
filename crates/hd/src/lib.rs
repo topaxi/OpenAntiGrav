@@ -279,7 +279,7 @@ pub const TITLE: &Title = &Title {
         circuit_unlocks: false,
         loyalty_unlocks: false,
         model_unlocks: Some(campaign::DEFINITION_ENTRY),
-        // Not wired, not measured absent: HD's unlock rows are unread here.
+        // The `PI_TeamModel` rows are read (`model_unlocks`); the circuit and team rows are not.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
         screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
