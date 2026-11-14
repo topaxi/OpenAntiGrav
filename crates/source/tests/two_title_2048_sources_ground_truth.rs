@@ -1,10 +1,10 @@
 //! The Vita disc's 2048 craft and Omega's 2048-era craft are two sources
-//! Race Remix offers as two CRAFT TITLE entries when both are mounted. This
+//! a two-title race offers as two CRAFT TITLE entries when both are mounted. This
 //! reads all twenty craft from each and says where they differ.
 //!
 //! **`#[ignore]`d and never run in CI**: needs `data/extracted/vita/PCSF00007`
 //! and `data/extracted/ps4`. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-source --run-ignored all -E 'test(/^remix_2048_sources_ground_truth::/)' --no-capture`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-source --run-ignored all -E 'test(/^two_title_2048_sources_ground_truth::/)' --no-capture`.
 
 use oag_tables::handling;
 

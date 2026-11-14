@@ -124,7 +124,7 @@ pub fn offer(source: &str) -> Result<Offer> {
             classes
                 .names
                 .iter()
-                .filter(|name| !classes.remix_only.contains(name))
+                .filter(|name| !classes.union_only.contains(name))
                 .map(|name| (*name).to_string())
                 .collect()
         },

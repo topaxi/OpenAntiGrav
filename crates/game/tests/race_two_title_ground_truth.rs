@@ -1,4 +1,4 @@
-//! Race Remix: a track from one title, a craft from another - and the
+//! A two-title race: a track from one title, a craft from another - and the
 //! regression this must never become, a mixed load that silently drifts from
 //! today's single-title one.
 //!
@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!     --run-ignored all -E 'test(/^race_remix_ground_truth::/)'
+//!     --run-ignored all -E 'test(/^race_two_title_ground_truth::/)'
 //! ```
 //!
 //! Two properties, each its own test:
@@ -18,16 +18,16 @@
 //! 1. **No-op regression.** `craft_source: None` and `craft_source:
 //!    Some(<source>)` (the same path, spelled out) must load the same race -
 //!    same track geometry, same grid, same HUD - for every title that races
-//!    today. This is what makes `oag_source::remix::Remix::Single` a true no-op
+//!    today. This is what makes `oag_source::pair::SourcePair::Single` a true no-op
 //!    rather than an accidental behaviour change dressed as a refactor.
-//! 2. **A genuine remix.** Wipeout 2048's own circuit with Wipeout Pure's
+//! 2. **A genuine two-title race.** Wipeout 2048's own circuit with Wipeout Pure's
 //!    craft: the track loads off 2048, the grid and the HUD off Pure. This is
-//!    the spec's own example (see `race_remix_prompt.md`, not committed).
-//! 3. **The RACE REMIX menu page's own data source**, `remix::catalogue`,
+//!    the spec's own example (from the original brief, not committed).
+//! 3. **the two-title race page's own data source**, `title_lists::catalogue`,
 //!    independent of the menus themselves - which need a window this suite
 //!    cannot open.
 
-use oag_game::remix;
+use oag_game::title_lists;
 use oag_raceplay as race;
 use std::path::{Path, PathBuf};
 
@@ -70,7 +70,7 @@ fn shape(loaded: &race::Loaded) -> Shape {
 }
 
 /// **The no-op regression.** For every title that races today, naming its own
-/// source as `craft_source` too must change nothing - `oag_source::remix::Remix`
+/// source as `craft_source` too must change nothing - `oag_source::pair::SourcePair`
 /// falls back to `Single` whenever the two paths are equal, and this is the
 /// test that would fail if that fallback ever stopped being exact.
 #[test]
@@ -87,24 +87,24 @@ fn naming_the_same_source_as_craft_source_changes_nothing() {
             source: source.clone(),
             ..race::Options::default()
         });
-        let remixed = load(race::Options {
+        let paired = load(race::Options {
             source: source.clone(),
             craft_source: Some(source.clone()),
             ..race::Options::default()
         });
         assert_eq!(
             shape(&plain).track_triangles,
-            shape(&remixed).track_triangles,
+            shape(&paired).track_triangles,
             "{label}: naming craft_source as the same source moved the track"
         );
         assert_eq!(
             shape(&plain).grid,
-            shape(&remixed).grid,
+            shape(&paired).grid,
             "{label}: naming craft_source as the same source moved the grid"
         );
         assert_eq!(
             shape(&plain).hud_layout,
-            shape(&remixed).hud_layout,
+            shape(&paired).hud_layout,
             "{label}: naming craft_source as the same source moved the HUD"
         );
         assert!(
@@ -115,16 +115,16 @@ fn naming_the_same_source_as_craft_source_changes_nothing() {
             "{label}: a single-source race must not report a craft source"
         );
         assert!(
-            !remixed
+            !paired
                 .report
                 .iter()
                 .any(|line| line.starts_with("craft from")),
-            "{label}: craft_source equal to source is still not a remix"
+            "{label}: craft_source equal to source is still not a two-title race"
         );
     }
 }
 
-/// **A genuine remix**, and the spec's own example: a Wipeout 2048 circuit
+/// **A genuine two-title race**, and the spec's own example: a Wipeout 2048 circuit
 /// with a Wipeout Pure craft. The track is 2048's own Altima; the grid, the
 /// livery and the HUD are Pure's.
 #[test]
@@ -243,7 +243,7 @@ fn a_team_variant_races_on_both_join_shapes() {
 }
 
 /// **2048's own copy of Wipeout HD/Fury's roster races, standalone.** No
-/// Race Remix craft split here - `source` alone is 2048's package, exactly
+/// two-title craft split here - `source` alone is 2048's package, exactly
 /// what `--race --source <2048> --team Assegai_c1` does, which is the
 /// `oag_title::RaceDefaults::guest_roster` axis this build did not carry
 /// before: 2048 has one `ship_dir`/`handling_dir` pair, pointed at its own
@@ -277,12 +277,12 @@ fn a_guest_team_races_standalone_on_2048_without_a_craft_split() {
             .report
             .iter()
             .any(|line| line == "racing on Wipeout 2048"),
-        "expected 2048's own title in the report, not a Race Remix craft split; was {:#?}",
+        "expected 2048's own title in the report, not a two-title race craft split; was {:#?}",
         loaded.report
     );
 }
 
-/// `remix::catalogue` - the RACE REMIX page's own reader - offers HD's real
+/// `title_lists::catalogue` - the two-title race page's own reader - offers HD's real
 /// circuits and roster, independent of the menu machinery that calls it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -290,7 +290,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
     let Some(image) = image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let catalogue = remix::catalogue(&image.display().to_string())
+    let catalogue = title_lists::catalogue(&image.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", image.display()));
 
     assert!(!catalogue.tracks.is_empty(), "HD declares circuits");
@@ -325,7 +325,7 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
     // keyed by a track's plugin id (`01_Track`), so a direct
     // `strings.get(&track.id)` resolves nothing and every label fell back to
     // the raw id on this page until `crate::boot::load_circuit_names` was
-    // wired into `remix::catalogue` - see its own doc comment. Talon's
+    // wired into `title_lists::catalogue` - see its own doc comment. Talon's
     // Junction is this project's reference circuit and is always present.
     let talons_junction = catalogue
         .tracks
@@ -353,11 +353,11 @@ fn the_catalogue_offers_a_titles_real_tracks_and_roster() {
 }
 
 /// **The regression this test exists for**: picking Wipeout 2048 as TRACK
-/// TITLE in Race Remix showed no circuits at all. Root cause -
+/// TITLE in a two-title race showed no circuits at all. Root cause -
 /// `oag_title::Title::plugin_definition` is 2048's *team* plugin
 /// (`Data\Plugins\teams\Definition.xml`, by design: a race needs a roster
 /// before it needs a circuit list, see the field's own doc comment) and
-/// `remix::catalogue` read `PI_Track` nodes off that same file - which has
+/// `title_lists::catalogue` read `PI_Track` nodes off that same file - which has
 /// none, since 2048 splits into three plugin files where every other title
 /// ships one. Fixed by `oag_title::Title::track_plugin_definition`, `None`
 /// everywhere the two agree, `Some` naming 2048's own tracks plugin.
@@ -373,7 +373,7 @@ fn the_catalogue_offers_2048s_own_track_list() {
         println!("skipping: 2048 package not extracted under data/extracted/vita/");
         return;
     }
-    let catalogue = remix::catalogue(&source.display().to_string())
+    let catalogue = title_lists::catalogue(&source.display().to_string())
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
 
     // The ten circuits the base package ships - see

@@ -88,7 +88,7 @@ executables read the two counts, truncate and clamp them to `1..=3` and `1..=5`,
 craft that omits one three rockets and five mines; Pulse, Pure and HD author and read none
 ([weapon-counts.md](../ghidra/functions/ps4-omega-eu/weapon-counts.md)). Parsed to
 `handling::Stats::weapons`, spent by `oag_weapons::counts::WeaponCounts`
-(`remix_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`).
+(`two_title_2048_sources_ground_truth::rocket_and_mine_counts_per_craft`).
 
 ## What is decoded
 

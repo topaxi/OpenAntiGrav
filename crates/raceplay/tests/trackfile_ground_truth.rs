@@ -578,7 +578,7 @@ fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
 /// loop draws only its own art (a checker and its own sky), so it loads with its
 /// art on HD's own disc. Re-pointed at Pulse 03_Track's sky, it pins the Pulse
 /// disc: with HD's as the track source it is refused by name rather than drawn
-/// without it, and as a remix (Pulse track source, HD craft, what the game's
+/// without it, and as a two-title race (Pulse track source, HD craft, what the game's
 /// launches arrange) it loads with nothing missed. The oval, offered on Pulse
 /// alone (`titles`), is refused on HD. Drop the host check, the titles filter,
 /// the own sky, or route the track side through the craft's disc, and one part
@@ -659,11 +659,12 @@ fn a_track_file_loads_on_the_disc_it_borrows_from_and_where_its_author_offers_it
     for needle in [
         "borrows its art from the Wipeout Pulse disc",
         "track source is Wipeout HD",
-        "Race Remix",
+        "a two-title race",
     ] {
         assert!(why.contains(needle), "refusal lacks {needle:?}: {why}");
     }
-    let loaded = race::load(&options(&pulse, Some(&hd), &pinned_path)).expect("the remix loads");
+    let loaded =
+        race::load(&options(&pulse, Some(&hd), &pinned_path)).expect("the two-title race loads");
     let report = loaded.report.join("\n");
     for needle in [
         "track file borrows from wipeout-pulse's disc; the track source is Wipeout Pulse",

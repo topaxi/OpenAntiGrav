@@ -198,7 +198,7 @@ fn settle_keeps_a_value_the_list_still_offers() {
     assert_eq!(stored, "Wipeout Pure");
 }
 
-/// **The fresh-settings-file case.** `settings::Remix` defaults every field
+/// **The fresh-settings-file case.** a two-title race page's settings default every field
 /// to empty, `Menu::supply` draws index 0 for it, and the setting has to
 /// follow or START races nothing at all.
 #[test]
@@ -236,8 +236,8 @@ fn settle_clears_against_an_empty_list() {
     assert_eq!(stored, "");
 }
 
-/// RACE REMIX's speed-class row, over the *real* title packages rather than a
-/// shaped fixture - the composition `Session::remix_speed_classes` performs,
+/// A two-title race page's speed-class row, over the *real* title packages rather than a
+/// shaped fixture - the composition the SPEED CLASS union row performs,
 /// with the survey list supplied directly so no disc has to be present.
 fn union_over(titles: &[&'static oag_title::Title]) -> Vec<&'static str> {
     let ladders = titles.iter().filter_map(|title| title.race.speed_classes);
@@ -299,7 +299,7 @@ fn an_unread_ladder_adds_nothing_to_the_union() {
     assert!(union_over(&[oag_omega::TITLE]).is_empty());
 }
 
-/// RACE REMIX offers **every class any mounted title authors**: Pure's
+/// A two-title race page offers **every class any mounted title authors**: Pure's
 /// `VECTOR` first, 2048's `SUPERPHANTOM` last, in whichever order the survey
 /// lists them, and the ordinary page of each stays at four.
 #[test]
@@ -487,7 +487,7 @@ fn each_2048_entry_reads_its_own_sources_craft() {
     );
 }
 
-/// RACE REMIX's TEAM row hides a team whose files do not author the chosen
+/// A two-title race page's TEAM row hides a team whose files do not author the chosen
 /// class (chosen, not measured), over 2048's real roster: the five native
 /// teams author `SUPERPHANTOM`, the twelve HD-derived ones do not; no team of
 /// 2048 authors `VECTOR`.
@@ -497,7 +497,7 @@ fn super_phantom_hides_the_hd_teams_and_vector_hides_every_2048_team() {
     let Some(vita) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    let catalogue = oag_game::remix::catalogue(&vita.display().to_string()).expect("opens");
+    let catalogue = oag_game::title_lists::catalogue(&vita.display().to_string()).expect("opens");
     let race = &oag_2048::TITLE.race;
     let races = |class: &str| -> Vec<String> {
         catalogue

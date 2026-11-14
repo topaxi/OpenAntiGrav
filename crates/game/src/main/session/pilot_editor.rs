@@ -4,7 +4,7 @@
 //! Split into its own file rather than folded into [`super::menus`], which is
 //! close enough to this project's 1,000-line ceiling
 //! (`scripts/check-file-size.py`) that a feature this size landing there
-//! would have pushed it over. The seam is the same one [`super::remix_menu`]
+//! would have pushed it over. The seam is the same one [`super::queries`]
 //! already draws: pure per-feature logic here, called from one line in
 //! [`super::menus::Session::open_menus`] and a couple of match arms in
 //! [`super::apply`]/[`super::menus`].

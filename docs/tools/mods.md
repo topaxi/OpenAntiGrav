@@ -343,7 +343,7 @@ track = "Vostok"
 - **Restart.** The table seeds the menu's rows when the menu opens, so a pick survives a restart.
 - **Settled.** When the menu opens and when a pick changes, a row's saved value that its list
   no longer offers becomes the value the row shows (its `default` while nothing is saved), and
-  a changed pick re-lists the queries that read it, down the chain (`oag_game::remix::settle_queries`,
+  a changed pick re-lists the queries that read it, down the chain (`oag_game::title_lists::settle_queries`,
   `crates/game/tests/query_resolve_ground_truth.rs`). A row with an empty list keeps its saved
   value. So what a launch reads is what the page shows.
 

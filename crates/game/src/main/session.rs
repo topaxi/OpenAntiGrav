@@ -88,8 +88,7 @@ mod pause_menu;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
-// unaliased above, and a sibling module of the same name would shadow it,
-// the same reason `remix_menu` below is not called `remix`.
+// unaliased above, and a sibling module of the same name would shadow it.
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
 #[path = "session/custom_tracks.rs"]
@@ -139,11 +138,8 @@ mod wallpaper;
 mod tournament;
 #[path = "session/stutter.rs"]
 mod stutter;
-// Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
-// unaliased throughout `session::menus`, and a sibling module of the same
-// name would shadow it at every one of those call sites.
-#[path = "session/remix.rs"]
-mod remix_menu;
+#[path = "session/queries.rs"]
+mod queries;
 
 /// Everything that only exists once there is a window.
 pub(crate) struct Session {
@@ -473,7 +469,7 @@ pub(crate) struct Session {
     pub(crate) race_options: Option<race::Options>,
     /// The track the command line named (`--ballisticng-track`/`--track-file`), which
     /// every launch that does not pick its own sets on `race_options`; a CUSTOM
-    /// remix sets its file there instead, and RACE AGAIN keeps whatever was
+    /// a two-title race sets its file there instead, and RACE AGAIN keeps whatever was
     /// raced. See [`Session::inherit_cli_foreign_track`].
     pub(crate) cli_foreign_track: Option<std::path::PathBuf>,
     /// What the command line decided, until a pick turns it into a boot.
@@ -633,7 +629,7 @@ pub(crate) struct Session {
     /// which happens once per windowed boot, not per frame. See
     /// `oag_game::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<oag_game::launcher::Candidate>,
-    /// RACE REMIX's CUSTOM tracks. See [`oag_game::custom_tracks`].
+    /// A two-title race page's CUSTOM tracks. See [`oag_game::custom_tracks`].
     pub(crate) custom_tracks: oag_game::custom_tracks::Scan,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///
@@ -1039,7 +1035,7 @@ pub(crate) struct Shell {
     /// `boot::Shell::title`, not re-derived. Lets the RACE page's own
     /// VARIANT row ask this title's own
     /// [`oag_title::RaceDefaults::team_variants`] for whichever team
-    /// `race.team` names, the same question RACE REMIX's craft-side VARIANT
+    /// `race.team` names, the same question a two-title race page's craft-side VARIANT
     /// row asks of a *picked* title instead of the booted one.
     pub(crate) title: &'static oag_title::Title,
     /// Which console this source is for, carried the same way `title` is -

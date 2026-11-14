@@ -830,7 +830,7 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
 }
 
 /// This build's tiles are on the grid, after the authored six, and ask for this build's own pages.
-/// A mod's tile under RACEBOX (REMIX) depends on the mods found, and is
+/// A mod's tile under RACEBOX (a mod's two-title page) depends on the mods found, and is
 /// `boot::tests::a_mods_row_under_racebox_is_a_tile_between_them`'s.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]

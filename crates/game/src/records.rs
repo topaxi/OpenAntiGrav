@@ -232,7 +232,7 @@ pub struct Observation {
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
     /// `None` for a race launched any other way (the ordinary RACE page,
-    /// RACE REMIX, `--race`), since none of those set `RaceStage::campaign_cell`
+    /// a two-title race page, `--race`), since none of those set `RaceStage::campaign_cell`
     /// at all. See the module doc's "where a career system attaches" section.
     pub campaign_medal: Option<Medal>,
     /// **Wipeout HD/Fury only.** The rung [`Self::campaign_medal`] was

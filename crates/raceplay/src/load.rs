@@ -65,7 +65,7 @@ pub use campaign::load_event;
 use environment::cloud_layer;
 #[cfg(feature = "view")]
 pub use environment::{authored_light, hd_bloom_params};
-use oag_source::remix::craft_of;
+use oag_source::pair::craft_of;
 
 /// A disc circuit as a track in this project's own format, opened the way
 /// [`load`] opens its source. **Local use only**: the result is disc content.
@@ -79,8 +79,8 @@ pub fn export_track(options: &Options) -> Result<oag_trackfile::Track> {
         &options.dlc,
         &oag_source::cache::default_dlc_cache_dir(),
     );
-    let remix = oag_source::remix::Remix::open(&options.source, None, packs, pure_packs)?;
-    let (opened, _, title, _) = remix.into_parts();
+    let pair = oag_source::pair::SourcePair::open(&options.source, None, packs, pure_packs)?;
+    let (opened, _, title, _) = pair.into_parts();
     let mut archives = opened.archives.memoising_reads();
     track_inputs::export(options, &mut archives, title)
 }
@@ -111,20 +111,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     // **Opened as whichever title the source turned out to be**, the way the boot
     // path does, so `--race` and the menus' `Launch Game` reach every title.
-    // **Two sources when `craft_source` names a Race Remix** - see
-    // `oag_source::remix::Remix`. `archives`/`title` stay the track's; a
+    // **Two sources when `craft_source` names a second title** - see
+    // `oag_source::pair::SourcePair`. `archives`/`title` stay the track's; a
     // craft-governed load reads `craft_title` and `craft_of(&mut craft, &mut archives)` instead.
-    let remix = if options.server_source {
-        oag_source::remix::Remix::open_server(&options.source, packs, pure_packs)?
+    let pair = if options.server_source {
+        oag_source::pair::SourcePair::open_server(&options.source, packs, pure_packs)?
     } else {
-        oag_source::remix::Remix::open(
+        oag_source::pair::SourcePair::open(
             &options.source,
             options.craft_source.as_deref(),
             packs,
             pure_packs,
         )?
     };
-    let (opened, craft_opened, title, craft_title) = remix.into_parts();
+    let (opened, craft_opened, title, craft_title) = pair.into_parts();
     let mut archives = opened.archives.memoising_reads();
     let mut craft = craft_opened.map(|opened| opened.archives.memoising_reads());
     report.push(format!("racing on {}", title.name));

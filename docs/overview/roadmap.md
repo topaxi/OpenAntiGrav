@@ -1719,9 +1719,9 @@ Wipeout 2048's own Altima circuit races with Wipeout Pure's craft, HUD and
 grid roster - the feature's own request, verified end to end: the load
 report names both titles (`racing on Wipeout 2048`, `craft from Wipeout
 Pure`), the grid wears Pure's roster and the HUD entry is Pure's own
-`TimeTrial_HUD.xml`. `race::Options.craft_source` and `crate::remix::Remix`
-(`crates/game/src/remix.rs`) are the backend: `None`/omitted is
-byte-identical to an ordinary race, proven by `race_remix_ground_truth.rs`
+`TimeTrial_HUD.xml`. `race::Options.craft_source` and `oag_source::pair::SourcePair`
+(`crates/source/src/pair.rs`) are the backend: `None`/omitted is
+byte-identical to an ordinary race, proven by `race_two_title_ground_truth.rs`
 loading every combination twice, once plain and once naming its own source
 as `craft_source`, and diffing the result.
 

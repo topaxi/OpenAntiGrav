@@ -25,7 +25,7 @@ struct Expect {
 
 fn demos_on(image: &Path, demos: u32) -> Vec<chain::Report> {
     let source = image.display().to_string();
-    let catalogue = oag_game::remix::catalogue(&source).expect("the title's roster");
+    let catalogue = oag_game::title_lists::catalogue(&source).expect("the title's roster");
     let options = oag_raceplay::Options {
         source,
         ..oag_raceplay::Options::default()
@@ -284,7 +284,7 @@ fn the_authored_demo_config_of_2048_and_omega_sets_their_timing_and_circuit() {
             30 * 60,
             "{source}: the authored 30 s, not the inherited 60"
         );
-        let catalogue = oag_game::remix::catalogue(&source).expect("the roster");
+        let catalogue = oag_game::title_lists::catalogue(&source).expect("the roster");
         let options = oag_raceplay::Options {
             source,
             ..oag_raceplay::Options::default()

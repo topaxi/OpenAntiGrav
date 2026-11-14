@@ -184,7 +184,7 @@ impl Session {
     /// Races the same 2048 event again, the way the map's own tap did: the
     /// event's name is handed to the loader and the race is launched through
     /// the one path every launch uses. A race that was not an event (the RACE
-    /// page, REMIX) relaunches on the options it ran with.
+    /// page, a mod's race page) relaunches on the options it ran with.
     fn restart_event(&mut self) {
         if let Stage::Race(stage) = &self.stage {
             self.pending_event = stage.campaign_2048_event.as_ref().map(|p| p.name.clone());

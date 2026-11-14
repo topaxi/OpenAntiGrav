@@ -429,7 +429,7 @@ impl Session {
         cell: &oag_tables::race_campaign::Cell,
         // A cross-disc mod campaign event's circuits (ADR-0077), in place of
         // this source's.
-        other_disc: Option<&oag_game::remix::Catalogue>,
+        other_disc: Option<&oag_game::title_lists::Catalogue>,
         // A mod campaign event's own track file, which is its only circuit.
         track_file: Option<&oag_game::campaign::custom::TrackFile>,
     ) -> Option<Result<oag_game::campaign::launch::CellPlan, Refusal>> {
@@ -790,7 +790,7 @@ pub(super) fn fedata_spec(source: &str) -> String {
 /// A mod campaign event's extras, checked against what this machine has.
 pub(super) struct Extras {
     /// The other disc's source and circuits, for a cross-disc event.
-    other_disc: Option<(String, oag_game::remix::Catalogue)>,
+    other_disc: Option<(String, oag_game::title_lists::Catalogue)>,
     /// The preset team, by the id this source spells it with.
     team: Option<String>,
     /// The opponents' teams, grid slot 1 first.
@@ -855,7 +855,7 @@ impl Session {
                         )
                     })
                     .ok_or_else(|| format!("the circuit is on {slug}, and no disc of it is here"))?;
-                let catalogue = oag_game::remix::catalogue(&candidate.source)
+                let catalogue = oag_game::title_lists::catalogue(&candidate.source)
                     .map_err(|e| format!("{slug}: {e:#}"))?;
                 Some((candidate.source.clone(), catalogue))
             }

@@ -41,7 +41,7 @@ pub(super) fn resolve_team(
 /// regardless of title is one of the two ways this same grid went uniform on
 /// an HD source: HD names its game plugin where the PSP titles number it, so
 /// the read missed. See [`oag_title::Title::plugin_definition`]. This is
-/// craft content - a Race Remix passes `craft_title`'s archives here, not the
+/// craft content - a two-title race passes `craft_title`'s archives here, not the
 /// track's.
 ///
 /// **The other way was `fexml::expand` rather than `fexml::text`**, and it is
@@ -233,7 +233,7 @@ pub(super) fn own_cockpit(
 #[cfg(feature = "view")]
 /// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
 /// takes. The craft's source, not the track's: the shell is loaded from the
-/// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
+/// craft's archives (`livery::shield::shell`), so a two-title race with a PSP craft
 /// on a PS2 circuit must still tint.
 pub(super) fn shield_palette(
     options: &crate::Options,

@@ -320,7 +320,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_y: 20.0,
     title_scale: 0.97,
     // **Now checked, both pressings**: `Skin.xml`'s own `Main Menu` screen
-    // (the same root screen `Race Campaign`/`Racebox`/`Remix`/... draws under)
+    // (the same root screen `Race Campaign`/`Racebox`/... draws under)
     // authors `idstring="Main Menu" font="Title" x="FEGlobals->TitleXOffset"
     // y="FEGlobals->TitleYOffset" scale="FEGlobals->TitleScale"
     // color="FEGlobals->TitleColor"` - the same role/offset/scale/color

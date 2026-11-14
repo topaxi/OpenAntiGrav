@@ -330,7 +330,7 @@ impl Definition {
     }
 
     /// [`Self::parse`] without the reachability check: the tree this project
-    /// ships holds pages (REMIX, RECORDS) that only a mod's row opens, so it is
+    /// ships holds pages (RECORDS) that only a mod's row opens, so it is
     /// whole only once [`Self::build`] has merged the extras in.
     ///
     /// # Errors
@@ -998,10 +998,10 @@ impl Definition {
     /// and the cursor all agree.
     ///
     /// A title with no such screens - Pure, 2048 today - keeps all
-    /// three, and START launches off the rows as before. RACE REMIX and
-    /// RECORDS keep their own `race.track`/`remix.*` rows either way: the
-    /// first mixes titles and the second browses records, neither of which
-    /// the selection screens do.
+    /// three, and START launches off the rows as before. A mod's
+    /// two-title race page and RECORDS keep their own rows (`mod.<id>.*`) either
+    /// way: the first mixes titles and the second browses records, neither of
+    /// which the selection screens do.
     pub fn drop_rows_picked_on_screen(&mut self, title: &oag_title::Title) {
         // The KILLS and WEAPONS rows offer the lists of the race box's
         // `Single Player` screen, which only a title with a

@@ -1,4 +1,4 @@
-//! RACE REMIX's CUSTOM track title: the tracks a player has put in the
+//! A two-title race page's CUSTOM track title: the tracks a player has put in the
 //! directories `--ballisticng-track` searches, offered on the TRACK row.
 //!
 //! The list is the one [`oag_source::tracks::all_in`] gives the command line,
@@ -10,7 +10,7 @@
 //!
 //! **The survey is lazy** (eager, it was 22% of the profile samples in a race). Finding the files is a directory read
 //! and happens at start-up, because it decides whether CUSTOM is offered at all.
-//! Reading them ([`Scan::begin`]) starts only when RACE REMIX's CUSTOM title is
+//! Reading them ([`Scan::begin`]) starts only when a two-title race page's CUSTOM title is
 //! first on screen, never while a race is running, and its results are cached
 //! on disk by path and modification time ([`cache`]), so a file that has not
 //! changed is not decoded twice across runs.
@@ -253,7 +253,7 @@ fn stem(path: &Path) -> String {
 /// The most characters a row's value holds before it runs into the label beside
 /// it on Pulse and Pure (1280 wide, about 29). Wipeout HD draws values in boxes
 /// about 20 characters wide, and a longer one runs past the box's right edge over
-/// nothing; the text stays whole and readable (measured in `--menu-page remix`).
+/// nothing; the text stays whole and readable (measured in `--menu-page oag.remix/remix`).
 const ROW_WIDTH: usize = 28;
 
 /// The row: name, author when the file names one, and which format it is. The
@@ -274,7 +274,7 @@ fn label(listing: &Listing) -> String {
     format!("{name}{tail}")
 }
 
-/// What racing the file at `path` sets on the options a remix is built from:
+/// What racing the file at `path` sets on the options a two-title race is built from:
 /// exactly what `--ballisticng-track` and `--track-file` set (`Pending::race_options`),
 /// and clears what an earlier launch left (a disc circuit's name, a second
 /// source for the craft), so that both routes reach the same race.
@@ -331,8 +331,8 @@ pub fn not_offered(listing: &Listing, craft: Option<&oag_title::Title>) -> Optio
     Some(format!("offered on {} only", names.join(", ")))
 }
 
-/// Makes a launch of a track file that borrows from another title's disc a Race
-/// Remix (ADR-0076 decision 13): the host's disc becomes the track source and
+/// Makes a launch of a track file that borrows from another title's disc a
+/// two-title race (ADR-0076 decision 13): the host's disc becomes the track source and
 /// the launch's own source the craft's (unless a craft source is already set).
 /// A track that borrows nothing, a Workshop track, or one already on its host's
 /// disc is left alone. `source_title` names the title of a source path;
@@ -372,7 +372,7 @@ pub fn route_to_host(
         .take()
         .unwrap_or_else(|| options.source.clone());
     let line = format!(
-        "{:?} borrows from the {} disc: racing it as a Race Remix, track from {}, craft from \
+        "{:?} borrows from the {} disc: racing it as a two-title race, track from {}, craft from \
          {craft}",
         track.title,
         disc.title(),

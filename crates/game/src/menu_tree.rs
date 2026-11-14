@@ -41,7 +41,7 @@ pub fn mods_menu(
     let mut definition = built.definition;
     let mut listing = built.listing;
     // Surveyed only when a campaign names another disc: the same survey
-    // Race Remix reads, by title slug.
+    // a two-title race reads, by title slug.
     let discs = std::cell::OnceCell::new();
     let has_disc = |slug: &str| {
         discs
