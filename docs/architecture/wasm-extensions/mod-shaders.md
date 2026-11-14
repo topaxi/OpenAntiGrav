@@ -66,10 +66,11 @@ ticks and is read as `param_x() + rate * input.between` is a tick behind the pic
 `camera_cut()` is true on every frame of such a tick, whatever the draw alpha, and false on the ticks
 either side: it is `Race::camera_cut`, the comparison the engine's own between-ticks blend skips on
 (`oag_raceplay::between_ticks`). A guest that must not show the far side early takes `0.0` for `between`
-when it holds, or skips the count that would: `oag.slipstream`'s `Flight::Through` never takes the value
-one past the last tick of its tunnel. `between` itself is left running because a particle's vertex
-stage moves by it too. The flag is the player's camera (`Race::camera_cuts` counts the player's slot),
-so a split screen's other seats report their own seat's cut only when it is also the player's.
+when it holds: `oag.slipstream`'s `fx/wormhole.wgsl` reads `param_phase() + select(input.between, 0.0,
+camera_cut())`, so its tick count runs through the exit (59 the last tick in the tunnel, 60 the exit tick)
+and the exit tick's frames show the far side from the first. `between` itself is left running because a particle's vertex
+stage moves by it too. The flag is the drawn seat's own cut (a respawn, a jump or a transit's exit),
+so each seat of a split screen reports its own.
 
 The cut is per seat: each view's `camera_cut()` is that seat's own (`Race::viewed_camera_cut`, a seat's craft placed anew), true for the other seats on no tick but their own.
 

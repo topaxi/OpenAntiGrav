@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-13
+updated: 2026-11-14
 summary: "Mod API friction left after names-by-key, held scalars, stop-mod-effect and state_bytes landed: a second fill, a picture age, a cut flag."
 kind: debt
 size: S (50)
@@ -49,8 +49,9 @@ Landed with this thread, small and not in doubt:
    after the request stops, with its age readable, would let a shader fade it. Size S (30).
    Declined for now, as above.
 3. ~~A shader is not told a frame is a cut.~~ Landed: `camera_cut()` in the shader prelude (the flag, not
-   `between` forced to 0, which would move mod particles and the wormhole's count). Open follow-up: `oag.slipstream`'s
-   `Flight::Through` workaround can use it; a picture-checked change to a shipped mod, own lane. Size XS (60).
+   `between` forced to 0, which would move mod particles and the wormhole's count). `oag.slipstream` uses it (branch `slip-cut`):
+   its tick count no longer skips the exit tick (59, then 60 where it used to be 61), and the `ticks - 1`
+   in its field-of-view curve and the shader's `transit + 2` convention are gone.
 4. **`hud-icon` and `pickup-look` naming an icon the manifest lacks draw nothing and fault
    nothing**, where `raise-warning` faults the module naming it. Their documented behaviour is
    to draw nothing, so it was left; faulting is one arm in `named()` of
