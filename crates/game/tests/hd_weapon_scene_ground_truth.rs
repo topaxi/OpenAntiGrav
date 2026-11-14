@@ -161,6 +161,38 @@ fn a_rockets_body_is_lit_not_flat_black() {
     );
 }
 
+/// A rocket's smoke ribbon reads its two colour taps decoded on fetch.
+///
+/// Unit 0 and unit 1 of the ribbon's draws carry gamma nibble 7 on two live shots
+/// (`docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"), and the
+/// packer then encodes the product, so a pale smoke stores darker and bluer than the
+/// raw tap did. The chase camera at tick 324, the ribbon in the 160 x 140 box ahead of
+/// the nose at (400, 170): the box's summed mean channels are 472 decoded and 494 raw.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_rockets_smoke_reads_its_colour_taps_decoded() {
+    let Some(frame) = frame_of("rocket", 324, None) else {
+        return;
+    };
+    let mut sum = 0u64;
+    let mut pixels = 0u64;
+    for y in 170..310 {
+        for x in 400..560 {
+            sum += frame[y * SIZE.0 + x]
+                .into_iter()
+                .map(u64::from)
+                .sum::<u64>();
+            pixels += 1;
+        }
+    }
+    let mean = sum as f64 / pixels as f64;
+    println!("summed mean channels in the smoke's box: {mean:.1}");
+    assert!(
+        mean < 483.0,
+        "the smoke reads its colour taps raw, as the console does not: {mean:.1}"
+    );
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_laid_bombs_body_is_lit_by_the_circuits_rig() {

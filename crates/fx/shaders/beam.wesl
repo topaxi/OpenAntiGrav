@@ -6,7 +6,7 @@
 
 import oag_shaders::colour::srgb_decode_channel;
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
-import oag_shaders::target::{linear_out, gamma_to_target, target_out};
+import oag_shaders::target::{decode, encoded_out, linear_out, gamma_to_target, target_out};
 
 // What the ribbon stamps into the glow mask - `beam::GLOW_MASK`, the stencil
 // reference `LeachBeam_SubmitStrip` writes with `REPLACE`.
@@ -138,7 +138,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let facing = saturate(max(min(abs(facing_dot), 0.32), 0.0) * 3.12433);
         let depth_fade = saturate(in.clip.z * 0.75);
         let coverage = saturate(14.0 * texel.a * facing * in.colour.a) * depth_fade;
-        return vec4<f32>(target_out(decoded), coverage);
+        // **Both of the smoke's colour taps are sRGB-decoded on fetch on HD's encoded
+        // store**: units 0 and 1 of the Rocket smoke's draws carry gamma nibble 7
+        // (`0x60710101`, alpha raw) on two live shots
+        // (docs/rendering/hd-unlit-programs.md, "The weapon units, read live"). The
+        // program applies no transfer function of its own, so the decode is the
+        // texel's alone and the vertex colour is not decoded; the packer then
+        // encodes the product. Gated on `encoded_out` so no other title moves.
+        let smoke_tap = mix(texel.rgb, decode(texel.rgb), encoded_out * linear_out);
+        return vec4<f32>(target_out(mix(decoded, smoke_tap * in.colour.rgb, encoded_out * linear_out)), coverage);
     }
     return vec4<f32>(target_out(decoded * weight), alpha);
 }

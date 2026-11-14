@@ -77,11 +77,12 @@ shockwave ring reads raw on the console too (nibble 0), so its white burn is the
 engine-trail.md, "The flame's colour tap is decoded on fetch" and "The trail's colour taps are decoded on fetch";
 hd-unlit-programs.md, "The Bomb's units, read live". **Read 2026-11-14 (`hd-weapon-taps`, hd-unlit-programs.md, "The weapon units, read live")**: the Missile
 blast's core and rays 7 (wired), its shockwave ring 0; the LeachBall and its ring 7 (ball wired, ring on the
-generic path); the Plasma head 7 (wired), halo 7, ring 0; the Rocket smoke 7 on both taps (**not wired**: an
-earlier film read the decoded smoke grey, no Rocket film exists on the host); the light cone was read live
-before (Amphiseum draws 724/730) and is decoded. **Still open**: the Plasma ring reads raw but ours' generic
-combine decodes it and no ours frame draws it through the edited branch (a probe moved one pixel); the Rocket
-smoke needs a pair with the decode on; the absorb shell's landing. Tools: `rpcs3-hd-whiteout.py --fire-state N
+authored path, decodes already); the Plasma head 7 (wired), sphere 7, halo 7, ring 0; the Rocket smoke 7 on both
+taps (wired; reverses `rocket-trail.md`'s WCB-off film note); the track light cone was read live before and is
+decoded. **Still open**: the Plasma ring reads raw but ours lights it through the authored path, so a raw ring
+needs its unlit clock-scroll program written whole (as `BOMB_SHOCK` is); a second Plasma explosion read; the
+absorb shell's landing; Omega's and 2048's sampler state (their programs are recooked GCN / Vita; "checked,
+applies, not wired" for the models they ship). Tools: `rpcs3-hd-whiteout.py --fire-state N
 --behind --want-mats DIR`, `rsx_fp_match.py` (attribute a dumped draw to the disc program it runs).
 
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
