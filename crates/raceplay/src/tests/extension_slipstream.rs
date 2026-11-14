@@ -508,10 +508,16 @@ fn the_tunnels_tick_count_never_skips_a_tick_through_the_exit() {
             _ => None,
         })
         .collect();
-    assert!(phases.len() > 60, "the tunnel is told its count: {phases:?}");
+    assert!(
+        phases.len() > 60,
+        "the tunnel is told its count: {phases:?}"
+    );
     for pair in phases.windows(2) {
         assert_eq!(pair[1] - pair[0], 1.0, "a tick skipped in {phases:?}");
     }
     assert_eq!(phases[0], 0.0, "the entrance tick");
-    assert_eq!(phases[60], 60.0, "the exit tick follows the last tunnel tick, 59");
+    assert_eq!(
+        phases[60], 60.0,
+        "the exit tick follows the last tunnel tick, 59"
+    );
 }
