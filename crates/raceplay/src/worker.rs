@@ -11,7 +11,7 @@
 //! is greyed out and offered for killing.
 //!
 //! So the load moves to a thread and the loading screen goes up over it, which
-//! is the same shape `crate::boot::MediaWorker` already has for the boot's own
+//! is the same shape `crate::boot::worker::MediaWorker` already has for the boot's own
 //! movies - deliberately, because the two waits are the same problem and a
 //! second mechanism for it would be a second thing to keep in step with the
 //! frame loop.
@@ -196,7 +196,7 @@ impl LoadWorker {
     ///
     /// **Never actually waits in the frame loop**, which only calls this once
     /// [`Self::is_finished`] is true - the same contract
-    /// `crate::boot::MediaWorker::join` has. `None` on the second call, and
+    /// `crate::boot::worker::MediaWorker::join` has. `None` on the second call, and
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
         let joined = self.task.join()?;

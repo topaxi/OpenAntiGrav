@@ -30,7 +30,7 @@ use crate::session::menus::combine_variant;
 ///
 /// **Split off from `main` because the boot is loaded differently here.** A
 /// window defers the movies onto a worker and covers the wait with the loading
-/// screen (`boot::MediaWorker`); none of these legs has anywhere to show that,
+/// screen (`boot::worker::MediaWorker`); none of these legs has anywhere to show that,
 /// and a capture must not race a worker for the frames it is about to draw, so
 /// every one of them takes the whole boot in one blocking `boot::load` exactly
 /// as the game always did. The body below is that former part of `main`,

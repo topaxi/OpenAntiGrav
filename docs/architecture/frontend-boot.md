@@ -87,7 +87,7 @@ first:
   table, the font, the sprite sheet. Hundredths of a second, and enough to
   build both the loading screen and the menus. Runs before the event loop.
 - `boot::load_media` - the intro, its ATRAC3+ track, the backdrop, Pure's
-  second reel. Runs on a `boot::MediaWorker` thread while the window is already
+  second reel. Runs on a `boot::worker::MediaWorker` thread while the window is already
   up and the wave is drawing.
 - `boot::assemble` - joins the two into a `boot::Boot`. It cannot run earlier:
   `Frontend::booting` needs the reels' frame counts.
@@ -98,8 +98,8 @@ them has anywhere to show a wait.
 
 The loading screen therefore now appears on **every** windowed boot rather than
 only under `--prefetch`, and **both of its waits are counted**. The media phase
-reports its own progress through `boot::MediaWorker::progress`, whose
-denominator is `boot::MediaPlan::loads` - two loads per named movie, its picture
+reports its own progress through `boot::worker::MediaWorker::progress`, whose
+denominator is `boot::worker::MediaPlan::loads` - two loads per named movie, its picture
 and its ATRAC3+ track, plus one for the backdrop, so Pulse's plan is five. The
 screen heads that `LOADING MOVIES`; `--prefetch`'s own wait, on the same screen,
 is headed `CONVERTING ASSETS`. `loading::Phase` is which of the two is being

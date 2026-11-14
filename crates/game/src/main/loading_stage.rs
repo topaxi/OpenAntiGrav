@@ -34,7 +34,7 @@ pub(crate) struct LoadingStage {
     pub(crate) shell: Option<boot::Shell>,
     /// The movies, still decoding. **What this screen is actually waiting for**
     /// on an ordinary boot - `--prefetch`, when it is on, is waited for as well.
-    pub(crate) media: Option<boot::MediaWorker>,
+    pub(crate) media: Option<boot::worker::MediaWorker>,
     /// The circuit, still being read. `Some` on the race path and `None` on the
     /// boot one, which is the whole of what tells the two apart.
     ///
@@ -108,7 +108,7 @@ impl LoadingStage {
     pub(crate) fn media_ready(&self) -> bool {
         self.media
             .as_ref()
-            .is_none_or(boot::MediaWorker::is_finished)
+            .is_none_or(boot::worker::MediaWorker::is_finished)
     }
 
     /// Whether the circuit has landed **and its scene is ready to draw**, on a

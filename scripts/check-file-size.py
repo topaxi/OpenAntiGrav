@@ -123,11 +123,6 @@ BASELINE = {
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
-    # Ratcheted down from 1,719 when `Options`/`impl Options` moved to
-    # `crates/game/src/boot/options.rs`, split out for the `platform` field
-    # the title+platform render-profile split (`crates/game/src/settings.rs`)
-    # needed on `Boot`/`Shell` - a move, with room left for it.
-    "crates/game/src/boot.rs": 1572,
     # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
     # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
     # prep for the `oag-ui` extraction, which cannot name a type that lives in
