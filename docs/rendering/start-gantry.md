@@ -2432,7 +2432,7 @@ shows no white board, so this is not the player's "transparent edges".
 | circuit | material | slots word | indices | UV rect |
 | --- | --- | --- | --- | --- |
 | amphiseum, modesto_heights, talons_junction, tech_de_ra | `billboarddiffuse` (lit) | `0x18` | 228 | 0..1 |
-| 02_track | `cf_vex_billboard` (lit, second texture `tv_glow.gtf`, not wired: no `ADD_SECOND`) | `0x18` | 6 | 0..1 |
+| 02_track | `cf_vex_billboard` (lit, second texture `tv_glow.gtf`; slots word `0x0d000118` since the Metropia wiring: `ADD_SECOND` and billboard entry 1) | `0x18` when surveyed, `0x0d000118` now | 6 | 0..1 |
 | 01_vineta_k, 05_ubermall | `sign_emissive_glow` | `0xd8` | 276 | -0.003..0.997 x 0.003..1.003 |
 | 03_track, 12_sol_2, 15_anulpha_pass | `sign_emissive_glow` | `0xd8` | 276 | 0..1 |
 | 04_chenghou_project, 10_sebenco_climb | `sign_emissive_glow` | `0xd8` | 6 | 0..1 |
@@ -2466,8 +2466,10 @@ for Omega, whose `billboard8` the shared lineage would put on the same quads; 20
 
 **Open.** (1) `billboarddiffuse` and `cf_vex_billboard` have no specular chain, but the stand-in `32` still applies to every
 lit HD material whose program resolves none: switching it off for all of them (`no_specular` without `colour_factor`) moved
-`10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) `tv_glow.gtf`
-on `02_track`'s `cf_vex_billboard` is not bound (no `ADD_SECOND`).
+`10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) ~~`tv_glow.gtf`
+on `02_track`'s `cf_vex_billboard` is not bound~~: closed. `billboard_glass::classify` takes the compile with no `k`, so the
+slot carries `ADD_SECOND` and `Emissive::program` mode 1 (`picture * (glow.a + glow.rgb * light)`, `docs/formats/rcsmaterial.md`, "The gantry boards on Metropia"); pinned by
+`hd_program_glow_ground_truth::metropia_carries_its_programs_glow_masks`. Omega and 2048: **checked, applies, not wired** (same page).
 
 ## Pulse's gantry card against the original: sampler read, ten circuits laid (2026-10-18, `pulse-card-verify`)
 

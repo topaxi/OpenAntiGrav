@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-10
-summary: "no-dot-power specular and the Omega card route landed; tv_glow.gtf second texture is open"
+updated: 2026-11-14
+summary: "no-dot-power specular and the Omega card route landed; tv_glow.gtf landed; finish-flag and slot-7 advert items open"
 categories: [rendering]
 difficulty: medium (30)
 ---
@@ -20,8 +20,7 @@ difficulty: medium (30)
   in `shade.wesl` no longer needs `colour_factor`. `billboarddiffuse` and `cf_vex_billboard` (no `LG2` at all) are
   in it. The census asked for here ran as a 13-circuit dump of every material's verdict; census of which
   drawn blocks carry an `LG2` is replaced by the dot-product test (the lightmap curve has an `LG2` too).
-- **`tv_glow.gtf` on `02_track`.** `cf_vex_billboard` binds it as a second texture and it does
-  not reach the shader (no `ADD_SECOND` bit, slots word `0x18`).
+- ~~**`tv_glow.gtf` on `02_track`.**~~ Already wired by the Metropia gantry-board lane (`billboard_glass`, mode 1; slots word `0x0d000118`); `docs/rendering/start-gantry.md` refreshed.
 - ~~**Omega.**~~ Landed 2026-11-10 (`omega-gantry`): `adverts` is HD's pass, inherited, and Altima's `321Go_2048.vex` plays as a card
   (`docs/rendering/start-gantry.md`, "Omega and 2048"). Still open there: the HD-lineage board (PS4 material curves).
 
