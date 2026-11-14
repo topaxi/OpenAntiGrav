@@ -1021,7 +1021,7 @@ omega!(
 omega!(
     omega_data01,
     "ps4/omega-eu/uroot/data01.psarc",
-    pin(316, 27_942, (2_741, 1_478_396), 0, (0, 0), 0)
+    pin(316, 27_942, (2_574, 1_455_344), 0, (0, 0), 0)
 );
 omega!(
     omega_data02,
