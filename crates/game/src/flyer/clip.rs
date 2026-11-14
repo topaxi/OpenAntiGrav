@@ -23,7 +23,7 @@
 //! card is shown at one moment, so [`bake`] picks it once, multiplies those
 //! vertices through their node matrices and clears the node index.
 
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::{Mat4, Vec3, lerp};
 use oag_mesh::mesh::{DrawCall, GpuVertex, Model};
 
 /// Multiplies every animated vertex through its node's matrix at `seconds`
@@ -175,15 +175,15 @@ fn clip_by_plane(polygon: Vec<GpuVertex>, plane: [f32; 3]) -> Vec<GpuVertex> {
 /// interpolated attribute carried there and the per-draw constants from
 /// `from`.
 fn lerp_vertex(from: &GpuVertex, to: &GpuVertex, t: f32) -> GpuVertex {
-    let lerp = |a: f32, b: f32| a + (b - a) * t;
+    let mix = |a: f32, b: f32| lerp(a, b, t);
     let mut out = *from;
-    out.position = std::array::from_fn(|k| lerp(from.position[k], to.position[k]));
-    out.normal = std::array::from_fn(|k| lerp(from.normal[k], to.normal[k]));
-    out.colour = std::array::from_fn(|k| lerp(from.colour[k], to.colour[k]));
-    out.texcoord = std::array::from_fn(|k| lerp(from.texcoord[k], to.texcoord[k]));
+    out.position = std::array::from_fn(|k| mix(from.position[k], to.position[k]));
+    out.normal = std::array::from_fn(|k| mix(from.normal[k], to.normal[k]));
+    out.colour = std::array::from_fn(|k| mix(from.colour[k], to.colour[k]));
+    out.texcoord = std::array::from_fn(|k| mix(from.texcoord[k], to.texcoord[k]));
     out.lightmap_texcoord =
-        std::array::from_fn(|k| lerp(from.lightmap_texcoord[k], to.lightmap_texcoord[k]));
-    out.sun_mask = lerp(from.sun_mask, to.sun_mask);
+        std::array::from_fn(|k| mix(from.lightmap_texcoord[k], to.lightmap_texcoord[k]));
+    out.sun_mask = mix(from.sun_mask, to.sun_mask);
     out
 }
 
@@ -356,15 +356,15 @@ fn cross(from: &GpuVertex, to: &GpuVertex, axis: usize, bound: f32) -> GpuVertex
     } else {
         (bound - from.position[axis]) / span
     };
-    let lerp = |a: f32, b: f32| a + (b - a) * t;
+    let mix = |a: f32, b: f32| lerp(a, b, t);
     let mut out = *from;
-    out.position = std::array::from_fn(|k| lerp(from.position[k], to.position[k]));
-    out.normal = std::array::from_fn(|k| lerp(from.normal[k], to.normal[k]));
-    out.colour = std::array::from_fn(|k| lerp(from.colour[k], to.colour[k]));
-    out.texcoord = std::array::from_fn(|k| lerp(from.texcoord[k], to.texcoord[k]));
+    out.position = std::array::from_fn(|k| mix(from.position[k], to.position[k]));
+    out.normal = std::array::from_fn(|k| mix(from.normal[k], to.normal[k]));
+    out.colour = std::array::from_fn(|k| mix(from.colour[k], to.colour[k]));
+    out.texcoord = std::array::from_fn(|k| mix(from.texcoord[k], to.texcoord[k]));
     out.lightmap_texcoord =
-        std::array::from_fn(|k| lerp(from.lightmap_texcoord[k], to.lightmap_texcoord[k]));
-    out.sun_mask = lerp(from.sun_mask, to.sun_mask);
+        std::array::from_fn(|k| mix(from.lightmap_texcoord[k], to.lightmap_texcoord[k]));
+    out.sun_mask = mix(from.sun_mask, to.sun_mask);
     // The axis value is the bound itself, not a rounded interpolation of it.
     out.position[axis] = bound;
     out

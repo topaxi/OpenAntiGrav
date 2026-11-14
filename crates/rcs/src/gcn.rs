@@ -54,6 +54,7 @@ pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
 
 use core::fmt;
 use core::ops::Range;
+use oag_bytes::le::u32_at;
 
 pub use isa::{DecodeError, Detail, Encoding, Instruction, Operand};
 
@@ -279,11 +280,6 @@ impl fmt::Display for Error {
 impl core::error::Error for Error {}
 
 pub type Result<T> = core::result::Result<T, Error>;
-
-fn u32_at(file: &[u8], at: usize) -> Option<u32> {
-    file.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("four bytes")))
-}
 
 /// Every `Shdr` tag in `file` that is not the tail of an `OrbShdr`, in order.
 #[must_use]

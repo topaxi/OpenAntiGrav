@@ -3596,6 +3596,7 @@ name = "oag-rcs"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-bytes",
  "oag-formats",
  "oag-tables",
  "oag-vex",

@@ -165,7 +165,7 @@ impl HullGather {
 /// plane's normal and the strength carried in the colour move, the rest is
 /// constant across a hull.
 fn lerp(a: &GpuVertex, b: &GpuVertex, alpha: f32) -> GpuVertex {
-    let mix = |a: f32, b: f32| a + (b - a) * alpha;
+    let mix = |a: f32, b: f32| oag_core::math::lerp(a, b, alpha);
     let normal = Vec3::from_array(a.normal)
         .lerp(Vec3::from_array(b.normal), alpha)
         .normalize_or_zero();

@@ -494,14 +494,11 @@ fn params_at(cpu: &[u8], header_at: usize) -> Vec<Param> {
 }
 
 fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
-    if at >= cpu.len() {
+    let text = oag_bytes::cstr_at(cpu, at)?;
+    if text.is_empty() {
         return None;
     }
-    let end = (at..cpu.len()).find(|&k| cpu[k] == 0)?;
-    if end == at {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&cpu[at..end]).into_owned())
+    Some(String::from_utf8_lossy(text).into_owned())
 }
 
 /// Byte-slice suffix comparison, deliberately not `str`-based: [`cstr_at`]
@@ -511,11 +508,6 @@ fn cstr_at(cpu: &[u8], at: usize) -> Option<String> {
 fn ends_with_ci(s: &str, suffix: &str) -> bool {
     let (sb, xb) = (s.as_bytes(), suffix.as_bytes());
     sb.len() >= xb.len() && sb[sb.len() - xb.len()..].eq_ignore_ascii_case(xb)
-}
-
-fn u32_at(cpu: &[u8], at: usize) -> Option<u32> {
-    cpu.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
 }
 
 /// Whether a string starts at `at`: the byte before it is `0`, or it is the section's first.
@@ -645,6 +637,8 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
 
 mod ps4_params;
 
+use oag_bytes::le::{u32_at, u64_at};
+
 /// Bytes from the start of a PS4 sampler entry to its texture pointer.
 const PS4_SAMPLER_POINTER: usize = 0x18;
 /// Bytes per PS4 sampler entry. Consecutive entries of one material sit this
@@ -731,11 +725,6 @@ fn gnf_textures_in(cpu: &[u8], from: usize, to: usize) -> (Vec<String>, Option<S
         found.into_iter().map(|(_, _, path)| path).collect(),
         lightmap.map(|(_, path)| path),
     )
-}
-
-fn u64_at(cpu: &[u8], at: usize) -> Option<u64> {
-    cpu.get(at..at + 8)
-        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
 /// Where a PS4 file states its material count: a 64-bit word at this offset of

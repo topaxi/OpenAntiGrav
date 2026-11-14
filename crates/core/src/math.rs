@@ -78,6 +78,17 @@ pub fn acos(x: f32) -> f32 {
     libm::acosf(x)
 }
 
+/// `a + (b - a) * t`: the point a fraction `t` of the way from `a` to `b`,
+/// unclamped.
+///
+/// This is the one ordering of the arithmetic the shared helper offers. The other
+/// common form, `a * (1 - t) + t * b`, rounds differently in `f32`, so a caller
+/// that already uses it keeps its own.
+#[must_use]
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
 /// `sin`, from our own libm rather than the platform's. See [`acos`].
 #[must_use]
 pub fn sin(x: f32) -> f32 {
@@ -273,6 +284,15 @@ pub fn binary_angle_to_radians(units: u16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lerp_is_a_plus_the_difference_times_t_bit_for_bit() {
+        for (a, b, t) in [(1.0f32, 5.0, 0.25), (-3.3, 7.1, 0.37), (0.1, 0.7, 1.5)] {
+            assert_eq!(lerp(a, b, t).to_bits(), (a + (b - a) * t).to_bits());
+        }
+        assert_eq!(lerp(2.0, 6.0, 0.0), 2.0);
+        assert_eq!(lerp(2.0, 6.0, 1.0), 6.0);
+    }
 
     /// The wrapper has to be glam's rotation, not merely *a* rotation: every
     /// caller that swaps to it is asserting its own results did not move by

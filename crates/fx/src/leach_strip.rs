@@ -26,7 +26,7 @@
 //! phases start at 0 with the race and carry from one beam to the next
 //! (measured live, see `oag_raceplay`'s `advance_leach_strip`).
 
-use oag_core::math::Vec3;
+use oag_core::math::{Vec3, lerp};
 use oag_mesh::mesh::GpuVertex;
 
 use crate::rocket_smoke::{FINS, fin_axes};
@@ -79,7 +79,7 @@ impl Record {
     fn lerp(self, other: Self, t: f32) -> Self {
         Self {
             anchor: self.anchor.lerp(other.anchor, t),
-            progress: self.progress + (other.progress - self.progress) * t,
+            progress: lerp(self.progress, other.progress, t),
             row0: self.row0.lerp(other.row0, t),
             row1: self.row1.lerp(other.row1, t),
         }

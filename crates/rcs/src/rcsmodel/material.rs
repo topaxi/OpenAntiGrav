@@ -547,12 +547,7 @@ impl Material {
 
 /// The NUL-terminated string at `at`, or empty when the pointer leaves the file.
 fn cstr(data: &[u8], at: usize) -> String {
-    if at >= data.len() {
-        return String::new();
-    }
-    let end = data[at..]
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(data.len(), |n| at + n);
-    String::from_utf8_lossy(&data[at..end]).into_owned()
+    oag_bytes::cstr_at_or_end(data, at)
+        .map(|text| String::from_utf8_lossy(text).into_owned())
+        .unwrap_or_default()
 }

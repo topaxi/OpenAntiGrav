@@ -918,7 +918,7 @@ fn lerp_color(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
     let t = t.clamp(0.0, 1.0);
     let mut out = [0.0; 4];
     for i in 0..4 {
-        out[i] = from[i] + (to[i] - from[i]) * t;
+        out[i] = oag_core::math::lerp(from[i], to[i], t);
     }
     out
 }
