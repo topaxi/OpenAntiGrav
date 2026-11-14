@@ -114,15 +114,7 @@ TEST_LIMIT = 500
 # was split along its own seams on 2026-08-16 into `race.rs` plus twenty-four
 # modules under `crates/raceplay/src/`. `main.rs` followed it the same day:
 # 4,808 lines into 430 plus eighteen modules under `crates/game/src/main/`.
-# Both splits were move-only and left nothing over 800 lines. The largest thing
-# left is `crates/game/tests/race_ground_truth.rs`.
 BASELINE = {
-    # Ratcheted down from 2,387 on 2026-09-02, when
-    # `a_ship_spawns_on_the_track_and_flies_along_it` moved to
-    # `crates/raceplay/tests/ship_spawn_ground_truth.rs`. The move was forced the
-    # right way round: a disc-backed fix needed twelve lines in a file already
-    # at its ceiling, and a ceiling only ever lowers.
-    "crates/game/tests/race_ground_truth.rs": 2266,
 }
 
 # Inline `#[cfg(test)]` modules over `TEST_LIMIT`, keyed `<file>::<module>`.
