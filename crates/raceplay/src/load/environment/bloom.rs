@@ -126,12 +126,17 @@ pub(in crate::load) fn scene_store(
     )
 }
 
-fn store_of(title: &oag_title::Title, has_rcsmodel: bool) -> oag_gpu::formats::SceneStore {
+pub(super) fn store_of(
+    title: &oag_title::Title,
+    has_rcsmodel: bool,
+) -> oag_gpu::formats::SceneStore {
     use oag_gpu::formats::SceneStore;
     if title.looks.wo_composite.applies_everywhere() {
         SceneStore::Squared
     } else if has_rcsmodel && title.looks.blends_encoded.applies_everywhere() {
         SceneStore::Encoded
+    } else if has_rcsmodel && title.looks.texels_srgb.applies_everywhere() {
+        SceneStore::SrgbTexels
     } else {
         SceneStore::Computed
     }
@@ -179,5 +184,16 @@ mod tests {
     fn the_half_texel_follows_the_titles_rule() {
         assert!(for_title(authored(), oag_hd::TITLE).final_half_texel);
         assert!(!for_title(authored(), oag_pulse::TITLE).final_half_texel);
+    }
+
+    /// Each title's scene store: HD's encoded, 2048's squared, Omega's sRGB-decoded texels over
+    /// the value as computed, Pulse's the value as computed.
+    #[test]
+    fn the_scene_store_follows_the_titles_rules() {
+        use oag_gpu::formats::SceneStore;
+        assert_eq!(store_of(oag_hd::TITLE, true), SceneStore::Encoded);
+        assert_eq!(store_of(oag_2048::TITLE, true), SceneStore::Squared);
+        assert_eq!(store_of(oag_omega::TITLE, true), SceneStore::SrgbTexels);
+        assert_eq!(store_of(oag_pulse::TITLE, false), SceneStore::Computed);
     }
 }

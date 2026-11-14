@@ -39,11 +39,11 @@ use super::skin::decode_texture;
 use super::{Report, Textures};
 
 /// `Colour`: what the emask's alpha and the wave are multiplied by.
-const COLOUR: u32 = 0x02ab_9f07;
+pub(super) const COLOUR: u32 = 0x02ab_9f07;
 /// `k`: what the wave's coordinate is scaled by.
-const SCALE: u32 = 0x220c_f0e6;
+pub(super) const SCALE: u32 = 0x220c_f0e6;
 /// `~crc32("offset")`: what is added to it, driven by the material's curve.
-const OFFSET: u32 = 0xa6f5_352f;
+pub(super) const OFFSET: u32 = 0xa6f5_352f;
 /// `~crc32("time")`: the magstrip family declares it and this one does not.
 const TIME: u32 = 0x906b_67ba;
 

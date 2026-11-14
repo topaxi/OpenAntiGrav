@@ -600,6 +600,11 @@ impl Chain {
 
     /// The circuit's block, as the chain was built with it.
     #[must_use]
+    pub fn store(&self) -> oag_gpu::formats::SceneStore {
+        self.params.store
+    }
+
+    /// The parameters the chain was built with.
     pub fn params(&self) -> Params {
         self.params
     }

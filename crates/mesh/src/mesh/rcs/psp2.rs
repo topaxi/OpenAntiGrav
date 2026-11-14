@@ -44,8 +44,10 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod alpha_emissive;
 mod alpha_product;
+mod chevron;
 mod emissive_add;
 mod glow;
+mod lit_alpha;
 mod normal_map;
 pub mod placement;
 pub mod refraction;
@@ -57,6 +59,7 @@ mod transparency;
 mod twin_blend;
 mod uv_keys;
 
+pub use chevron::PLASMA_COMBINE;
 pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 
@@ -124,6 +127,12 @@ pub struct Report {
     pub lightmap_misses: usize,
     /// Submeshes lit by their `NOVAColor` vertex stream (a Vita circuit's vertex-lit surfaces).
     pub nova_vertex_submeshes: usize,
+    /// Submeshes whose program lights the albedo's alpha (`lit_alpha`, Anulpha Pass).
+    pub lit_alpha_submeshes: usize,
+    /// Chevron materials drawing their emissive mask and wave (`chevron`).
+    pub chevron_materials: usize,
+    /// Chevron materials whose mask or wave would not decode, or found no table row.
+    pub chevron_unread: usize,
     /// Textured draws routed to the blended list by their material's state word
     /// (alpha-over, chosen) - see [`transparency`].
     pub blended_draws: usize,
@@ -348,6 +357,14 @@ impl Report {
             format!(
                 "{lightmaps}; {} submesh(es) lit by their NOVAColor vertex stream",
                 self.nova_vertex_submeshes
+            )
+        };
+        let lightmaps = if self.lit_alpha_submeshes == 0 {
+            lightmaps
+        } else {
+            format!(
+                "{lightmaps}; {} submesh(es) light the albedo's alpha, {} chevron material(s) add their mask and wave ({} unread, the wave offset held)",
+                self.lit_alpha_submeshes, self.chevron_materials, self.chevron_unread
             )
         };
         let nodes = if self.node_bound == 0 {
@@ -673,6 +690,14 @@ fn build_planned(
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
     let tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    // Anulpha Pass's chevrons add their emissive mask and wave after the light.
+    let chevron = chevron::plan(
+        &decoded,
+        &mut glow.emissive,
+        &mut glow.tracks,
+        &mut *textures,
+        &mut report,
+    );
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
@@ -757,6 +782,18 @@ fn build_planned(
             ),
             None => ([1.0; 4], 1.0, role),
         };
+        // Anulpha Pass's alpha-lit families, read on each title's own programs (`lit_alpha`).
+        let alpha_lit = lit > 0.5
+            && submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .is_some_and(lit_alpha::admits);
+        let role = if alpha_lit {
+            role | crate::mesh::slots::LIT_ALPHA
+        } else {
+            role
+        };
+        report.lit_alpha_submeshes += usize::from(alpha_lit && !place.hidden);
         // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
         // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes
         // `a` on as the sun's mask, and its fragment program adds the two to the sun and
@@ -903,6 +940,7 @@ fn build_planned(
                     role
                 }) | emissive_add.role(submesh.material)
                     | tarmac.role(submesh.material)
+                    | chevron.role(submesh.material)
                     | glass.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
@@ -980,7 +1018,7 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals, &emissive_add, &tarmac),
+        (&glow, &twin, &normals, &emissive_add, &tarmac, &chevron),
         &mut model,
         &mut report,
         textures,
@@ -989,6 +1027,16 @@ fn build_planned(
     transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
+
+/// The readings whose bindings ride beside a draw's picture.
+type Plans<'a> = (
+    &'a glow::Plan,
+    &'a twin_blend::Plan,
+    &'a normal_map::Plan,
+    &'a emissive_add::Plan,
+    &'a tarmac::Plan,
+    &'a chevron::Plan,
+);
 
 /// Binds each draw to its own submesh's material's texture.
 ///
@@ -1000,13 +1048,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac): (
-        &glow::Plan,
-        &twin_blend::Plan,
-        &normal_map::Plan,
-        &emissive_add::Plan,
-        &tarmac::Plan,
-    ),
+    (glow, twin, normals, emissive_add, tarmac, chevron): Plans<'_>,
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -1149,12 +1191,21 @@ fn bind_textures(
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
             }
-            if tarmac.any() {
+            if tarmac.any() || chevron.any() {
                 let layers = tarmac.of(Some(index));
+                let pulse = chevron.of(Some(index));
                 debug_assert_eq!(model.fifth_maps.len(), at);
-                model.fifth_maps.push(layers.map(|l| l.markings.clone()));
+                model.fifth_maps.push(
+                    layers
+                        .map(|l| l.markings.clone())
+                        .or_else(|| pulse.map(|p| p.emask.clone())),
+                );
                 debug_assert_eq!(model.sixth_maps.len(), at);
-                model.sixth_maps.push(layers.map(|l| l.dirt.clone()));
+                model.sixth_maps.push(
+                    layers
+                        .map(|l| l.dirt.clone())
+                        .or_else(|| pulse.map(|p| p.wave.clone())),
+                );
             }
             if twin.any() || tarmac.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);

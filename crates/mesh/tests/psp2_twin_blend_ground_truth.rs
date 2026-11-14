@@ -9,11 +9,17 @@
 //! circuit model, that every such material reaches the mode with its four pictures and its
 //! three coordinate pairs. Remove the builder's `twin_blend::plan` call and every count here
 //! reads zero.
+//!
+//! The same pass holds `slots::LIT_ALPHA` (`oag_mesh::mesh::rcs::psp2`, `lit_alpha`): Anulpha
+//! Pass's walls, floor plates and chevrons light their albedo's alpha on both titles, read on
+//! each title's own programs (`docs/rendering/hd-track-tone.md`, "2048 and Omega"), and no other
+//! circuit here carries the flag; their chevrons bind the emissive mask and the wave
+//! (`chevron`).
 
 use std::path::Path;
 
 use oag_mesh::mesh::rcs::psp2;
-use oag_mesh::mesh::{Model, PROGRAM_TWIN_BLEND, slots};
+use oag_mesh::mesh::{Model, PROGRAM_CHEVRON, PROGRAM_TWIN_BLEND, slots};
 
 const VITA: [&str; 3] = [
     "vita/PCSF00007/base/PSP2/data.psarc",
@@ -228,6 +234,56 @@ fn check(name: &str, expected: usize, model: &Model, report: &psp2::Report) {
     }
 }
 
+/// Anulpha Pass's models flag their alpha-lit submeshes, every other circuit flags none.
+fn check_lit_alpha(name: &str, model: &Model, report: &psp2::Report) {
+    let flagged = model
+        .vertices
+        .iter()
+        .filter(|v| v.slots & slots::LIT_ALPHA != 0)
+        .count();
+    if name.to_ascii_lowercase().contains("anulpha_pass") {
+        assert!(
+            report.lit_alpha_submeshes >= 10 && flagged > 0,
+            "{name}: {} alpha-lit submesh(es), {flagged} vertices",
+            report.lit_alpha_submeshes
+        );
+        // The centre lane's glow entry, and its `Uvset1` coordinate: Omega's lane vertices
+        // vary across the picture rather than sampling one texel.
+        let lane: Vec<[f32; 2]> = model
+            .vertices
+            .iter()
+            .filter(|v| {
+                let index = slots::material_index(v.slots) as usize;
+                index != 0
+                    && model.emissive[index - 1].program == [PROGRAM_CHEVRON, psp2::PLASMA_COMBINE]
+            })
+            .map(|v| v.texcoord)
+            .collect();
+        assert!(!lane.is_empty(), "{name}: no centre-lane vertex");
+        assert!(
+            lane.iter().any(|t| *t != lane[0]),
+            "{name}: the centre lane's coordinate is constant"
+        );
+        // The chevrons bind their emissive mask and wave (`psp2`'s `chevron`).
+        assert!(
+            report.chevron_materials >= 2 && report.chevron_unread == 0,
+            "{name}: {} chevron material(s), {} unread",
+            report.chevron_materials,
+            report.chevron_unread
+        );
+    } else {
+        assert_eq!(
+            (
+                report.lit_alpha_submeshes,
+                flagged,
+                report.chevron_materials
+            ),
+            (0, 0, 0),
+            "{name}: alpha-lit off Anulpha Pass"
+        );
+    }
+}
+
 fn open(root: &Path, names: &[&str]) -> Vec<oag_assets::psarc::Archive> {
     names
         .iter()
@@ -260,6 +316,7 @@ fn every_2048_and_omega_circuit_that_ships_nr_twinblend_draws_it_by_hds_law() {
         let full = format!("data/art/published/{path}");
         let (model, report) = build(&mut vita, index, &full);
         check(&format!("{package} {path}"), *expected, &model, &report);
+        check_lit_alpha(path, &model, &report);
     }
     for (path, expected) in OMEGA_CENSUS {
         let index = (0..omega.len())
@@ -267,5 +324,6 @@ fn every_2048_and_omega_circuit_that_ships_nr_twinblend_draws_it_by_hds_law() {
             .unwrap_or_else(|| panic!("{path} is in no archive"));
         let (model, report) = build(&mut omega, index, path);
         check(path, *expected, &model, &report);
+        check_lit_alpha(path, &model, &report);
     }
 }

@@ -204,6 +204,7 @@ pub(in crate::load) fn envsettings_tonemap(
         start_angle: t.start_angle,
         end_angle: t.end_angle,
         composite: omega_composite(&env, &name, report),
+        store: oag_gpu::formats::SceneStore::Computed,
     };
     report.push(format!(
         "{name}: Tonemap applied - exposure ({:.3} + {:.3} LAvg) / LAvg in {:.2}..{:.2}, \

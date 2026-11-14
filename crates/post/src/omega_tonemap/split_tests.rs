@@ -24,6 +24,7 @@ fn params() -> Params {
         start_angle: 10.0,
         end_angle: -20.0,
         composite: Composite::NONE,
+        store: oag_gpu::formats::SceneStore::Computed,
     }
 }
 

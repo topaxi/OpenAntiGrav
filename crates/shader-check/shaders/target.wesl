@@ -16,13 +16,19 @@ public override linear_out: f32 = 0.0;
 // with `linear_out`; 0.0 everywhere else, which keeps the 2.2 power.
 public override square_decode: f32 = 0.0;
 
+// 1.0 when the linear scene's texels are sRGB-typed and the texture unit decodes them with the
+// piecewise sRGB curve, while the target stores the value as computed: Omega's
+// (docs/rendering/hd-track-tone.md, "Omega's texels decode with the sRGB curve"). Only
+// meaningful with `linear_out`.
+public override srgb_texels: f32 = 0.0;
+
 // A gamma-authored colour decoded to the scene's linear space: the 2.2 power
 // the originals authored against, the square on 2048's (`square_decode`), or
-// the piecewise sRGB curve on Wipeout HD's scene (`encoded_out`), whose texture
-// units decode with it (docs/rendering/hd-track-tone.md, "The texture unit's
-// decode is the sRGB curve").
+// the piecewise sRGB curve on Wipeout HD's scene (`encoded_out`) and Omega's
+// (`srgb_texels`), whose texture units decode with it
+// (docs/rendering/hd-track-tone.md, "The texture unit's decode is the sRGB curve").
 public fn decode(rgb: vec3<f32>) -> vec3<f32> {
-    if encoded_out > 0.5 {
+    if encoded_out > 0.5 || srgb_texels > 0.5 {
         return srgb_decode(rgb);
     }
     return pow(rgb, vec3<f32>(select(2.2, 2.0, square_decode > 0.5)));
@@ -33,7 +39,7 @@ public fn decode(rgb: vec3<f32>) -> vec3<f32> {
 // survive the round trip.
 public fn encode(rgb: vec3<f32>) -> vec3<f32> {
     let c = max(rgb, vec3<f32>(0.0));
-    if encoded_out > 0.5 {
+    if encoded_out > 0.5 || srgb_texels > 0.5 {
         return srgb_encode(c);
     }
     return pow(c, vec3<f32>(select(1.0 / 2.2, 0.5, square_decode > 0.5)));

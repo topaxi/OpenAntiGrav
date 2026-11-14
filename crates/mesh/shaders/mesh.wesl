@@ -111,7 +111,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the material's own curve. Laid here into the chunk's unused second pair because the
     // table is a vertex-stage binding and the coordinate is linear in `uv`.
     let chevron_entry = (in.slots >> 24u) & 127u;
-    if (in.slots & 2147483648u) != 0u && chevron_entry != 0u
+    // 2048's and Omega's centre lane takes the entry without `LIT_ALPHA` (`program[1]` 2).
+    if ((in.slots & 2147483648u) != 0u || emissive_scale(chevron_entry).w > 1.5)
+        && chevron_entry != 0u
         && emissive_scale(chevron_entry).z > 2.5 && emissive_scale(chevron_entry).z < 3.5 {
         let row = u32(emissive_tint(chevron_entry).w + 0.5);
         let offset = anims.transform[min(row, 63u)].z;

@@ -915,15 +915,28 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // these two units, whose address words were not read; the alpha they join is raw.
     // **Not in a Zone race**: every Zone variant of `cf_chevron_pulse` (blocks #15-#34, #45-#64,
     // #75-#93) declares neither the emask nor the wave, as the magstrips' do not (`mag_glow`).
-    let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5
-        && zone_on == 0.0;
+    // 2048's and Omega's centre lane (the entry's `program[1]` 2) lights its colour and takes the
+    // same entry without `LIT_ALPHA`.
+    let chevron = ((in.slots & 2147483648u) != 0u || row_scale.w > 1.5) && glow_program > 2.5
+        && glow_program < 3.5 && zone_on == 0.0;
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
         let e = material_sample(MATERIAL_FIFTH_MAP, in.texcoord);
         let w = material_sample(MATERIAL_SIXTH_MAP, in.lightmap_texcoord.zw);
-        chevron_surface = decode(e.rgb);
-        chevron_glow = e.a * glow_tint_offset.rgb * decode(w.rgb);
+        let e_linear = decode(e.rgb);
+        let w_linear = decode(w.rgb);
+        // **2048's and Omega's combines** (the entry's `program[1]`, `oag_mesh::mesh::rcs::psp2`'s
+        // `chevron`, `docs/rendering/hd-track-tone.md`, "2048 and Omega"): no mask inside the light;
+        // after it the chevron's `max(E, Colour * mix(E, W, E.a))` (1) or the centre lane's
+        // `E.a * W`, HD's own glow (2).
+        let lineage = row_scale.w > 0.5 && row_scale.w < 1.5;
+        chevron_surface = select(e_linear, vec3<f32>(0.0), row_scale.w > 0.5);
+        chevron_glow = select(
+            e.a * glow_tint_offset.rgb * w_linear,
+            max(e_linear, glow_tint_offset.rgb * mix(e_linear, w_linear, e.a)),
+            lineage,
+        );
     }
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.

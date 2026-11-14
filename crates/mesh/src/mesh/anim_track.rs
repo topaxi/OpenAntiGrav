@@ -33,6 +33,9 @@ pub enum AnimTrack {
     /// its UV, carried as `offset = (v, v)` with scale 1. No vertex's `anim`
     /// names it; a material's glow-table entry does (`rcs::chevron_pulse`).
     Param(rcs::curve_track::ParamCurveTrack),
+    /// One scalar parameter held at a value, carried as `Param` is: a material whose curve for
+    /// it is unread (`rcs::psp2`'s `chevron`).
+    Held(f32),
 }
 
 impl AnimTrack {
@@ -48,6 +51,7 @@ impl AnimTrack {
                 let v = track.sample(seconds);
                 ([1.0, 1.0], [v, v])
             }
+            Self::Held(v) => ([1.0, 1.0], [*v, *v]),
             Self::Scroll(rate) => (
                 [1.0, 1.0],
                 [

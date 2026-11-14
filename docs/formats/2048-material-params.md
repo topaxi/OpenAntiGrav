@@ -412,6 +412,17 @@ act on the composite only; the floor's own normal map and `shadowMap`/`occlusion
 marker in `shade.wesl`); Omega's `NOVAColor` variant stays *checked, applies, not wired* (its
 declaration reader differs, type nibble `11` is the PS4 colour, and the 2048 filter excludes it).
 
+## Anulpha Pass's alpha-lit families (2026-11-14, `anulpha-tone`)
+
+`reversed_diffuse_specular_normal`, `cf_chevron_pulse` and `cf_chevron_pulse_time` (Anulpha Pass
+only) multiply the light by the albedo's **alpha** and tint the specular with its squared RGB
+(`mul.f16 light, pa6.www`; `sa_spec * T.rgb * T.rgb * pow`), HD's `slots::LIT_ALPHA` law, read on
+the USSE and wired with Omega (**ported**; listings, Omega's GCN and the before/after regions in
+[`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)). The
+chevron's unlit `max(E^2, Colour * mix(E^2, W^2, E.a))` emissive is drawn with `Colour` held at
+zero (chosen, its live value unread), and the centre lane `cf_centre_plasma_pulse` adds
+`Normal_EmissMask.a * W^2` after its colour-lit light (#16 words 21 and 30).
+
 ## The emissive add of the `*_emmissive_alpha` family (2026-10-31, `2048-floor-emissive`)
 
 **The lane's premise was off by one name.** The floor panels of Vineta K are not the

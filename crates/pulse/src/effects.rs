@@ -230,6 +230,7 @@ pub const LOOKS: &Looks = &Looks {
         origin: Origin::InheritedFrom("Wipeout Pulse (PSP)"),
     },
     blends_encoded: Rule::UNREAD,
+    texels_srgb: Rule::UNREAD,
     final_composite_half_texel: Rule::UNREAD,
     // Pulse ends its frame in its own bloom (`oag_post::bloom`), not the `wo_*` chain.
     wo_composite: Rule::UNREAD,

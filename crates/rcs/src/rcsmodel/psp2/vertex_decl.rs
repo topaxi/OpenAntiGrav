@@ -78,6 +78,10 @@ pub const UV1_HASH: u32 = 0x4272_14fc;
 /// (`fc06_lambert_simple`: `uv1` passes to the pixel program's `DiffuseMapSampler` lookup).
 /// Omega spells it as an `f32` pair ([`PS4_FLOAT2`]) where 2048 has a half or float pair.
 pub const LOWERCASE_UV1_HASH: u32 = 0x7a3f_521c;
+/// `~crc32("Uvset1")`: the only texture coordinate Omega's Anulpha Pass centre-lane programs
+/// (`cf_centre_plasma_pulse`) take, an `f32` pair (`docs/rendering/hd-track-tone.md`, "2048 and
+/// Omega").
+pub const UVSET1_HASH: u32 = 0x49f7_6806;
 /// `~crc32("Uv1_Uv2")`: four halves, two coordinate pairs, the vertex input of
 /// `2048_shipshield_old`'s programs (`param1` is the first pair, `param2` the second). The
 /// declaration also lists `Uv1` and `Uv2` entries, both at the offset of the second pair;
@@ -248,6 +252,7 @@ impl VertexDecl {
     pub fn own_diffuse_texcoord(&self, half: u8, float: u8) -> Option<&Attribute> {
         self.diffuse_texcoord()
             .or_else(|| self.uv_dirt_tiling(half))
+            .or_else(|| self.attribute(UVSET1_HASH).filter(|a| a.components == 2))
             .or_else(|| {
                 self.attributes.iter().find(|a| {
                     a.name_hash != LIGHTMAP_HASH
@@ -264,6 +269,7 @@ impl VertexDecl {
     pub fn diffuse_texcoord_is_fallback(&self, half: u8, float: u8) -> bool {
         self.diffuse_texcoord().is_none()
             && self.uv_dirt_tiling(half).is_none()
+            && self.attribute(UVSET1_HASH).is_none()
             && self.own_diffuse_texcoord(half, float).is_some()
     }
 }
@@ -399,6 +405,25 @@ mod tests {
         let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
         assert_eq!(own.name_hash, UV1_UVDIRT_HASH);
         assert_eq!(own.offset, 28);
+        assert!(!decl.diffuse_texcoord_is_fallback(PS4_HALF2, PS4_FLOAT2));
+    }
+
+    #[test]
+    fn the_centre_lanes_f32_uvset1_pair_is_its_diffuse_coordinate() {
+        assert_eq!(UVSET1_HASH, crate::rcsmaterial::name_hash("Uvset1"));
+        // Anulpha Pass's `cf_centre_plasma_pulse` declaration (Omega `data01`, stride 44).
+        let decl = VertexDecl {
+            stride: 44,
+            attributes: vec![
+                attr(POSITION_HASH, 3, PS4_FLOAT2, 0),
+                attr(NORMAL_HASH, 3, 14, 12),
+                attr(crate::rcsmaterial::name_hash("tangent"), 4, PS4_FLOAT2, 16),
+                attr(UVSET1_HASH, 2, PS4_FLOAT2, 32),
+                attr(LIGHTMAP_HASH, 2, PS4_HALF2, 40),
+            ],
+        };
+        let own = decl.own_diffuse_texcoord(PS4_HALF2, PS4_FLOAT2).unwrap();
+        assert_eq!((own.name_hash, own.offset), (UVSET1_HASH, 32));
         assert!(!decl.diffuse_texcoord_is_fallback(PS4_HALF2, PS4_FLOAT2));
     }
 

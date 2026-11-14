@@ -858,6 +858,28 @@ Checked: `omega/vineta-k` 48.19, unchanged (no material of the family); HD pairs
 models) and `dlc1` 30, with the same names; the take-condition admits them and no 2048 pair shows them, so the draw is
 unseen. 2048's Vita materials carry a readable GXP program, which is the cheaper place to read the law than Omega's GCN.
 
+**Revised 2026-11-14 (`anulpha-tone`): the original is not flat, and the albedo law is wired.** The
+"flat road" was read off shadPS4 frames; the native-port original (the compare page's reference since
+2026-11-01) shows brushed grey plates with dark hex outlines and cyan-glowing chevron lanes. The GCN is now
+read: `cf_chevron_pulse_displacement2out` and the walls' and plates' `track_surface_displaced2out` light the
+albedo's alpha and tint the specular with its colour, as HD does, and the chevron adds an unlit
+`max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` that is not HD's emissive (programs, addresses and before/after
+regions: [`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)).
+**Ported** with 2048: `slots::LIT_ALPHA` is set on both titles; the cyan bars and purple stripes are gone
+(road plate dB/G +0.180 to -0.047). The chevron's mask is drawn with `Colour` held at zero (the authored
+value paints green the original never shows), and the cyan centre lanes, `cf_centre_plasma_pulse`, draw
+their `E.a * wave` and their own `Uvset1` coordinate, which the PS4 reader had refused (the lane sampled one
+texel): whole-frame mean grey 30.28 to **25.03**.
+
+### The texel decode is the sRGB curve (2026-11-14, `anulpha-tone`)
+
+**Ported from HD.** 3,115 of the 3,234 circuit pictures of `data01` and `data02` are `ChannelType::Srgb` GNF and
+the lightmap atlases `Unorm`, so the texture unit decodes the pictures with the sRGB curve; ours used the `2.2`
+power. `Looks::texels_srgb` selects `SceneStore::SrgbTexels` on Omega: every Omega race pair's mean grey fell or
+held (Metropia 35.36 to 34.63, the largest), census and table in
+[`hd-track-tone.md`](../rendering/hd-track-tone.md#omegas-texels-decode-with-the-srgb-curve-2026-11-14-anulpha-tone).
+**2048: checked, differs** (its programs square the texel, no sRGB unit).
+
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 
 Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,
