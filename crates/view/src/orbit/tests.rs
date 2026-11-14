@@ -83,7 +83,7 @@ fn a_model_with_no_geometry_draws_the_clear_colour_and_does_not_panic() {
         return;
     };
     assert!(
-        pixels.chunks_exact(4).all(|p| p == CLEAR),
+        pixels.as_chunks::<4>().0.iter().all(|p| *p == CLEAR),
         "every pixel is the clear colour, first pixel {:?}",
         &pixels[..4]
     );
