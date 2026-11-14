@@ -856,6 +856,17 @@ Checked: `omega/vineta-k` 48.19, unchanged (no material of the family); HD pairs
 models) and `dlc1` 30, with the same names; the take-condition admits them and no 2048 pair shows them, so the draw is
 unseen. 2048's Vita materials carry a readable GXP program, which is the cheaper place to read the law than Omega's GCN.
 
+**Revised 2026-11-14 (`anulpha-tone`): the original is not flat, and the albedo law is wired.** The
+"flat road" was read off shadPS4 frames; the native-port original (the compare page's reference since
+2026-11-01) shows brushed grey plates with dark hex outlines and cyan-glowing chevron lanes. The GCN is now
+read: `cf_chevron_pulse_displacement2out` and the walls' and plates' `track_surface_displaced2out` light the
+albedo's alpha and tint the specular with its colour, as HD does, and the chevron adds an unlit
+`max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` that is not HD's emissive (programs, addresses and before/after
+regions: [`hd-track-tone.md`](../rendering/hd-track-tone.md#2048-and-omega-2026-11-14-anulpha-tone)).
+**Ported** with 2048: `slots::LIT_ALPHA` is set on both titles; the cyan bars and purple stripes are gone
+(road plate dB/G +0.180 to -0.047, whole-frame mean grey 30.28 to 29.57). The emissive is read and not drawn
+(its wave offset's curve is unread), so the chevron lanes read dark where the original glows.
+
 ### Vineta K's shadows: the lightmap is right, the display encode is the lead (2026-10-27, `omega-vineta-shadow`, negative result)
 
 Pair `omega/vineta-k` draws the shadowed road and wall about 65 and 52 grey too bright (boxes x 700-1300,

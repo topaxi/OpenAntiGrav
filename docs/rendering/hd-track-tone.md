@@ -453,23 +453,104 @@ emissive (`emask.a * (0, 1, 0) * wave`, a green outline live) and its
   dump); it is the program's own term with the live constants, and the aligned
   pair shows the slot within 0.01, so it stays.
 
-### Cross-title
+### 2048 and Omega (2026-11-14, `anulpha-tone`)
 
-Both re-ship Anulpha Pass with the same families and textures, so the finding
-applies to both and neither is wired:
+**Ported to both, each read on its own programs.** The maintainer reported from play that
+Omega's and 2048's Anulpha Pass "render with the colours quite off, which HD used to have
+too"; the compare pairs showed saturated cyan bars and purple stripes on Omega's road and a blue
+cast on 2048's walls and plates. Neither title's loader set `slots::LIT_ALPHA`: the flag came
+only from the PS3 microcode reader. Both titles ship these families under Anulpha Pass alone (a
+census of every `*.psarc` of both titles for `reversed_diffuse`, `chevron_pulse` and
+`track_surface_displaced` names), and their lit programs light the albedo's alpha.
 
-- **Omega (checked, applies, not wired)**: `uroot/data08.psarc` (the patch)
-  carries `environments/15_Anulpha_Pass/Materials/Reversed_Diffuse_Specular_Normal{,_1,_2}.rcsmaterial`,
-  `cf_Chevron_Pulse{,_1,_2,_Displacement2Out*}.rcsmaterial` and
-  `Chevron_Pulse*`; `data01.psarc` carries `TexturesPS4/ds_wall_sc.gnf`,
-  `ds_floorplain_cs.gnf` and `ds_wallchevron_N.gnf`. The reader here is the PS3
-  fragment microcode, so `LIT_ALPHA` is never set on Omega; whether its PSSL
-  pixel shader for the family multiplies the alpha the same way is a GCN read
-  (`ps4-omega-eu/lightmap-prelit.md`'s method), not done.
-- **2048 (checked, applies, not wired)**: the Vita base `data.psarc` ships
-  `textures/ds_wall_sc.gxt`, `ds_wallchevron_sc.gxt` and `ds_wallchevron_n.gxt`
-  under its Anulpha Pass directory; the material's `.gxp` program is not read
-  by this lane.
+**2048, USSE** (`python3 scripts/vita-usse.py disasm
+"data/extracted/vita/PCSF00007/base/PSP2/data.psarc:Anulpha_Pass/materials/<file>." <n>`). The
+track models use `reversed_diffuse_specular_normal` (walls `ds_wall_sc`, plates
+`ds_floorplain_cs`), `cf_chevron_pulse` (`ds_floorchevron_sc`, `ds_wallchevron_sc`) and
+`cf_chevron_pulse_time` (`ds_floorleadin_sc`):
+
+```text
+reversed_diffuse_specular_normal #3 (vertex-lit, samplers Texture1, Texture2)
+  21  mad.f16 pa2.xyzw, pa2.xxxx, sa4.xyzw, sa0.xyzw   ; light = N.L * diffuse + ambient
+  22  mul.f16 pa2.xyz, pa2.xyz, pa6.www                ; light * T.a
+  23  mul.f16 pa0.xyz, sa2.xyz, pa6.xyz                ; specular colour * T.rgb
+  24  mul.f16 pa0.xyz, pa0.xyz, pa6.xyz                ;   * T.rgb (the Vita's square decode)
+  25  mad.f16 pa2.xyzw, pa0.xyzw, pa4.xxxx, pa2.xyzw   ; * pow(N.H) + light * T.a
+reversed_diffuse_specular_normal #16 (lightmapped, + lightmap sampler)
+  24  mul.f16 pa4.xyz, pa4.xyz, pa10.www               ; light * T.a
+  28..31  sa4 * T.rgb * T.rgb * lm.a * pow + that
+cf_chevron_pulse #3 and #16, cf_chevron_pulse_time #3: the same, T at pa10 / pa14
+  #3 28  mad.f16 pa4.xyzw, pa2.xyzw, pa10.wwww, pa4.xyzw  ; light * T.a + emissive
+```
+
+`pa2` is the normal map (unpacked `2T - 1` at word 1 and rotated by the tangent frame), `pa6` /
+`pa10` the albedo (its `.www` and `.xyz` read). Every lit permutation of the three files carries
+the `light * T.www` multiply (#3, #5, #12 to #22); #33, #35, #59 and #61 do not, and were not
+identified. Confidence 85: the operand listing, three files agreeing, no live run.
+
+**Omega, GCN** (`cargo run -p oag-rcs --example gcn_dump -- <archive> <entry> --at <addr>`).
+Omega's track models use two other names: `track_surface_displaced2out` (walls and plates, the
+same `ds_wall_sc` and `ds_floorplain_cs`) and `cf_chevron_pulse_displacement2out` (the
+chevrons); both add a parallax search over a panel map. `Reversed_Diffuse_Specular_Normal`
+ships too and reads the same (`data01` `@0xad04`: `T1` sampled `dmask:0xf` at `@0x158`, specular
+`s36..s38 * T.rgb * pow`, then `v_mac light, T.a` at `@0x31c`, `@0x334`, `@0x348`), but no
+track model draws it.
+
+- `track_surface_displaced2out`, lightmapped pixel program, `data01` `@0xf7c4` (patch `data08`
+  `@0x10204`, recompiled, the same): `Texture1` (API slot 1) sampled `dmask:0xf` twice (`@0xa74`,
+  `@0xb88`) and lerped by the parallax weight; `liveLighting0specular * T.rgb * pow`
+  (`@0xc0c`, `@0xc14`, `@0xc90`), then `v_mac_f32 spec, light, T.a` at `@0xcb8`, `@0xcbc`,
+  `@0xcc0` (`data08` `@0xcec` to `@0xcf4`).
+- `cf_chevron_pulse_displacement2out`, `data01` `@0x105c4` (`data08` `@0x10fc4`):
+  `Diffuse_Specular` (slot 1, `@0xbbc`, `@0xbc4`), specular `s36..s38 * DS.rgb`, `+= light * DS.a`
+  at `@0xe08` to `@0xe10` (`data08` `@0xe34` to `@0xe3c`).
+
+The sampler's sRGB format decodes the RGB and not the alpha, so the grey surface is the raw alpha
+and the tint the decoded colour, as on HD. Confidence 85.
+
+**The chevron emissive, read and not drawn.** Both titles' chevron programs add, after the
+light, `max(E.rgb, Colour * mix(E.rgb, W.rgb, E.a))` with `E` the emissive mask (`Emiss_Mask`,
+squared on 2048) and `W` the wave sampled at `uv * UVScale + offset` (2048 #3 words 12 to 28;
+Omega `@0x105c4` `@0xcfc`, `@0xd40` to `@0xdd0`; `data08` `@0xc84`, `@0xd90` to `@0xda4`). That is
+not HD's (`light * (DS.a + E.rgb) + E.a * Colour * wave`). Its wave offset animates by a curve
+nobody has read on either title, so it is not wired.
+
+**What landed.** `oag_mesh::mesh::rcs::psp2`'s `lit_alpha` admits the five file stems
+(`reversed_diffuse_specular_normal`, `cf_chevron_pulse`, `cf_chevron_pulse_time`,
+`track_surface_displaced2out`, `cf_chevron_pulse_displacement2out`) on a lit submesh whose
+material binds a picture, and sets `slots::LIT_ALPHA`; `shade.wesl` is unchanged (its `decode` is
+the square on 2048 and 2.2 on Omega, which is each program's tint). The loader report counts
+"submesh(es) light the albedo's alpha". `psp2_twin_blend_ground_truth` holds the flag on every
+Anulpha model of both titles and on no other circuit's.
+
+**Result** (region means of the stored pairs, linear-light chromaticity, ours minus theirs; the
+regions are `WxH+X+Y` in the pair's own frame):
+
+| Pair, region | dR/G before | dB/G before | dR/G after | dB/G after |
+| --- | ---: | ---: | ---: | ---: |
+| `omega/anulpha-pass`, road plate `190x70+870+450` | -0.267 | +0.180 | +0.084 | -0.047 |
+| `omega/anulpha-pass`, right wall `430x140+1450+380` | +0.081 | +0.515 | +0.032 | -0.113 |
+| `omega/anulpha-pass`, chevron lane `200x70+100+650` | -0.030 | +0.265 | +0.235 | -0.145 |
+| `omega/anulpha-pass`, whole frame | -0.009 | +0.068 | +0.033 | -0.030 |
+| `2048-vita/anulpha-pass`, road plate `140x28+400+262` | -0.083 | +0.416 | -0.064 | -0.039 |
+| `2048-vita/anulpha-pass`, left wall `150x40+0+175` | -0.081 | +0.182 | +0.017 | -0.087 |
+| `2048-vita/anulpha-pass`, right wall `200x80+700+180` | -0.269 | +0.504 | -0.157 | -0.053 |
+| `2048-vita/anulpha-pass`, chevron strip `140x18+30+282` | -0.145 | +0.318 | -0.090 | -0.003 |
+| `2048-vita/anulpha-pass`, whole frame | -0.190 | +0.152 | -0.211 | +0.015 |
+
+Whole-frame mean grey difference (the tool's metric): Omega 30.28 to 29.57, 2048 15.13 to 17.31.
+Every other Omega pair (twelve HD-lineage and eight 2048-lineage circuits) and every other
+2048-vita pair is unchanged to the decimal.
+
+**What remains.** (1) Omega's chevron lanes read dark navy where the original glows cyan
+(`srgb` 35, 49, 60 against 34, 91, 107): the unwired emissive above. (2) The surfaces read
+brighter than the originals (2048 road plate G 95 against 57, Omega right wall 85 against 59):
+the raw alpha is what both programs light, so the excess is in the light or the exposure, not
+this law. (3) 2048's floor-chevron strips stay bright (G 139 against 59) with the chromaticity
+now matched: the strips' own light term is too strong there; the specular is not it (zeroing it
+leaves the frame identical). The chevron submeshes bind the same lightmap atlas as the plain
+floor (`nova_mesh_combine_track_12-lmap.gxt`) over their own region (`lmuv` 0 to 0.62 by 0.67 to
+0.75).
 
 ## The LOD bias, wired and held (2026-10-21, `hd-lod-bias`)
 
