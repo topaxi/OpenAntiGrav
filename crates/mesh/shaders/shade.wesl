@@ -922,8 +922,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if chevron {
         let e = material_sample(MATERIAL_FIFTH_MAP, in.texcoord);
         let w = material_sample(MATERIAL_SIXTH_MAP, in.lightmap_texcoord.zw);
-        chevron_surface = decode(e.rgb);
-        chevron_glow = e.a * glow_tint_offset.rgb * decode(w.rgb);
+        let e_linear = decode(e.rgb);
+        let w_linear = decode(w.rgb);
+        // **2048's and Omega's combine** (the entry's `program[1]`, `oag_mesh::mesh::rcs::psp2`'s
+        // `chevron`): no emask inside the light, and `max(E, Colour * mix(E, W, E.a))` after it
+        // (`docs/rendering/hd-track-tone.md`, "2048 and Omega").
+        let lineage = row_scale.w > 0.5;
+        chevron_surface = select(e_linear, vec3<f32>(0.0), lineage);
+        chevron_glow = select(
+            e.a * glow_tint_offset.rgb * w_linear,
+            max(e_linear, glow_tint_offset.rgb * mix(e_linear, w_linear, e.a)),
+            lineage,
+        );
     }
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.

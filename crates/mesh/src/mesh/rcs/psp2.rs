@@ -44,6 +44,7 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod alpha_emissive;
 mod alpha_product;
+mod chevron;
 mod emissive_add;
 mod glow;
 mod lit_alpha;
@@ -127,6 +128,10 @@ pub struct Report {
     pub nova_vertex_submeshes: usize,
     /// Submeshes whose program lights the albedo's alpha (`lit_alpha`, Anulpha Pass).
     pub lit_alpha_submeshes: usize,
+    /// Chevron materials drawing their emissive mask and wave (`chevron`).
+    pub chevron_materials: usize,
+    /// Chevron materials whose mask or wave would not decode, or found no table row.
+    pub chevron_unread: usize,
     /// Textured draws routed to the blended list by their material's state word
     /// (alpha-over, chosen) - see [`transparency`].
     pub blended_draws: usize,
@@ -357,8 +362,8 @@ impl Report {
             lightmaps
         } else {
             format!(
-                "{lightmaps}; {} submesh(es) light the albedo's alpha",
-                self.lit_alpha_submeshes
+                "{lightmaps}; {} submesh(es) light the albedo's alpha, {} chevron material(s) add their mask and wave ({} unread, the wave offset held)",
+                self.lit_alpha_submeshes, self.chevron_materials, self.chevron_unread
             )
         };
         let nodes = if self.node_bound == 0 {
@@ -684,6 +689,14 @@ fn build_planned(
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
     let tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    // Anulpha Pass's chevrons add their emissive mask and wave after the light.
+    let chevron = chevron::plan(
+        &decoded,
+        &mut glow.emissive,
+        &mut glow.tracks,
+        &mut *textures,
+        &mut report,
+    );
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     let uv_keys = billboard_vex.map_or_else(uv_keys::Plan::default, |vex_blob| {
@@ -926,6 +939,7 @@ fn build_planned(
                     role
                 }) | emissive_add.role(submesh.material)
                     | tarmac.role(submesh.material)
+                    | chevron.role(submesh.material)
                     | glass.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
@@ -1003,7 +1017,7 @@ fn build_planned(
 
     bind_textures(
         &decoded,
-        (&glow, &twin, &normals, &emissive_add, &tarmac),
+        (&glow, &twin, &normals, &emissive_add, &tarmac, &chevron),
         &mut model,
         &mut report,
         textures,
@@ -1023,12 +1037,13 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac): (
+    (glow, twin, normals, emissive_add, tarmac, chevron): (
         &glow::Plan,
         &twin_blend::Plan,
         &normal_map::Plan,
         &emissive_add::Plan,
         &tarmac::Plan,
+        &chevron::Plan,
     ),
     model: &mut Model,
     report: &mut Report,
@@ -1172,12 +1187,21 @@ fn bind_textures(
                         .or_else(|| normals.of(Some(index)).cloned()),
                 );
             }
-            if tarmac.any() {
+            if tarmac.any() || chevron.any() {
                 let layers = tarmac.of(Some(index));
+                let pulse = chevron.of(Some(index));
                 debug_assert_eq!(model.fifth_maps.len(), at);
-                model.fifth_maps.push(layers.map(|l| l.markings.clone()));
+                model.fifth_maps.push(
+                    layers
+                        .map(|l| l.markings.clone())
+                        .or_else(|| pulse.map(|p| p.emask.clone())),
+                );
                 debug_assert_eq!(model.sixth_maps.len(), at);
-                model.sixth_maps.push(layers.map(|l| l.dirt.clone()));
+                model.sixth_maps.push(
+                    layers
+                        .map(|l| l.dirt.clone())
+                        .or_else(|| pulse.map(|p| p.wave.clone())),
+                );
             }
             if twin.any() || tarmac.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);

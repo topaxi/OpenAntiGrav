@@ -13,7 +13,8 @@
 //! The same pass holds `slots::LIT_ALPHA` (`oag_mesh::mesh::rcs::psp2`, `lit_alpha`): Anulpha
 //! Pass's walls, floor plates and chevrons light their albedo's alpha on both titles, read on
 //! each title's own programs (`docs/rendering/hd-track-tone.md`, "2048 and Omega"), and no other
-//! circuit here carries the flag.
+//! circuit here carries the flag; their chevrons bind the emissive mask and the wave
+//! (`chevron`).
 
 use std::path::Path;
 
@@ -246,10 +247,21 @@ fn check_lit_alpha(name: &str, model: &Model, report: &psp2::Report) {
             "{name}: {} alpha-lit submesh(es), {flagged} vertices",
             report.lit_alpha_submeshes
         );
+        // The chevrons bind their emissive mask and wave (`psp2`'s `chevron`).
+        assert!(
+            report.chevron_materials >= 2 && report.chevron_unread == 0,
+            "{name}: {} chevron material(s), {} unread",
+            report.chevron_materials,
+            report.chevron_unread
+        );
     } else {
         assert_eq!(
-            (report.lit_alpha_submeshes, flagged),
-            (0, 0),
+            (
+                report.lit_alpha_submeshes,
+                flagged,
+                report.chevron_materials
+            ),
+            (0, 0, 0),
             "{name}: alpha-lit off Anulpha Pass"
         );
     }
