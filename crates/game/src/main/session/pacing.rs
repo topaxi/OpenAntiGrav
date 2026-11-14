@@ -1,12 +1,17 @@
 //! The frame limiter: which limit is in force for what is on screen, and the
 //! schedule that holds the loop to it.
 
+use oag_present::drs::Target;
 use oag_present::perf;
 
 use super::Session;
 use crate::stage::Stage;
 
 /// How often the monitor's refresh report is asked for again.
+const TARGET_FPS: &str = "graphics.target_fps";
+const FOLLOW_VALUE: &str = "default";
+const TARGET_DEFAULT_ID: &str = "OAG_GRAPHICS_TARGET_FPS_DEFAULT";
+
 const REPORT_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 /// How many frames old a timed GPU cost may be and still stand for the frame being drawn. The
 /// reading lands a few frames after the work it times.
@@ -153,12 +158,36 @@ impl Session {
         let shown = self.display.hz();
         if self.logged_display_hz != Some(shown) {
             self.logged_display_hz = Some(shown);
+            let target = self.render_profile().target_fps;
             log::debug!(
-                "display refresh in force: {} (target {} held under it)",
+                "display refresh in force: {} (target {target} held under it)",
                 shown.map_or_else(|| "unknown".to_string(), |hz| format!("{hz} Hz")),
-                self.render_profile().target_fps
             );
+            if target.follows_display() && shown.is_none() {
+                log::debug!(
+                    "target fps default: no refresh rate known, aiming for {}",
+                    Target::FOLLOW_FALLBACK_HZ
+                );
+            }
+            let label = self.target_default_label();
+            if let Stage::Menu(stage) = &mut self.stage {
+                stage.menu.relabel_choice(TARGET_FPS, FOLLOW_VALUE, &label);
+            }
         }
+    }
+
+    /// What the TARGET FPS row draws for `default`: the rate it resolves to now.
+    pub(super) fn target_default_label(&self) -> String {
+        let strings = oag_ui::strings::project_table(self.settings.language.as_deref());
+        let hz = self.display.hz().unwrap_or(Target::FOLLOW_FALLBACK_HZ);
+        strings
+            .get_or_fallback(TARGET_DEFAULT_ID, "DEFAULT (%s)")
+            .replace("%s", &hz.to_string())
+    }
+
+    /// [`Self::target_default_label`] on a menu not yet on screen.
+    pub(super) fn label_target_default(&self, model: &mut oag_ui::menu::Menu) {
+        model.relabel_choice(TARGET_FPS, FOLLOW_VALUE, &self.target_default_label());
     }
 
     /// Puts the next frame on the schedule, one period after the last one was

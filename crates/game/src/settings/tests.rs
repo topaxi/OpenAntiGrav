@@ -174,6 +174,24 @@ perf_overlay = \"fps\"
     assert_eq!(round_tripped.display.frame_limit.hz(), Some(120));
 }
 
+/// `default` is stored as the word, not as the rate it resolved to, so a profile
+/// moved to another monitor still follows it.
+#[test]
+fn a_default_target_fps_round_trips_as_the_word() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout HD\"]
+target_fps = \"default\"
+",
+    );
+    let key = profile_key(oag_hd::TITLE, oag_disc::Platform::Ps3);
+    let target = settings.render_profiles[&key].target_fps;
+    assert!(target.follows_display());
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    assert!(written.contains("target_fps = \"default\""), "{written}");
+    assert_eq!(read(&written).render_profiles[&key].target_fps, target);
+}
+
 /// The already-migrated case, where something has put an old key back: the
 /// new spelling is the one the player last saw on the menu, so it wins.
 #[test]

@@ -103,6 +103,7 @@ BASELINE_SUBTITLES: set[tuple[str, str]] = set()
 # site is what was copied in, so the two must be kept in step by hand until
 # either file gains its own generated manifest.
 STRING_CONSUMERS = [
+    "crates/game/src/main/session/pacing.rs",
     "crates/game/src/main/session/pilot_editor.rs",
     "crates/game/src/main/session/pilot_editor/tests.rs",
     "crates/game/src/capture/menu_page.rs",

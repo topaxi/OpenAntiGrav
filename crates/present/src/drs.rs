@@ -202,6 +202,16 @@ impl Target {
     /// load without them asking.
     pub const DEFAULT: Self = Self::OFF;
 
+    /// The refresh rate of the output the window is on, whatever that is now.
+    ///
+    /// Not a rate: it stays unresolved until [`Self::resolve`] turns it into one
+    /// at the call site, so the controller never learns where its number came
+    /// from. Until then it reads as no rate at all ([`Self::hz`] is `None`).
+    pub const FOLLOW_DISPLAY: Self = Self(u32::MAX);
+
+    /// The rate [`Self::resolve`] aims for when no refresh rate is known.
+    pub const FOLLOW_FALLBACK_HZ: u32 = 60;
+
     /// The fastest target that can be asked for.
     ///
     /// Not a preference: past here the budget is shorter than the readings
@@ -220,16 +230,38 @@ impl Target {
         Self(144),
     ];
 
-    /// The rate aimed for, or `None` when this is off.
+    /// The rate aimed for, or `None` when this is off or still
+    /// [`Self::FOLLOW_DISPLAY`].
     #[must_use]
     pub fn hz(self) -> Option<u32> {
-        (self.0 > 0).then_some(self.0)
+        (self.0 > 0 && self.0 <= Self::MAX).then_some(self.0)
     }
 
     /// Whether a controller runs at all.
     #[must_use]
     pub fn is_on(self) -> bool {
-        self.0 > 0
+        self.hz().is_some()
+    }
+
+    /// Whether this names the output's own rate rather than a fixed one.
+    #[must_use]
+    pub fn follows_display(self) -> bool {
+        self == Self::FOLLOW_DISPLAY
+    }
+
+    /// This target with [`Self::FOLLOW_DISPLAY`] replaced by `display_hz`, or by
+    /// [`Self::FOLLOW_FALLBACK_HZ`] when the platform reports none. Any other
+    /// target is returned as it is.
+    #[must_use]
+    pub fn resolve(self, display_hz: Option<u32>) -> Self {
+        if !self.follows_display() {
+            return self;
+        }
+        Self(
+            display_hz
+                .unwrap_or(Self::FOLLOW_FALLBACK_HZ)
+                .clamp(1, Self::MAX),
+        )
     }
 
     /// This target, held under a presentation rate that will not deliver it.
@@ -302,6 +334,7 @@ impl Target {
     pub fn name(self) -> String {
         match self.hz() {
             Some(hz) => hz.to_string(),
+            None if self.follows_display() => "default".to_string(),
             None => "off".to_string(),
         }
     }
@@ -315,8 +348,11 @@ impl std::str::FromStr for Target {
         if text.eq_ignore_ascii_case("off") {
             return Ok(Self::OFF);
         }
+        if text.eq_ignore_ascii_case("default") {
+            return Ok(Self::FOLLOW_DISPLAY);
+        }
         let hz: u32 = text.parse().map_err(|_| {
-            format!("{text:?} is not a dynamic-resolution target; write a rate or \"off\"")
+            format!("{text:?} is not a dynamic-resolution target; write a rate, \"default\" or \"off\"")
         })?;
         // Zero is rejected rather than accepted as a second spelling of off,
         // the reason `FrameLimit` rejects it: two spellings for one value is
@@ -383,6 +419,10 @@ impl Limits {
     /// first meet.
     #[must_use]
     pub fn new(ceiling: (u32, u32), floor: (u32, u32), target: Target) -> Self {
+        debug_assert!(
+            !target.follows_display(),
+            "a target must be resolved to a rate before the controller sees it"
+        );
         let ceiling = (ceiling.0.max(1), ceiling.1.max(1));
         Self {
             ceiling,

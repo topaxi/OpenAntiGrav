@@ -1163,6 +1163,7 @@ impl Session {
         let replays = self.replay_choices(shell);
         model.supply(menu::ValueSource::Replays, &replays);
         self.seed_menu(&mut model, shell.title, shell.platform);
+        self.label_target_default(&mut model);
         self.resolve_menu_queries(&mut model);
         settings::supply_reset(
             &mut model,

@@ -180,6 +180,7 @@ OAG_DISPLAY_GAMMA = { text = "GAMA", human = false }
 OAG_GRAPHICS_RENDERER = { text = "RENDERIZADOR", human = false }
 OAG_GRAPHICS_RENDER_SCALE = { text = "ESCALA DE RENDERIZAÇÃO", human = false }
 OAG_GRAPHICS_TARGET_FPS = { text = "FPS ALVO", human = false }
+OAG_GRAPHICS_TARGET_FPS_DEFAULT = { text = "PADRÃO (%s)", human = false }
 OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "RESOLUÇÃO MÍNIMA", human = false }
 OAG_GRAPHICS_RECONSTRUCTION = { text = "RECONSTRUÇÃO", human = false }
 OAG_GRAPHICS_UPSCALER_SHARPNESS = { text = "NITIDEZ DO UPSCALER", human = false }

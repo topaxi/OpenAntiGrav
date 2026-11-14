@@ -593,6 +593,19 @@ other two share the RECONSTRUCTION row.
 floor halves against `upscale::magnifies`, the same guard the `off` halves were
 already pinned to.
 
+### `default` follows the output
+
+The TARGET FPS row offers `default` after the fixed rates, stored as the word
+`"default"` in `[render_profiles.<title>]`. It is resolved each frame at
+`Session::render_limits` (`crates/game/src/main/session/draw.rs`) with
+`drs::Target::resolve(display.hz())`, so the controller only ever sees a
+rate: the refresh the window's output reports (re-polled about once a second,
+so moving the window to another monitor retargets), or 60 when the platform
+reports none (logged at `debug`). The limiter and display clamp below still
+apply on top. The row draws as `DEFAULT (144)` with the rate in force, set
+when the menus open and again when the rate changes. No `warn_when` pair is
+declared for it: its rate is the output's own.
+
 ### The target is held to the frame limiter and to the display
 
 Aiming above the limiter asks for frames the loop is not allowed to produce. At
