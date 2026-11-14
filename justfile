@@ -485,7 +485,9 @@ hash-images:
 # A bare flag (`--ticks 5`) still gets the EU default; anything
 # else (a path or `image:entry` spec) is passed straight through unchanged,
 # so `just play data/images/foo.chd --ticks 5` still works.
-play *ARGS:
+# Every mod guest is rebuilt first (`rebuild-guests`, about a second once
+# cached), so a guest edited since its last build never runs stale.
+play *ARGS: rebuild-guests
     #!/usr/bin/env bash
     set -euo pipefail
     # `--interpreter` is ours, not the game's: it builds with `wasm-interpreter` (the
