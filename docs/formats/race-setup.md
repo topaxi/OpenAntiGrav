@@ -70,6 +70,16 @@ name="Single Player">`. Five `<List>` widgets, read directly. Confidence 92.
 `Difficulty` against `SkillLevel` - on all three titles that have it. Code
 keying off the widget name will not find the saved value.
 
+**`Eliminations` is a false friend across titles. Do not unify it.** On Pulse
+and the PS2 it is a list of kill counts (5, 10, 15, 20, 25). On HD the widget
+of that name is a `<Slider>`, not a list
+([hd-frontend.md](hd-frontend.md), "`Eliminations` is a `<Slider>`"), and HD's
+TARGET row is a separate row fed by the score rule's own file
+(`ScoreRule::race_setup`): a score target, not a kill count. An earlier note
+gave the HD slider as min 200, max 600, step 20, disabled (an `a`-prefixed
+`aSlider`); that was not re-read from the HD files in this audit, so treat the
+range as single-source and unscored.
+
 **When the `Eliminations` row shows** (read 2026-09-30 off the screen's per-mode visibility
 routine `FUN_088e715c`, called with the mode index, Pulse PSP USA; confidence 75 - the
 helpers are read, the mode index to mode name mapping is by elimination, so only Elimination

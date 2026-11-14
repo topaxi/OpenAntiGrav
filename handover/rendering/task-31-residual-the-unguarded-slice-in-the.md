@@ -1,19 +1,27 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-09-10
-summary: "Add test coverage for the orbit guard in crates/view/src/orbit.rs; needs a window"
+updated: 2026-11-14
+summary: "Add test coverage for the orbit guard at crates/view/src/orbit.rs:560 (empty vertex or index buffer); the race-side guard question is moot"
 difficulty: easy (35)
 ---
 
-# Task #31 residual: the unguarded `slice(..)` in the race's draw path
+# Task #31 residual: the orbit guard has no test
 
-`oag-view --collision`'s panic on an empty vertex buffer is fixed. **Corrected 2026-09-10 (thread audit note): the premise below was already stale the day this thread was split out.** `Drawable::draw` was never left deliberately unguarded - commit `cec399e7` (2026-08-16, splitting the 11,294-line race file into its own seams) added an empty-model early return immediately before the `slice(..)` calls, and that guard was already present when this thread was created (2026-08-25). It is confirmed still present today at `crates/raceplay/src/drawable.rs:552-554` (the function moved from line 275 to 535 in the same split; the old line number was never updated). The `orbit` guard is the one still genuinely without coverage - it needs a window.
+`oag-view --collision`'s panic on an empty vertex buffer is fixed by a guard at
+`crates/view/src/orbit.rs:560` (`if !self.model.vertices.is_empty() &&
+!self.model.indices.is_empty()`), skipping every `slice(..)` below it. The
+race side no longer has the question: `crates/raceplay/src/drawable.rs` has no
+`Buffer::slice(..)` call today (its draw goes through `DrawCall`), and the
+early-return the older note cited moved with it.
 
 ## Open
 
-- The `orbit` guard (`crates/view/src/orbit.rs`) has no test coverage - `crates/view/src/orbit.rs` has zero `#[test]` in the file
+- The orbit guard has no test: `rg -c '#\[test\]' crates/view` finds none.
+  `crates/view/src/offscreen.rs` already reads a frame back headless, so a
+  test may not need a window; unconfirmed.
 
 ## Next Steps
 
-- Add coverage for the `orbit` guard - it needs a window
+- Build an `OrbitView` over a model with no vertices and draw one frame
+  through the offscreen path; assert no panic.

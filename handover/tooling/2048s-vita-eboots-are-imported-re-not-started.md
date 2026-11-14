@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-09-04
-summary: "Run auto-analysis on the three other imported 2048 programs; data/keys is not durable across machines"
+updated: 2026-11-14
+summary: "Confirm auto-analysis on the two USA 2048 programs (eu-base is done); data/keys is not durable across machines"
 difficulty: easy (30)
 ---
 
@@ -77,28 +77,11 @@ script's fallback case doesn't apply here. Evidence in
 
 ## Next Steps
 
-- The other three programs (`usa-v104`, `eu-base`, `usa-base`) are imported
-  but not fully analyzed - run auto-analysis on them opportunistically, same
-  "corroboration only" role as `psp-pulse-eu`/`psp-pure-eu`, not urgent.
-  **In progress as of 2026-09-04, left running rather than finished**:
-  `run_analysis` triggered on all three in the shared Ghidra JVM (PID
-  discoverable via `list_instances`); confirmed via `get_metadata` (distinct
-  executable paths under `data/extracted/vita/PCSA00015`/`PCSF00007`,
-  distinct memory sizes) that each is a genuinely separate binary, not one
-  program analyzed three times under a colliding path. Over roughly 25
-  minutes of polling, `usa-v104` climbed 1,197 -> 12,169 functions then
-  plateaued at 12,169 while still reporting `analyzing: true` (a slower pass
-  past the point new functions are found, not a hang - `eu-v104`'s own
-  final count was 12,420). `eu-base` and `usa-base` never moved off their
-  pre-analysis 1,197 in that same window, apparently queued behind
-  `usa-v104` in the single JVM (also contended by a concurrent session's
-  `oag-view` GXP work in the same instance). The session that triggered this
-  did not wait for completion - background analysis on a shared Ghidra
-  instance outlives any one session. Whoever picks this up next: call
-  `analysis_status` for all three programs first thing, and the moment each
-  reports `analyzing: false`, run `save_program` (or `save_all_programs`) -
-  Ghidra analysis lives in memory until saved and is not otherwise durable.
+- `eu-base` is analysed (12,281 functions, open in Ghidra, 2026-11-14). The
+  two USA programs (`/2048/eboot-vita-2048-usa-v104.elf`, `usa-base`) are not
+  open and their project version is 3, the import's own, so analysis is
+  unconfirmed for both: open each, read `get_function_count` (expect about
+  12,4xx, the import alone gives 1,197), run `run_analysis` if low, then
+  `save_program`. Corroboration only, not urgent.
 - Decide whether `data/keys/vita-zrif.tsv` should also record DLC1/DLC2
-  zRIFs now that the recovery method (nopaystation.com's TSV export, grepped
-  directly) is fast and repeatable - not needed yet since DLC PKGs carry no
-  binaries at all.
+  zRIFs; not needed yet since DLC PKGs carry no binaries at all.

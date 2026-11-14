@@ -743,14 +743,18 @@ uv run scripts/trace-omega-identity.py \
 these sections' tables come from is `talons-junction-clean-lap.csv` today -
 2,977 ticks, 2,837 clean intervals (95.3 %), (C) reading `0.2533` / `0.9685` /
 `0.6643` against the `0.231` / `0.970` / `0.647` recorded above.
-`talons-junction-time-trial-lap-omega.csv` no longer exists under that name, and
-the `talons-junction-time-trial-lap.csv` in `data/traces/` today is a different
+`talons-junction-time-trial-lap-omega.csv` was absent when this was written; it
+is tracked in git again (commit `d43a8c398`, 3,140 data rows, the tick count the
+"That capture was taken" section above cites, so the file is consistent with
+that analysis; the clean-interval count was not recomputed). The
+`talons-junction-time-trial-lap.csv` in `data/traces/` today is a different
 capture from the one the
 [lateral and yaw fits](#the-capture-and-the-discipline-applied-to-it) were taken
 on: it carries the `omega_*` columns those fits predate, and reads 696 clean
 intervals of 3,146 ticks (22.1 %) with (C) at `1.35` / `0.99` / `1.01`. The
-provenance was not chased; read the earlier sections' reproduce command as
-naming a capture that is no longer in the tree under that name.
+provenance was not chased; read an earlier section's reproduce command that
+names `talons-junction-time-trial-lap.csv` as naming a capture that is no longer
+in the tree under that name.
 
 ## What this page confirms, refutes and leaves open
 
