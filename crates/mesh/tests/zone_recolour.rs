@@ -143,16 +143,21 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
 }
 
 /// Identity camera and model, so clip space is model space.
-fn uniforms() -> Vec<u8> {
-    let identity: [[f32; 4]; 4] = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
+/// `scale` grows the model into world space and the view-projection shrinks it
+/// back, so the frame is the same and only world distances change.
+fn uniforms(scale: f32) -> Vec<u8> {
+    let diagonal = |d: f32| -> [[f32; 4]; 4] {
+        [
+            [d, 0.0, 0.0, 0.0],
+            [0.0, d, 0.0, 0.0],
+            [0.0, 0.0, d, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    };
+    let identity = diagonal(1.0);
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // view_projection
-    bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // model
+    bytes.extend_from_slice(bytemuck::cast_slice(&diagonal(1.0 / scale))); // view_projection
+    bytes.extend_from_slice(bytemuck::cast_slice(&diagonal(scale))); // model
     bytes.extend_from_slice(&[0u8; 32]); // the four pad floats, then the environment-probe layer and its padding
     bytes.extend_from_slice(&[0u8; 32]); // hull point lights
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // prev_mvp
@@ -674,10 +679,12 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
 /// original's own `distance(worldPos, zoneOrigin) < zoneColourTint.w` puts
 /// on every Zone surface as a stage change sweeps out of the craft.
 ///
-/// The identity matrices make world space clip space, so the quad spans
-/// `x` in `-0.9..0.9` at `z = 0.5`. The origin sits at its left edge and the
-/// radius is one unit: `x = -0.5` is half a unit in and `x = 0.5` a unit and
-/// a half out. Inner is red, Outer is green, both through a white stage
+/// The model is drawn a hundred times larger in world space (`WORLD`), so the
+/// quad spans `x` in `-90..90` at `z = 50`. The origin sits at its left edge
+/// and the radius is a hundred units: on row 48 (`y = -50`) the probes are
+/// 29 units inside the surface and 58 outside it, clear of the wavefront
+/// ring's ten-unit band, and the frame's centre is under two units from the
+/// surface, where the ring draws white. Inner is red, Outer is green, both through a white stage
 /// texel so the pixel is the parameter alone - and a swapped select lands
 /// each fragment on the other's colour, which no assertion here accepts.
 #[test]
@@ -705,12 +712,12 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.fog.camera = [0.0, 0.0, 100.5 * WORLD];
     scene.zone = Zone {
         uv_scale: [1.0, 1.0],
         enabled: 1.0,
-        radius: 1.0,
-        origin: [-1.0, 0.0, 0.5, 1.0],
+        radius: WORLD,
+        origin: [-WORLD, 0.0, 0.5 * WORLD, 1.0],
         // The Track pair is a magenta poison on both sides, as `scene_zone`
         // binds it: this quad carries no `ZONE_TRACK`, so it must read the
         // Scene pair.
@@ -729,9 +736,17 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
         ..Zone::default()
     };
 
-    let frame = draw_frame(&device, &queue, &surface, &scene_art(&stage), scene, None);
-    // Row 48 is `y = -0.5`, where the triangle is 1.4 units wide, so both
-    // columns land on it: column 16 is `x = -0.5`, column 48 is `x = 0.5`.
+    let frame = draw_frame_scaled(
+        &device,
+        &queue,
+        &surface,
+        &scene_art(&stage),
+        scene,
+        None,
+        WORLD,
+    );
+    // Row 48 is `y = -50`, where the triangle is 140 units wide, so both
+    // columns land on it: column 16 is `x = -50`, column 48 is `x = 50`.
     let texel = |column: u32, row: u32| {
         let at = ((row * SIZE + column) * 4) as usize;
         (frame[at], frame[at + 1], frame[at + 2])
@@ -740,12 +755,17 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
     assert_eq!(
         texel(left, row),
         (255, 0, 0),
-        "half a unit from the origin is inside the sphere and reads the Inner pair"
+        "29 units inside the sphere reads the Inner pair"
     );
     assert_eq!(
         texel(right, row),
         (0, 255, 0),
-        "a unit and a half from the origin is outside and reads the Outer pair"
+        "58 units outside reads the Outer pair"
+    );
+    assert_eq!(
+        texel(SIZE / 2, SIZE / 2),
+        (255, 255, 255),
+        "the sphere's surface draws the wavefront's white ring"
     );
 
     // **And with the Outer pair equal to the Inner, the radius is
@@ -753,7 +773,15 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
     // altogether, relies on that.
     scene.zone.scene_outer = inner;
     scene.zone.radius = 0.0;
-    let settled = draw_frame(&device, &queue, &surface, &scene_art(&stage), scene, None);
+    let settled = draw_frame_scaled(
+        &device,
+        &queue,
+        &surface,
+        &scene_art(&stage),
+        scene,
+        None,
+        WORLD,
+    );
     let texel = |column: u32, row: u32| {
         let at = ((row * SIZE + column) * 4) as usize;
         (settled[at], settled[at + 1], settled[at + 2])
@@ -810,12 +838,12 @@ fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside(
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.fog.camera = [0.0, 0.0, 100.5 * WORLD];
     scene.zone = Zone {
         uv_scale: [1.0, 1.0],
         enabled: 1.0,
-        radius: 1.0,
-        origin: [-1.0, 0.0, 0.5, 1.0],
+        radius: WORLD,
+        origin: [-WORLD, 0.0, 0.5 * WORLD, 1.0],
         track: poison,
         track_outer: poison,
         scene: white,
@@ -823,7 +851,7 @@ fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside(
         ..Zone::default()
     };
 
-    let frame = draw_frame(&device, &queue, &surface, &art, scene, None);
+    let frame = draw_frame_scaled(&device, &queue, &surface, &art, scene, None, WORLD);
     let texel = |column: u32, row: u32| {
         let at = ((row * SIZE + column) * 4) as usize;
         (frame[at], frame[at + 1], frame[at + 2])
@@ -832,12 +860,12 @@ fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside(
     assert_eq!(
         texel(left, row),
         (255, 0, 0),
-        "half a unit from the origin is inside the sphere and samples the Inner texture"
+        "29 units inside the sphere samples the Inner texture"
     );
     assert_eq!(
         texel(right, row),
         (0, 255, 0),
-        "a unit and a half out is outside and samples the Outer texture"
+        "58 units outside samples the Outer texture"
     );
 }
 
@@ -860,6 +888,10 @@ fn draw(
     [frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]
 }
 
+/// How much larger than the screen the sphere tests draw their quad in world
+/// space. See [`draw_frame_scaled`].
+const WORLD: f32 = 100.0;
+
 /// [`draw`], returning the whole `SIZE`x`SIZE` RGBA frame, row-major from
 /// the top, for a test that reads more than one texel of it.
 fn draw_frame(
@@ -869,6 +901,21 @@ fn draw_frame(
     stage: &zone::StageArt,
     scene: Scene,
     zone_vis: Option<(&[f32], [u8; 3])>,
+) -> Vec<u8> {
+    draw_frame_scaled(device, queue, model, stage, scene, zone_vis, 1.0)
+}
+
+/// [`draw_frame`] with the quad `world_scale` times larger in world space and
+/// the same on screen, for a test whose world distances must clear the
+/// wavefront ring's ten-unit band.
+fn draw_frame_scaled(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    stage: &zone::StageArt,
+    scene: Scene,
+    zone_vis: Option<(&[f32], [u8; 3])>,
+    world_scale: f32,
 ) -> Vec<u8> {
     let built = mesh_render::build(
         device,
@@ -899,7 +946,7 @@ fn draw_frame(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&uniform_buffer, 0, &uniforms());
+    queue.write_buffer(&uniform_buffer, 0, &uniforms(world_scale));
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("zone uniforms"),
         layout: &built.pipeline.get_bind_group_layout(0),

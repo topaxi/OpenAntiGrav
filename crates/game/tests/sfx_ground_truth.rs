@@ -468,6 +468,10 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
         says("MR_SUZ (stage 11) -> 2 waveform(s)"),
         "the once-silent class stopped decoding both its waveforms"
     );
+    assert!(
+        announcer.tone_voices(&mut rng).is_some(),
+        "the class-step tone ZONEBAR_TRANS did not decode"
+    );
 }
 
 #[test]

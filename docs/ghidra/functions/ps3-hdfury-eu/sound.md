@@ -1081,3 +1081,34 @@ timeline.
 - **Opcodes `0x00`-`0x04`, `0x07`, `0x09`-`0x18`, `0x1a`-`0x21`,
   `0x25`-`0x2c`.** The table covers at least 40 entries past `0x927614`;
   only seven are read.
+
+## The class-step tone's bank
+
+2026-11-15. `Zone_UpdateCraftClass` (`0x0006c600`) plays `ZONEBAR_TRANS` as
+`Sound_PlayBankCue(*0x00b6cc28, *0x00b6cc50, "ZONEBAR_TRANS", 0x400, 0, 0, 0, 0)`:
+the TOC slots `0x008a6ee4` and `0x008a6ee8` read `0x00b6cc28` (the sound
+manager, the same first argument `HBEAT` and the menu cues pass) and
+`0x00b6cc50`. The bank handle at `0x00b6cc50` is the **race's environment
+bank**: `FUN_003120b8` plays `~UNDERWATER` out of the same handle (TOC slot
+`0x008b5048`), and `~UNDERWATER` is an environment-bank cue. In Zone that
+bank is `Data\Sound\env0_zone.bnk`. Confidence 75: the handle's writer was
+not read, only its two readers.
+
+**Two copies of `env0_zone.bnk` ship, and only one names the cue.** On
+`hdfury-ps3-eu-dec.iso`, `DATA00.PSARC`'s copy (2,868,752 bytes) names no
+`ZONEBAR_TRANS`; `DATA01.PSARC`'s (4,492,608 bytes) does, as a timeline cue
+of five voices. The only other bank carrying the string is `DATA00`'s
+`weapons_nitro.bnk`. `DATA00` is Fury's archive and loads last
+(`hd-frontend.md`, "`DATA00`'s copy is the live one"), so whether a Fury
+pressing's plain Zone race reaches `DATA01`'s copy, or `DATA00`'s copy serves
+Fury's Zone Battle and Detonator modes only, is not settled; the maintainer's
+reading is the latter. This engine plays the copy that names the cue
+(`oag_sound::sfx::ClassAnnouncer`), and the ground truth
+`wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues` asserts it
+decodes.
+
+**Not read**: the writer of `0x00b6cc50` per mode, which settles the Fury
+question; and whether `Zone_UpdateCraftClass`'s branch fires on every zone or
+only on a class step (it wraps a `0`-`14` rung counter). This engine fires the
+tone on the class-step edge the voice line already uses.
+

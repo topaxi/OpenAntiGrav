@@ -304,17 +304,12 @@ collision zone, or one loses a refused voice slot to something else entirely,
 is not established** - only that the code path itself arbitrates nothing
 between the two calls it makes on the same tick.
 
-**A candidate for the non-verbal half of a class change, found the same day
-and deliberately left unwired - and the maintainer's own play now
-corroborates that it exists.** `env0_zone.bnk` (HD's Zone environment sound
-bank, not `speech_zone.bnk`) names a cue `ZONEBAR_TRANS` - plausibly "Zone bar
-transition," the HUD ladder widget's own animation - but nothing traces a call
-site for it, and a single unread label is not the fourteen-way order match the
-`MR_*` ladder has. **Asked directly, the maintainer describes the class-change
-sound as a spoken class name and a non-verbal tone together, not one or the
-other** - independent evidence that a second, non-verbal cue really is there
-to find, strengthening the case for chasing `ZONEBAR_TRANS`'s trigger next
-rather than treating it as a name-only guess. **This entry previously also
+**The non-verbal half of a class change is `ZONEBAR_TRANS`, wired
+2026-11-15.** `Zone_UpdateCraftClass` plays it beside the voice line from the
+race's environment bank, which in Zone is `env0_zone.bnk`; only `DATA01`'s
+copy of that bank names the cue. Played as its five-voice timeline on the same
+class-step edge as the `MR_*` line. Evidence:
+[sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-tones-bank). **This entry previously also
 listed `HBEAT_ZCHANGE` as a
 third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly this session
 and is wrong - `speech_zone.bnk` names exactly 42 cues (`cue_count`, read off

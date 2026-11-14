@@ -150,6 +150,17 @@ fn clocks(ticks: u64) -> Vec<(u64, u64)> {
 /// clock of the view side from another moment.
 #[test]
 fn the_hud_clocks_after_a_seek_are_the_live_races_at_that_tick() {
+    // Several `Race` values live on this frame at once and a debug build copies them, so the
+    // default 2 MiB test stack is passed or missed by a few KB (as in `timeline.rs`).
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(the_hud_clocks_after_a_seek_body)
+        .expect("spawns")
+        .join()
+        .expect("the body passes");
+}
+
+fn the_hud_clocks_after_a_seek_body() {
     let (replay, _) = recording(TICKS);
     let live = clocks(TICKS);
     assert!(

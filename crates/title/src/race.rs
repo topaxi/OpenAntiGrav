@@ -160,6 +160,7 @@ mod zone_circuit;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{
     CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
+    ZoneClassTone,
 };
 pub use fresh::FreshVariant;
 pub use lineage::CircuitLineage;

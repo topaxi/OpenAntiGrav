@@ -447,6 +447,12 @@ pub const ZONE_CLASS_ANNOUNCER: &oag_title::ZoneClassAnnouncer = &oag_title::Zon
         "MR_SVE", "MR_VEN", "MR_SFL", "MR_FLA", "MR_SRA", "MR_RAP", "MR_SPH", "MR_PHA", "MR_SUP",
         "MR_ZEN", "MR_SUZ", "MR_Z_SUB", "MR_Z_M1", "MR_Z_SUP",
     ],
+    // The race's environment-bank slot (`*0x00b6cc50`), `env0_zone.bnk` in Zone.
+    tone: Some(oag_title::ZoneClassTone {
+        bank: r"Data\Sound\env0_zone.bnk",
+        cue: "ZONEBAR_TRANS",
+        tick: oag_title::SequenceTick::Ps3,
+    }),
 };
 
 /// Where each race cue lives, and the one title where two of them move.

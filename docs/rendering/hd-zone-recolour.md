@@ -158,11 +158,19 @@ line, which is what settling gives.
   with a smaller one, or a `zonemodetrack*` pair viewed head-on rather than
   at the grazing angle a chase camera puts a road surface at, where the
   `rim^5`/`rim^10` colour summands already dominate over the texture term.
-- **The glow's sphere term is read but not drawn.** `5.0 * saturate(1 -
-  0.1 * (distance - zoneColourTint.w))` now has both inputs bound, and as
-  read it adds `5.0` to every fragment *inside* the sphere rather than at its
-  edge - the RPCS3 frame at radius `799` shows no such flood. The reading is
-  what is in doubt; it stays out until re-read.
+- ~~**The glow's sphere term is read but not drawn.**~~ **Drawn 2026-11-15.**
+  The term is `5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)`: the
+  first reading lost the source `abs`, which made it a fill of the sphere's
+  interior. With it the term is a white band ten units either side of the
+  wavefront, the edge that sweeps out with the new stage's colours.
+  Evidence: [zone-shader.md](../ghidra/functions/ps3-hdfury-eu/zone-shader.md#the-wavefront-ring).
+  Headless on Talon's Junction (`--ticks 1500` to `1640`) the band is first a
+  circle on the road round the craft, a radius of a few tens of units, and
+  then moves out past the near track with the lime following it. That puts
+  the zone 2 step just before `--ticks 1500`, not at 1200 as the table below
+  has it; why the two disagree is not measured. Drawn only while the radius
+  is positive, so a title with no transition law (radius `0`) draws no ring
+  round the craft.
 - **Which live frame confirms the polarity.** `burst-2.png` at radius
   `3288` does: the near road green and the near walls lime (`Venom`'s
   `Track.Texture Colour` and `Scene.Texture Colour`), the far scenery still

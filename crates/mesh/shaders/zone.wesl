@@ -195,18 +195,13 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
 // transcription of anything on the disc. See that function's own doc
 // comment.
 //
-// **One additive term of the microcode's own glow is left out**:
-// `5.0 * saturate(1 - 0.1 * (distance - zoneColourTint.w))`. Both of its
-// inputs are bound now - `zone_inside` reads the same origin and radius -
-// and it is still not drawn, for a different reason than before: as read,
-// the term is `5.0` for every fragment *inside* the sphere (the argument
-// saturates to `1` wherever `distance <= radius`) and only tails off over
-// ten units past the boundary, which would flood the new stage's whole
-// interior white. The live RPCS3 frame at radius `799` shows nothing of the
-// kind - the near track is plainly the new stage's colours. So the reading
-// of that term is what is in doubt, not its inputs, and it stays out until
-// the microcode is re-read rather than being tuned into an edge glow that
-// looks right.
+// **The stage-change wavefront's white ring** is the microcode's other additive
+// term, `5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)` (`@0x26` to
+// `@0x40`): a band ten units either side of the sphere's surface, five times
+// full scale on its centre line. On a title with no transition law
+// (`oag_title::ZoneTransition`) the radius is `0` and the sphere never moves,
+// so the ring is drawn only while the radius is positive.
+// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`, "The wavefront ring".
 //
 // `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
 // own window-space depth in `0..1`, the same convention the microcode's own
@@ -239,5 +234,8 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
     let up = clamp(n.y - 0.5, 0.0, 1.0);
     let drive = zone_set(slots, world).effect.w;
-    return max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
+    let visualiser = max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
+    let edge = abs(distance(world, scene.zone.origin.xyz) - scene.zone.radius);
+    let ring = select(0.0, 5.0 * clamp(1.0 - 0.1 * edge, 0.0, 1.0), scene.zone.radius > 0.0);
+    return visualiser + vec3<f32>(ring);
 }

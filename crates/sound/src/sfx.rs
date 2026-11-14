@@ -380,7 +380,13 @@ impl Audio {
             // The Zone speed-class announcer: one voice line per stage raised this
             // tick (see `oag_raceplay::tick`). Unlike the milestone one, this trigger is
             // not yet read from HD's executable (`oag_title::ZoneClassAnnouncer`).
+            // The tone beside each line is HD's `ZONEBAR_TRANS`, played dry by the
+            // same branch (`docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "The
+            // class-step tone's bank").
             for stage in class_announcements {
+                if let Some(tone) = class_announcer.tone_voices(&mut voices.rng) {
+                    let _ = layers::start(mixer, &tone, Bus::Sfx, layers::Where::DRY);
+                }
                 let Some((sound, looping)) = class_announcer.pick(stage, &mut voices.rng) else {
                     continue;
                 };

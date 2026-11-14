@@ -587,12 +587,9 @@ pub use light::Light;
 /// 1. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
 ///    lookup is rewritten every frame from a value whose source is unread,
 ///    so `shaders/zone.wesl`'s `zone_glow` samples a lookup this project fills from
-///    its own mixer instead. Its additive sibling, `5.0 * saturate(1 - 0.1 *
-///    (distance - zoneColourTint.w))`, now has both its inputs and is still
-///    left out: as read it adds `5.0` to *every* fragment inside the sphere,
-///    not just at its edge, and the live frame at radius `799` shows no such
-///    flood - so the reading of that term is what is in doubt, and it stays
-///    out until it is re-read. See `shaders/zone.wesl`'s `zone_glow`.
+///    its own mixer instead. Its additive sibling, the wavefront's white ring
+///    `5.0 * saturate(1 - 0.1 * |distance - zoneColourTint.w|)`, is drawn
+///    from [`Self::origin`] and [`Self::radius`]; see `zone_glow`.
 // **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
 // alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
 // starts at a 16-aligned offset there. Rust's own alignment for it is 4, and

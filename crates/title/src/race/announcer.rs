@@ -191,15 +191,11 @@ impl ZoneAnnouncer {
 /// inference, and keeps all three from being able to disagree about when a
 /// class changed.
 ///
-/// **A candidate for the *non-verbal* half of a class change was found and is
-/// deliberately left unwired.** `env0_zone.bnk` (HD's Zone environment sound
-/// bank) names a cue `ZONEBAR_TRANS` - plausibly "Zone bar transition," the
-/// HUD ladder's own animation - but nothing traces when it plays either, and
-/// its name is a single unread label rather than a fourteen-way order match.
-/// See `docs/formats/psp-audio.md` for both findings side by side, including
-/// a prior claim on that page (`HBEAT_ZCHANGE`) that this session's direct
-/// extraction found does not exist in the shipped bank at all - corrected
-/// there rather than repeated here.
+/// **The non-verbal half of a class change is [`Self::tone`].** HD fires it in
+/// the same branch as the voice line, one call after it, through its generic
+/// named-cue player (`Sound_PlayNamedCue`, confidence 82 for the cue). See
+/// `docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "`ZONEBAR_TRANS` is a
+/// genuine second cue".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZoneClassAnnouncer {
     /// `Data\Sound\speech_class.bnk` on HD/Fury - the dedicated bank, not the
@@ -209,6 +205,19 @@ pub struct ZoneClassAnnouncer {
     /// `classes[0]` is stage `1`'s cue, not stage `0`'s - HD's speech bank
     /// names no cue for `Start` at all.
     pub classes: &'static [&'static str],
+    /// The tone played with every class step. `None` where unread.
+    pub tone: Option<ZoneClassTone>,
+}
+
+/// The non-verbal cue a Zone class step plays beside its voice line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneClassTone {
+    /// The bank it is named in.
+    pub bank: &'static str,
+    /// The cue's name.
+    pub cue: &'static str,
+    /// What the cue's per-grain delays are counted in.
+    pub tick: SequenceTick,
 }
 
 impl ZoneClassAnnouncer {

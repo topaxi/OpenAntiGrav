@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-09-15
+updated: 2026-11-15
 summary: "What sets the float Hud_UpdateZoneSpeedClass compares is untraced; zone 60 and beyond unproven"
 categories: [frontend, rendering]
 ---
@@ -78,6 +78,11 @@ asset file.
 
 ## Open
 
+- **2026-11-15: `ZONEBAR_TRANS` is wired** beside the `MR_*` line, from
+  `DATA01`'s `env0_zone.bnk` (`DATA00`'s copy lacks the cue). Open: which
+  copy a Fury pressing's plain Zone race reads, and whether the original
+  fires it on every zone or only on a class step. See
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-tones-bank).
 - **What sets the float `Hud_UpdateZoneSpeedClass` compares.** It arrives as
   `f1` from its single caller, which forwards its own argument; nothing traced
   it back to the zone counter's storage. The units rest on the two observations
