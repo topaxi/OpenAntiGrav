@@ -311,7 +311,9 @@ impl Session {
     /// or HD's own ship screen, which prints the running loyalty total no other title that
     /// gates nothing shows.
     fn shows_loyalty(&self, seat: usize) -> bool {
-        self.shell.as_ref().is_some_and(|shell| unlock::gates_variants(shell.title))
+        self.shell.as_ref().is_some_and(|shell| {
+            unlock::gates_variants(shell.title) || shell.model_gate.gates()
+        })
             || self.ship_layout(seat).is_some_and(|layout| layout.hd.is_some())
     }
 
@@ -348,8 +350,10 @@ impl Session {
                     details,
                     &shell.strings,
                     records,
+                    &shell.model_gate,
                     mode,
                 );
+                let preview = ship_source(title, details, &choice.value, mode, skins, &variants);
                 let join = title.race.join_for(&choice.value);
                 let stats = details
                     .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
@@ -380,7 +384,7 @@ impl Session {
                                 .then(|| records.loyalty_total(title, &choice.value)),
                         },
                     },
-                    ship_source(title, details, &choice.value, mode, skins),
+                    preview,
                 )
             })
             .unzip();
@@ -765,14 +769,28 @@ pub(super) fn ship_source(
     team: &str,
     mode: oag_race::Mode,
     skins: Vec<(String, String)>,
+    variants: &[(String, String)],
 ) -> PreviewSource {
+    let join = title.race.team_variants_for(team).map(|v| v.join);
+    let liveries = details
+        .map(|details| {
+            variants
+                .iter()
+                .filter_map(|(id, _)| {
+                    oag_game::preview::variant::livery_folders(details, join, id)
+                        .map(|folders| (id.clone(), folders))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     PreviewSource::Ship {
+        liveries,
         location: details.map_or_else(
             || format!(r"Data\Ships\{team}"),
             |details| details.location.clone(),
         ),
         skins,
-        join: title.race.team_variants_for(team).map(|v| v.join),
+        join,
         hull_file: oag_game::preview::zone_hull_file(title, mode),
         zone_entry: oag_game::preview::zone_race_hull_entry(title, team, mode),
         race_hull: oag_game::preview::race_hull_entry(title, team, mode),

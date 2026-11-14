@@ -3909,12 +3909,11 @@ The seven `HexSelection` rows match `PI_TeamModel` file order (`chrome_c1`,
 `nitro`, `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`): on the
 fresh-profile frame the only two rows with a ship icon rather than a padlock
 are the third and fourth, the two models with no `<Unlock>`. Confidence
-**70** (one frame, and the icon art is the widget's own). This build keeps
-its own three-variant axis (`""`, `_c1`, `_n1`, `oag_hd::race::TEAM_VARIANTS`)
-rather than widening to seven; each variant's stats come off the model racing
-out of that directory, preferring one with no `<Unlock>` - `Feisar_c1` is
-both `chrome_c1` and `concept1` - which is **chosen, not measured**
-(`oag_raceplay::catalogue::Team::model_for_directory`).
+**70** (one frame, and the icon art is the widget's own). Since 2026-11-14
+this build offers all seven, each when its own `<Unlock>` row holds, a
+re-liveried model by its directory suffix plus livery folder (`_c1@livery4`
+for `chrome_c1`): [race-setup.md](../formats/race-setup.md#hd-era-model-unlocks).
+A fresh profile opens exactly the two rows the frame shows.
 
 **The stat bar, measured off the settled frame**: each block is split where
 its nobble sits (`0.69`, `0.79`, `1.0` of the block for `070`, `080`, `100`);

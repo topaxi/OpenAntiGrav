@@ -49,6 +49,9 @@
 
 use oag_tables::fexml::{Node, parse};
 
+mod model_unlock;
+pub use model_unlock::{MedalCount, ModelUnlock};
+
 /// How many laps the race a player is setting up runs: the mode's own count
 /// for the speed class, `None` where no lap ends it. An unresolved class
 /// reads as no count rather than a guess.
@@ -488,9 +491,14 @@ pub struct TeamModel {
     /// (`oag_title::ShipFit`). `None` where the element authors none.
     pub length_milli: Option<u16>,
     /// Whether the model carries an `<Unlock>` child at all - a model with
-    /// none is available from a fresh profile. What each unlock condition
-    /// means is not read here.
+    /// none is available from a fresh profile.
     pub has_unlock: bool,
+    /// The model's `<Unlock>` rows, in file order: what each asks for. Whether one holds is
+    /// `oag_game::unlock::ModelGate`'s.
+    pub unlock: Vec<ModelUnlock>,
+    /// The `texturelocation`: the livery folder inside [`Self::model_location`] the hull is
+    /// painted from (`livery1`; `SKIN1` is `livery2`). `None` where the model authors none.
+    pub texture_location: Option<String>,
     /// The `LiveryNumber` the model's front-end thumbnail is named by:
     /// `<modellocation>\FE\thumb<LiveryNumber>.gtf` exists on the disc for
     /// every model of every team (Feisar's `concept1` is `4`, `Feisar_c1\FE\thumb4.gtf`).
@@ -690,6 +698,8 @@ fn read_models(team: &Node) -> Vec<TeamModel> {
                 rating_tenths,
                 length_milli,
                 has_unlock: model.children_named("Unlock").next().is_some(),
+                unlock: model_unlock::read(model),
+                texture_location: model.value("texturelocation").map(str::to_string),
                 livery_number: model
                     .value("LiveryNumber")
                     .and_then(|number| number.trim().parse().ok()),
@@ -719,8 +729,8 @@ impl Team {
         }
         variant_ids
             .into_iter()
-            .map(|suffix| {
-                let model = self.model_for_directory(&join.combine(&self.location, suffix))?;
+            .map(|id| {
+                let model = self.model_for_variant(join, id)?;
                 let rating = model.rating_tenths?;
                 Some(oag_ui_screens::picker::hd::Stats {
                     speed: rating.speed,
@@ -753,12 +763,10 @@ impl Team {
     /// whether it can be picked right now.
     ///
     /// A row is open when it is the model one of `variant_ids` races as
-    /// ([`Self::model_for_directory`], carrying that variant's index) and
-    /// padlocked otherwise - every model with an `<Unlock>` the build does
-    /// not offer. The original draws exactly the two `<Unlock>`-free models
-    /// of Feisar open on a fresh profile; this build keeps no unlock state
-    /// on HD, so a model it lets a player race (`nitro`, through the `_n1`
-    /// variant) is drawn open as well. Pulse's law, unmeasured on HD.
+    /// ([`Self::model_for_variant`], carrying that variant's index) and
+    /// padlocked otherwise: the caller passes the ids the profile has opened
+    /// (`oag_game::livery_row`), so a model whose `<Unlock>` row does not hold
+    /// is a padlock, as the original draws Feisar's on a fresh profile.
     #[must_use]
     pub fn hex_cells<'a>(
         &self,
@@ -767,8 +775,8 @@ impl Team {
     ) -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
         let offered: Vec<Option<usize>> = variant_ids
             .into_iter()
-            .map(|suffix| {
-                let model = self.model_for_directory(&join.combine(&self.location, suffix))?;
+            .map(|id| {
+                let model = self.model_for_variant(join, id)?;
                 self.models.iter().position(|candidate| candidate == model)
             })
             .collect();
@@ -789,14 +797,78 @@ impl Team {
     }
 
     /// The model a race directory `directory` (a [`Self::location`] plus a
-    /// title's variant suffix, e.g. `Data\Ships\Feisar_c1`) races as,
-    /// among [`Self::models`]: the one whose `modellocation` names that
-    /// directory, case-insensitively, preferring one with no `<Unlock>` -
-    /// `Feisar_c1` is both `chrome_c1` (locked) and `concept1` (not), and
-    /// only the second is on a fresh profile's grid. Of several with no
-    /// `<Unlock>` the one named `normal` wins. **Chosen, not
-    /// measured**: which of two models sharing a directory the original
-    /// means is decided by its unlock state, which this build does not keep.
+    /// title's variant suffix, e.g. `Data\Ships\Feisar_c1`) races as in its
+    /// own livery, among [`Self::models`]: the one whose `modellocation` names
+    /// that directory, case-insensitively, preferring one with no `<Unlock>` -
+    /// `Feisar_c1` is both `chrome_c1` (`livery4`, locked) and `concept1`
+    /// (`livery1`, open), and the plain `_c1` variant is the second. Of several
+    /// with no `<Unlock>` the one named `normal` wins (**chosen**: Omega's
+    /// `Tigron_x` names one directory for every model). The other models of a
+    /// directory are reached by their livery, [`Self::model_for_variant`].
+    /// The model the stored variant id `id` races as: [`oag_title::race::split_livery`]'s suffix
+    /// joined to [`Self::location`] by `join`, in its own livery
+    /// ([`Self::model_for_directory`]) or, for an id naming one, the model of that directory
+    /// whose `texturelocation` is that livery (`"@livery2"` is Feisar's `SKIN1`).
+    #[must_use]
+    pub fn model_for_variant(&self, join: oag_title::VariantJoin, id: &str) -> Option<&TeamModel> {
+        let (suffix, livery) = oag_title::race::split_livery(id);
+        let directory = join.combine(&self.location, suffix);
+        let Some(livery) = livery else {
+            return self.model_for_directory(&directory);
+        };
+        self.models.iter().find(|model| {
+            paths_match(&model.model_location, &directory)
+                && model
+                    .texture_location
+                    .as_deref()
+                    .is_some_and(|own| own.eq_ignore_ascii_case(livery))
+        })
+    }
+
+    /// Every model raced out of one of `suffixes`' directories, in file order, with the variant
+    /// id it is raced by: the plain suffix for the directory's own model
+    /// ([`Self::model_for_directory`]), the suffix with its `texturelocation`
+    /// ([`oag_title::race::livery_variant`]) for a model painted from another livery there. A
+    /// model whose livery is its directory's own is that model's duplicate and is left out, as is
+    /// one in no directory `suffixes` names (Omega's `vr_hd`).
+    #[must_use]
+    pub fn model_variants<'a>(
+        &self,
+        join: oag_title::VariantJoin,
+        suffixes: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<(String, &TeamModel)> {
+        let directories: Vec<(&str, String)> = suffixes
+            .into_iter()
+            .map(|suffix| (suffix, join.combine(&self.location, suffix)))
+            .collect();
+        let mut out: Vec<(String, &TeamModel)> = Vec::new();
+        for model in &self.models {
+            let Some((suffix, directory)) = directories
+                .iter()
+                .find(|(_, directory)| paths_match(&model.model_location, directory))
+            else {
+                continue;
+            };
+            let Some(base) = self.model_for_directory(directory) else {
+                continue;
+            };
+            let id = if std::ptr::eq(base, model) {
+                (*suffix).to_string()
+            } else {
+                match (&model.texture_location, &base.texture_location) {
+                    (Some(own), Some(base)) if !own.eq_ignore_ascii_case(base) => {
+                        oag_title::race::livery_variant(suffix, Some(own))
+                    }
+                    _ => continue,
+                }
+            };
+            if !out.iter().any(|(seen, _)| *seen == id) {
+                out.push((id, model));
+            }
+        }
+        out
+    }
+
     #[must_use]
     pub fn model_for_directory(&self, directory: &str) -> Option<&TeamModel> {
         // The whole path, not its leaf: a numbered craft's directory is `3` under

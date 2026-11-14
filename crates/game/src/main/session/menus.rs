@@ -496,6 +496,7 @@ impl Session {
             &self.settings.race.team,
             &shell.team_details,
             &oag_game::records::load(),
+            &shell.model_gate,
         );
         queries::settle(&mut self.settings.race.variant, &choices);
         if let Stage::Menu(stage) = &mut self.stage {
@@ -1052,6 +1053,7 @@ impl Session {
                 &self.settings.race.team,
                 &shell.team_details,
                 &oag_game::records::load(),
+                &shell.model_gate,
             );
         queries::settle(&mut self.settings.race.variant, &race_variants);
         model.supply(menu::ValueSource::RaceVariant, &race_variants);

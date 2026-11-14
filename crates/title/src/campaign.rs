@@ -136,6 +136,11 @@ pub struct Campaign {
     pub circuit_unlocks: bool,
     /// Whether craft variants carry `loyalty` unlock rows this build reads.
     pub loyalty_unlocks: bool,
+    /// The grids definition a `PI_TeamModel`'s own `<Unlock>` rows are evaluated against, on a
+    /// title whose models carry Wipeout HD/Fury's rows (`loyalty`, `MedalCountHD`,
+    /// `MedalCountFURY`, `grid`): Ship Select offers a model only once its row holds. `None` gates
+    /// no model. See `docs/formats/race-setup.md`, "HD-era model unlocks".
+    pub model_unlocks: Option<&'static str>,
     /// Where [`Self::circuit_unlocks`] and [`Self::loyalty_unlocks`] came from,
     /// apart from [`Self::origin`]: a `false` there is "measured absent" on one
     /// title (Pure authors none) and merely "not wired" on the others, which is

@@ -392,6 +392,7 @@ impl Session {
                         &choice.value,
                         mode,
                         Vec::new(),
+                        &[],
                     ),
                 });
             }

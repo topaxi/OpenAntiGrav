@@ -262,3 +262,123 @@ fn slot_zero_is_the_team_the_options_asked_for() {
             .collect::<Vec<_>>()
     );
 }
+
+/// Feisar's `SKIN1` (`Options::livery` `livery2`, what Ship Select's `@livery2` row writes)
+/// races `Data\Ships\Feisar` with every texture its hull names in `livery1` read from `livery2`.
+#[test]
+#[ignore = "needs a disc image"]
+fn feisars_skin1_races_its_hull_in_livery2() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        team: Some("Feisar".to_string()),
+        livery: Some("livery2".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let lines: Vec<&String> = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("livery livery2"))
+        .collect();
+    assert_eq!(lines.len(), 1, "{:#?}", loaded.report);
+    assert!(
+        lines[0].starts_with("Feisar: livery livery2 replaces livery1 on 5 texture request(s)"),
+        "{}",
+        lines[0]
+    );
+}
+
+/// Every HD-era model painted from a livery folder other than its directory's own finds every
+/// texture its hull names there: the folder swap is the whole of a skin, on all twelve teams.
+#[test]
+#[ignore = "needs a disc image"]
+fn every_hd_era_livery_folder_holds_what_its_hull_names() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("mounting the disc");
+    // Twelve teams: SKIN1, SKIN2 and chrome on the HD hull, chrome_c1 on the Fury one.
+    assert_eq!(paint_every_livery(&mut archives, oag_hd::TITLE), 48);
+}
+
+/// [`every_hd_era_livery_folder_holds_what_its_hull_names`] on Omega's re-cooked hulls: the
+/// same twelve teams' 48, plus `Tigron` and `VanUber`'s three skins each on their one directory.
+#[test]
+#[ignore = "needs the Omega extract"]
+fn every_omega_livery_folder_holds_what_its_hull_names() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
+    assert_eq!(paint_every_livery(&mut archives, oag_omega::TITLE), 54);
+}
+
+/// Loads every re-liveried model of `title`'s definition as the player's craft and asserts the
+/// swap answered at least one texture request and missed none. Returns how many it loaded.
+fn paint_every_livery(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+) -> usize {
+    let blob = archives
+        .read_name(title.plugin_definition)
+        .expect("the definition");
+    let teams = race::catalogue::teams(&oag_tables::fexml::text(&blob).expect("expands"));
+    let mut painted = 0;
+    for team in &teams {
+        let join = title.race.join_for(&team.id);
+        let suffixes: Vec<&str> = title
+            .race
+            .team_variants_for(&team.id)
+            .map_or(vec![""], |table| {
+                table.variants.iter().map(|v| v.suffix).collect()
+            });
+        for (id, _) in team.model_variants(join, suffixes.iter().copied()) {
+            let (suffix, Some(worn)) = oag_title::race::split_livery(&id) else {
+                continue;
+            };
+            let craft = join.combine(&team.id, suffix);
+            let own = team
+                .model_for_directory(&join.combine(&team.location, suffix))
+                .and_then(|model| model.texture_location.clone())
+                .expect("the directory's own livery");
+            let mut report = Vec::new();
+            oag_livery::load(
+                archives,
+                std::slice::from_ref(&craft),
+                &oag_livery::LoadContext {
+                    store: Default::default(),
+                    race: title.race,
+                    mode: oag_race::Mode::TimeTrial,
+                    flare: title.flare,
+                    hull_overlay: false,
+                    leach_overlay: false,
+                    hull_shine: false,
+                    hull_wreck: false,
+                    absorb_shell: false,
+                    own_shield: false,
+                    zone_liveries: &[],
+                    forced_skins: &[],
+                    player_livery: Some(oag_livery::LiveryFolder { own: &own, worn }),
+                },
+                None,
+                None,
+                &[],
+                &mut report,
+            )
+            .unwrap_or_else(|error| panic!("{craft} {worn}: {error:#}"));
+            let line = report
+                .iter()
+                .find(|line| line.starts_with(&format!("{craft}: livery {worn}")))
+                .unwrap_or_else(|| panic!("{craft} {worn}: no swap\n{}", report.join("\n")));
+            assert!(line.contains(" replaces "), "{line}");
+            assert!(!line.contains(" on 0 "), "{line}");
+            painted += 1;
+        }
+    }
+    painted
+}

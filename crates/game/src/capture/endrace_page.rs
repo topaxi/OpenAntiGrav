@@ -377,6 +377,7 @@ fn endrace_page(
                     ship_scale: 1.0,
                     entry: trophy.placement.model.src.clone(),
                     fallback: None,
+                    livery: None,
                     race_hull: None,
                     skin: None,
                     rect: [0.0, 0.0, grid[0], grid[1]],

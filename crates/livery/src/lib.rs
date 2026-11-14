@@ -232,8 +232,37 @@ pub struct LoadContext<'a> {
     /// [`oag_title::RaceDefaults::eliminator_skin`], resolved per team. Empty outside an
     /// Eliminator race and for a title that forces none. See [`forced_paint`].
     pub forced_skins: &'a [(String, String)],
+    /// The livery folder the player's craft (slot 0) is painted from in place of its own. See
+    /// [`LiveryFolder`]. `None` keeps the hull's own.
+    pub player_livery: Option<LiveryFolder<'a>>,
     /// What the race's scene target stores, which the hull's baked colours are encoded for.
     pub store: oag_gpu::formats::SceneStore,
+}
+
+/// A craft painted from another livery folder of its own directory: Wipeout HD/Fury's and
+/// Omega's `PI_TeamModel` `texturelocation` (`SKIN1` is Feisar in `livery2`, `normal` in
+/// `livery1`). Every texture the hull names under [`Self::own`] is read from [`Self::worn`]
+/// instead, the same path substitution the Zone livery makes (`zone_livery`). The census that
+/// makes this a folder swap: every texture a Feisar hull names in `livery1` is shipped under
+/// `livery2`..`livery4` too, on HD's PS3 disc and on Omega (`docs/formats/race-setup.md`,
+/// "HD-era model unlocks"). A texture the worn folder does not hold draws nothing and is reported:
+/// the own folder's would be another livery's paint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiveryFolder<'a> {
+    /// The folder the hull's materials name (the directory's own model's `texturelocation`).
+    pub own: &'a str,
+    /// The folder the picked model is painted from.
+    pub worn: &'a str,
+}
+
+impl LiveryFolder<'_> {
+    /// The archive path a texture request becomes, or `None` when `path` is not under
+    /// [`Self::own`] and is read as asked. The rule a race's hull build applies, for a caller that
+    /// builds a hull of its own (a front-end preview).
+    #[must_use]
+    pub fn rewrite(&self, path: &str) -> Option<String> {
+        zone_livery::Swap::new(self.own, self.worn).rewrite(path)
+    }
 }
 
 /// A hull file and a paint job picked for one craft.
@@ -370,7 +399,14 @@ pub fn load(
             ctx.race.ships_for(team),
             ctx,
             (paint.hull_variant, hull_variant),
-            paint.skin,
+            (
+                paint.skin,
+                if slot == 0 && !forced {
+                    ctx.player_livery
+                } else {
+                    None
+                },
+            ),
             report,
         ) {
             Ok(livery) => out.push(livery),
@@ -432,7 +468,7 @@ fn one(
     ships: oag_title::race::ShipPaths,
     ctx: &LoadContext,
     (hull_variant, team_model): (Option<&str>, Option<&str>),
-    skin: Option<&str>,
+    (skin, livery): (Option<&str>, Option<LiveryFolder>),
     report: &mut Vec<String>,
 ) -> Result<Livery> {
     let hull_name = ships.hull_entry_name(team, ctx.mode == Mode::Zone, hull_variant);
@@ -460,37 +496,35 @@ fn one(
             )),
             // 2048's container is a different file under the same extension
             // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
-            Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
-                let swap = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
-                let (mut swapped, mut missing) = (0_usize, Vec::new());
-                let built = mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
-                    let Some(alt) = swap.as_ref().and_then(|swap| swap.rewrite(path)) else {
-                        return archives.read_name(path).ok();
-                    };
-                    if let Ok(blob) = archives.read_name(&alt) {
-                        swapped += 1;
-                        return Some(blob);
-                    }
-                    missing.push(alt);
-                    archives.read_name(path).ok()
-                })
-                .map(|(model, built)| (model, built.describe()))
+            Some(geometry) => {
+                let zone = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
+                let worn = livery
+                    .filter(|_| ctx.mode != Mode::Zone)
+                    .map(|folder| zone_livery::Swap::new(folder.own, folder.worn));
+                let mut textures =
+                    zone_livery::Reads::new(zone.as_ref().or(worn.as_ref()), zone.is_some());
+                let built = if mesh::rcs::psp2::is_psp2(&geometry) {
+                    mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
+                        textures.read(archives, path)
+                    })
+                    .map(|(model, built)| (model, built.describe()))
+                } else {
+                    mesh::rcs::build(
+                        &hull_name,
+                        &blob,
+                        &geometry,
+                        &mut |path| textures.read(archives, path),
+                        ctx.store,
+                        |c| c.mesh,
+                    )
+                    .map(|(model, built)| (model, built.describe()))
+                }
                 .map_err(|error| format!("{hull_name}: {error:#}"));
-                if let Some(swap) = &swap {
-                    report.push(zone_livery::describe(team, swap, swapped, &missing));
+                if let Some(line) = textures.describe(team) {
+                    report.push(line);
                 }
                 built
             }
-            Some(geometry) => mesh::rcs::build(
-                &hull_name,
-                &blob,
-                &geometry,
-                &mut |path| archives.read_name(path).ok(),
-                ctx.store,
-                |c| c.mesh,
-            )
-            .map(|(model, built)| (model, built.describe()))
-            .map_err(|error| format!("{hull_name}: {error:#}")),
         };
         let (hull, built) = match built {
             Ok(pair) => pair,

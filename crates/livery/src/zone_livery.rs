@@ -1,4 +1,6 @@
-//! The Zone hull's team texture: the one thing a craft's pick changes on it.
+//! The Zone hull's team texture: the one thing a craft's pick changes on it. The path
+//! substitution it makes ([`Swap`], [`Reads`]) also repaints an HD-era model from another livery
+//! folder ([`crate::LiveryFolder`]).
 //!
 //! The ship-model loader builds `hdships\Zone\Ship.vex` for every craft and
 //! then substitutes one material key (`zoneship_zone` on 2048 v1.04,
@@ -19,6 +21,14 @@ pub(crate) struct Swap {
 }
 
 impl Swap {
+    /// Reads what names `key` as a path component from `livery` instead.
+    pub(crate) fn new(key: &str, livery: &str) -> Self {
+        Self {
+            key: key.to_ascii_lowercase(),
+            livery: livery.to_ascii_lowercase(),
+        }
+    }
+
     /// The archive path a texture request becomes, or `None` when the request
     /// is not under the key and so is read as asked.
     pub(crate) fn rewrite(&self, path: &str) -> Option<String> {
@@ -57,6 +67,69 @@ pub(crate) fn swap(
         key: key.to_ascii_lowercase(),
         livery: livery.to_ascii_lowercase(),
     })
+}
+
+/// A hull build's texture reads through one [`Swap`], counted for the report.
+pub(crate) struct Reads<'a> {
+    swap: Option<&'a Swap>,
+    /// Whether a texture the swap names but the archive lacks falls back to the hull's own:
+    /// the Zone hull's default skin does; a model's livery does not, since the own folder's
+    /// texture is another livery's paint.
+    fall_back: bool,
+    swapped: usize,
+    missing: Vec<String>,
+}
+
+impl<'a> Reads<'a> {
+    pub(crate) fn new(swap: Option<&'a Swap>, fall_back: bool) -> Self {
+        Self {
+            swap,
+            fall_back,
+            swapped: 0,
+            missing: Vec::new(),
+        }
+    }
+
+    /// The texture at `path`, read through the swap.
+    pub(crate) fn read(
+        &mut self,
+        archives: &mut oag_assets::Archives,
+        path: &str,
+    ) -> Option<Vec<u8>> {
+        let Some(alt) = self.swap.and_then(|swap| swap.rewrite(path)) else {
+            return archives.read_name(path).ok();
+        };
+        if let Ok(blob) = archives.read_name(&alt) {
+            self.swapped += 1;
+            return Some(blob);
+        }
+        self.missing.push(alt);
+        if self.fall_back {
+            archives.read_name(path).ok()
+        } else {
+            None
+        }
+    }
+
+    /// The report line, when a swap was asked for.
+    pub(crate) fn describe(&self, team: &str) -> Option<String> {
+        let swap = self.swap?;
+        Some(if self.fall_back {
+            describe(team, swap, self.swapped, &self.missing)
+        } else if self.missing.is_empty() {
+            format!(
+                "{team}: livery {} replaces {} on {} texture request(s)",
+                swap.livery, swap.key, self.swapped
+            )
+        } else {
+            format!(
+                "{team}: livery {} does not hold {} - those draw untextured ({} swapped)",
+                swap.livery,
+                self.missing.join(", "),
+                self.swapped
+            )
+        })
+    }
 }
 
 /// What a finished hull build did with `swap`, as a report line.

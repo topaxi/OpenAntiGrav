@@ -169,6 +169,7 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: true,
         loyalty_unlocks: true,
+        model_unlocks: None,
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
         screen_archive: None,

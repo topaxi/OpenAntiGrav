@@ -57,6 +57,9 @@ pub(crate) enum PreviewSource {
         /// The race hull this front-end hull's flaps are seated from
         /// (`oag_game::preview::race_hull_entry`); `None` where the title draws the race hull.
         race_hull: Option<String>,
+        /// Each variant id the row offers that paints the hull from another livery folder, with
+        /// its `(own, worn)` folders (`oag_game::preview::variant::livery_folders`).
+        liveries: Vec<(String, (String, String))>,
     },
 }
 
@@ -903,6 +906,7 @@ pub(crate) fn read_preview(
                 hull_file: None,
                 zone_entry: None,
                 race_hull: None,
+                liveries: Vec::new(),
             }
             .entry_name(previews.ship_hull, previews.front_end)
         }
@@ -917,11 +921,19 @@ pub(crate) fn read_preview(
             PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
             PreviewSource::Track { .. } => None,
         };
+        let livery = match (&source, variant) {
+            (PreviewSource::Ship { liveries, .. }, Some(variant)) => liveries
+                .iter()
+                .find(|(id, _)| id == variant)
+                .map(|(_, (own, worn))| oag_livery::LiveryFolder { own, worn }),
+            _ => None,
+        };
         oag_game::preview::variant::model_or_default(
             archives,
             entry,
             Some(&name),
             race_hull,
+            livery,
         )
             .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
             .0
@@ -1022,6 +1034,7 @@ mod tests {
             hull_file: None,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -1038,6 +1051,7 @@ mod tests {
             hull_file: zone,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -1064,6 +1078,7 @@ mod tests {
             hull_file: None,
             zone_entry: None,
             race_hull: None,
+            liveries: Vec::new(),
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -1088,6 +1103,7 @@ mod tests {
                 hull_file: None,
                 zone_entry: Some(zone.clone()),
                 race_hull: None,
+                liveries: Vec::new(),
             };
             assert_eq!(
                 source.entry_name(Some("ship.vex"), None).as_deref(),

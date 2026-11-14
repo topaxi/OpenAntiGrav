@@ -56,6 +56,7 @@ fn load(shine: bool) -> Option<Vec<livery::Livery>> {
             own_shield: false,
             zone_liveries: &[],
             forced_skins: &[],
+            player_livery: None,
         },
         None,
         None,

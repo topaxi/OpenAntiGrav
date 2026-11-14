@@ -71,6 +71,7 @@ fn every_hd_and_fury_flare_draws_every_spike_it_authors() {
                     own_shield: false,
                     zone_liveries: &[],
                     forced_skins: &[],
+                    player_livery: None,
                 },
                 None,
                 None,

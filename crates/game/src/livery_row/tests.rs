@@ -39,6 +39,7 @@ fn row(team: &str, loyalty: u32, mode: Mode) -> Livery {
         teams.iter().find(|candidate| candidate.id == team),
         &oag_ui::language::StringTable::default(),
         &records,
+        &crate::unlock::ModelGate::none(),
         mode,
     )
 }
@@ -99,9 +100,29 @@ fn a_zone_row_holds_the_zone_hull_alone() {
 fn the_variant_row_is_cut_by_the_hull_gate() {
     let teams = teams();
     let mut records = Store::default();
-    assert_eq!(gated_variant_choices(T, "Plain", &teams, &records).len(), 1);
+    assert_eq!(
+        gated_variant_choices(
+            T,
+            "Plain",
+            &teams,
+            &records,
+            &crate::unlock::ModelGate::none()
+        )
+        .len(),
+        1
+    );
     records.record_loyalty(T, "Plain", 25_000);
-    assert_eq!(gated_variant_choices(T, "Plain", &teams, &records).len(), 2);
+    assert_eq!(
+        gated_variant_choices(
+            T,
+            "Plain",
+            &teams,
+            &records,
+            &crate::unlock::ModelGate::none()
+        )
+        .len(),
+        2
+    );
 }
 
 /// The row is the mode's own in Zone and in an Eliminator race, where the screen shows its `skin

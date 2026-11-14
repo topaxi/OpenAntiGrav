@@ -1,5 +1,8 @@
 //! Which teams the grid may fly, when the caller named none itself.
 
+#[cfg(feature = "view")]
+mod model_livery;
+
 /// The team the player races as, resolved to `craft_title`'s own default
 /// when the caller named none - the first point the title is known, and
 /// craft content, so it follows `craft_title` rather than the track's own
@@ -352,6 +355,14 @@ pub(super) fn grid(
         report,
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
+    let player_livery = model_livery::resolve(
+        archives,
+        craft_title,
+        team,
+        options.livery.as_deref(),
+        options.mode,
+        report,
+    );
     let forced_skins = super::skin::forced(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
     let slot_teams = teams(craft_title, options, team, available, report);
@@ -406,6 +417,9 @@ pub(super) fn grid(
             own_shield: own_shield(options, craft_title),
             zone_liveries: &zone_liveries,
             forced_skins: &forced_skins,
+            player_livery: player_livery
+                .as_ref()
+                .map(|(own, worn)| oag_livery::LiveryFolder { own, worn }),
         },
         hull_variant,
         skin.as_deref(),

@@ -665,7 +665,43 @@ title branch: `Campaign::circuit_unlocks`). Craft variants gate on the two loyal
 (`oag-wad cat --expand`): Pulse USA and EU identical, 85 rows, 21 with `Grid=`, 24 `PI_Track`; **Pure USA and EU
 identical, 17 rows, none with `Grid` or loyalty: `MedalCount` 10/25/40/60/60/70 on the Classic circuits,
 `Track`+`medal` chaining Zone 1..4, `Tournament` Alpha/Beta - checked, differs, and since 2026-10-12 read and wired as Pure's SINGLE PLAYER chain: [`pure-campaign.md`](pure-campaign.md)**; HD: see
-`hd-status.md` (its own progression is `hd-campaign`'s).
+`hd-status.md` (its own progression is `hd-campaign`'s); its craft models: [HD-era model unlocks](#hd-era-model-unlocks).
+
+## HD-era model unlocks
+
+Wipeout HD/Fury and Omega gate each team's `PI_TeamModel`s (its hull and livery rows on `Team
+Selection`'s `HexSelection` column) on the model's own `<Unlock>` row. Evidence, the rows for all
+twelve HD-era teams and confidences: [model-unlock.md](../ghidra/functions/ps3-hdfury-eu/model-unlock.md).
+Feisar, in hex-column order:
+
+| Model | Races | Opens when |
+| --- | --- | --- |
+| `chrome_c1` | `Feisar_c1` in `livery4` | gold on all 80 `Fury` campaign cells (`MedalCountFURY="80"`) |
+| `nitro` | `Feisar_n1` | `grid8`'s own points met (`grid="grid8"`) |
+| `concept1` | `Feisar_c1` | always |
+| `normal` | `Feisar` | always |
+| `SKIN1` | `Feisar` in `livery2` | Feisar loyalty 4000 |
+| `SKIN2` | `Feisar` in `livery3` | Feisar loyalty 8000 |
+| `chrome` | `Feisar` in `livery4` | gold on all 87 `HD` campaign cells (`MedalCountHD="87"`) |
+
+**Status 2026-11-14 (implemented, HD and Omega).** `oag_raceplay::catalogue::ModelUnlock` reads the
+rows; `oag_game::unlock::ModelGate` evaluates them against the records and the title's campaign grids
+(`oag_title::Campaign::model_unlocks`); Ship Select's model row (`livery_row::gated_variant_choices`)
+offers the open models in file order, so `Down` steps down the column, and a locked model is a
+padlock. A model is stored as its variant id: the directory suffix (`""`, `_c1`, `_n1`) for the
+directory's own model, the suffix and its `texturelocation` after an `@` (`"@livery2"`,
+`"_c1@livery4"`) for another livery there (`oag_title::race::split_livery`). The race reads every
+texture the hull names in the directory's own folder from the picked one (`oag_livery::LiveryFolder`,
+the Zone livery's path substitution), for the player's craft; opponents flying the player's variant
+keep the directory's livery (**chosen**). The Ship Select preview hull wears it too. A texture the
+picked folder lacks draws untextured and the loader says so (none is missing on either disc).
+`--livery <folder>` names one for `--race`. `--unlock-all` opens every model.
+
+**What is read off the data, not the code** (the evaluator is not found): medal counts are golds over
+the grids whose `Campaign` matches (87 and 80 are those campaigns' cell counts), loyalty is the named
+team's own total, `grid` is Pulse's `Unlock_GridPointsMet`. **Open:** split-screen seats past the first
+race their model's directory in its own livery (`SeatPick` carries no livery); the `--menu-page` RACE
+page still's VARIANT row is the uncut variant table (no grids are read for it).
 
 ## The Race Campaign: the disc's own campaign grid, shape yes, content no
 

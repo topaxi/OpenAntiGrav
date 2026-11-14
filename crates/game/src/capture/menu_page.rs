@@ -880,6 +880,7 @@ pub(super) fn picker_page(
     title: &'static oag_title::Title,
     tracks: &[oag_raceplay::catalogue::Track],
     teams: &[oag_raceplay::catalogue::Team],
+    model_gate: &crate::unlock::ModelGate,
     strings: &oag_ui::language::StringTable,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -918,7 +919,7 @@ pub(super) fn picker_page(
         }
         Kind::Ship => {
             let gates = crate::unlock::gates_variants(title);
-            let shows_loyalty = gates || layout.hd.is_some();
+            let shows_loyalty = gates || model_gate.gates() || layout.hd.is_some();
             let saved = if shows_loyalty {
                 crate::records::load()
             } else {
@@ -934,6 +935,7 @@ pub(super) fn picker_page(
                         Some(team),
                         strings,
                         &saved,
+                        model_gate,
                         mode,
                     )
                     .variants;
@@ -1083,6 +1085,18 @@ pub(super) fn picker_page(
             entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
             fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
+            livery: match kind {
+                Kind::Ship if !picker.fixed_livery() => {
+                    teams.get(picker.index()).and_then(|team| {
+                        crate::preview::variant::livery_folders(
+                            team,
+                            title.race.team_variants_for(&team.id).map(|v| v.join),
+                            picker.variant().map_or("", |(id, _)| id.as_str()),
+                        )
+                    })
+                }
+                _ => None,
+            },
             race_hull: match kind {
                 Kind::Ship => teams
                     .get(picker.index())

@@ -181,6 +181,34 @@ impl VariantJoin {
     }
 }
 
+/// What separates a [`TeamVariant::suffix`] from a livery folder in a stored variant id.
+pub const LIVERY_SEPARATOR: char = '@';
+
+/// A stored variant id split into the [`TeamVariant::suffix`] it races out of and the livery
+/// folder it wears there, when it names one: `"_c1@livery4"` is `("_c1", Some("livery4"))`, a
+/// plain `"_c1"` is `("_c1", None)`.
+///
+/// Wipeout HD/Fury's and Omega's `PI_TeamModel`s pair a hull directory with a `texturelocation`
+/// (`SKIN1` is `Feisar` in `livery2`), so a model is a directory plus a livery. The plain suffix
+/// keeps the directory's own livery, so ids stored before liveries were a choice still read.
+#[must_use]
+pub fn split_livery(id: &str) -> (&str, Option<&str>) {
+    match id.split_once(LIVERY_SEPARATOR) {
+        Some((suffix, livery)) if !livery.is_empty() => (suffix, Some(livery)),
+        Some((suffix, _)) => (suffix, None),
+        None => (id, None),
+    }
+}
+
+/// The stored variant id of `suffix` worn in `livery`, [`split_livery`]'s inverse.
+#[must_use]
+pub fn livery_variant(suffix: &str, livery: Option<&str>) -> String {
+    match livery {
+        Some(livery) => format!("{suffix}{LIVERY_SEPARATOR}{livery}"),
+        None => suffix.to_string(),
+    }
+}
+
 /// A team's own alternate hull **file**, inside its own directory - see
 /// [`RaceDefaults::hull_variants`].
 ///

@@ -148,6 +148,13 @@ pub struct Options {
     /// Applied to slot 0 alone, like [`Self::hull_variant`] and for the same
     /// reason: nothing offers an opponent a paint job of their own.
     pub skin: Option<String>,
+    /// The livery folder the **player's** craft is painted from, where its model names one other
+    /// than its directory's own: Wipeout HD/Fury's and Omega's `texturelocation` (`livery2` for
+    /// `SKIN1`), the part after [`oag_title::race::LIVERY_SEPARATOR`] of a stored variant id.
+    /// Every texture the hull names under its own livery folder is read from this one instead
+    /// (`oag_livery::LiveryFolder`). `None` is the hull's own. Slot 0 alone, like
+    /// [`Self::skin`]: an opponent flying the player's variant keeps the directory's livery.
+    pub livery: Option<String>,
     /// The team ids the *opponents* may fly, in the caller's own order.
     ///
     /// The caller supplies them because they come off the player's own disc -

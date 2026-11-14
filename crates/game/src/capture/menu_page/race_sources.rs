@@ -33,7 +33,15 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceVariant,
-        &crate::livery_row::gated_variant_choices(title, team, teams, &crate::records::load()),
+        // No source is open for this still, so no campaign grids: the row is the variant table,
+        // uncut by the model rows the live page cuts it by.
+        &crate::livery_row::gated_variant_choices(
+            title,
+            team,
+            teams,
+            &crate::records::load(),
+            &crate::unlock::ModelGate::none(),
+        ),
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,

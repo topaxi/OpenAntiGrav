@@ -24,6 +24,9 @@ pub(crate) fn combine_variant(
     team: &str,
     stored: &str,
 ) -> (String, Option<&'static str>, Option<String>) {
+    // A model in another livery of the same directory (`"@livery2"`) races out of that directory:
+    // the livery is `Options::livery`'s, set by `apply_race_team`.
+    let (stored, _) = oag_title::race::split_livery(stored);
     if let Some(team_variants) = title.race.team_variants_for(team) {
         let (suffix, warning) = match team_variants.variants.iter().find(|v| v.suffix == stored) {
             Some(variant) => (variant.suffix, None),

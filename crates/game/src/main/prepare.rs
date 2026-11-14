@@ -197,6 +197,7 @@ impl Pending {
             // `race::Options::skin` - the player's own paint job, resolved
             // against what the team declares once the source is open.
             skin: self.cli.skin.clone(),
+            livery: self.cli.livery.clone(),
             class: self.class.clone(),
             // See `race::Options::no_driver_for_class`.
             no_driver_for_class: !oag_ai::coverage::project_driver_covers(&self.class),

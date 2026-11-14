@@ -129,6 +129,7 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
                 own_shield: false,
                 zone_liveries: &liveries,
                 forced_skins: &[],
+                player_livery: None,
             },
             None,
             None,

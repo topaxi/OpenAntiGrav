@@ -229,6 +229,7 @@ impl Session {
             ship_select: None,
             ship_select_split: None,
             team_details: Vec::new(),
+            model_gate: oag_game::unlock::ModelGate::none(),
             map: None,
             strings,
         });

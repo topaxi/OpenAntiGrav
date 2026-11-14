@@ -284,6 +284,7 @@ pub const TITLE: &Title = &Title {
         main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        model_unlocks: None,
         // Not wired, not measured absent: 2048's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,

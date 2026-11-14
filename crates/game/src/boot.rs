@@ -238,6 +238,8 @@ pub struct Shell {
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The raceable teams, for the menus.
     pub teams: Vec<oag_raceplay::catalogue::Team>,
+    /// What gates [`Self::teams`]' models on Ship Select, read off this source's campaign grids.
+    pub model_gate: crate::unlock::ModelGate,
     /// The text atlas.
     pub font: oag_ui::font::Atlas,
     /// The front-end sprite sheet.
@@ -875,6 +877,7 @@ pub fn load_shell(
         title.campaign.flow.map(|flow| f32::from(flow.row_pitch)),
         &mut report,
     );
+    let model_gate = crate::unlock::ModelGate::read(title, &mut archives);
     report.push(steps.describe("the boot's first half"));
 
     Ok((
@@ -892,6 +895,7 @@ pub fn load_shell(
             demo_config,
             circuit_names,
             teams,
+            model_gate,
             font,
             sprites,
             space,
@@ -1075,6 +1079,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         demo_config: _,
         circuit_names,
         teams,
+        model_gate: _,
         font,
         sprites,
         space,
