@@ -3,10 +3,10 @@
 //!
 //! Read on each title's own programs (`docs/rendering/hd-track-tone.md`, "2048 and Omega"):
 //!
-//! - **2048, USSE**: every lit permutation of `reversed_diffuse_specular_normal`,
-//!   `cf_chevron_pulse` and `cf_chevron_pulse_time` ends `mul light, T.www` then `mad
-//!   spec * T.rgb * T.rgb * pow, +that` (`reversed_diffuse_specular_normal` #3 words 21 to 25,
-//!   lightmapped #16 words 20 to 31).
+//! - **2048, USSE**: the lit permutations #3, #5 and #12 to #22 of
+//!   `reversed_diffuse_specular_normal`, `cf_chevron_pulse` and `cf_chevron_pulse_time` end
+//!   `mul light, T.www` then `mad spec * T.rgb * T.rgb * pow, +that`
+//!   (`reversed_diffuse_specular_normal` #3 words 21 to 25, lightmapped #16 words 20 to 31).
 //! - **Omega, GCN**: `track_surface_displaced2out` (the walls and floor plates) and
 //!   `cf_chevron_pulse_displacement2out` sample the albedo with `dmask:0xf`, multiply its RGB by
 //!   `liveLighting0specular` and the specular power, and add `light * T.a` (`data01` `@0xf7c4`

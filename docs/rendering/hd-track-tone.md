@@ -582,9 +582,16 @@ Whole-frame mean grey: Omega **30.28 to 25.03** (RMSE 0.206 to 0.173), 2048 15.1
 Every other Omega pair (twelve HD-lineage and eight 2048-lineage circuits), every other
 2048-vita pair and every HD pair (`hd/*`, `hd-race/talons-pack`) is unchanged to the decimal.
 
-**What remains.** (1) The alpha-lit surfaces read brighter than the originals (2048 road plate
-G 98 against 57, Omega right wall 86 against 59): both programs light the raw alpha, so the excess
-is in the light or the exposure, not this law. (2) 2048's floor-chevron strips stay bright (G 140
+**What remains.** (1) **2048's alpha-lit surfaces read 2 to 3 times too bright in linear light,
+and the flag is what raised them**: before it the road plate, right wall and left wall read G 61,
+25 and 14 against the original's 57, 26 and 18; after it 98, 39 and 24 (whole-frame mean grey
+15.13 to 17.67). The cast was wrong before, the brightness was not. Checked: the specular is not
+it (zeroing the alpha-lit specular over the whole frame leaves it identical), and the alpha is not
+cooked differently (2048's `ds_floorplain_cs` and `ds_wall_sc` alpha bytes average 64.6 and 63.6,
+HD's 64.5 and 64.3 at twice the resolution). Lighting the alpha squared (2048's colour decode)
+would land them (road G 54, left wall 13, right wall 18, whole frame 14.33) with the chromaticity
+held, but no instruction read squares it (#3 word 22 and #16 word 24 read `.www` raw), so that is
+not wired. Omega's right wall also reads brighter (86 against 59). (2) 2048's floor-chevron strips stay bright (G 140
 against 59) with the chromaticity matched. Not the specular (zeroing it leaves the frame
 identical) and not the baked colour: the strips' atlas region (`nova_mesh_combine_track_12-lmap.gxt`,
 `lmuv` 0 to 0.62 by 0.67 to 0.75) is dark in RGB and mostly sunlit in alpha (mean 169 of 255),

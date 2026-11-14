@@ -22,9 +22,14 @@ Programs, addresses and before/after regions: `docs/rendering/hd-track-tone.md`,
    `lmuv` 0 to 0.62 by 0.67 to 0.75) is dark in RGB and mostly sunlit in alpha (169 of 255).
    Next: compare our sun term (`liveLighting0diffuse`, direction, `N.L` on a Vita submesh with no
    normal map) at that surface against the original; 2048 #16 words 22 to 27 are the light.
-2. **The alpha-lit surfaces read brighter than the originals** on both titles (2048 road plate
-   G 98 against 57, Omega right wall 86 against 59). Both programs light the raw alpha, so the
-   excess is the light or the exposure; check against another 2048 circuit's lit floor first.
+2. **2048's alpha-lit surfaces read 2 to 3 times too bright, raised by the flag itself**
+   (road plate G 61 before, 98 after, original 57; whole-frame mean grey 15.13 to 17.67). Ruled
+   out: the specular (zeroed, frame identical), a different alpha cook (2048's alpha bytes average
+   the same as HD's). Lighting `alpha * alpha` would match (road 54, mean grey 14.33) but no
+   instruction read squares it. Next: re-read #16 around word 24 for a square of `pa10.w` (an
+   earlier `mul` on the whole texel, or a sampler swizzle/format that decodes alpha), and check how
+   the GXT for `ds_floorplain_cs` declares its format (gamma mode per channel). Omega's right wall
+   is also brighter (86 against 59), likely the light or exposure there.
 3. **The chevron's `Colour` is held at zero** (chosen): the authored value paints green the
    native-port original never shows; the live value is unread (HD's came off a hooked draw).
    Omega's executable in Ghidra is where to find who writes the `Colour` constant.
