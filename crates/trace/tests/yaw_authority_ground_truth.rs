@@ -122,57 +122,44 @@ fn shipped_handling() -> Handling {
     .expect("this team's file authors the class under test")
 }
 
-/// A capture under `data/traces/`, or `None` on a checkout that lacks it.
+/// A capture under `data/traces/`. Both are tracked in git per
+/// [ADR-0046](../../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md),
+/// so absence is a broken checkout and panics.
 ///
-/// `data/traces/` is *derived* evidence, not durable the way `data/images/`
-/// is - see `HANDOVER.md`, "derived evidence under `data/` is not durable".
-/// `verification/scenarios/steer-left.inputs` and `-right.inputs` are what
-/// regenerate the two captures this file reads, each naming its own
-/// `just scripted-emu ... data/traces/talons-junction-steer-{left,right}.csv`
-/// command in a header comment.
-fn capture_path(name: &str) -> Option<std::path::PathBuf> {
+/// `verification/scenarios/steer-left.inputs` and `-right.inputs` regenerate
+/// them, each naming its `just scripted-emu ...` command in a header comment.
+fn capture_path(name: &str) -> std::path::PathBuf {
     let path = workspace(&format!("data/traces/talons-junction-{name}.csv"));
-    if path.exists() {
-        return Some(path);
-    }
     assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.exists(),
+        "{} is tracked in git per ADR-0046 and is missing - the checkout is broken; \
+         regenerate with `just scripted-emu verification/scenarios/{name}.inputs \
+         data/traces/talons-junction-{name}.csv`",
         path.display()
     );
-    eprintln!(
-        "skipping: {} is not present; regenerate with `just scripted-emu \
-         verification/scenarios/{name}.inputs data/traces/talons-junction-{name}.csv`",
-        path.display()
-    );
-    None
+    path
 }
 
 /// The yaw rate the recording actually shows, differentiated out of the captured
 /// basis exactly the way `docs/ghidra/functions/psp-pulse-usa/engine.md` measured it
 /// on hardware: `dot(cross(fwd_t, fwd_t+1), up) / dt`.
-///
-/// `None` when the capture is not present on this checkout.
-fn recorded_yaw(capture: &str) -> Option<Vec<(f32, f32, f32)>> {
-    let path = capture_path(capture)?;
+fn recorded_yaw(capture: &str) -> Vec<(f32, f32, f32)> {
+    let path = capture_path(capture);
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
     let trace = oag_trace::Trace::parse(&text).expect("parse trace");
 
-    Some(
-        trace
-            .frames
-            .windows(2)
-            .take(WINDOW)
-            .filter_map(|pair| {
-                let (previous, current) = (&pair[0], &pair[1]);
-                let yaw =
-                    Vec3::cross(previous.forward, current.forward).dot(current.up) / current.dt;
+    trace
+        .frames
+        .windows(2)
+        .take(WINDOW)
+        .filter_map(|pair| {
+            let (previous, current) = (&pair[0], &pair[1]);
+            let yaw = Vec3::cross(previous.forward, current.forward).dot(current.up) / current.dt;
 
-                (yaw.abs() < IMPACT_YAW).then_some((current.steer, yaw, current.dt))
-            })
-            .collect(),
-    )
+            (yaw.abs() < IMPACT_YAW).then_some((current.steer, yaw, current.dt))
+        })
+        .collect()
 }
 
 #[test]
@@ -181,9 +168,7 @@ fn the_recovered_yaw_inertia_reproduces_the_recorded_yaw_rate() {
     let handling = shipped_handling();
 
     for capture in ["steer-left", "steer-right"] {
-        let Some(samples) = recorded_yaw(capture) else {
-            continue;
-        };
+        let samples = recorded_yaw(capture);
         assert!(
             samples.len() > 100,
             "{capture}: only {} usable sample(s); the capture is not what this \
@@ -218,9 +203,7 @@ fn the_recovered_yaw_inertia_reproduces_the_recorded_yaw_rate() {
 #[ignore = "needs a disc image in data/images/ and captures in data/traces/"]
 fn holding_left_yaws_positive_and_holding_right_yaws_negative() {
     for (capture, expected) in [("steer-left", 1.0_f32), ("steer-right", -1.0)] {
-        let Some(samples) = recorded_yaw(capture) else {
-            continue;
-        };
+        let samples = recorded_yaw(capture);
         let mean: f32 = samples.iter().map(|s| s.1).sum::<f32>() / samples.len() as f32;
 
         assert_eq!(
