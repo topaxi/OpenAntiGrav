@@ -143,14 +143,22 @@ fn drawn(targets: Option<[i64; 4]>) -> (Vec<String>, Vec<f32>) {
 #[test]
 fn the_target_rows_list_the_best_three_tiers_the_event_awards() {
     let (texts, medals) = drawn(Some([13_800, 15_000, 16_500, 18_000]));
-    assert_eq!(texts, ["2.18.00", "2.30.00", "2.45.00"], "platinum, gold, silver");
+    assert_eq!(
+        texts,
+        ["2.18.00", "2.30.00", "2.45.00"],
+        "platinum, gold, silver"
+    );
     assert_eq!(medals, [100.0, 200.0, 300.0], "a medal beside each row");
 }
 
 #[test]
 fn a_tier_the_event_does_not_award_has_no_row_and_no_medal() {
     let (texts, medals) = drawn(Some([0, 15_000, 16_500, 18_000]));
-    assert_eq!(texts, ["2.30.00", "2.45.00", "3.00.00"], "gold, silver, bronze");
+    assert_eq!(
+        texts,
+        ["2.30.00", "2.45.00", "3.00.00"],
+        "gold, silver, bronze"
+    );
     let (texts, medals_one) = drawn(Some([0, 15_000, 0, 0]));
     assert_eq!(texts, ["2.30.00"]);
     assert_eq!(medals_one, [100.0], "{medals:?}");
