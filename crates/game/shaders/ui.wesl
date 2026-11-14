@@ -274,7 +274,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 
     // The vertex stage collapses a gradient (mode 3) to mode 0 before this
     // runs, so `in.mode` only ever reaches here as 0, 1, 2, 4 or 5 - tested
-    // by range, for the same reason the vertex stage now is (see
+    // by range, for the same reason the vertex stage is (see
     // `Instance::mode`'s own doc for the `is_face`/`is_buttons` trap this
     // guards against).
     let is_sheet = in.mode > 0.5 && in.mode < 2.5;

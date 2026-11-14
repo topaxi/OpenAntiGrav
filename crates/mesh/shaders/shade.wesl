@@ -176,8 +176,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Everything from here to `authored` is the authored rig's, and only
     // runs when the rig is on.** Off - `Light::stand_in`, which is every
     // circuit with no `.envsettings` to read, Pulse's and Pure's included -
-    // the output mixes this whole path in at weight zero, and it was costing
-    // a lightmap fetch, the sun-occlusion lookup and half a dozen `pow`s a
+    // the output mixes this whole path in at weight zero, so running it would
+    // cost a lightmap fetch, the sun-occlusion lookup and half a dozen `pow`s a
     // pixel for nothing: half the race pass on an integrated GPU.
     // `enabled` is a uniform, so the fetches keep their derivatives.
 
@@ -1087,8 +1087,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // reflectivity, added after the albedo multiply and before the fog - read off
         // the live microcode, `@0x5c`-`@0x70` of `diffuse_with_specular_from_alpha_n`'s
         // `IBL` block. The probe array is `Rgba8UnormSrgb`, so both probe fetches are linear
-        // light, as the original's gamma-nibble-7 units 4 and 5 give it; the raw read this
-        // replaced was a fit to a capture with `Write Color Buffers` off
+        // light, as the original's gamma-nibble-7 units 4 and 5 give it
         // (`docs/rendering/hd-ship-materials.md`, "Hull brightness").
         var probe_reflection = vec3<f32>(0.0);
         let probe_entry = (in.slots >> 24u) & 127u;

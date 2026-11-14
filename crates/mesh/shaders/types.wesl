@@ -6,10 +6,8 @@ struct Uniforms {
     // Which layer of the per-craft sun-occlusion array this model samples,
     // **plus one** - `0.0` for none, which is every draw but a Wipeout HD hull
     // under the `original` tier. See `sun_occlusion` below and
-    // `oag_render::shadow::occlusion`. The slot was a global
-    // texture-animation phase before the authored per-material keyframe
-    // blocks (`TexAnims`) replaced it, and sat as padding until this; reusing
-    // it keeps the layout `UNIFORMS_SIZE` and four other pipelines mirror.
+    // `oag_render::shadow::occlusion`. It sits in this slot to keep the
+    // layout `UNIFORMS_SIZE` and four other pipelines mirror.
     //
     // Three trailing f32 fields rather than a vec3: WGSL aligns vec3 to 16
     // bytes, which would silently insert padding this struct's Rust mirror
