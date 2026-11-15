@@ -113,6 +113,60 @@ fn a_loop_runs_out_of_fuel_at_the_same_point_every_time() {
     assert_eq!(costs[0].fuel_used, 5_000);
 }
 
+/// A guest with one page that grows by `pages` more during its tick, room for eight.
+fn grower(pages: u32) -> Vec<u8> {
+    module(&format!(
+        r#"(module
+            (memory (export "memory") 1 8)
+            (func (export "oag_abi") (result i32) i32.const {{ABI_WORD}})
+            (func (export "oag_io") (result i32) i32.const 1024)
+            (func (export "tick") (result i32)
+              (drop (memory.grow (i32.const {pages})))
+              i32.const 0))"#
+    ))
+}
+
+#[test]
+fn a_cost_carries_the_guests_memory_after_its_tick_growth_included() {
+    let limits = Limits {
+        memory_pages: 8,
+        ..Limits::default()
+    };
+    let bytes = |wasm: &[u8]| {
+        Module::compile(wasm, limits)
+            .unwrap()
+            .tick(&observe(0), &mut [0; 4], &mut Vec::new())
+            .unwrap()
+            .memory_bytes
+    };
+    assert_eq!(bytes(&grower(0)), 65_536);
+    assert_eq!(bytes(&grower(2)), 3 * 65_536);
+    assert_eq!(bytes(&grower(7)), 8 * 65_536);
+}
+
+#[test]
+fn a_faulting_call_still_reports_the_memory_it_reached() {
+    let wasm = module(
+        r#"(module
+            (memory (export "memory") 1 8)
+            (func (export "oag_abi") (result i32) i32.const {ABI_WORD})
+            (func (export "oag_io") (result i32) i32.const 1024)
+            (func (export "tick") (result i32)
+              (drop (memory.grow (i32.const 3)))
+              unreachable))"#,
+    );
+    let limits = Limits {
+        memory_pages: 8,
+        ..Limits::default()
+    };
+    let (fault, cost) = Module::compile(&wasm, limits)
+        .unwrap()
+        .tick(&observe(0), &mut [0; 4], &mut Vec::new())
+        .unwrap_err();
+    assert!(matches!(fault, Fault::Trap(_)));
+    assert_eq!(cost.memory_bytes, 4 * 65_536);
+}
+
 #[test]
 fn an_instance_is_fresh_every_tick() {
     // A counter in the guest's own memory, not the blob: it must read 1 every tick.
