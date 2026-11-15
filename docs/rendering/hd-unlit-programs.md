@@ -185,6 +185,29 @@ rather than `time`. They earn `slots::CLOCK_SCROLL_RING`/`_HALO` through
 programs, the evidence and the frames are in
 [plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md), 2026-10-05.
 
+## The Plasma blast's three programs, written whole (2026-11-15)
+
+The ring (`hd_plasmaring_glow` `@0x1900`), the halo (`hd_plasmahalo_glow` `@0x1960`) and the
+sphere (`plasmasphere_glow` `@0x2690`) no longer go through the authored lit path. Each is its
+own program in `crates/mesh/shaders/shade.wesl` ("The Plasma blast's three programs"), `t` the
+blast's age:
+
+- **Ring and halo, unlit.** The tap times the vertex colour, alpha the tap's channel sum. The
+  ring reads its colour tap raw, the halo decoded, as read live (next section's table). Their
+  vertex programs hand over the stride-22 and stride-18 colour fields
+  ([the stride-18 colour](#an-inline-stride-18-vertex-can-carry-its-colour-last)).
+- **Sphere, lit, three samplers.** The one shape here with three: a Fresnel shell
+  `2 sat(1 - N.V)^(2t)` over the plasma picture, lit by the sun and ambient and tinted
+  `(1.93, 1.2, 8)`, a noise-modulated sun highlight, and the reflection probe times
+  `iblScalePower`. The probe and `iblScalePower` are the scenery glass's measured value, not read
+  on this draw ([hd-track-tone.md](hd-track-tone.md), "The glass program").
+- The ring's and the sphere's first tap is `(u, 4 (v + 0.01 t))`.
+
+`rim_glow`'s fingerprint routes them to `slots::CLOCK_SCROLL_RING`, `_HALO` and `PLASMA_SPHERE`,
+compared under the four weapon bits (`slots::WEAPON_PROGRAM_BITS`). Evidence and the pairs:
+[plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md), "The blast's three programs" and "The
+pairs". Omega's programs are recooked GCN and unread; Omega draws HD's.
+
 ## Gates
 
 - **LeachBall: drawn.** `load::weapon_models::LEACH_BALL_DRAWN` is deleted
@@ -450,7 +473,8 @@ What it changes:
   box 1,518 near-white pixels to 1,330; the Plasma bolt adds 569 dark pixels to its box and now
   1,024. Pinned by `hd_missile_blast_ground_truth`, `hd_leach_ball_ground_truth` and
   `hd_plasma_ball_ground_truth`.
-- **The Plasma ring reads raw on the console and ours decodes it, left open.** Both the ring and
+- **The Plasma ring reads raw on the console and ours decoded it: closed 2026-11-15** (next
+  section): the ring, the halo and the sphere run their own programs whole. As first written: both the ring and
   the halo are drawn in ours' tick-487 explosion frame (a probe that returns solid red for the
   ring's slot bit and green for the halo's before anything else lights 6,463 and 1,756 pixels), but
   through the authored lit path (`albedo_linear = decode(texel.rgb)`, times the rig), not the
@@ -492,6 +516,7 @@ executable (named in the HD fidelity handover thread).
   written since 2026-10-07 and framed with `--force-bomb-trip`; see above.)
 - Which archive's `hd_leachbeam_ball_glow` the original serves; the two copies
   differ by the vertex alpha only.
-- No capture of the original's LeachBall or Plasma head exists under
-  `data/traces/` or `data/scratch/`, so the pictures are judged against the
-  programs, not against the game.
+- No capture of the original's LeachBall exists, so its picture is judged
+  against the program, not against the game. The Plasma's whole shot was
+  paired on 2026-11-15 ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md),
+  "The pairs"; the differences left are its "Open").

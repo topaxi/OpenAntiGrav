@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-14
+updated: 2026-11-15
 summary: "HD fidelity queue: bitangent sign and hull/mine/bomb LOD bias wired (pads open), Bomb, weapon taps, Amphiseum scene, exposure"
 difficulty: medium (35)
 ---
@@ -79,8 +79,9 @@ hd-unlit-programs.md, "The Bomb's units, read live". **Read 2026-11-14 (`hd-weap
 blast's core and rays 7 (wired), its shockwave ring 0; the LeachBall and its ring 7 (ball wired, ring on the
 authored path, decodes already); the Plasma head 7 (wired), sphere 7, halo 7, ring 0; the Rocket smoke 7 on both
 taps (wired; reverses `rocket-trail.md`'s WCB-off film note); the track light cone was read live before and is
-decoded. **Still open**: the Plasma ring reads raw but ours lights it through the authored path, so a raw ring
-needs its unlit clock-scroll program written whole (as `BOMB_SHOCK` is); a second Plasma explosion read; the
+decoded. **Still open**: ~~the Plasma ring reads raw but ours lights it through the authored path~~ **closed
+2026-11-15** (the ring, halo and sphere run their own programs, hd-unlit-programs.md); the sphere's probe read on its
+own draw; the
 absorb shell's landing; Omega's and 2048's sampler state (their programs are recooked GCN / Vita; "checked,
 applies, not wired" for the models they ship). Tools: `rpcs3-hd-whiteout.py --fire-state N
 --behind --want-mats DIR`, `rsx_fp_match.py` (attribute a dumped draw to the disc program it runs).

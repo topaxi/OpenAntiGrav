@@ -13,7 +13,7 @@ the five title crates (text only, no compiler) and fails when
   `Origin`**: `ghost_static`, `cockpit_hit`, the `effects.*` rows and the two `Sourced`
   bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`,
   `pads_stamp_in_eliminator`, `launch_normal_is_track_up`,
-  `floor_arms_steer_to_ride_point`) and the
+  `floor_arms_steer_to_ride_point`, `plasma_release_at_display_scale`) and the
   `Sourced` count `leach_beams`.
 
 What it does not check, and the page says so: the provenance of a `Weapons`
@@ -211,6 +211,7 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             "pads_stamp_in_eliminator",
             "launch_normal_is_track_up",
             "floor_arms_steer_to_ride_point",
+            "plasma_release_at_display_scale",
         ):
             sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
             if sourced is None:

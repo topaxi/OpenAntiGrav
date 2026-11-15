@@ -1534,6 +1534,30 @@ treated that way - unmeasured. (Their roll and aspect are a different law: a
 constant `+0x4c8` aspect and a roll that is always a rate; see the emitter
 record's table above.)
 
+### An HD template names its sprite at `+0x87c` - 2026-11-15
+
+Wipeout HD's `.pob` files embed no sprite pixels: an emitter names its texture
+at `+0x4c4` and the caller supplies it (the "sprites beside the effect"
+convention). A **sprite template** record (previous section) names its own
+texture elsewhere: at **`+0x87c`**, a resource-base-relative offset to the
+developer path, the same convention as the emitter's field. Read on the HD
+disc, confidence **90**: all **38** template records name a `.tga` there, and
+every one is shipped as a `.gtf` of the same stem; read at the emitter's
+`+0x4c4`, none does. `oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`,
+`ParticleSystem::template_texture_path`;
+`crates/pob/tests/pob_ground_truth.rs` holds the census. The Plasma's head
+templates are two of them (`glow3` on `WO_RING_BW_64x64`, `glow2` on
+`psysed_default_glow`).
+
+Played only for the effects a title lists (`oag_title::effects` `templates`,
+`oag_fx::psys::Effect::parse_listed`): on HD, `WO_PLASMA_HEAD`'s and
+`WO_PLASMA_CHARGING`'s.
+
+**2048 and Omega: checked, applies, not wired.** 2048's 36 template records
+and Omega's 55 all name a `.tga` at `+0x87c`
+(`crates/fx/tests/psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`);
+neither title lists an effect for its templates yet.
+
 ## Effects Pulse names that 2048 and Omega never author - 2026-10-06
 
 `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,

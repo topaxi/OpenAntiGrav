@@ -20,7 +20,7 @@ pub enum Hold {
     LastFrame,
     /// `--pose-hold-ticks`: after every tick as well, at rest. A weapon fired from a resting
     /// craft then leaves along the pose's own heading instead of the heading the craft has
-    /// turned to by the shot (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pair").
+    /// turned to by the shot (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
     EveryTick,
 }
 
