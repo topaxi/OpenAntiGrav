@@ -235,3 +235,68 @@ fn hd_zone_hull_wears_the_picked_teams_livery() {
         assert!(!report.contains("does not hold"), "{report}");
     }
 }
+
+/// 2048 v1.04 carries the same twelve HD-era Zone liveries as HD and Omega, under
+/// HD's key `zoneship_zone` (`docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`):
+/// an HD-era team's swap reaches the hull's textures and finds them all, and a
+/// native 2048 craft authors none and keeps the default.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vita_2048_zone_hull_wears_the_livery_its_definition_names() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
+    let blob = archives
+        .read_name(oag_2048::TITLE.plugin_definition)
+        .expect("teams definition");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition reads");
+    let liveries: Vec<(String, String)> = oag_raceplay::catalogue::teams(&xml)
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.zone_livery.clone()?)))
+        .collect();
+    assert_eq!(liveries.len(), 12, "{liveries:?}");
+    let mut load = |team: &str| {
+        let mut report = Vec::new();
+        oag_livery::load(
+            &mut archives,
+            &[team.to_string()],
+            &oag_livery::LoadContext {
+                store: Default::default(),
+                race: oag_2048::TITLE.race,
+                mode: Mode::Zone,
+                flare: oag_2048::TITLE.flare,
+                hull_overlay: false,
+                leach_overlay: false,
+                hull_shine: false,
+                hull_wreck: false,
+                absorb_shell: false,
+                own_shield: false,
+                zone_liveries: &liveries,
+                forced_skins: &[],
+                player_livery: None,
+            },
+            None,
+            None,
+            &[],
+            &mut report,
+        )
+        .expect("the Zone hull loads");
+        report.join("\n")
+    };
+    for (team, livery) in [
+        ("Qirex", "zoneship_quirex"),
+        ("AG_Systems", "zoneship_ag_sys"),
+    ] {
+        let report = load(team);
+        assert!(
+            report.contains(&format!(
+                "{team}: Zone livery {livery} replaces zoneship_zone on "
+            )),
+            "{report}"
+        );
+        assert!(!report.contains("does not hold"), "{report}");
+    }
+    let kept = load(r"feisar2048\1");
+    assert!(kept.contains("authors no Zone livery"), "{kept}");
+}
