@@ -599,6 +599,7 @@ fn run(cli: Cli) -> Result<()> {
         // The rules modules of the mods that are on. None in a network race (the host's
         // race runs vanilla, and the lobby's fingerprint leaves the examples out), an
         // original campaign's cell (`--campaign-cell`) or a 2048 event (`--event`).
+        options.campaign = cli.wreck.campaign_cell.is_some() || cli.event.is_some();
         #[cfg(feature = "extensions")]
         {
             let vanilla = net.is_some() || cli.wreck.campaign_cell.is_some() || cli.event.is_some();

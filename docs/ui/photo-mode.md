@@ -178,7 +178,11 @@ opens the menus.
 **Lenses** (the camera row): `internal` (5 ahead of the nose, Pulse's measured), `close` (12 behind
 and 3 above, free to orbit; Pulse's measured offset, **chosen** on the others), `track` (the
 circuit's authored `Camera` node nearest the craft, aimed at it; only where a circuit authors
-one, left out of the cycle otherwise). The mode opens on `internal`, as both originals do.
+one, left out of the cycle otherwise), and `free`, which is ours ("The free lens" below). **The
+mode opens on `free`, seeded from the camera on screen when the pause began, so the first frame is
+the frame the pause left** (maintainer's instruction, 2026-11-15; both originals open on `internal`, a
+camera 5 ahead of the nose, which cut the picture on entering). The cycle is `internal`, `close`,
+`track` (where the circuit has one), `free`.
 
 **No visibility culling while it is open** (maintainer's decision: a shot must never lose
 scenery). On every title the section set (`Race::visible_set`: Pulse, Pure, 2048 and Omega
@@ -205,7 +209,11 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 
 | Input | Does |
 | --- | --- |
-| left stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track` |
+| left stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track`; walk `free` (forward and back, strafe) |
+| right stick (`free`) | look: yaw and pitch, 0.05 rad a tick |
+| SELECT held + stick (`free`) | up and down zoom (field 10 to 100), left and right roll |
+| SQUARE held + stick (`free`) | slide (left and right) and lift (up and down) along the camera's own axes |
+| drag (mouse button held, or a finger), wheel (`free`) | drag looks, or moves with the DRAG chip set to MOVE; the wheel dollies forward and back |
 | right stick (a pad) | `close` and `track`: up and down zoom, left and right tilt (HD's right stick is zoom; the tilt on its X axis is chosen) |
 | SELECT held + stick | `close`: zoom (up and down, field 10 to 100 from 65) and tilt (left and right) |
 | SQUARE held + stick | `close`: pan, +-5 |
@@ -218,10 +226,46 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 | CROSS | take the shot (refused for 0.15 s after opening: HD's guard) |
 | CIRCLE, right click | leave |
 
-A click on the five chips along the top (camera, HUD, EFFECTS, TAKE PHOTO, BACK) does the same, and a
+A click on the five chips along the top (and, on `free`, the DRAG chip under the camera chip) (camera, HUD, EFFECTS, TAKE PHOTO, BACK) does the same, and a
 click with the help hidden shows it. A chip says its row and its value, and the value alone where the
 row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch gestures
 of 2048 (a follow-up).
+
+## The free lens
+
+Ours: no original has a camera the player flies (Pulse and HD move an eye on a rigid rig about the
+craft, "There is no free camera on Pulse"). Code: `oag_raceplay::photo` (`Lens::Free`, `Photo::fly`),
+the camera maths `oag_render::camera::free::Free` (yaw, pitch and roll; translates along its own
+forward, right and up). **Chosen, not measured**, all of it:
+
+- **Where it starts.** `Race::photo_begin` reads the camera the race is drawn from (the override if one is
+  imposed, else the view matrix and the authored field of the chase or cockpit camera, without the speed
+  widen the draw adds back) and opens the mode on `free` at exactly that pose
+  (`tests::photo::photo_mode_opens_on_the_frame_the_pause_left`). Choosing `free` from another lens seeds it
+  from the camera that lens put on screen (`choosing_the_free_lens_from_another_starts_where_that_lens_was`).
+  TRIANGLE returns to that seed.
+- **What it is relative to.** The eye is stored as an offset from the craft in the picture, the
+  orientation is the world's. A rewind or PLAY keeps the craft framed (the craft moves, the eye moves with
+  it); L1 and R1 carry the offset to the next craft; motion blur on the track rides the craft like `close`,
+  ship blur holds the pose the shot's tick left (`photo_hold`) as it does for every lens. The pose is
+  presentation state in `Photo`, never `World`; the hash test drives the free lens
+  (`a_race_taken_through_photo_mode_hashes_as_one_that_was_not`, and the ground truth that hashes
+  every tick of a visit).
+- **Bounds.** The eye stays within `FREE_RANGE` = 400 units of the craft (a sphere, no collision with the
+  road or the scenery, like every lens: "A port needs no collision to be faithful"). Pitch is clamped to
+  +-1.5 rad (`oag_mesh::orbit::PITCH_LIMIT`), roll and yaw are free.
+- **Speeds.** Walking: 0.4 units a tick at full stick (24 a second), ramping to four times that over 90 ticks
+  of a direction held and back to the base the tick it is let go. Look: 0.05 rad a tick at full right stick,
+  0.005 rad a grid unit dragged. Dolly: 2 units a wheel detent. Drag-to-move: 0.1 units a grid unit. Zoom and
+  roll as the `close` lens (0.6 degrees, 0.05 rad a tick).
+- **Pointer and touch.** While `free` is up a held mouse button reports its travel as a drag, the way a
+  finger does (`Pointer::drag`, `set_mouse_pans`), so mouse and touch look around by dragging and a tap or a
+  click is still a click. The DRAG chip switches a drag to moving (the only way a touch player without the
+  on-screen stick moves; whether the on-screen stick is live under photo mode was not checked on a phone).
+  A drag or the wheel abandons a shot of several frames, as any input does.
+- **Words.** `OAG_PHOTO_FREE` and its help lines are ours; no title's disc words a free camera, so
+  `oag_title::photo::Strings` is unchanged. German and Brazilian Portuguese are machine translations
+  (`human = false`), French is in `[untranslated]`.
 
 **The stick layout is HD's measured one** (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, lines 95-98 and 140-141: the left stick
 orbits, SQUARE held with it pans, the right stick's Y zooms). **ADR-0088's binding plan misnames a different layout as

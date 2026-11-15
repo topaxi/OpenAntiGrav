@@ -1047,3 +1047,56 @@ fn a_name_sent_twice_takes_one_pool_entry_and_a_full_pool_is_refused_by_name() {
     }
     assert!(sent > 10 && sent < oag_ext_abi::MAX_COMMANDS, "{sent}");
 }
+
+struct OnlyRaces;
+
+impl Extension for OnlyRaces {
+    type State = NoState;
+    fn tick(_: &Observation<'_>, _: &mut NoState, _: &mut Reply<'_>) {}
+    fn wants_race(race: &RaceInfo) -> bool {
+        race.mode == RaceMode::SingleRace && race.weapons
+    }
+}
+
+struct AnyRace;
+
+impl Extension for AnyRace {
+    type State = NoState;
+    fn tick(_: &Observation<'_>, _: &mut NoState, _: &mut Reply<'_>) {}
+}
+
+fn a_race(mode: RaceMode, weapons: bool) -> RaceInfo {
+    RaceInfo {
+        title: channel_key("wipeout-pulse"),
+        class: channel_key("venom"),
+        mode,
+        weapons,
+        campaign: false,
+        people: 1,
+        crafts: 8,
+        options: [0; 4],
+    }
+}
+
+#[test]
+fn a_guest_picks_its_races_from_the_description_and_the_default_takes_every_one() {
+    for mode in RaceMode::ALL {
+        for weapons in [false, true] {
+            let race = a_race(*mode, weapons);
+            assert_eq!(
+                crate::test::wants_race::<OnlyRaces>(&race),
+                *mode == RaceMode::SingleRace && weapons,
+                "{mode:?}, weapons {weapons}"
+            );
+            assert!(crate::test::wants_race::<AnyRace>(&race));
+        }
+    }
+}
+
+#[test]
+fn a_description_with_a_mode_the_sdk_does_not_know_is_skipped() {
+    let mut io = [0_u8; IO_LEN];
+    a_race(RaceMode::SingleRace, true).write(&mut io);
+    io[oag_ext_abi::RACE_MODE_AT] = 200;
+    assert_eq!(crate::ask::<AnyRace>(&io), oag_ext_abi::SKIP);
+}

@@ -375,6 +375,14 @@ OAG_PHOTO_SHUTTER = { text = "OBTURADOR", human = false }
 OAG_PHOTO_PROGRESS = { text = "TIRANDO FOTO", human = false }
 OAG_PHOTO_CANCELLED = { text = "FOTO CANCELADA", human = false }
 OAG_PHOTO_ANY_INPUT = { text = "QUALQUER BOTÃO CANCELA", human = false }
+OAG_PHOTO_FREE = { text = "LIVRE", human = false }
+OAG_PHOTO_WALK = { text = "ANDAR", human = false }
+OAG_PHOTO_SLIDE_LIFT = { text = "LADO, SUBIR", human = false }
+OAG_PHOTO_ZOOM_ROLL = { text = "ZOOM, GIRAR", human = false }
+OAG_PHOTO_FREE_KEYS = { text = "ANALÓGICO DIREITO OU ARRASTAR OLHAR    RODA AVANÇAR", human = false }
+OAG_PHOTO_DRAG = { text = "ARRASTAR", human = false }
+OAG_PHOTO_LOOK = { text = "OLHAR", human = false }
+OAG_PHOTO_MOVE = { text = "MOVER", human = false }
 
 OAG_MENU_RESET_TO_DEFAULT = { text = "RESTAURAR O PADRÃO", human = false }
 

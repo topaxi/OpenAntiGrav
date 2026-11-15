@@ -243,6 +243,8 @@ impl super::Session {
             help: controls.view_take(Button::Start),
             shot: controls.view_take(Button::Cross),
             leave: controls.view_take(Button::Circle),
+            drag: pointer.drag,
+            scroll: pointer.scroll as f32,
         };
         // A shot of several frames under way owns the mode: any input abandons it, and the
         // controls stand still while it runs.
@@ -261,11 +263,14 @@ impl super::Session {
         if pointer.clicked {
             let grid_size = space.size;
             let hit = grid.at.and_then(|at| {
-                if stage.race.photo().is_some_and(|p| p.help()) {
-                    photo::chip_at(grid_size, at)
-                } else {
-                    None
-                }
+                stage
+                    .race
+                    .photo()
+                    .filter(|p| p.help())
+                    .and_then(|p| {
+                        let free = p.lens() == oag_raceplay::photo::Lens::Free;
+                        photo::chip_at(grid_size, at, free)
+                    })
             });
             let row = grid.at.and_then(|at| {
                 stage
@@ -285,6 +290,7 @@ impl super::Session {
                 Some(Chip::Effects) => stage.race.photo_toggle_panel(),
                 Some(Chip::Camera) => stage.race.photo_cycle_lens(),
                 Some(Chip::Hud) => stage.race.photo_toggle_hud(),
+                Some(Chip::Drag) => stage.race.photo_toggle_drag(),
                 Some(Chip::Take) => pad.shot = true,
                 Some(Chip::Back) => pad.leave = true,
                 None if row.is_none() && !stage.race.photo().is_some_and(|p| p.help()) => {
@@ -293,6 +299,16 @@ impl super::Session {
                 None => {}
             }
         }
+        // A held mouse button reports its travel as a drag, as a finger does, while the free
+        // lens is up; on the others a click is a click.
+        let free = stage
+            .race
+            .photo()
+            .is_some_and(|p| p.lens() == oag_raceplay::photo::Lens::Free);
+        self.pointer.set_mouse_pans(free);
+        let Stage::Race(stage) = &mut self.stage else {
+            return;
+        };
         let action = stage.race.photo_step(pad);
         self.photo_triggers(&view);
         match action {
@@ -389,6 +405,7 @@ impl super::Session {
     /// Closes the mode: the camera as it was, the race stepping again, every button the mode
     /// read spent so none reaches the race or the end screens as a press.
     pub(crate) fn leave_photo(&mut self) {
+        self.pointer.set_mouse_pans(false);
         self.photo_job_cancel();
         let Some(mut open) = self.photo.take() else {
             return;
@@ -476,7 +493,7 @@ impl super::Session {
         let (yaw, pitch) = photo.orbit();
         let (pan, fov, tilt) = (photo.pan(), photo.fov(), photo.tilt());
         Some(format!(
-            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} tilt={tilt:.2} subject={} hud={}",
+            "exposure={} saturation={} speed_blur={} dof={} aperture={} focus={} blur={} shutter={} rewind={} play={} orbit={yaw:.2},{pitch:.2} pan={:.2},{:.2} fov={fov:.1} tilt={tilt:.2} subject={} hud={} free={}",
             effects.value(Row::Exposure),
             effects.value(Row::Saturation),
             effects.value(Row::SpeedBlur),
@@ -491,6 +508,13 @@ impl super::Session {
             pan.1,
             photo.subject(),
             u8::from(photo.hud()),
+            photo.free_pose().map_or_else(
+                || "none".to_string(),
+                |(eye, yaw, pitch, roll)| format!(
+                    "{:.1},{:.1},{:.1}/{yaw:.2},{pitch:.2},{roll:.2}",
+                    eye.x, eye.y, eye.z
+                ),
+            ),
         ))
     }
 
@@ -508,6 +532,7 @@ impl super::Session {
                 Some(Lens::Internal) => "internal",
                 Some(Lens::Close) => "close",
                 Some(Lens::Track) => "track",
+                Some(Lens::Free) => "free",
                 None => "none",
             },
             _ => "none",

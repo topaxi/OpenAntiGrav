@@ -50,9 +50,9 @@ fn every_chip_has_a_rect_inside_the_grid_and_a_click_finds_it() {
     for chip in CHIPS {
         let [x, y, w, h] = chip_rect(chip, grid);
         assert!(x >= 0.0 && x + w <= grid.0 && y >= 0.0 && y + h <= grid.1);
-        assert_eq!(chip_at(grid, (x + w / 2.0, y + h / 2.0)), Some(chip));
+        assert_eq!(chip_at(grid, (x + w / 2.0, y + h / 2.0), false), Some(chip));
     }
-    assert_eq!(chip_at(grid, (240.0, 150.0)), None);
+    assert_eq!(chip_at(grid, (240.0, 150.0), true), None);
 }
 
 #[test]

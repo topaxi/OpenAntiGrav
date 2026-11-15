@@ -69,6 +69,13 @@ counts WebAssembly operations; the host sets a budget before each call
 (`Store::set_fuel`) and an exhausted budget traps `OutOfFuel`, which faults the mod
 deterministically ([hooks.md](hooks.md#the-shape-one-call-per-tick-events-in-commands-out)).
 
+The one call outside the tick is a guest's `oag_wants_race`
+([hooks.md](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6)), made once at race load
+on a fresh instance under the same budget: a load cost, outside the per-tick figures, and
+deterministic for the same reason (fuel, no clock). Its answer is a function of the race
+description alone, so the same options decide the same modules on every machine; a trap or an
+exhausted budget there leaves the module out of the race, never a mid-race fault.
+
 Measured:
 
 - **The trap point is identical on Cranelift and Pulley.** A runaway loop stopped

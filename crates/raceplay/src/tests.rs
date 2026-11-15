@@ -43,6 +43,8 @@ mod distance_reset;
 mod eliminator;
 mod energy_bar_delay;
 #[cfg(feature = "extensions")]
+mod extension_admit;
+#[cfg(feature = "extensions")]
 mod extension_ai_pickup;
 #[cfg(feature = "extensions")]
 mod extension_aiming;

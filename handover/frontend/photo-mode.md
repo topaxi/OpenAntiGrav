@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-08
+updated: 2026-11-15
 summary: "Photo mode with picture controls, rewind, motion blur and accumulated depth of field runs; split screen, touch and follow-ups are open"
 ---
 
@@ -37,6 +37,12 @@ ours does") says what it does, the bindings and the shot. The ranked table that 
 in that page's lineage and `git log`; what is left from it is here.
 
 ### Follow-ups to `photo-wire`
+
+- **Free lens landed (2026-11-15, `photo-cam`).** The mode opens on `free` at the camera the pause left; see
+  `docs/ui/photo-mode.md`, "The free lens". Open: the HUD row still opens OFF while the pause frame
+  had the HUD, so the first frame differs by the HUD (the camera is identical); a touch player moves only by
+  the DRAG chip's MOVE (`Pointer` has no held level for a hold-to-move pad, and whether the on-screen stick
+  is live under photo mode was not checked on a phone); roll is on SELECT + stick and has no mouse binding.
 
 - **Entry moved (2026-11-07):** on Pulse the PHOTO MODE row is the pause screen's (`handover/frontend/pause-menu.md`); the other titles keep the main page's.
 - **Split screen.** Left out on purpose (the mode frames one picture and one pad drives it); HD and

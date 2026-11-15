@@ -545,6 +545,7 @@ impl Session {
         // (manifests and `.wasm` alike, off this thread) so a MODS page switch counts.
         // None in an original campaign's race (README 1.2; a mod campaign's runs them) or
         // a network race (the host's race runs vanilla).
+        options.campaign = self.campaign_cell.is_some() || self.pending_event.is_some();
         #[cfg(feature = "extensions")]
         {
             let vanilla = (self.campaign_cell.is_some() && self.campaign_custom.is_none())

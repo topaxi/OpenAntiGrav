@@ -147,10 +147,7 @@ fn the_lens_list_leaves_track_out_where_the_circuit_has_no_node() {
         photo.cycle_lens();
         seen.push(photo.lens());
     }
-    assert_eq!(
-        seen,
-        [Lens::Close, Lens::Internal, Lens::Close, Lens::Internal]
-    );
+    assert_eq!(seen, [Lens::Close, Lens::Free, Lens::Internal, Lens::Close]);
 }
 
 #[test]
@@ -567,4 +564,227 @@ fn a_scrub_moves_the_rewind_row_by_the_pull_and_stops_at_both_ends() {
     assert_eq!(scrub_ticks(0.05, 30), 1);
     assert_eq!(scrub_ticks(1.0, 30), 30);
     assert!(scrub_ticks(0.5, 30) < scrub_ticks(0.8, 30));
+}
+
+fn pose_at(eye: Vec3, yaw: f32, pitch: f32, roll: f32) -> CameraOverride {
+    CameraOverride {
+        eye,
+        orientation: Free {
+            position: eye,
+            yaw,
+            pitch,
+            roll,
+        }
+        .orientation(),
+        fov_deg: Some(70.0),
+    }
+}
+
+/// The free lens opened on a rolled, pitched pose, and the craft it is relative to.
+fn on_free() -> (Photo, Subject, CameraOverride) {
+    let craft = craft(0);
+    let start = pose_at(craft.position + Vec3::new(3.0, 5.0, 20.0), 0.7, 0.2, 0.3);
+    (
+        Photo::new(0, true, None).opening_on(start, craft.position),
+        craft,
+        start,
+    )
+}
+
+fn camera_of(photo: &Photo, craft: &Subject) -> Free {
+    let pose = photo.pose(craft, None);
+    Free::from_orientation(pose.eye, pose.orientation)
+}
+
+#[test]
+fn opening_on_a_pose_shows_that_pose_to_the_bit() {
+    let (photo, craft, start) = on_free();
+    assert_eq!(photo.lens(), Lens::Free);
+    let pose = photo.pose(&craft, None);
+    assert!((pose.eye - start.eye).length() < 1e-4, "{pose:?}");
+    for axis in [Vec3::X, Vec3::Y, Vec3::Z] {
+        assert!((pose.orientation * axis - start.orientation * axis).length() < 1e-4);
+    }
+    assert_eq!(pose.fov_deg, Some(70.0));
+}
+
+#[test]
+fn the_free_lens_walks_the_eye_along_its_own_axes() {
+    let (mut photo, craft, start) = on_free();
+    let eye = Free::from_orientation(start.eye, start.orientation);
+    let ticks = 10;
+    // Held for ten ticks the speed has ramped as `fly` ramps it.
+    let travelled: f32 = (1..=ticks)
+        .map(|t| {
+            FREE_WALK_RATE * (1.0 + (FREE_WALK_BOOST - 1.0) * (t as f32 / FREE_RAMP_TICKS as f32))
+        })
+        .sum();
+    for _ in 0..ticks {
+        photo.step(stick(0.0, 1.0), &[0]);
+    }
+    let moved = photo.pose(&craft, None).eye - start.eye;
+    assert!(
+        (moved - eye.forward() * travelled).length() < 1e-3,
+        "{moved:?}"
+    );
+    let before = photo.pose(&craft, None).eye;
+    for _ in 0..ticks {
+        photo.step(stick(1.0, 0.0), &[0]);
+    }
+    let strafed = photo.pose(&craft, None).eye - before;
+    assert!(strafed.normalize().dot(eye.right()) > 0.999, "{strafed:?}");
+    let before = photo.pose(&craft, None).eye;
+    let lift = Pad {
+        square: true,
+        stick: (0.0, 1.0),
+        ..Pad::default()
+    };
+    photo.step(lift, &[0]);
+    let lifted = photo.pose(&craft, None).eye - before;
+    assert!(lifted.normalize().dot(eye.up()) > 0.999, "{lifted:?}");
+}
+
+#[test]
+fn holding_a_direction_speeds_the_free_lens_up_and_letting_go_slows_it() {
+    let (mut photo, craft, _) = on_free();
+    let step_length = |photo: &mut Photo, pad: Pad| {
+        let before = photo.pose(&craft, None).eye;
+        photo.step(pad, &[0]);
+        (photo.pose(&craft, None).eye - before).length()
+    };
+    let first = step_length(&mut photo, stick(0.0, 1.0));
+    for _ in 0..FREE_RAMP_TICKS {
+        photo.step(stick(0.0, 1.0), &[0]);
+    }
+    let held = step_length(&mut photo, stick(0.0, 1.0));
+    assert!(
+        (held / first - FREE_WALK_BOOST).abs() < 0.2,
+        "{first} {held}"
+    );
+    photo.step(Pad::default(), &[0]);
+    let again = step_length(&mut photo, stick(0.0, 1.0));
+    assert!((again - first).abs() < 1e-3, "{again} against {first}");
+}
+
+#[test]
+fn the_right_stick_looks_and_pitch_stops_short_of_vertical() {
+    let (mut photo, craft, _) = on_free();
+    let before = camera_of(&photo, &craft);
+    photo.step(
+        Pad {
+            right: (1.0, 0.0),
+            ..Pad::default()
+        },
+        &[0],
+    );
+    let turned = camera_of(&photo, &craft);
+    assert!(
+        (turned.yaw - before.yaw - FREE_LOOK_RATE).abs() < 1e-4,
+        "{turned:?}"
+    );
+    for _ in 0..1000 {
+        photo.step(
+            Pad {
+                right: (0.0, 1.0),
+                ..Pad::default()
+            },
+            &[0],
+        );
+    }
+    assert!((camera_of(&photo, &craft).pitch - oag_mesh::orbit::PITCH_LIMIT).abs() < 1e-3);
+    for _ in 0..2000 {
+        photo.step(
+            Pad {
+                right: (0.0, -1.0),
+                ..Pad::default()
+            },
+            &[0],
+        );
+    }
+    assert!((camera_of(&photo, &craft).pitch + oag_mesh::orbit::PITCH_LIMIT).abs() < 1e-3);
+}
+
+#[test]
+fn select_with_the_stick_zooms_and_rolls_the_free_lens_within_the_close_field() {
+    let (mut photo, craft, _) = on_free();
+    let roll_before = camera_of(&photo, &craft).roll;
+    let pad = Pad {
+        select: true,
+        stick: (1.0, 1.0),
+        ..Pad::default()
+    };
+    photo.step(pad, &[0]);
+    assert!((photo.fov() - (70.0 - ZOOM_RATE)).abs() < 1e-4);
+    assert!(camera_of(&photo, &craft).roll < roll_before);
+    for _ in 0..1000 {
+        photo.step(pad, &[0]);
+    }
+    assert_eq!(photo.fov(), CLOSE_FOV.0);
+}
+
+#[test]
+fn the_free_eye_stays_within_range_of_the_craft_and_triangle_comes_home() {
+    let (mut photo, craft, start) = on_free();
+    for _ in 0..5000 {
+        photo.step(stick(0.0, 1.0), &[0]);
+    }
+    let away = photo.pose(&craft, None).eye - craft.position;
+    assert!(
+        (away.length() - FREE_RANGE).abs() < 1e-2,
+        "{}",
+        away.length()
+    );
+    photo.step(
+        Pad {
+            reset: true,
+            ..Pad::default()
+        },
+        &[0],
+    );
+    let pose = photo.pose(&craft, None);
+    assert!((pose.eye - start.eye).length() < 1e-4);
+    assert_eq!(pose.fov_deg, Some(70.0));
+}
+
+#[test]
+fn a_drag_looks_by_default_and_moves_with_the_drag_chip_and_the_wheel_dollies() {
+    let (mut photo, craft, _) = on_free();
+    let before = camera_of(&photo, &craft);
+    let drag = Pad {
+        drag: (100.0, 0.0),
+        ..Pad::default()
+    };
+    photo.step(drag, &[0]);
+    let looked = camera_of(&photo, &craft);
+    assert!((looked.yaw - before.yaw - 100.0 * FREE_DRAG_LOOK).abs() < 1e-4);
+    assert!(
+        (looked.position - before.position).length() < 1e-4,
+        "a look does not travel"
+    );
+    photo.toggle_drag_moves();
+    photo.step(drag, &[0]);
+    let moved = camera_of(&photo, &craft);
+    assert!(
+        (moved.yaw - looked.yaw).abs() < 1e-4,
+        "a move does not turn"
+    );
+    assert!(((moved.position - looked.position).length() - 100.0 * FREE_DRAG_MOVE).abs() < 1e-3);
+    let wheel = Pad {
+        scroll: -2.0,
+        ..Pad::default()
+    };
+    photo.step(wheel, &[0]);
+    let dollied = camera_of(&photo, &craft);
+    let along = (dollied.position - moved.position).dot(dollied.forward());
+    assert!((along - 2.0 * FREE_DOLLY).abs() < 1e-3, "{along}");
+}
+
+#[test]
+fn the_free_eye_keeps_its_offset_when_the_craft_moves_or_changes() {
+    let (photo, craft, _) = on_free();
+    let mut later = craft;
+    later.position += Vec3::new(40.0, 0.0, 0.0);
+    let (a, b) = (photo.pose(&craft, None), photo.pose(&later, None));
+    assert!((b.eye - a.eye - Vec3::new(40.0, 0.0, 0.0)).length() < 1e-4);
+    assert!((a.orientation * Vec3::NEG_Z - b.orientation * Vec3::NEG_Z).length() < 1e-6);
 }

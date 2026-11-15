@@ -478,6 +478,44 @@ it cannot move it (README: no grid changes). An arena's authored spawn points, a
 respawn at a point rather than a spline sample (`Race::respawn` places a craft on a
 sample), are engine changes in the track file and `respawn.rs` first.
 
+## Choosing its races: `oag_wants_race` (ABI 1 revision 6)
+
+Before anything of a module is loaded for a race, the race load asks it whether it runs in
+that race. A guest may export `oag_wants_race() -> u32`; one that does not runs in every race
+its mod is on for (title, scope), as before, so no guest built earlier needs the export.
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| The question | `oag_ext_abi::RaceInfo` (`crates/ext-abi/src/race.rs`) | Written at the start of the I/O buffer of a fresh instance, its own 20-byte layout (the call happens before a race has a tick, a craft or a track, so the tick observation is not used): the ABI major, the title key (`channel_key` of its slug), the class key (`channel_key` of its lowercased name, 0 for none), the mode (`RaceMode`, the engine's `Mode` order from 1), a flags byte (`RACE_WEAPONS`, `RACE_CAMPAIGN`), the people flying, the craft on the grid and the module's four `sim` option picks (`Source::options.sim`, as a tick would read them) |
+| The answer | `RUN` (1) or `SKIP` (0) | Any other value, a trap or running out of fuel leaves the module out of the race by name (`mod <id>: <module> left out: its race check <fault>`), because a broken check must not run a module its guest meant to withhold |
+| The cost | `Module::wants_race`, `crates/modhost/src/lib.rs` | One fresh instance and one call under the module's own fuel budget (`FUEL_PER_TICK`), at race load. A load cost: not a tick's fuel, never in the overlay's per-tick figures. A module that exports no check is not instantiated for it |
+| The choke point | `oag_raceplay::extensions::admit`, `crates/raceplay/src/extensions/admit.rs`, which `sources_for_race` (the load's one call) runs on what `gather` found | Filters the sources to those for the race's title and scope whose module does not decline. Every later consumer (shaders, effects, sounds and icons of the mod, `[[pickup.odds]]`, the pickup kind it would take, `MAX_SIM_MODS`, `prepare`'s compile, the MODDED line, the state blob and the hash) sees only the accepted sources, so a module that declines has no presence in that race: no `tick`, no fuel, no state, no pickup, no HUD or sound or effect of its own, and `Race::is_modded` stays false on its account (a race with only decliners records a replay). The decline is one `debug` line in the load report |
+| What the race is | `describe`, same file | From the load's `Options`: the mode through an exhaustive `match` on `oag_race::Mode` (a new mode does not compile until it has a code), `Options::weapons_on` (the override over the mode), `Options::campaign` (the launch sites set it for a campaign cell or a 2048 event), `Options::people_flying`, and the craft count from `spawn::field_opponents` plus one, the function `Race::start` grids with, so the two cannot disagree |
+
+A module that does not compile is not dropped by `admit`: `prepare` compiles it again and
+names why it is left out, once. An accepted module is therefore compiled twice at load (unmeasured; the
+official guest is 11 KB); passing the compiled module on would change `prepare`'s
+signature for no player-visible gain and is left.
+
+In the guest SDK, `Extension::wants_race(&RaceInfo) -> bool` (default `true`); `export!`
+always exports `oag_wants_race`. The test harness `oag_ext::test::wants_race::<E>(&info)` runs
+the answer through the host's writer. The check must decide from the description alone: it sees
+no state, no craft and no track.
+
+**Slipstream** (`assets/mods/official/slipstream`) answers yes for a Single Race or a
+Tournament leg with weapons on, and no for everything else (weapons off, Eliminator, Zone,
+Time Trial, Speed Lap, Head to Head, Detonator), on every title. The "in races with weapons"
+its manifest comment used to promise was never checked: with weapons off no pad hands the
+pickup out, so the module was merely idle, but it was ticked, held its state and marked the race
+modded, and in Eliminator, Tournament, Head to Head and Detonator (weapons on) it ran. The
+Tournament leg's inclusion is the maintainer's instruction.
+Proof: `oag_raceplay`'s `tests::extension_admit` (a decliner is never loaded, hashes as a race
+with no mod, is not modded; an accepter and a guest with no check run as before; a check that
+traps or answers neither is left out by name; every field of the description reaches the
+guest), `tests::extension_slipstream` (the real module over mode x weapons x title), the
+disc-backed `slipstream_ground_truth` (`race::load` on Pulse PSP EU's `16_Track`: MODDED only
+for a Single Race or a Tournament with weapons) and the guest's own tests.
+
 ## Picks: sim and view
 
 A `choice` row of a mod's `menu.toml` declares `scope = "sim"` (the default) or `scope = "view"`

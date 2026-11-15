@@ -251,12 +251,12 @@ fn photo_mode_and_game_options_open_from_the_pause_screen() {
         &format!(
             "{} {OPEN} select pause_options; press cross; expect page=options; \
              press circle; expect page=pause; \
-             select photo_mode; press cross; until photo=internal within 200",
+             select photo_mode; press cross; until photo=free within 200",
             to_the_race("time_trial")
         ),
     );
     assert!(
-        run.states.iter().any(|state| state["photo"] == "internal"),
+        run.states.iter().any(|state| state["photo"] == "free"),
         "photo mode opened"
     );
 }
@@ -775,15 +775,10 @@ mod pure_screens {
         assert_eq!(quit.states.last().expect("a state")["screen"]["id"], "main");
         let photo = run_pure(
             "photo",
-            &format!(
-                "{race} {OPEN} select photo_mode; press cross; until photo=internal within 200"
-            ),
+            &format!("{race} {OPEN} select photo_mode; press cross; until photo=free within 200"),
         );
         assert!(
-            photo
-                .states
-                .iter()
-                .any(|state| state["photo"] == "internal"),
+            photo.states.iter().any(|state| state["photo"] == "free"),
             "PHOTO MODE opens the photo lens from the pause screen"
         );
     }

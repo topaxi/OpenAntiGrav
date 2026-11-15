@@ -521,3 +521,34 @@ pub(super) fn start_position_of(blob: &[u8]) -> Option<StartPosition> {
     let node = nodes.iter().find(|node| node.class_id == class)?;
     oag_vex::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
 }
+
+/// How many of the grid's other seven slots are actually driven. Every opponent-fielding mode
+/// except Head2Head fields all seven; Head2Head fields exactly one - see
+/// [`Mode::opponent_count`]'s own doc for the measurement. The `--opponents` escape hatch
+/// always asks for the full seven, matching what it did before this field existed.
+///
+/// The craft on the grid are this plus one; the race start and the question a module is asked
+/// before it (`crate::extensions::admit`) both read it here.
+pub(crate) fn field_opponents(
+    mode: oag_race::Mode,
+    people: u8,
+    no_opponents: bool,
+    opponents: bool,
+) -> u8 {
+    if mode.is_multiplayer_time_trial(usize::from(people)) {
+        // The people and nobody else, each on a grid slot of their own: person `k`
+        // takes seat `k`, the back row first. **Chosen, not measured**: the original has no
+        // such mode on the grid, and `grid.md`'s "a short grid packs to the back" is
+        // contradicted by the measured Head to Head field of two ([`grid_row`]).
+        people.min(GRID_SLOTS) - 1
+    } else if no_opponents {
+        0
+    } else if mode.field_is_fixed() {
+        // Head2Head: two craft, whoever flies them. A second person takes the
+        // one opponent's slot, so the people never meet an AI craft.
+        mode.opponent_count()
+    } else {
+        mode.opponent_count()
+            .max(if opponents { GRID_SLOTS - 1 } else { 0 })
+    }
+}

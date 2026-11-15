@@ -48,8 +48,9 @@ pub use oag_ext_abi::{
     ABI_WORD, Aim, Anchor, Colour, Command, Cue, Distance, Effect, Event, HudElement, HudPlace,
     IO_LEN, Icon, MAX_CRAFTS, MAX_EMITS_PER_TICK, MAX_HUD_EXTRA, MAX_HUD_ITEMS, MAX_HUD_SHAKE,
     MAX_HUD_TEXT, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_STATE_BYTES, MAX_THRUST_FACTOR,
-    MAX_TRANSIT_TICKS, ModName, Pickup, Rgba, SPEED_TO_KMH, Slot, SoundMode, TICKS_PER_SECOND,
-    TRACK_SENDER, ViewUpdate, Warning, WarningIcon, WarningSide, Weapon, WeatherKind, channel_key,
+    MAX_TRANSIT_TICKS, ModName, Pickup, RaceInfo, RaceMode, Rgba, SPEED_TO_KMH, Slot, SoundMode,
+    TICKS_PER_SECOND, TRACK_SENDER, ViewUpdate, Warning, WarningIcon, WarningSide, Weapon,
+    WeatherKind, channel_key,
 };
 pub use reply::{Refused, Reply};
 pub use track::{Entity, Track};
@@ -73,6 +74,19 @@ pub trait Extension {
 
     /// One tick: read `obs`, update `state`, send commands through `reply`.
     fn tick(obs: &Observation<'_>, state: &mut Self::State, reply: &mut Reply<'_>);
+
+    /// Whether the module runs in `race`, asked once before the race is built. Answer `false`
+    /// and the module is not loaded for that race at all: no `tick`, no fuel, no state, no
+    /// pickup kind, none of its HUD, sounds, effects or shaders, and the race is not modded on
+    /// its account. The default runs in every race.
+    ///
+    /// Pure: it sees only `race`, in a fresh instance with the module's usual fuel; nothing it
+    /// does is kept. A call that traps or runs out of fuel leaves the module out of the race
+    /// too, so decide from the description alone.
+    fn wants_race(race: &RaceInfo) -> bool {
+        let _ = race;
+        true
+    }
 }
 
 /// One grid slot that holds a craft this tick. Only an [`Observation`] hands one out,
@@ -307,6 +321,17 @@ pub fn run<E: Extension>(io: &mut [u8; IO_LEN], track: &[u8]) -> u32 {
     0
 }
 
+/// `E`'s answer to the race a whole I/O buffer describes: what the `oag_wants_race` export
+/// returns. A buffer whose mode this SDK does not know is a race the module cannot judge, and
+/// skipped.
+#[doc(hidden)]
+pub fn ask<E: Extension>(io: &[u8; IO_LEN]) -> u32 {
+    match RaceInfo::read(io) {
+        Some(race) if E::wants_race(&race) => oag_ext_abi::RUN,
+        _ => oag_ext_abi::SKIP,
+    }
+}
+
 /// The I/O buffer and the exports' bodies on wasm32.
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
@@ -329,6 +354,13 @@ pub mod wasm {
         core::ptr::addr_of!(TRACK) as u32
     }
 
+    /// `oag_wants_race`.
+    pub fn wants_race<E: Extension>() -> u32 {
+        // SAFETY: as in `tick`: one thread, no other reference to `IO` during the call.
+        let io = unsafe { &*core::ptr::addr_of!(IO) };
+        super::ask::<E>(io)
+    }
+
     /// `tick`.
     pub fn tick<E: Extension>() -> u32 {
         // SAFETY: wasm32 has one thread and these are the only references to `IO` and
@@ -340,7 +372,7 @@ pub mod wasm {
 }
 
 /// Exports `E` as the module's extension: `oag_abi`, `oag_io`, `oag_track`, `oag_state_len`,
-/// `tick` and the panic handler (`unreachable`, which the host turns into a fault),
+/// `oag_wants_race`, `tick` and the panic handler (`unreachable`, which the host turns into a fault),
 /// all only on wasm32.
 #[macro_export]
 macro_rules! export {
@@ -367,6 +399,12 @@ macro_rules! export {
         #[unsafe(no_mangle)]
         pub extern "C" fn oag_state_len() -> u32 {
             <<$extension as $crate::Extension>::State as $crate::Blob>::BYTES as u32
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn oag_wants_race() -> u32 {
+            $crate::wasm::wants_race::<$extension>()
         }
 
         #[cfg(target_arch = "wasm32")]
