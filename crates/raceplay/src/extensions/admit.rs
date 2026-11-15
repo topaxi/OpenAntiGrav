@@ -56,6 +56,29 @@ pub(crate) fn describe(options: &crate::Options, title: &str) -> RaceInfo {
     }
 }
 
+/// The sources the race `options` runs: [`gather`](super::gather)ed, then [`admit`]ted for
+/// `title` (its slug). The one call the load makes, so nothing of a module that declines is
+/// read for the race.
+#[must_use]
+pub fn sources_for_race(
+    options: &crate::Options,
+    title: &str,
+    report: &mut Vec<String>,
+) -> Vec<Source> {
+    let found = super::gather(
+        &options.extensions,
+        options.find_extensions.as_ref(),
+        report,
+    );
+    admit(
+        found,
+        title,
+        options.foreign_track.as_deref(),
+        options,
+        report,
+    )
+}
+
 /// The `sources` that run in the race `options` describes: those for `title` (and
 /// `foreign_track`, for a track module) whose module does not decline it. A module that
 /// exports no `oag_wants_race` runs everywhere. One that declines is dropped with a debug
