@@ -493,8 +493,8 @@ its mod is on for (title, scope), as before, so no guest built earlier needs the
 | What the race is | `describe`, same file | From the load's `Options`: the mode through an exhaustive `match` on `oag_race::Mode` (a new mode does not compile until it has a code), `Options::weapons_on` (the override over the mode), `Options::campaign` (the launch sites set it for a campaign cell or a 2048 event), `Options::people_flying`, and the craft count from `spawn::field_opponents` plus one, the function `Race::start` grids with, so the two cannot disagree |
 
 A module that does not compile is not dropped by `admit`: `prepare` compiles it again and
-names why it is left out, once. An accepted module is therefore compiled twice at load (a few
-milliseconds for an 11 KB guest); passing the compiled module on would change `prepare`'s
+names why it is left out, once. An accepted module is therefore compiled twice at load (unmeasured; the
+official guest is 11 KB); passing the compiled module on would change `prepare`'s
 signature for no player-visible gain and is left.
 
 In the guest SDK, `Extension::wants_race(&RaceInfo) -> bool` (default `true`); `export!`
