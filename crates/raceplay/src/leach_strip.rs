@@ -137,13 +137,6 @@ impl Race {
             + standing.progress.unwrap_or(0.0)
     }
 
-    pub(crate) fn leach_course_length(&self) -> f32 {
-        self.sim
-            .course
-            .as_deref()
-            .map_or(0.0, |course| course.length())
-    }
-
     /// The craft's trail record as of now: anchor, progress and the body's
     /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
     fn leach_record(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> law::Record {

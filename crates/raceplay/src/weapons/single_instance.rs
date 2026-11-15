@@ -283,6 +283,15 @@ impl Race {
         }
     }
 
+    /// The course's length, or 0 with no course: what a LeachBeam's trip
+    /// folds the craft's track gap by, and the strip's wobble divides by.
+    pub(crate) fn leach_course_length(&self) -> f32 {
+        self.sim
+            .course
+            .as_deref()
+            .map_or(0.0, |course| course.length())
+    }
+
     /// One tick of the beam in pool entry `at`.
     fn advance_one_leach_beam(
         &mut self,
