@@ -736,6 +736,14 @@ pub struct Report {
     pub fuel_peak: u64,
     /// Fuel a call may use.
     pub fuel_budget: u64,
+    /// The guest's linear memory in bytes after the last call that ran.
+    pub memory_bytes: u64,
+    /// The most linear memory any call this race ended with.
+    pub memory_peak: u64,
+    /// The memory the manifest allows: `memory_pages` in bytes. Not a reservation.
+    pub memory_cap: u64,
+    /// The state blob's length in bytes: the manifest's `state_bytes`.
+    pub state_bytes: u64,
     /// The last call's wall time, microseconds.
     pub call_us: f32,
     /// The tick the module faulted on, and why; it has not run since.

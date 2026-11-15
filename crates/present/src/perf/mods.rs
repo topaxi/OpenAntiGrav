@@ -1,5 +1,6 @@
-//! The simulation mods block of the `Dev` overlay: each module's fuel and call time,
-//! drawn under the network block.
+//! The simulation mods block of the `Dev` overlay: each module's fuel, linear memory
+//! (now and peak against its cap, with its state blob) and call time, drawn under the
+//! network block.
 //!
 //! Plain data in, [`Draw`]s out, like [`super::net`]: this crate knows no wasm host, so
 //! the composition root maps `oag_raceplay::extensions::Report` into a [`Readout`].
@@ -27,6 +28,14 @@ pub struct Module {
     pub fuel_peak: u64,
     /// The per-call budget.
     pub fuel_budget: u64,
+    /// The guest's linear memory in bytes after the last call.
+    pub memory_bytes: u64,
+    /// The most it ended a call with this race.
+    pub memory_peak: u64,
+    /// The memory its manifest allows, in bytes.
+    pub memory_cap: u64,
+    /// The state blob's length in bytes.
+    pub state_bytes: u64,
     /// The last call's wall time, microseconds.
     pub call_us: f32,
     /// The tick it faulted on and why; it has not run since.
@@ -69,6 +78,22 @@ impl Readout {
             rows.push((
                 format!(" FUEL {} PEAK {}", module.fuel_used, module.fuel_peak),
                 color,
+            ));
+            rows.push((
+                format!(
+                    " MEM {}K PEAK {}K",
+                    module.memory_bytes / 1024,
+                    module.memory_peak / 1024
+                ),
+                TEXT,
+            ));
+            rows.push((
+                format!(
+                    " OF {}K  STATE {} B",
+                    module.memory_cap / 1024,
+                    module.state_bytes
+                ),
+                TEXT,
             ));
             rows.push((
                 format!(
@@ -134,6 +159,10 @@ mod tests {
                 fuel_used: 1_000,
                 fuel_peak: 3_000,
                 fuel_budget: 200_000,
+                memory_bytes: 65_536,
+                memory_peak: 196_608,
+                memory_cap: 1_048_576,
+                state_bytes: 64,
                 call_us: 7.4,
                 faulted: None,
             }],
@@ -146,6 +175,8 @@ mod tests {
                 "MODS",
                 "OAG.WALL-PENALTY",
                 " FUEL 1000 PEAK 3000",
+                " MEM 64K PEAK 192K",
+                " OF 1024K  STATE 64 B",
                 " 0.5% OF 200000  7 US"
             ]
         );
