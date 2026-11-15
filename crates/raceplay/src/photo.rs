@@ -22,8 +22,10 @@
 //! | no shot for [`GUARD_TICKS`] after entering | HD, 2048 |
 //! | no collision with the road | Pulse and HD |
 //!
-//! **Chosen, not measured:** the zoom and pan rates, the bindings ([`Pad`]) and which lens
-//! the mode opens on when a title's original has none.
+//! A fourth lens, `free`, is ours: no original has one (`docs/ui/photo-mode.md`, "The free
+//! lens"). **Chosen, not measured:** the zoom and pan rates, the free lens's speeds, bounds and
+//! bindings, the bindings ([`Pad`]) and which lens the mode opens on when a title's original has
+//! none.
 
 use super::*;
 
@@ -35,6 +37,7 @@ use effects::Effects;
 use finish_camera::Subject;
 use oag_render::camera::craft_view;
 use oag_render::camera::destroy::Destroy;
+use oag_render::camera::free::{Free, Motion};
 
 /// Ticks after entering in which a shot is refused: `0.15` s at 60 Hz. It stops the button
 /// that opened the mode from taking a picture.
@@ -56,6 +59,23 @@ pub const CLOSE_FOV: (f32, f32, f32) = (10.0, 100.0, 65.0);
 /// The `track` lens's vertical field, in degrees: `(least, greatest, opening)`.
 pub const TRACK_FOV: (f32, f32, f32) = (3.0, 40.0, 20.0);
 
+/// Units per tick the free lens moves at full deflection before it has been held.
+pub const FREE_WALK_RATE: f32 = 0.4;
+/// How many times faster the free lens moves once a direction has been held [`FREE_RAMP_TICKS`].
+pub const FREE_WALK_BOOST: f32 = 4.0;
+/// Ticks of held movement over which the free lens speeds up to [`FREE_WALK_BOOST`].
+pub const FREE_RAMP_TICKS: u32 = 90;
+/// Radians per tick the free lens looks around at full right stick.
+pub const FREE_LOOK_RATE: f32 = ORBIT_RATE;
+/// Radians of look per grid unit a mouse or a finger drags.
+pub const FREE_DRAG_LOOK: f32 = 0.005;
+/// Units of movement per grid unit dragged, with the drag set to move.
+pub const FREE_DRAG_MOVE: f32 = 0.1;
+/// Units a wheel detent dollies the free lens.
+pub const FREE_DOLLY: f32 = 2.0;
+/// How far the free lens's eye may be from the craft in the picture, in units.
+pub const FREE_RANGE: f32 = 400.0;
+
 /// The stick deflection that counts as a push on the effects panel.
 const PUSH: f32 = 0.5;
 /// Ticks a push is held before it repeats, and between repeats once it does.
@@ -74,6 +94,17 @@ pub enum Lens {
     Close,
     /// The circuit's own camera node, aimed at the craft.
     Track,
+    /// A camera the player flies: it starts where the last lens left it and goes anywhere
+    /// within [`FREE_RANGE`] of the craft.
+    Free,
+}
+
+/// The free lens's camera: [`Free::position`] is the eye **relative to the craft in the picture**
+/// (so a rewind or a ship change keeps the craft framed), the angles are the world's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Rig {
+    cam: Free,
+    fov: f32,
 }
 
 /// What the player's devices said this tick, already boiled down to what the mode reads.
@@ -108,6 +139,11 @@ pub struct Pad {
     pub shot: bool,
     /// CIRCLE went down this tick: leave.
     pub leave: bool,
+    /// How far a mouse or a finger dragged this tick, in grid units (`y` down): looks around on
+    /// the free lens, or moves it with [`Photo::drag_moves`].
+    pub drag: (f32, f32),
+    /// Wheel detents this tick, positive toward the player: dollies the free lens.
+    pub scroll: f32,
 }
 
 /// What a tick of the mode asks of whoever runs it.
@@ -163,6 +199,14 @@ pub struct Photo {
     accumulation: Option<oag_title::photo::Accumulation>,
     /// The eye moved across the lens for one frame of an accumulated depth of field.
     shift: Option<LensShift>,
+    /// The free lens's camera, `None` until it is seeded from the picture on screen, and the
+    /// seed TRIANGLE returns to.
+    free: Option<Rig>,
+    free_home: Option<Rig>,
+    /// Whether a drag moves the free lens instead of turning it.
+    drag_moves: bool,
+    /// Ticks a free movement has been held, for the speed-up.
+    walk_ticks: u32,
 }
 
 /// The eye moved by `(dx, dy)` in view space and aimed at the point `focus` ahead of where it
@@ -220,6 +264,10 @@ impl Photo {
             restore,
             accumulation: None,
             shift: None,
+            free: None,
+            free_home: None,
+            drag_moves: false,
+            walk_ticks: 0,
         }
     }
 
@@ -246,6 +294,16 @@ impl Photo {
     #[must_use]
     pub fn shift(&self) -> Option<LensShift> {
         self.shift
+    }
+
+    /// The mode opened on the free lens at `pose`, the camera the player was looking through
+    /// when the pause began, with `craft` the position of the craft in the picture: the first
+    /// frame is the one the pause left.
+    #[must_use]
+    pub fn opening_on(mut self, pose: CameraOverride, craft: Vec3) -> Self {
+        self.lens = Lens::Free;
+        self.seed_free(pose, craft);
+        self
     }
 
     /// The mode as it opens with SELECT and SQUARE already down: their release is not a tap.
@@ -376,7 +434,48 @@ impl Photo {
             Lens::Internal => craft_view::FOV_DEGREES,
             Lens::Close => self.close_fov,
             Lens::Track => self.track_fov,
+            Lens::Free => self.free.map_or(self.close_fov, |rig| rig.fov),
         }
+    }
+
+    /// Whether the free lens is up and waiting for the picture it starts from
+    /// ([`Self::seed_free`]).
+    #[must_use]
+    pub fn needs_free_seed(&self) -> bool {
+        self.lens == Lens::Free && self.free.is_none()
+    }
+
+    /// Starts the free lens from `pose`, the camera on screen, with `craft` the position of the
+    /// craft in the picture: the picture does not move. Also what TRIANGLE returns to.
+    pub fn seed_free(&mut self, pose: CameraOverride, craft: Vec3) {
+        let rig = Rig {
+            cam: Free::from_orientation(pose.eye - craft, pose.orientation),
+            fov: pose
+                .fov_deg
+                .unwrap_or(craft_view::FOV_DEGREES)
+                .clamp(CLOSE_FOV.0, CLOSE_FOV.1),
+        };
+        self.free = Some(rig);
+        self.free_home = Some(rig);
+        self.walk_ticks = 0;
+    }
+
+    /// The free lens's eye relative to the craft, and its yaw, pitch and roll, once seeded.
+    #[must_use]
+    pub fn free_pose(&self) -> Option<(Vec3, f32, f32, f32)> {
+        self.free
+            .map(|rig| (rig.cam.position, rig.cam.yaw, rig.cam.pitch, rig.cam.roll))
+    }
+
+    /// Whether a drag moves the free lens (otherwise it turns it).
+    #[must_use]
+    pub fn drag_moves(&self) -> bool {
+        self.drag_moves
+    }
+
+    /// Sets what a drag does on the free lens.
+    pub fn toggle_drag_moves(&mut self) {
+        self.drag_moves.toggle();
     }
 
     /// The tilt, in radians.
@@ -403,14 +502,19 @@ impl Photo {
         self.track_available
     }
 
-    /// Takes the next lens in `internal, close, track`, leaving `track` out where there
+    /// Takes the next lens in `internal, close, track, free`, leaving `track` out where there
     /// is no node. The picture is a different shot, so the upscaler's history is dropped.
     pub fn cycle_lens(&mut self) {
         self.lens = match self.lens {
             Lens::Internal => Lens::Close,
             Lens::Close if self.track_available => Lens::Track,
-            Lens::Close | Lens::Track => Lens::Internal,
+            Lens::Close | Lens::Track => Lens::Free,
+            Lens::Free => Lens::Internal,
         };
+        if self.lens == Lens::Free {
+            self.free = None;
+            self.free_home = None;
+        }
         self.cuts = self.cuts.wrapping_add(1);
     }
 
@@ -427,6 +531,8 @@ impl Photo {
         self.pan = (0.0, 0.0);
         self.close_fov = CLOSE_FOV.2;
         self.track_fov = TRACK_FOV.2;
+        self.free = self.free_home;
+        self.walk_ticks = 0;
         self.cuts = self.cuts.wrapping_add(1);
     }
 
@@ -522,6 +628,9 @@ impl Photo {
             pan,
             zoom,
             tilt,
+            walk,
+            lift,
+            look,
         } = roles(pad, self.lens);
         match self.lens {
             Lens::Internal => {}
@@ -539,7 +648,58 @@ impl Photo {
                     (self.track_fov - zoom * ZOOM_RATE).clamp(TRACK_FOV.0, TRACK_FOV.1);
                 self.tilt = wrap(self.tilt + tilt * TILT_RATE);
             }
+            Lens::Free => self.fly(pad, walk, lift, look, zoom, tilt),
         }
+    }
+
+    /// One tick of the free lens: the sticks in `roles`, then the pointer's drag and wheel.
+    fn fly(
+        &mut self,
+        pad: Pad,
+        walk: (f32, f32),
+        lift: f32,
+        look: (f32, f32),
+        zoom: f32,
+        tilt: f32,
+    ) {
+        let Some(mut rig) = self.free else {
+            return;
+        };
+        let asked = walk.0 != 0.0 || walk.1 != 0.0 || lift != 0.0;
+        self.walk_ticks = if asked {
+            self.walk_ticks.saturating_add(1)
+        } else {
+            0
+        };
+        let ramp = (self.walk_ticks as f32 / FREE_RAMP_TICKS as f32).min(1.0);
+        let speed = FREE_WALK_RATE * (1.0 + (FREE_WALK_BOOST - 1.0) * ramp);
+        let (mut strafe, mut advance) = (walk.0 * speed, walk.1 * speed);
+        let (mut yaw, mut pitch) = (look.0 * FREE_LOOK_RATE, look.1 * FREE_LOOK_RATE);
+        let (dx, dy) = pad.drag;
+        if self.drag_moves {
+            strafe += dx * FREE_DRAG_MOVE;
+            advance -= dy * FREE_DRAG_MOVE;
+        } else {
+            yaw += dx * FREE_DRAG_LOOK;
+            pitch -= dy * FREE_DRAG_LOOK;
+        }
+        advance -= pad.scroll * FREE_DOLLY;
+        rig.cam = rig.cam.advance(
+            &Motion {
+                advance,
+                strafe,
+                lift: lift * speed,
+                yaw,
+                pitch,
+                // A positive tilt rolls as the close lens's does, which turns the horizon
+                // clockwise.
+                roll: -tilt * TILT_RATE,
+            },
+            1.0,
+        );
+        rig.cam.position = rig.cam.position.clamp_length_max(FREE_RANGE);
+        rig.fov = (rig.fov - zoom * ZOOM_RATE).clamp(CLOSE_FOV.0, CLOSE_FOV.1);
+        self.free = Some(rig);
     }
 
     /// SELECT and SQUARE let go without having been used as a modifier.
@@ -567,6 +727,13 @@ impl Photo {
     /// `close` where `node` is `None`.
     #[must_use]
     pub fn pose(&self, craft: &Subject, node: Option<Vec3>) -> CameraOverride {
+        if let (Lens::Free, Some(rig)) = (self.lens, self.free) {
+            return CameraOverride {
+                eye: craft.position + rig.cam.position,
+                orientation: rig.cam.orientation(),
+                fov_deg: Some(rig.fov),
+            };
+        }
         let roll = Quat::from_rotation_z(self.tilt);
         let (eye, orientation) = match (self.lens, node) {
             (Lens::Internal, _) => {
@@ -584,7 +751,7 @@ impl Photo {
                 let (_, orientation, _) = aim.to_world().to_scale_rotation_translation();
                 (node, orientation * roll)
             }
-            (Lens::Close | Lens::Track, _) => {
+            (Lens::Close | Lens::Track | Lens::Free, _) => {
                 let rig = craft.orientation
                     * Quat::from_rotation_y(self.yaw)
                     * Quat::from_rotation_x(-self.pitch);
@@ -618,6 +785,12 @@ struct Roles {
     zoom: f32,
     /// Tilt.
     tilt: f32,
+    /// Free lens: across (right positive) and forward.
+    walk: (f32, f32),
+    /// Free lens: up the camera's own up.
+    lift: f32,
+    /// Free lens: turn right and look up.
+    look: (f32, f32),
 }
 
 fn roles(pad: Pad, lens: Lens) -> Roles {
@@ -627,9 +800,25 @@ fn roles(pad: Pad, lens: Lens) -> Roles {
         pan: (0.0, 0.0),
         zoom: 0.0,
         tilt: 0.0,
+        walk: (0.0, 0.0),
+        lift: 0.0,
+        look: (0.0, 0.0),
     };
     match lens {
         Lens::Internal => return roles,
+        Lens::Free => {
+            // The left stick walks, SQUARE held slides and lifts, SELECT held zooms and rolls
+            // (the close lens's modifiers); the right stick looks.
+            if pad.select {
+                (roles.zoom, roles.tilt) = (y, x);
+            } else if pad.square {
+                (roles.walk.0, roles.lift) = (x, y);
+            } else {
+                roles.walk = (x, y);
+            }
+            roles.look = pad.right;
+            return roles;
+        }
         Lens::Close if pad.square => roles.pan = (x, y),
         Lens::Close if pad.select => (roles.zoom, roles.tilt) = (y, x),
         Lens::Close => roles.orbit = (x, y),
@@ -689,13 +878,41 @@ impl Race {
             .is_some_and(finish_camera::FinishCamera::has_nodes);
         let restore = self.view.camera_override;
         let subject = self.player_slot();
+        // The first frame is the one the pause left: the lens it opens on is the camera on
+        // screen, free to be flown from there.
+        let on_screen = self.on_screen_camera();
+        let craft = self.sim.world.ships[subject].physics.body.position;
         self.view.photo = Some(
             Photo::new(subject, track, restore)
+                .opening_on(on_screen, craft)
                 .holding(select, square)
                 .with_zoom(zoom.map(crate::zoom::tuning)),
         );
         self.photo_pose();
         true
+    }
+
+    /// The camera the picture is drawn from at the tick the race stands at: an imposed override
+    /// as it is, else the view the race draws, with the field it authors (the speed widen is
+    /// added again by the draw, so it is not part of this).
+    fn on_screen_camera(&self) -> CameraOverride {
+        if let Some(over) = self.view.camera_override {
+            return over;
+        }
+        let (_, orientation, eye) = self
+            .tick_view_unshaken()
+            .inverse()
+            .to_scale_rotation_translation();
+        let authored = if self.view.camera_view == oag_display::display::CameraView::Internal {
+            self.view.internal_params.fov
+        } else {
+            self.view.chase_params.fov
+        };
+        CameraOverride {
+            eye,
+            orientation,
+            fov_deg: Some(authored),
+        }
     }
 
     /// Offers the blur and rewind rows to the mode that is open (`Photo::offering`).
@@ -763,6 +980,29 @@ impl Race {
         if let Some(photo) = self.view.photo.as_mut() {
             photo.cycle_lens();
         }
+        self.photo_seed_free();
+    }
+
+    /// Switches what a drag does on the free lens, as a click on the screen's drag chip does.
+    pub fn photo_toggle_drag(&mut self) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.toggle_drag_moves();
+        }
+    }
+
+    /// Starts the free lens, if it was just chosen, from the camera on screen, so the picture
+    /// does not move.
+    fn photo_seed_free(&mut self) {
+        let Some(photo) = self.view.photo.as_ref().filter(|p| p.needs_free_seed()) else {
+            return;
+        };
+        let craft = self.sim.world.ships[photo.subject()].physics.body.position;
+        let Some(pose) = self.view.camera_override.or_else(|| self.photo_camera()) else {
+            return;
+        };
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.seed_free(pose, craft);
+        }
     }
 
     /// Turns the HUD in the picture on or off, as a click on the screen's HUD chip does.
@@ -822,6 +1062,7 @@ impl Race {
             return Action::None;
         };
         let action = photo.step(pad, &live);
+        self.photo_seed_free();
         self.photo_pose();
         action
     }

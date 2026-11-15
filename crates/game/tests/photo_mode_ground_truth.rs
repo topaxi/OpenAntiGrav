@@ -204,7 +204,7 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
         "hash-photo",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press select; ticks 5; hold left 60; \
+             until photo=free within 200; press select select; ticks 5; hold left 60; \
              hold select up 30; press square; ticks 5; \
              press start; hold right 30; hold down 1; ticks 2; hold right 30; hold down 1; ticks 2; \
              hold right 15; hold down 1; ticks 2; hold right 1; hold down 1; ticks 2; \
@@ -270,7 +270,7 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
         "hash-plain",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press select; ticks 5; hold left 60; \
+             until photo=free within 200; press select select; ticks 5; hold left 60; \
              hold select up 30; press square; ticks 5; press cross; ticks 5; \
              screenshot SHOTS/during-plain.png; press circle; until photo=none within 50; \
              ticks 500; screenshot SHOTS/end-plain.png"
@@ -319,7 +319,7 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
             &format!("{tag}-rewind"),
             &format!(
                 "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
-                 until photo=internal within 200; press start; \
+                 until photo=free within 200; press start; \
                  hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
                  hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
              screenshot SHOTS/rewound.png; \
@@ -380,7 +380,7 @@ fn a_race_handed_a_pickup_hashes_the_same_at_every_tick_after_a_rewind() {
         "give-rewind",
         &format!(
             "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press start; \
+             until photo=free within 200; press start; \
              hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
              hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 5; \
              screenshot SHOTS/rewound.png; \
@@ -475,7 +475,7 @@ fn leaving_by(image: &Path, tag: &str, mode: &str, leave: &str) -> usize {
         tag,
         &format!(
             "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; ticks 15; {leave}; until photo=none within 50; \
+             until photo=free within 200; ticks 15; {leave}; until photo=none within 50; \
              ticks 600"
         ),
         &shots,
@@ -550,7 +550,7 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
         "play",
         &format!(
             "{to_the_throttle} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press start; {down}{down}{down}{down} \
+             until photo=free within 200; press start; {down}{down}{down}{down} \
              hold left 25; ticks 40; {down} {down} hold right 2; ticks 100; \
              screenshot SHOTS/playing.png; escape; until photo=none within 50; ticks 500"
         ),
@@ -627,7 +627,7 @@ fn a_saved_picture_is_the_frame_the_player_saw_at_its_full_size() {
         "pixels",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press select; ticks 5; hold right 45; \
+             until photo=free within 200; press select select; ticks 5; hold right 45; \
              press start; press start; ticks 10; screenshot SHOTS/bare.png; press start; ticks 5; \
              press cross; ticks 3; screenshot SHOTS/with-help.png; \
              press square; ticks 5; press cross; ticks 3; screenshot SHOTS/with-hud.png; \
@@ -676,9 +676,9 @@ fn escape_leaves_the_mode_and_the_next_one_opens_the_menus_and_the_race_still_ru
         "escape",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; ticks 5; escape; expect stage=race photo=none; \
+             until photo=free within 200; ticks 5; escape; expect stage=race photo=none; \
              ticks 60; escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press circle; until photo=none within 50; ticks 60"
+             until photo=free within 200; press circle; until photo=none within 50; ticks 60"
         ),
         &shots,
     );
@@ -708,7 +708,7 @@ fn select_on_race_end_photo_opens_the_mode_and_leaving_returns_to_it() {
         "finish",
         &format!(
             "{TO_THE_RACE} ticks 8000; until endrace=photo within 2000; ticks 100; \
-             press select; until photo=internal within 50; ticks 20; \
+             press select; until photo=free within 50; ticks 20; \
              press circle; until photo=none within 50; ticks 5; expect endrace=photo"
         ),
         &shots,
@@ -884,7 +884,7 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         "effects",
         &format!(
             "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; press select; ticks 20; press cross; ticks 2; screenshot SHOTS/frame-1.png; ticks 2; \
+             until photo=free within 200; press select select; ticks 20; press cross; ticks 2; screenshot SHOTS/frame-1.png; ticks 2; \
              press start; hold right 72; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-2.png; ticks 2; \
              hold left 72; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-3.png; ticks 2; \
              hold down 1; ticks 2; hold left 69; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-4.png; ticks 2; \
@@ -968,7 +968,7 @@ fn the_games_motion_blur_never_reaches_a_photo() {
     let _ = std::fs::remove_dir_all(&shots);
     let script = format!(
         "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
-         until photo=internal within 200; press select; ticks 5; hold left 40; hold up 1; \
+         until photo=free within 200; press select select; ticks 5; hold left 40; hold up 1; \
          ticks 2; press cross; ticks 2; screenshot SHOTS/frame.png; ticks 2; \
          press circle; until photo=none within 50"
     );
@@ -1003,7 +1003,7 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
          set race.mode=time_trial; select launch_race; press cross; until screen=picker; \
          press cross; until screen.id=ship-select; press cross; until stage=race within 4000; \
          ticks 300; hold cross 400; escape; until stage=menu; select photo_mode; press cross; \
-         until photo=internal within 200; press select; ticks 5; hold left 8; ticks 3; ";
+         until photo=free within 200; press select select; ticks 5; hold left 8; ticks 3; ";
     let down = "hold down 1; ticks 2; ";
     // The plain shot, a track blur at full shutter, and a ship blur, all at the one tick.
     let run = drive(
@@ -1145,10 +1145,10 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
         "bindings",
         &format!(
             "{to_the_throttle} escape; until stage=menu; select photo_mode; press cross; \
-             until photo=internal within 200; \
+             until photo=free within 200; \
              press r; ticks 3; screenshot SHOTS/craft-1.png; press l; ticks 3; press r; ticks 3; press r; ticks 3; \
              press l; ticks 3; press l; ticks 3; \
-             press select; ticks 5; rstick 1 1 40; ticks 3; screenshot SHOTS/zoomed.png; \
+             press select select; ticks 5; rstick 1 1 40; ticks 3; screenshot SHOTS/zoomed.png; \
              lstick 1 -0.5 40; ticks 3; screenshot SHOTS/orbited.png; hold square left 20; ticks 3; \
              pull l2 0.8 8; ticks 3; pull r2 0.5 4; ticks 3; \
              pull r2 1.0 3; ticks 60; screenshot SHOTS/playing.png; pull l2 0.4 3; ticks 3; \

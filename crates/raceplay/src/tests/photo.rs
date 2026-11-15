@@ -10,17 +10,71 @@ fn pad() -> Pad {
 }
 
 #[test]
+fn photo_mode_opens_on_the_frame_the_pause_left() {
+    let mut race = race_with_a_grid();
+    for _ in 0..20 {
+        race.tick(&PlayerInputs::none());
+    }
+    let (view, fov) = (
+        race.view(),
+        race.vertical_fov(1.5, oag_display::display::Fov::AUTHORED),
+    );
+    assert!(race.photo_begin(false, false, None));
+    assert_eq!(
+        race.photo().map(crate::photo::Photo::lens),
+        Some(Lens::Free)
+    );
+    let opened = race.view();
+    for (a, b) in view.to_cols_array().iter().zip(opened.to_cols_array()) {
+        assert!(
+            (a - b).abs() < 2e-3,
+            "view moved: {view:?} against {opened:?}"
+        );
+    }
+    let opened_fov = race.vertical_fov(1.5, oag_display::display::Fov::AUTHORED);
+    assert!(
+        (fov - opened_fov).abs() < 1e-4,
+        "{fov} against {opened_fov}"
+    );
+}
+
+#[test]
+fn choosing_the_free_lens_from_another_starts_where_that_lens_was() {
+    let mut race = race_with_a_grid();
+    race.tick(&PlayerInputs::none());
+    assert!(race.photo_begin(false, false, None));
+    for _ in 0..2 {
+        race.photo_cycle_lens();
+    }
+    assert_eq!(
+        race.photo().map(crate::photo::Photo::lens),
+        Some(Lens::Close)
+    );
+    let close = race.view();
+    race.photo_cycle_lens();
+    assert_eq!(
+        race.photo().map(crate::photo::Photo::lens),
+        Some(Lens::Free)
+    );
+    for (a, b) in close
+        .to_cols_array()
+        .iter()
+        .zip(race.view().to_cols_array())
+    {
+        assert!((a - b).abs() < 2e-3, "the picture jumped");
+    }
+}
+
+#[test]
 fn photo_mode_imposes_a_camera_and_leaving_puts_back_the_one_that_was_in_force() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
     let before = race.camera_position();
     assert!(race.photo_begin(false, false, None));
     assert!(race.photo().is_some());
-    race.photo_step(Pad {
-        select: true,
-        ..pad()
-    });
-    race.photo_step(pad());
+    for _ in 0..2 {
+        race.photo_cycle_lens();
+    }
     assert_eq!(
         race.photo().map(crate::photo::Photo::lens),
         Some(Lens::Close)
@@ -42,6 +96,24 @@ fn photo_mode_imposes_a_camera_and_leaving_puts_back_the_one_that_was_in_force()
 }
 
 #[test]
+fn flying_the_free_lens_moves_the_camera_and_leaving_puts_the_race_camera_back() {
+    let mut race = race_with_a_grid();
+    race.tick(&PlayerInputs::none());
+    let before = race.camera_position();
+    assert!(race.photo_begin(false, false, None));
+    for _ in 0..30 {
+        race.photo_step(Pad {
+            stick: (0.0, 1.0),
+            right: (0.3, 0.1),
+            ..pad()
+        });
+    }
+    assert!((race.camera_position() - before).length() > 5.0);
+    race.photo_end();
+    assert_eq!(race.camera_position(), before);
+}
+
+#[test]
 fn a_race_taken_through_photo_mode_hashes_as_one_that_was_not() {
     let mut control = race_with_a_grid();
     let mut photographed = race_with_a_grid();
@@ -53,6 +125,9 @@ fn a_race_taken_through_photo_mode_hashes_as_one_that_was_not() {
             for step in 0..90 {
                 let moved = Pad {
                     stick: ((step as f32 * 0.2).sin(), (step as f32 * 0.1).cos()),
+                    right: ((step as f32 * 0.3).cos(), (step as f32 * 0.05).sin()),
+                    drag: (step as f32, -(step as f32)),
+                    scroll: if step % 7 == 0 { 1.0 } else { 0.0 },
                     next: step % 30 == 29,
                     reset: step == 70,
                     ..pad()

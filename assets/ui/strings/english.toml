@@ -611,6 +611,14 @@ OAG_PHOTO_SHUTTER = { text = "SHUTTER", human = false }
 OAG_PHOTO_PROGRESS = { text = "TAKING PHOTO", human = false }
 OAG_PHOTO_CANCELLED = { text = "PHOTO CANCELLED", human = false }
 OAG_PHOTO_ANY_INPUT = { text = "ANY BUTTON CANCELS", human = false }
+OAG_PHOTO_FREE = { text = "FREE", human = false }
+OAG_PHOTO_WALK = { text = "WALK", human = false }
+OAG_PHOTO_SLIDE_LIFT = { text = "SLIDE, LIFT", human = false }
+OAG_PHOTO_ZOOM_ROLL = { text = "ZOOM, ROLL", human = false }
+OAG_PHOTO_FREE_KEYS = { text = "RIGHT STICK OR DRAG LOOK    WHEEL DOLLY", human = false }
+OAG_PHOTO_DRAG = { text = "DRAG", human = false }
+OAG_PHOTO_LOOK = { text = "LOOK", human = false }
+OAG_PHOTO_MOVE = { text = "MOVE", human = false }
 
 # The hint under a settings page's rows while the selected row is off its default,
 # also what a click or a tap on it does. Ours, in no original.
