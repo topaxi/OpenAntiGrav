@@ -277,6 +277,16 @@ pub struct Cost {
     pub fuel_used: u64,
     /// The budget it ran under.
     pub fuel_budget: u64,
+    /// The guest's linear memory in bytes when the call ended, growth included. 0 when the
+    /// instance never came up. Reporting only: the cap is [`Limits::memory_pages`].
+    pub memory_bytes: u64,
+}
+
+/// What a call leaves on the instance, read before the pooled instance is dropped.
+#[derive(Default)]
+struct Left {
+    fuel: Option<u64>,
+    memory_bytes: u64,
 }
 
 /// Refuses an export that is not `() -> i32`, the shape of every function the ABI names,
@@ -434,11 +444,12 @@ impl Module {
         state: &mut [u8],
         commands: &mut Vec<Command>,
     ) -> Result<Cost, (Fault, Cost)> {
-        let mut store_fuel = None;
-        let result = self.run(observation, state, &mut store_fuel);
+        let mut left = Left::default();
+        let result = self.run(observation, state, &mut left);
         let cost = Cost {
-            fuel_used: self.limits.fuel - store_fuel.unwrap_or(0),
+            fuel_used: self.limits.fuel - left.fuel.unwrap_or(0),
             fuel_budget: self.limits.fuel,
+            memory_bytes: left.memory_bytes,
         };
         match result {
             Ok((reply_state, reply)) => {
@@ -455,7 +466,7 @@ impl Module {
         &self,
         observation: &Observation<'_>,
         state: &[u8],
-        fuel_left: &mut Option<u64>,
+        left: &mut Left,
     ) -> Result<(Vec<u8>, Vec<Command>), Fault> {
         let (mut store, instance) = self.instantiate().map_err(trap)?;
         let outcome = (|| {
@@ -508,7 +519,10 @@ impl Module {
             let at = oag_ext_abi::STATE_AT;
             Ok((buffer[at..at + state.len()].to_vec(), commands))
         })();
-        *fuel_left = store.get_fuel().ok();
+        left.fuel = store.get_fuel().ok();
+        left.memory_bytes = instance
+            .get_memory(&mut store, "memory")
+            .map_or(0, |memory| memory.data_size(&store) as u64);
         outcome
     }
 }

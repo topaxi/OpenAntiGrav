@@ -236,6 +236,10 @@ pub fn readout(race: &oag_raceplay::Race) -> Option<oag_present::perf::mods::Rea
                 fuel_used: r.fuel_used,
                 fuel_peak: r.fuel_peak,
                 fuel_budget: r.fuel_budget,
+                memory_bytes: r.memory_bytes,
+                memory_peak: r.memory_peak,
+                memory_cap: r.memory_cap,
+                state_bytes: r.state_bytes,
                 call_us: r.call_us,
                 faulted: r.faulted,
             })

@@ -122,6 +122,8 @@ pub(super) struct Slot {
     faulted: Option<(u64, String)>,
     fuel_used: u64,
     fuel_peak: u64,
+    memory_bytes: u64,
+    memory_peak: u64,
     call_us: f32,
 }
 
@@ -444,6 +446,8 @@ impl On {
                     faulted: None,
                     fuel_used: 0,
                     fuel_peak: 0,
+                    memory_bytes: 0,
+                    memory_peak: 0,
                     call_us: 0.0,
                 })
                 .collect(),
@@ -721,6 +725,10 @@ impl On {
                 fuel_used: slot.fuel_used,
                 fuel_peak: slot.fuel_peak,
                 fuel_budget: slot.module.limits().fuel,
+                memory_bytes: slot.memory_bytes,
+                memory_peak: slot.memory_peak,
+                memory_cap: u64::from(slot.module.limits().memory_pages) * 65_536,
+                state_bytes: slot.blob.len() as u64,
                 call_us: slot.call_us,
                 faulted: slot.faulted.clone(),
             })
@@ -1150,6 +1158,7 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
     for (index, slot) in on.slots.iter_mut().enumerate() {
         if slot.faulted.is_some() {
             slot.fuel_used = 0;
+            slot.memory_bytes = 0;
             continue;
         }
         let prior = slot.blob.clone();
@@ -1207,6 +1216,8 @@ pub(super) fn tick(sim: &mut RaceSim, inputs: &oag_gameplay::PlayerInputs, trans
         };
         slot.fuel_used = cost.fuel_used;
         slot.fuel_peak = slot.fuel_peak.max(cost.fuel_used);
+        slot.memory_bytes = cost.memory_bytes;
+        slot.memory_peak = slot.memory_peak.max(cost.memory_bytes);
     }
     for index in faulted {
         release(sim, index);

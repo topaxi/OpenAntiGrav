@@ -1025,6 +1025,8 @@ colour = "#ff2010"
         let reports = first.extension_reports();
         assert_eq!(reports.len(), 1);
         assert!(reports[0].fuel_used > 0 && reports[0].faulted.is_none());
+        assert!(reports[0].memory_bytes > 0 && reports[0].memory_peak >= reports[0].memory_bytes);
+        assert!(reports[0].memory_peak <= reports[0].memory_cap);
     }
 
     #[test]
