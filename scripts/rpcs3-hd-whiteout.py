@@ -61,6 +61,9 @@ STRIP_SAMPLE = 0x50
 STRIP_TARGET = 0x138
 STRIP_SHOOTER = 0x13C
 WOBBLE = 0x63C4
+PATH = 0x130
+PATH_CUMULATIVE = 0x5F10
+BALL = 0xC820
 SLOT_TARGET = 0x1AC
 AGE = 0x170
 RING = (0x40000000, 0x20000)
@@ -136,7 +139,30 @@ def leach_record(gdb, beam):
         blob = read_span(gdb, strip + STRIP_SAMPLES, count * STRIP_SAMPLE)
         samples = [struct.unpack_from(">20f", blob, i * STRIP_SAMPLE) for i in range(count)]
     ends = struct.unpack(">II", gdb.read(strip + STRIP_TARGET, 8))
+    # The ball (weapons.md, "The ball rides the strip"): BeamPath_Rebuild's pair and gap at strip
+    # +0x130..+0x140, the cumulative lengths at +0x5f10, LeachBall_Advance's clock,
+    # period and fraction at ball +0x1c/+0x20/+0x24 and its placed point at +0xd0;
+    # each craft's +0x7010/+0x7020 and the course length `**(craft+0x6f64)`.
+    pair = struct.unpack(">IIIIf", gdb.read(strip + PATH, 20))
+    cumulative = []
+    if 0 < count <= 300:
+        blob = read_span(gdb, strip + PATH_CUMULATIVE, count * 4)
+        cumulative = list(struct.unpack(">%df" % count, blob))
+    ball = beam + BALL
+    progress = {}
+    for craft in pair[:2]:
+        if craft:
+            track = struct.unpack(">I", gdb.read(craft + 0x6F64, 4))[0]
+            course = struct.unpack(">f", gdb.read(track, 4))[0] if track else None
+            progress["%08x" % craft] = struct.unpack(">ff", gdb.read(craft + 0x7010, 4)
+                                                     + gdb.read(craft + 0x7020, 4)) + (course,)
     return {"beam": "%08x" % beam,
+            "path": ["%08x" % p for p in pair[:4]], "gap": pair[4],
+            "cumulative": cumulative,
+            "ball": struct.unpack(">fff", gdb.read(ball + 0x1C, 12)),
+            "ball_point": struct.unpack(">4f", gdb.read(ball + 0xD0, 16)),
+            "owner": "%08x" % struct.unpack(">I", gdb.read(beam + 0xC94C, 4))[0],
+            "progress": progress,
             "state": struct.unpack_from(">i", head, LEACH_STATE)[0],
             "clock": struct.unpack(">f", gdb.read(beam + LEACH_CLOCK, 4))[0],
             "count": count, "target": "%08x" % ends[0], "shooter": "%08x" % ends[1],
@@ -150,7 +176,10 @@ def leach_shots(args, session, gdb, slot, beams, beam_state, capture, beam_live)
     try:
         for n, delay in enumerate(args.delay):
             gdb.pause()
-            gdb.write(slot + poll.STATE, struct.pack(">ii", 10, 10))
+            # `slot + 0x200` can carry bits (0x800) from an earlier pickup, and a
+            # state 10 written over them was seen not to fire (leach-beam-strips.md,
+            # "Getting a held beam"): cleared as a capture aid.
+            gdb.write(slot + poll.STATE - 4, struct.pack(">Iii", 0, 10, 10))
             gdb.resume()
             poll.behind_rival(gdb, args.behind_rival)
             # A shot fired at once after the teleport ends in state 6 on the next
@@ -228,6 +257,9 @@ def main():
                          "blocks (4 instructions or more) is among its draws (scripts/rsx_fp_match.py)")
     ap.add_argument("--want-name", default="",
                     help="--want-mats: the matched block's name must also contain this text (e.g. plasmaring)")
+    ap.add_argument("--in-race", action="store_true",
+                    help="the attached emulator is racing already (a `serve --load-state` race state, "
+                         "whose TTY carries no screen line): skip the walk")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -235,8 +267,7 @@ def main():
 
     with drive.Session(args.image, str(out / "logs")) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        gdb = Debugger(port=port)
-        if session.in_race() and not session.in_demo():
+        if args.in_race or (session.in_race() and not session.in_demo()):
             # An attached emulator already racing (a previous capture's race):
             # the craft are placed per shot, so the race's own progress is moot.
             print("already in a race (%s)" % drive.current_screen(), flush=True)
@@ -249,6 +280,10 @@ def main():
             session.wait_for_load(70)
             time.sleep(args.start_wait)
             session.tap("cross", settle=22)
+        # Connected only now: the stub halts the guest when a client connects
+        # (an attached `serve` took no menu press while one was connected), and
+        # it drops a client left idle through the walk's waits.
+        gdb = Debugger(port=port)
         gdb.pause()
         ship, _body = place.find_player(gdb)
         slot = struct.unpack(">I", gdb.read(ship + poll.SLOT_OFFSET, 4))[0]
