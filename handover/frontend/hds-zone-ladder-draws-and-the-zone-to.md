@@ -90,7 +90,7 @@ asset file.
   `MR_*` in `English(US)/Speech_NGP.bnk` - and sets `zone_class_announcer` to
   `None`. Wiring needs Omega's own trigger read in `eboot.bin` (not read) and
   its Wwise event names played through `oag_sound`'s Wwise path.
-  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#omega-and-2048-claude-md-lineage-rule).
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#omega-and-2048-claudemd-lineage-rule).
   2048 differs: its Zone banks carry neither cue.
 - **What sets the float `Hud_UpdateZoneSpeedClass` compares.** It arrives as
   `f1` from its single caller, which forwards its own argument; nothing traced

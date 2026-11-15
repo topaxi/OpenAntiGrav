@@ -428,11 +428,9 @@ impl Bank<'_> {
                     // No marker is an error return: the cue ends.
                     None => return,
                 }
-            } else if walk.model.zero_waits && opcode == RANDOM_WAIT && word & 0x00ff_ffff == 0 {
-                walk.out.passed.push(opcode);
-            } else if walk.model.tail_waits
-                && opcode == RANDOM_WAIT
-                && self.nothing_audible_after(cue, pc)
+            } else if opcode == RANDOM_WAIT
+                && ((walk.model.zero_waits && word & 0x00ff_ffff == 0)
+                    || (walk.model.tail_waits && self.nothing_audible_after(cue, pc)))
             {
                 walk.out.passed.push(opcode);
             } else if walk.model.vita && opcode == RANDOM_GOTO {
