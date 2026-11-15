@@ -245,6 +245,73 @@ table's: `c_GShipShipS/M/L` 42 to 44, `c_GShipWallS/M/L` 46 to 48, `c_CShipShipS
 to 67. `.GRIND` (cue 40) branches on variable 1 as `.COLLISIONS` does, to `c_GShipShip` (41) or
 `c_GShipWall` (45).
 
+## Wired
+
+2026-11-16, lane `hd-impact`. HD/Fury only (`oag_title::contact_cue::ContactCues::Impulse`,
+the numbers in `oag_hd::HD_IMPULSE_LAW`); Pulse, Pure, 2048 and Omega keep the re-armed
+`.COLLISIONS` they had.
+
+- **Simulation side** (`crates/raceplay/src/cues.rs`): each tick keeps every craft's largest
+  contact impulse, from the wall response's largest single contact
+  (`WallResponse::impulse_largest`, with that contact's normal) and from each craft pair
+  (`Race::resolve_craft_pairs`, both hulls, the pair's own impulse). Once every contact of the
+  tick is in, `decide_contact_cues` runs the law above per craft and raises `Cue::Collision`
+  (or `CollisionShield`) and, for a craft a person flies, `Cue::Grind` (or `GrindShield`),
+  each carrying `ContactCue { severity, surface, volume }`. The nose-on test is
+  `|dot| > cos(0.7) = 0.7648422`, the same comparison as `acosf(|dot|) < 0.7` without a
+  platform transcendental.
+- **Sound side** (`crates/sound/src/sfx/banks.rs`, `sfx.rs`): on the HD tick the loader walks
+  `.COLLISIONS`, `.COLLSHIELD`, `.GRIND` and `.GRINDSHIELD` once per variable block the game
+  can hand them (`[severity, surface, perspective, 0]`: 12, 6, 6 and 6 blocks) with the
+  replacing child followed, and a contact event plays the block it names at the request's
+  volume. A cue whose blocks do not all build plays nothing for a contact and says so in the
+  report; a contact never falls back to the flat pick. The three new cues are loaded on HD
+  alone (`Cue::HD_CONTACT`), so no other title's report gains a line.
+- **Tests.** `crates/raceplay/src/tests/contact_cues.rs`: the law's floors, steps, volumes
+  and waits with the captured impulses above (`3.9755` small, `4.0588` medium, `21.36`,
+  `52.15`, the volume words `986` and `789`), and three race cases: a hard craft bump raises
+  one `.COLLISIONS` on each hull with the craft surface and the law's severity and volume; a
+  gentle one raises a grind for the person and nothing for the opponent; the re-armed law
+  raises nothing from a craft bump. With the pair's hook removed the first two fail
+  (`slot 0: []`, `left: [] right: [Grind]`). Ground truth on the Fury disc
+  (`crates/raceplay/tests/sfx_timeline_ground_truth.rs`,
+  `hd_s_contact_cues_play_the_child_their_severity_and_surface_select`, inside the one test
+  that loads the banks): every block of every contact cue keys only commands of the child the
+  table in [cue-variables.md](cue-variables.md) names (`[2, 0, 2, 0]` and `[1, 0, 2, 0]`
+  `c_CShipShipL`, `[0, 0, 1, 0]` `c_CShipShipM`, the wall and grind children by severity, the
+  `Small` pair for `.COLLSHIELD` at severity 0), and the census's flat list, `[".COLLISIONS"]`
+  before, is empty.
+- **Load report** (`oag-game <hd iso> --race --dry-run`, `RUST_LOG=debug`): `.COLLISIONS`
+  12 contact blocks of up to 6 voices, `.GRIND` 6 of 1, `.COLLSHIELD` 6 of up to 9,
+  `.GRINDSHIELD` 6 of 1.
+
+**Chosen, not measured**, or not modelled:
+
+- **A craft pair's dot is 0.** The original reads the stale normal of the ring slot ("A pair
+  record has no normal"); zero is that slot before any track contact has used it. A craft that
+  last met a wall nose-on would, in the original, let a craft hit through from 3 and grind
+  nothing; here it needs 18 and grinds.
+- **The cues ride the craft's emitter.** The original plays the player's four cues unplaced
+  with a pan from the impulse's direction (`-31.5` or `-90` times the listener-space x).
+- **No race-state gate** (the original's `RaceManager + 0x1970 == 2` for the player), no
+  Detonator branch, no cockpit perspective (variable 2 is 1 for the player, as
+  cue-variables.md chose).
+- **The collision cage's contacts are not counted**: its response carries no normal here.
+- **The pair's impulse is this engine's pair resolver's** (Pulse's `-1.1` law with the
+  craft's masses); HD's own `Body_ResolveContactPair` is at confidence 60 and not ported.
+
+**What a race sounds like, measured.** A 60 s headless Fury single race (Venom, Talon's
+Junction, the player on full throttle swinging the stick with a 2.5 s period) raised for the
+player 34 wall hits (9 small, 11 medium, 14 large) and 471 grinds, and for the field 2 wall
+hits and 2 craft hits. The same input on RPCS3 (capture 1, 150 s) gave the player 7 hits and
+10 grinds: **this engine's craft stays on a wall for some thirty ticks after a hit, the
+original's leaves within a frame or two**, so the grind, which the law restarts every other
+tick of a contact, runs far longer here. That is the wall response's difference, heard
+through a faithful trigger. Rendered offline (`--race --hold cross,left --ticks 1200
+--dump-audio`, the craft held into a wall for 20 s): the mix's RMS is `0.154` against `0.116`
+before the change, and the limiter works on 75,819 of 960,000 frames, never under a gain of
+`0.7` (before: none).
+
 ## Lineage
 
 - **2048: checked, applies, not wired.** `FUN_811c5c3a` (`/2048/eboot-vita-2048-eu-v104.elf`,

@@ -1,8 +1,10 @@
 ---
-status: re-first
-titles: [hd]
-updated: 2026-11-15
-summary: "HD .COLLISIONS: variable 1 is the surface, variable 0 the severity; what computes the severity (0x000d8bd0) is unread; the fade is unheard"
+status: ready-to-wire
+titles: [hd, 2048, omega]
+updated: 2026-11-16
+summary: "HD contact cues play from the impulse law; open: grind runs long (craft stays on walls), stale pair normal, pan, cage contacts, 2048 and Omega"
+size: M (50)
+difficulty: medium (55)
 ---
 
 # HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree
@@ -100,6 +102,24 @@ spanning over 2x). It fires on HD's three and is silent on every Pulse cue.
 **Choosing correctly is reverse-engineering, not a patch** - see below.
 
 ## Open
+
+**2026-11-16 (lane `hd-impact`): the severity's source is read and the cue is wired.**
+`Ship_UpdateCollisionCues` (`0x000d8bd0`) starts `.COLLISIONS` and `.GRIND` from the frame's
+largest contact impulse (floors 3 and 18, steps 25/50 and 4/8, waits of 6 and 1 frames, the
+Shield's swap), measured on RPCS3 and wired for HD
+([collision-cues.md](../../docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md), "Wired").
+A craft-to-craft contact now sounds; before, it raised nothing on HD. The 2026-11-15 paragraph
+and the text under it describe the state before. What is left:
+
+| # | Open | Cause | Where | Next |
+| --- | --- | --- | --- | --- |
+| 1 | The grind runs much longer than the original's: 471 grinds in 60 s of a weaving player here against 10 in 150 s on RPCS3, and the limiter works on 8 % of the frames of a 20 s wall scrape | this engine's craft stays on a wall some thirty ticks after a hit, the original's leaves in a frame or two; the trigger is the original's | the wall response, [hd-wall-response-leftovers.md](../gameplay/hd-wall-response-leftovers.md); the measurement is on collision-cues.md, "What a race sounds like, measured" | measure the contact's length on RPCS3 with `scripts/rpcs3-hd-collision-cue.py` (consecutive grind arms after a hit) against ours; a listen by the maintainer (`just play hd`, scrape a wall) |
+| 2 | A craft pair's angle is taken as "not nose-on" always | the original's pair record (`0x000f5780`) writes no normal and reads the ring slot's stale one; which slot a pair record takes needs the resolve order | collision-cues.md, "A pair record has no normal" | read the order `Body_ResolveContact` and `Body_ResolveContactPair` run in per frame, then keep each craft's last track normal per slot |
+| 3 | The player's cues are placed on the craft, not panned | the original plays them unplaced with a pan of `-31.5` (cockpit `-90`) times the impulse direction's listener-space x | `0x000d8c98`..`0x000d8d6c`; how `Sound_PlayBankCue` applies the pan argument is unread | read the pan argument's consumer, then a per-event pan on `CueEvent` |
+| 4 | The collision cage's contacts are not heard | `CageResponse` carries no normal | `crates/physics/src/cage.rs` | report the normal, feed `note_contact_impulse` |
+| 5 | No race-state gate, no Detonator branch (mode 14 plays the shield names from another bank), no cockpit perspective | read, not wired | `0x000d9174`, `0x000d925c` | small, once a mode map exists |
+| 6 | 2048 and Omega keep the re-armed cue | 2048's race cues are a flat pick; Omega's are Wwise switches (`CollisionSize*`, `CollisionType*`), player only | collision-cues.md, "Lineage" | 2048 after its cue walk; Omega: set the two switches on `_COLLISIONS_1`, `_GRIND` |
+
 
 **2026-11-15 (lane `hd-sound-audit`): the selection mechanism is recovered, the severity's input
 is not.** `.COLLISIONS` branches on **cue variable 1** (0 ship, 1 wall) and each of `c_CShipShip`,
