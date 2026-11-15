@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-08-31
-summary: "Which child of HD's .COLLISIONS severity tree the original plays is unrecovered; the fade is unheard"
+updated: 2026-11-15
+summary: "HD .COLLISIONS: variable 1 is the surface, variable 0 the severity; what computes the severity (0x000d8bd0) is unread; the fade is unheard"
 ---
 
 # HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree
@@ -100,6 +100,21 @@ spanning over 2x). It fires on HD's three and is silent on every Pulse cue.
 **Choosing correctly is reverse-engineering, not a patch** - see below.
 
 ## Open
+
+**2026-11-15 (lane `hd-sound-audit`): the selection mechanism is recovered, the severity's input
+is not.** `.COLLISIONS` branches on **cue variable 1** (0 ship, 1 wall) and each of `c_CShipShip`,
+`c_CShipWall` and `c_GShipShip` on **cue variable 0** (0, 1, anything else: S, M, L, except that
+`c_CShipShip`'s three blocks are M, L, L and its S child is unreachable); both
+are bytes the caller supplies with the play request, and live captures matched the child that
+started to variable 0 on 149 of 149 starts
+([cue-variables.md](../../docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md), "The collision
+family"). So the game picks the surface and the severity itself, once per contact. What it
+computes the severity **from** is in `FUN_000d8bd0` (`0x000d8bd0`: loads `.COLLISIONS` at
+`0x000d9038` and `0x000d924c`, stores variable 0 to `emitter + 0x90` at `0x000d9014`), unread. The
+original also starts `.COLLSHIELD`, `.GRINDSHIELD` and `.GRIND` around a contact; this engine has
+none of the three. The wiring is in
+[hd-race-cues-are-guarded-lists-played-as-one-flat-pick.md](hd-race-cues-are-guarded-lists-played-as-one-flat-pick.md).
+The text below is the 2026-08-31 state.
 
 **Which child the original picks, and on what.** The tree is
 `.COLLISIONS -> {c_CShipShip, c_CShipWall} -> {S, M, L} -> takes`. Two

@@ -970,3 +970,22 @@
 0x009201d8	data	PI_Cell_ModeNameTable	95	cell-medal-award.md
 0x00166210	function	Definition_ParseUnlock	80	model-unlock.md
 0x008ab8e0	data	Unlock_ConditionNameTable	75	model-unlock.md
+# 2026-11-15 hd-sound-audit: the remaining grain opcodes, the cue variables and the SPEEDUPPAD call path (cue-variables.md)
+0x00625d50	function	Scream_DoGrainRandomBend	88	cue-variables.md
+0x006242b0	function	Scream_DoGrainSetBend	82	cue-variables.md
+0x00623530	function	Scream_DoGrainSetVar	82	cue-variables.md
+0x00623580	function	Scream_DoGrainIncVar	82	cue-variables.md
+0x00625ad8	function	Scream_DoGrainGotoRandom	82	cue-variables.md
+0x00623c88	function	Scream_DoGrainWaitVoices	78	cue-variables.md
+0x00626318	function	Scream_DoGrainKeyOff	60	cue-variables.md
+0x00625820	function	Scream_DoGrainLoopBack	85	cue-variables.md
+0x006234d0	function	Scream_DoGrainStop	80	cue-variables.md
+0x00623830	function	Scream_DoGrainEnd	85	cue-variables.md
+0x006265d0	function	Scream_DoGrainModulator	70	cue-variables.md
+0x0029fd00	function	SpeedupPad_PlayCue	82	cue-variables.md
+0x000cff78	function	Craft_PlayPlayerCue	78	cue-variables.md
+0x002fc940	function	SoundEmitter_Init	80	cue-variables.md
+0x002fcc20	function	SoundEmitter_PlayCue	80	cue-variables.md
+0x002fcd70	function	SoundEmitter_Update	78	cue-variables.md
+0x002fee20	function	SoundEmitterCue_Init	80	cue-variables.md
+0x002fdc00	function	SoundEmitterCue_Update	80	cue-variables.md
