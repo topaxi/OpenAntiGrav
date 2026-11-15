@@ -14,6 +14,20 @@ pub(crate) fn previous_race_index(index: usize, len: usize) -> usize {
     }
 }
 
+/// The song a random run opens on: one of `len`, drawn from `seed`, and on a PS2 boot (whose
+/// menus loop `MUSIC_TRACK`) never that one. [`MUSIC_TRACK`] when the playlist is unknown.
+pub(crate) fn random_first_index(seed: u64, len: usize, menu_plays_a_track: bool) -> usize {
+    if len == 0 {
+        return MUSIC_TRACK;
+    }
+    let index = oag_core::Rng::new(seed).below(len as u32) as usize;
+    if menu_plays_a_track && len > 1 && index == MUSIC_TRACK {
+        (index + 1) % len
+    } else {
+        index
+    }
+}
+
 /// Which track of `platform`'s soundtrack `index` means, `index` being an entry
 /// in the **booted** disc's own order.
 ///
@@ -87,6 +101,9 @@ enum Pick {
     /// recording the menu was playing; else [`MUSIC_TRACK`]. Decided by the
     /// booted platform, not by whether the menu's loop has landed yet.
     FirstRace,
+    /// A run's first race under a random order: any song of the playlist, drawn from this
+    /// seed once the worker knows how many there are; on a PS2 boot never the menu's.
+    Random(u64),
 }
 
 impl RacePick {
@@ -95,6 +112,29 @@ impl RacePick {
     pub fn exact(index: usize) -> Self {
         Self {
             index: Pick::Exact(index),
+            seek: None,
+            saved: None,
+        }
+    }
+
+    /// This pick checking `saved` first, a place [`Audio::restore_race_music`] could not.
+    pub(super) fn checking(self, saved: Option<RaceMusicState>) -> Self {
+        Self { saved, ..self }
+    }
+
+    /// A run's first race: [`Pick::FirstRace`].
+    pub(super) fn first_race() -> Self {
+        Self {
+            index: Pick::FirstRace,
+            seek: None,
+            saved: None,
+        }
+    }
+
+    /// A run's first race under a random order, drawn from `seed`.
+    pub(super) fn random_first(seed: u64) -> Self {
+        Self {
+            index: Pick::Random(seed),
             seek: None,
             saved: None,
         }
@@ -142,6 +182,9 @@ impl RacePick {
         let normal = match self.index {
             Pick::Exact(index) => index,
             Pick::FirstRace if discs.booted() != Some(Platform::Ps2) => MUSIC_TRACK,
+            Pick::Random(seed) => {
+                random_first_index(seed, len, discs.booted() == Some(Platform::Ps2))
+            }
             Pick::Before(index) => {
                 if len == 0 {
                     warn!(
@@ -294,7 +337,7 @@ impl RacePick {
     fn resolve_without_listing(&self) -> Resolved {
         let index = match self.index {
             Pick::Exact(index) | Pick::After(index) | Pick::Before(index) => index,
-            Pick::FirstRace => MUSIC_TRACK,
+            Pick::FirstRace | Pick::Random(_) => MUSIC_TRACK,
         };
         Resolved {
             index,
@@ -484,11 +527,7 @@ impl Audio {
                 ..RacePick::exact(index)
             };
         }
-        RacePick {
-            index: Pick::FirstRace,
-            seek: None,
-            saved: self.pending_restore.take(),
-        }
+        self.first_race_pick()
     }
 
     /// The fetch a race launch needs for its music, or [`None`] when the track
@@ -603,7 +642,7 @@ impl Audio {
             None => {}
         }
         let index = resolved.index;
-        self.race_index = Some(index);
+        self.set_race_index(index);
         if self.race_context.is_none() {
             if let Ok(Some(loaded)) = fetched
                 && let Some(platform) = loaded.from
@@ -733,11 +772,12 @@ impl Audio {
         let Some((discs, choice, cache_dir)) = self.race_context.clone() else {
             return;
         };
+        let pick = self.peek_next_race_pick(&discs, index);
         self.race_prefetch = Some(MusicFetchWorker::spawn(
             discs,
             choice,
             cache_dir,
-            RacePick::after(index),
+            pick,
             "race-music",
         ));
     }
@@ -764,7 +804,7 @@ impl Audio {
         if let Some(id) = self.race_voice.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
-        let wanted = RacePick::after(index);
+        let wanted = self.take_next_race_pick(&discs, index);
         self.race_job = Some(match self.race_prefetch.take() {
             Some(prefetch) if prefetch.pick == wanted => prefetch,
             _ => MusicFetchWorker::spawn(discs, choice, cache_dir, wanted, "race-music"),

@@ -1,8 +1,9 @@
 //! Restart, next and previous for the race song, on the pad's music actions.
 //!
-//! The race playlist is one numbered list walked in order (`pool`): next is the index after
-//! the playing one, previous the index before it, both wrapping. There is no shuffle, so
-//! previous is exactly the song that played before when the player has only gone forward.
+//! The race playlist is one numbered list (`pool`). In a sequential order next is the index
+//! after the playing one, previous the index before it, both wrapping. In a random order
+//! (`shuffle`) next is the shuffled deck's next song and previous the song that played before,
+//! or the same song again from its start when nothing earlier is remembered.
 //! A playlist of one song, no race music, a song still held for the green light, or a track
 //! still being fetched does nothing.
 
@@ -49,6 +50,10 @@ impl Audio {
         else {
             return false;
         };
+        let Some(pick) = self.take_previous_race_pick(&discs, index) else {
+            // Nothing earlier is remembered: the song starts over.
+            return self.restart_race_song();
+        };
         if let Some(id) = self.race_voice.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
@@ -58,7 +63,7 @@ impl Audio {
             discs,
             choice,
             cache_dir,
-            race_music::RacePick::before(index),
+            pick,
             "race-music",
         ));
         self.poll_race_job();
