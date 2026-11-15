@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-15
+updated: 2026-11-16
 summary: "HD: craft-to-craft contact sparks, the spark's own strength and reach, three damage-smoke corrections: read, not wired; a frame pair owed"
 size: M (55)
 difficulty: medium (60)
@@ -33,7 +33,7 @@ Nothing below needs more reverse engineering unless the row says so.
 | 6 | Damage smoke: a hit that changes the state (MILD, MODERATE, CRITICAL) kills the previous state's effects outright, particles included | `0x002a1994` on, `0x0027f7b0(.., 1)`, `0x00285868` | `damage_fx.rs` lets the old state's smoke finish | keep the `Playing` handles per craft and `psys::Stage::kill` them when the state changes |
 | 7 | Damage smoke carries the craft's velocity over 60 | `0x002a1c18`..`0x002a1c4c` | no velocity | `oag_fx::psys::carried` (`carry`, `play_carried`) on the riding instance |
 | 8 | Damage smoke anchor: the engine flare node's origin plus `1.5` of that node's Z row (`2.0` once dead), minus `1.9` of its Y row under a view flag | `0x002a0268`; the object is the `EngineFlare` at `craft + 0x5f70` | the craft's origin | take the flare node's matrix where the engine flare is placed today and offset along its Z; **which way that Z points along the hull is unsettled** (engine-trail.md), so check the result against a frame before keeping it |
-| 9 | An RPCS3-against-ours pair of a weapon hit: one film is taken (table on particle-triggers.md), ours was not rendered | `scripts/rpcs3-hd-missile-film.py`, `scripts/hd-missile-film-pair.py --film DIR --out OURS` | - | render ours from a fresh film and judge rows 1, 6 and 7 on it; the film is game data, kept under `data/`, not tracked |
+| 9 | An RPCS3-against-ours pair of a weapon hit on a craft: the original's film is taken (table on particle-triggers.md); ours rendered with `hd-missile-film-pair.py` is not a pair for the craft (the tool matches the camera to the blast, and the struck craft is a few pixels away) | `scripts/rpcs3-hd-missile-film.py`; `scripts/rpcs3-hd-weapon.py` and `scripts/hd-weapon-pair.py` take per-frame craft poses | - | take the film with every craft's pose (the film's `aNNNN.json` already has them), render ours posed on the struck rival with `--pose-hold-ticks` long enough for the smoke to be on screen, then judge rows 1, 6 and 7 |
 
 Leads read in passing, not followed:
 
@@ -58,9 +58,9 @@ Leads read in passing, not followed:
 ## Next Steps
 
 1. Row 9 first: `scripts/emu-env.sh`, restore
-   `hd-racebox-talons-venom-weapons-grid-rpcs3-20574`, run the film, render ours with
-   `hd-missile-film-pair.py`, and look at 1.0 s to 2.0 s (the hulls touching) and 0.5 s to
-   0.75 s (the struck rival alone).
+   `hd-racebox-talons-venom-weapons-grid-rpcs3-20574`, run the film, render ours **posed**
+   from the film's craft poses (not with `hd-missile-film-pair.py`, see the row), and look at
+   1.0 s to 2.0 s (the hulls touching) and 0.5 s to 0.75 s (the struck rival alone).
 2. Rows 1 and 2 together (one change, one test: a pair contact on HD starts the seat's attached
    spark and the next contact-free tick stops it).
 3. Rows 6 and 7 (small, `damage_fx.rs` alone), then row 8 against a frame.

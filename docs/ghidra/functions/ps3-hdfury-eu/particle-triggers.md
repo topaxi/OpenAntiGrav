@@ -307,8 +307,11 @@ rival 12 units ahead, single game frames from the hit. One run:
 | 2.5, 3.0 s | the rival out of frame |
 
 The run does not say which effect each spark is: a rival's first Missile hit leaves it above
-70 shield (`WO_DAMAGE_MILD`), and from 1.0 s the contact's own spark overlaps it. A pair
-against this engine was not rendered in this pass.
+70 shield (`WO_DAMAGE_MILD`), and from 1.0 s the contact's own spark overlaps it.
+`scripts/hd-missile-film-pair.py` was run on the film (ages 0.33 to 1.0 s) and is no pair for
+this question: it puts ours' camera where the film's was relative to the **blast**, in ours'
+own scenario at the start line, so the struck craft is a few pixels in the distance. A pair
+for the hit effect needs the struck craft's pose matched, not the blast's place.
 
 ## Names applied
 
