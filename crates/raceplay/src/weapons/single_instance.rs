@@ -290,10 +290,12 @@ impl Race {
         mut beam: oag_weapons::projectile::leach_beam::Beam,
     ) {
         let rules = self.sim.damage_rules();
+        let course_length = self.leach_course_length();
         let report = beam.advance(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
             rules,
+            course_length,
             self.sim.dt,
         );
         // A swallowed hit is the only thing that makes the target's shell

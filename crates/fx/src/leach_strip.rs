@@ -18,7 +18,11 @@
 //!
 //! Render-side only: nothing here is simulation state or reaches a hash.
 //!
-//! - the wobble, `BeamPath_AddWobble` (`0x001157d0`): [`wobble`].
+//! - the wobble, `BeamPath_AddWobble` (`0x001157d0`): [`wobble`];
+//! - the LeachBall's place on the strip, `BeamPath_PointAt` (`0x00116308`), by
+//!   the length table the bend leaves: [`cumulative`], [`point_at`]
+//!   (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+//!   strip").
 //!
 //! **Chosen, not measured**: the progress measure is this engine's unwrapped
 //! track distance (divided by the course length for the wobble) where the
@@ -219,6 +223,64 @@ pub fn bend(samples: &mut [Record], shooter_anchor: Vec3) {
     for (sample, along) in samples.iter_mut().zip(cumulative) {
         sample.anchor = sample.anchor.lerp(shooter_anchor, along / total);
     }
+}
+
+/// The running length of the path at each sample, 0 at sample 0: the table
+/// `BeamPath_BendToTarget` rebuilds at `strip + 0x5f10` from the bent points
+/// (its second loop, `0x0011622c`). [`wobble`] moves the points after it and
+/// does not rebuild it, so call this between [`bend`] and [`wobble`].
+#[must_use]
+pub fn cumulative(samples: &[Record]) -> Vec<f32> {
+    let mut along = 0.0f32;
+    let mut out = Vec::with_capacity(samples.len());
+    for (i, sample) in samples.iter().enumerate() {
+        if i > 0 {
+            along += (sample.anchor - samples[i - 1].anchor).length();
+        }
+        out.push(along);
+    }
+    out
+}
+
+/// `BeamPath_PointAt` (`0x00116308`): the point `fraction` of the way along the
+/// strip, by the [`cumulative`] table, lerped between the two samples that
+/// bracket it, so a point between samples lies on the drawn segment.
+///
+/// Fraction 0 is the target's end and 1 the shooter's whichever craft was
+/// walked: sample 0 is the walked craft, and when that is the shooter
+/// (`path + 0x8 == path + 0x0`) the distance is taken from the far end.
+/// `None` with no samples, or when the table never reaches the distance (a
+/// non-finite fraction); the original then places the ball at a constant.
+#[must_use]
+pub fn point_at(
+    samples: &[Record],
+    cumulative: &[f32],
+    fraction: f32,
+    shooter_walked: bool,
+) -> Option<Vec3> {
+    let first = samples.first()?;
+    let count = samples.len().min(cumulative.len());
+    let total = if count > 1 {
+        cumulative[count - 1]
+    } else {
+        0.0
+    };
+    if total <= 0.0 {
+        return Some(first.anchor);
+    }
+    let mut along = fraction * total;
+    if shooter_walked {
+        along = total - along;
+    }
+    let along = along.clamp(0.0, total);
+    let i = (1..count).find(|&i| cumulative[i] >= along)?;
+    let span = cumulative[i] - cumulative[i - 1];
+    let t = if span > 0.0 {
+        (along - cumulative[i - 1]) / span
+    } else {
+        0.0
+    };
+    Some(samples[i - 1].anchor.lerp(samples[i].anchor, t))
 }
 
 /// The wobble's three sines: `{frequency, amplitude, phase}`, the first two

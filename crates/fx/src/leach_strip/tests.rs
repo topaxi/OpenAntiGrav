@@ -179,3 +179,101 @@ fn the_wobble_moves_the_middle_sample() {
     wobble(&mut moved, &[0.0; 3], 100.0);
     assert!(moved[10].anchor != before[10].anchor);
 }
+
+#[test]
+fn the_cumulative_table_runs_from_zero_along_the_segments() {
+    let samples = [
+        rec(Vec3::ZERO, 0.0),
+        rec(Vec3::new(3.0, 4.0, 0.0), 1.0),
+        rec(Vec3::new(3.0, 4.0, 2.0), 2.0),
+    ];
+    assert_eq!(cumulative(&samples), vec![0.0, 5.0, 7.0]);
+}
+
+/// An L-shaped path: the chord from end to end is not on it.
+fn bent() -> Vec<Record> {
+    vec![
+        rec(Vec3::ZERO, 0.0),
+        rec(Vec3::new(10.0, 0.0, 0.0), 1.0),
+        rec(Vec3::new(10.0, 10.0, 0.0), 2.0),
+    ]
+}
+
+#[test]
+fn a_point_halfway_sits_on_the_bend_not_on_the_chord() {
+    let samples = bent();
+    let table = cumulative(&samples);
+    let point = point_at(&samples, &table, 0.5, false).unwrap();
+    assert!(
+        (point - Vec3::new(10.0, 0.0, 0.0)).length() < 1e-5,
+        "{point}"
+    );
+    let quarter = point_at(&samples, &table, 0.25, false).unwrap();
+    assert!(
+        (quarter - Vec3::new(5.0, 0.0, 0.0)).length() < 1e-5,
+        "{quarter}"
+    );
+    let chord = Vec3::new(10.0, 10.0, 0.0) * 0.25;
+    assert!(
+        (quarter - chord).length() > 1.0,
+        "the chord would put it at {chord}"
+    );
+}
+
+#[test]
+fn fraction_zero_is_sample_zero_unless_the_shooter_was_walked() {
+    let samples = bent();
+    let table = cumulative(&samples);
+    assert_eq!(point_at(&samples, &table, 0.0, false), Some(Vec3::ZERO));
+    assert_eq!(
+        point_at(&samples, &table, 1.0, false),
+        Some(Vec3::new(10.0, 10.0, 0.0))
+    );
+    // The shooter is sample 0 here, so the target's end is the far one.
+    assert_eq!(
+        point_at(&samples, &table, 0.0, true),
+        Some(Vec3::new(10.0, 10.0, 0.0))
+    );
+    assert_eq!(point_at(&samples, &table, 1.0, true), Some(Vec3::ZERO));
+    let quarter = point_at(&samples, &table, 0.25, true).unwrap();
+    assert!(
+        (quarter - Vec3::new(10.0, 5.0, 0.0)).length() < 1e-5,
+        "{quarter}"
+    );
+}
+
+#[test]
+fn out_of_range_fractions_clamp_and_one_sample_is_its_own_point() {
+    let samples = bent();
+    let table = cumulative(&samples);
+    assert_eq!(point_at(&samples, &table, -1.0, false), Some(Vec3::ZERO));
+    assert_eq!(
+        point_at(&samples, &table, 2.0, false),
+        Some(Vec3::new(10.0, 10.0, 0.0))
+    );
+    let one = [rec(Vec3::ONE, 0.0)];
+    assert_eq!(point_at(&one, &[0.0], 0.5, false), Some(Vec3::ONE));
+    assert_eq!(point_at(&[], &[], 0.5, false), None);
+}
+
+/// A held beam on RPCS3 (Talon's Junction, Venom, target ahead, so the target
+/// was walked): the strip's four dumped samples and `+0x5f10` table and the
+/// ball's fraction `+0x24` give the ball's placed point `+0xd0`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the strip").
+#[test]
+fn the_live_ball_point_is_the_lookup_on_the_dumped_strip() {
+    let samples: Vec<Record> = [
+        [75.433_37, -47.290_443, 159.950_2],
+        [80.135_8, -46.422_962, 162.447_68],
+        [83.176_895, -45.734_238, 164.756_58],
+        [83.352_67, -46.257_233, 164.943_79],
+    ]
+    .iter()
+    .map(|&[x, y, z]| rec(Vec3::new(x, y, z), 0.0))
+    .collect();
+    // The original's table, not one rebuilt from these (wobbled) points.
+    let table = [0.0, 5.391_739_4, 9.279_979, 9.717_032];
+    let point = point_at(&samples, &table, 0.666_570_1, false).unwrap();
+    let dumped = Vec3::new(80.984_68, -46.230_717, 163.092_18);
+    assert!((point - dumped).length() < 1e-3, "{point} against {dumped}");
+}

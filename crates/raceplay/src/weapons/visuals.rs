@@ -149,7 +149,7 @@ impl Race {
             _ => {}
         }
 
-        self.advance_leach_ball_hd(at, beam.trip, owner, target, dt);
+        self.advance_leach_ball_hd(at, beam, dt);
     }
 
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
@@ -170,13 +170,11 @@ impl Race {
     fn advance_leach_ball_hd(
         &mut self,
         at: usize,
-        trip: Option<f32>,
-        owner: Vec3,
-        target: Vec3,
+        beam: oag_weapons::projectile::leach_beam::Beam,
         dt: f32,
     ) {
-        let length = (target - owner).length();
-        let wrapped = match trip {
+        let gap = self.leach_trip_gap(beam);
+        let wrapped = match beam.trip {
             // The simulation's clock wrapped this tick (the drain landed):
             // it went down since the last frame read it.
             Some(elapsed) => {
@@ -187,17 +185,20 @@ impl Race {
             None => oag_weapons::projectile::leach_beam::trip::advance(
                 &mut self.view.leach_ball_elapsed[at],
                 dt,
-                length,
+                gap,
             ),
         };
         if !wrapped {
             return;
         }
-        let point = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed[at], length),
-            owner,
-            target,
-        );
+        // On the shooter: the wrap's `WO_LEACHBEAM_ABSORB` is placed on
+        // `*(path + 0x0) + 0x6944`'s matrix, the shooter's
+        // (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+        // strip"), where the ball has just arrived.
+        let point = self.sim.world.ships[beam.owner as usize]
+            .physics
+            .body
+            .position;
         if let Some(effect) = self.view.handles.get(Trigger::LeachbeamAbsorb) {
             self.view.stage.play(effect, point, 1.0);
         }
@@ -208,10 +209,10 @@ impl Race {
     /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
     /// takes for the ribbon.
     ///
-    /// Reads the owner's and target's positions fresh rather than any this
-    /// tick's [`Self::advance_leach_ball_hd`] captured, so a caller at draw
-    /// time (after the tick that moved them) still places the ball against
-    /// where the beam's two ends are now, not where they were a tick ago.
+    /// Reads the beam's path fresh rather than anything this tick's
+    /// [`Self::advance_leach_ball_hd`] captured, so a caller at draw time
+    /// (after the tick that moved the craft) places the ball on the strip as it
+    /// is drawn now.
     ///
     /// **Translation only - identity rotation and scale, both chosen, not
     /// measured.** `LeachBall_Advance`'s own placement call
@@ -226,21 +227,39 @@ impl Race {
     pub fn leach_ball_model_matrix(&self, entry: usize) -> Option<Mat4> {
         let beam = self.sim.world.leach_beams[entry]
             .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked)?;
-        let owner = self.sim.world.ships[beam.owner as usize]
-            .physics
-            .body
-            .position;
-        let target = self.sim.world.ships[beam.target as usize]
-            .physics
-            .body
-            .position;
-        let length = (target - owner).length();
-        let at = oag_fx::beam::hd_ball::position(
-            leach_ball_fraction(self.view.leach_ball_elapsed[entry], length),
-            owner,
-            target,
-        );
+        let at = self.leach_ball_point(beam, self.view.leach_ball_elapsed[entry]);
         Some(Mat4::from_translation(at))
+    }
+
+    /// The trip's length: the two craft's gap along the course
+    /// (`oag_weapons::projectile::leach_beam::trip::gap`), the length the
+    /// simulation's own trip reads.
+    fn leach_trip_gap(&self, beam: oag_weapons::projectile::leach_beam::Beam) -> f32 {
+        let ships = &self.sim.world.ships;
+        oag_weapons::projectile::leach_beam::trip::gap(
+            ships[beam.owner as usize].standing.progress,
+            ships[beam.target as usize].standing.progress,
+            self.leach_course_length(),
+        )
+    }
+
+    /// Where the ball is `elapsed` seconds into its trip: on the drawn strip
+    /// where the title has one ([`Self::leach_ball_on_strip`]), else on the
+    /// straight line between the two bodies, [`oag_fx::beam::hd_ball::position`].
+    fn leach_ball_point(
+        &self,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+        elapsed: f32,
+    ) -> Vec3 {
+        let fraction = leach_ball_fraction(elapsed, self.leach_trip_gap(beam));
+        self.leach_ball_on_strip(beam, fraction).unwrap_or_else(|| {
+            let ships = &self.sim.world.ships;
+            oag_fx::beam::hd_ball::position(
+                fraction,
+                ships[beam.owner as usize].physics.body.position,
+                ships[beam.target as usize].physics.body.position,
+            )
+        })
     }
 
     /// The firing craft's LeachBeam hull-overlay pulse on `slot` this tick, or
@@ -1123,7 +1142,7 @@ impl Race {
 }
 
 /// How far along its trip the HD LeachBall is, `0..=1`, `elapsed` seconds in
-/// on a beam `length` long.
-fn leach_ball_fraction(elapsed: f32, length: f32) -> f32 {
-    (elapsed / oag_weapons::projectile::leach_beam::trip::period(length)).clamp(0.0, 1.0)
+/// at a track gap of `gap`.
+fn leach_ball_fraction(elapsed: f32, gap: f32) -> f32 {
+    (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
 }
