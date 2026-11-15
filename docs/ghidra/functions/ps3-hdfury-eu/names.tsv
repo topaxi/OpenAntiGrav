@@ -989,3 +989,7 @@
 0x002fcd70	function	SoundEmitter_Update	78	cue-variables.md
 0x002fee20	function	SoundEmitterCue_Init	80	cue-variables.md
 0x002fdc00	function	SoundEmitterCue_Update	80	cue-variables.md
+# 2026-11-15 hd-leach-2: the LeachBall's place on the strip and its trip length (weapons.md)
+0x00116308	function	BeamPath_PointAt	90	weapons.md
+0x000d0398	function	Craft_GetTrackGap	85	weapons.md
+0x001178f8	function	BeamPath_RebuildUnwobbled	75	weapons.md
