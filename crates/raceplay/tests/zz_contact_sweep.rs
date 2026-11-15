@@ -32,10 +32,10 @@ fn zz_contact_sweep() {
     .expect("loading the race");
     if std::env::var("OAG_SWEEP_REARMED").is_ok() {
         loaded.setup.contact_cues = oag_title::contact_cue::ContactCues::Rearmed;
-    } else if std::env::var("OAG_SWEEP_GRIND").is_ok() {
-        if let oag_title::contact_cue::ContactCues::Impulse(law) = &mut loaded.setup.contact_cues {
-            law.value.grind_played = true;
-        }
+    } else if std::env::var("OAG_SWEEP_GRIND").is_ok()
+        && let oag_title::contact_cue::ContactCues::Impulse(law) = &mut loaded.setup.contact_cues
+    {
+        law.value.grind_played = true;
     }
     let weave: f32 = std::env::var("OAG_SWEEP_WEAVE")
         .ok()
