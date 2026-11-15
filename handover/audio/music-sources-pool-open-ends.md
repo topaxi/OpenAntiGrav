@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-02
+updated: 2026-11-15
 summary: "Music pool phase 1 landed (MUSIC page, folders, discs); open: add folders from the menu, other formats, menu music from the pool, playlist editing"
 ---
 
@@ -19,8 +19,8 @@ Phase 1 is in `docs/architecture/music-threads.md` ("The music pool"). The code 
    channels.
 3. **Menu music from the pool.** The front end keeps each disc's authored loop. A player who
    switches the booted disc off hears the authored menu loop and pool songs in races.
-4. **Playlist order and shuffle.** The pool order is fixed (booted soundtrack, discs, folders);
-   a folder's files play in path order. No shuffle, no skip, no editing.
+4. **Playlist editing.** The pool order is fixed (booted soundtrack, discs, folders); a
+   folder's files play in path order. ~~Shuffle~~ (MUSIC ORDER random) and ~~skip~~ landed; no editing.
 5. **Now-playing names.** The HUD names a song only for the booted soundtrack. A pool song shows
    no name; folder files carry ID3 tags that could name them.
 6. **The saved race place.** `music.toml` stores an index and a track count of the booted

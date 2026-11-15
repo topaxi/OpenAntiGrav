@@ -268,6 +268,7 @@ impl Audio {
             return;
         }
         let warm = std::mem::take(&mut self.engine_warm_ticks);
+        let wav_frame = self.dump_frames();
         let voices = self.sfx.get_or_insert_with(|| {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
@@ -377,29 +378,24 @@ impl Audio {
                 });
             }
 
-            // The Zone speed-class announcer: one voice line per stage raised this
-            // tick (see `oag_raceplay::tick`). Unlike the milestone one, this trigger is
-            // not yet read from HD's executable (`oag_title::ZoneClassAnnouncer`).
-            // The tone beside each line is HD's `ZONEBAR_TRANS`, played dry by the
-            // same branch (`docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "The
-            // class-step tone's bank").
+            // The Zone speed-class announcer: per stage raised this tick (see
+            // `oag_raceplay::tick`), the stage-blend tone and the class line.
+            // Both are timelines played dry, the line on its own authored
+            // lead-in (`oag_title::ZoneClassAnnouncer`).
             for stage in class_announcements {
-                if let Some(tone) = class_announcer.tone_voices(&mut voices.rng) {
+                let tone = class_announcer.tone_voices(&mut voices.rng);
+                let line = class_announcer.line_voices(stage, &mut voices.rng);
+                log::trace!(
+                    "sfx: class step to stage {stage} at wav frame {wav_frame:?}: tone {} voice(s), line {} voice(s)",
+                    tone.as_ref().map_or(0, Vec::len),
+                    line.as_ref().map_or(0, Vec::len)
+                );
+                if let Some(tone) = tone {
                     let _ = layers::start(mixer, &tone, Bus::Sfx, layers::Where::DRY);
                 }
-                let Some((sound, looping)) = class_announcer.pick(stage, &mut voices.rng) else {
-                    continue;
-                };
-                let play = if looping {
-                    Play::looping(sound, Bus::Speech)
-                } else {
-                    Play::once(sound, Bus::Speech)
-                };
-                let _ = mixer.play(Play {
-                    gain: 1.0,
-                    pan: None,
-                    ..play
-                });
+                if let Some(line) = line {
+                    let _ = layers::start(mixer, &line, Bus::Speech, layers::Where::DRY);
+                }
             }
 
             // `Shield_Activate` opens `~SHIELD` with a handle and the shield's drop

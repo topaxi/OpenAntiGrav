@@ -1253,6 +1253,10 @@ pub fn menu_seeds(
             "audio.music_volume",
             text(&settings.audio.music_volume.to_string()),
         ),
+        (
+            "audio.music_order",
+            text(&settings.audio.music_order.to_string()),
+        ),
         // The second of the original's two volumes, and it must be seeded:
         // an unseeded `choice` opens on its list's *first* option, so SFX VOLUME read `0`
         // whatever the file said, and the first press moved a player at 100

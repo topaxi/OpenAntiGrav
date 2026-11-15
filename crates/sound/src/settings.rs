@@ -75,6 +75,10 @@ pub struct Settings {
     /// falls back to the booted disc, not silence.
     #[serde(default)]
     pub music_source: MusicSource,
+    /// In which order the race playlist plays: `sequential` (the default, as on the disc) or
+    /// `random`, a shuffled deck that plays every song before repeating one.
+    #[serde(default)]
+    pub music_order: crate::MusicOrder,
     /// How a placed sound (a craft, a weapon) is heard to be ahead of or behind
     /// the camera: `auto` (the default), `original`, `rear_cue` or `headphones`.
     /// `auto` is `headphones` on a headphone output and `rear_cue` on any other.

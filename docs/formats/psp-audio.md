@@ -240,22 +240,28 @@ already carry, not by a second Zone_Update.
 **HD's speed-class cues are a second, independent ladder, now wired.** `MR_VEN`,
 `MR_FLA`, `MR_RAP`, `MR_PHA` and friends read as Venom/Flash/Rapier/Phantom-
 shaped speed-class names, matching HD's Zone HUD's `SpeedClass` and
-`NextSpeedClass` text widgets (`docs/ui/hud.md`). **2026-08-31: HD ships them
-twice.** Extracted and parsed directly (`oag_formats::sblk`, not assumed): a
-**dedicated** bank, `Data\Sound\speech_class.bnk`, names `ZONEMALE` at cue `0`
+`NextSpeedClass` text widgets (`docs/ui/hud.md`). **HD ships them twice**
+(2026-08-31, extracted and parsed directly with `oag_formats::sblk`): a
+dedicated `Data\Sound\speech_class.bnk` (`DATA01`) names `ZONEMALE` at cue `0`
 plus fourteen consecutive cues at `1`-`14` - `MR_SVE`, `MR_VEN`, `MR_SFL`,
 `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
-`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - nothing else. The same fourteen, in the
-same order, are also folded into the general `speech_zone.bnk` at cue indices
-`26`-`39`. That is a 14/14 order match against [`oag_title::ZoneStages`]'
-(`crates/title/src/race.rs`) own fourteen non-`Start` HD stage names, and it is
-what `oag_title::ZoneClassAnnouncer` and
-[`oag_sound::sfx::ClassAnnouncer`](../../crates/sound/src/sfx/announcer.rs)
-now play - fired on the same `ZoneStages::stage_for` edge the HUD text and the
-colour grade already key off, since no call site in HD's own executable has
-been read for this ladder either. See `crates/hd/tests/hd_title_ground_truth.rs`'s
-`the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index` for
-the ground truth.
+`MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP` - and the same fourteen, in the same order,
+sit in `speech_zone.bnk` at cue indices `26`-`39`. That is a 14/14 order match
+against [`oag_title::ZoneStages`]' (`crates/title/src/race.rs`) own fourteen
+non-`Start` HD stage names. **2026-11-15: the live copy is `speech_zone.bnk`.**
+A Zone race on the Fury disc loads `DATA00`'s `speech_zone.bnk` (43 cues) in its
+speech slot and no 15-cue `speech_class.bnk`; at a natural class step the race
+queues the new class's `MR_*` name from there (conf 88). This port plays that
+bank (`oag_title::ZoneClassAnnouncer::bank`), each line as the timeline it
+authors: a 200 tick lead-in (0.83 s at 240 Hz; a delay word and a `0x1a` with
+operand 0), then both voices on one tick at +30 and +330 degrees, and four
+voices for the last three (two clips, each at both angles). The `speech_class.bnk`
+variant is a 5-tick L/R comb instead; the port does not play it. Evidence and
+the trigger: [`sound.md`](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+The ground truth is `crates/hd/tests/hd_title_ground_truth.rs`'s
+`the_speed_class_announcer_names_the_zone_speech_bank_by_cue_index`. The edge is
+still `ZoneStages::stage_for`, the one the HUD text and the colour grade key off
+(the original queues the line a few ticks before the commit).
 
 **All fourteen decode.** Checked by playing the bank, not just parsing its
 directory. `MR_SUZ` ("Super Zen") used to be the one miss: both of its own
@@ -304,18 +310,21 @@ collision zone, or one loses a refused voice slot to something else entirely,
 is not established** - only that the code path itself arbitrates nothing
 between the two calls it makes on the same tick.
 
-**The non-verbal half of a class change is `ZONEBAR_TRANS`, wired
-2026-11-15.** `Zone_UpdateCraftClass` plays it beside the voice line from the
-race's environment bank, which in Zone is `env0_zone.bnk`; only `DATA01`'s
-copy of that bank names the cue. Played as its five-voice timeline on the same
-class-step edge as the `MR_*` line. Evidence:
-[sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-tones-bank). **This entry previously also
+**The non-verbal half of a class change is `light_wipe`, wired 2026-11-15.**
+`Environment_UpdateStageBlend` keys it from the race's environment bank
+(`env0_zone.bnk`, `DATA00`'s 67-cue copy on Fury) immediately before the stage
+commit; the port plays its six-voice timeline (the `0x24` goto skips its first six
+key-ons) on the same class-step edge as the `MR_*` line. `ZONEBAR_TRANS` is not
+this tone: it belongs to Zone Battle and `DATA00`'s `env0_zone.bnk` does not name
+it. Evidence:
+[sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+**This entry previously also
 listed `HBEAT_ZCHANGE` as a
-third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly this session
-and is wrong - `speech_zone.bnk` names exactly 42 cues (`cue_count`, read off
-the bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears
-anywhere in the file.** Corrected here rather than left to be re-discovered
-wrong a second time.
+third cue beside `HBEAT`/`HBEAT_GO`; that was checked directly and is wrong -
+`speech_zone.bnk` (`DATA01`'s copy) names 42 cues (`cue_count`, read off the
+bank's own header), `0`-`41`, and no `HBEAT_ZCHANGE` string appears anywhere in
+the file.** Corrected here rather than left to be re-discovered wrong a second
+time.
 
 ### A cue can be a sequence, and `zone_N` is one
 

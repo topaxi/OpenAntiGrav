@@ -1641,6 +1641,22 @@ string_id = "OAG_AUDIO_MUSIC_SOURCE"
 setting = "audio.music_source"
 values_from = "music_sources"
 
+# In which order the race playlist plays: `sequential` (the pool's own numbering, the default) or
+# `random`, a shuffled deck that plays every song before repeating one and never opens a new
+# round on the song that just ended (`oag_sound::shuffle`). Pulse's disc authors this as
+# `Music Order` (`OPT_MUSIC_PL`: Sequential, Random; default sequential) in its Game Options
+# screen, beside the volumes; this build keeps the volumes on this page, so the row sits here
+# for every title, one setting and one row. It is on this page and not the MUSIC page because
+# that page is taken out of the tree on a machine with a single source. Menu loops are authored
+# loops and not a playlist; only a song the race draws from the soundtrack follows the order.
+# Applies from the next song on.
+[[page.entry]]
+kind = "choice"
+label = "MUSIC ORDER"
+string_id = "OAG_AUDIO_MUSIC_ORDER"
+setting = "audio.music_order"
+values = ["sequential", "random"]
+
 # Whether a placed sound (a craft, a weapon) is heard ahead of or behind the camera.
 # `original` is the stereo pan alone, which cannot tell front from back (measured:
 # `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`); `rear_cue` low-passes and

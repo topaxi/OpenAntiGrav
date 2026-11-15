@@ -428,3 +428,23 @@ fn a_surround_value_above_the_open_end_filters_nothing() {
     assert_eq!(rear_occlusion_cutoff(-1.0, 24_000.0), OCCLUSION_OPEN_HZ);
     assert_eq!(low_pass_coefficient(OCCLUSION_OPEN_HZ, 48_000), 1.0);
 }
+
+#[test]
+fn the_folded_pan_is_the_rear_branch_of_the_pan_law_without_its_sign() {
+    // `Scream_PanVolumePair`'s rear branch (`a' >= 180`) swaps the table pair at
+    // `a' - 180`; its magnitudes are `pan_gains` at `sin(angle)`.
+    for degrees in 90..270 {
+        let a = degrees + 90;
+        let half = ((a - 180) as f32 / 2.0).to_radians();
+        let [left, right] = pan_gains(pan_of_angle_folded(degrees));
+        assert!((left - half.sin()).abs() < 1e-5, "{degrees}");
+        assert!((right - half.cos()).abs() < 1e-5, "{degrees}");
+    }
+    for degrees in (-90..90).chain(270..450) {
+        assert_eq!(
+            Some(pan_of_angle_folded(degrees)),
+            pan_of_angle(degrees),
+            "{degrees}"
+        );
+    }
+}

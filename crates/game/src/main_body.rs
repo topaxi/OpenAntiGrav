@@ -405,12 +405,18 @@ fn run(cli: Cli) -> Result<()> {
         .map_or(oag_audio::MIN_BUFFER, |frame| {
             frame.mul_f32(2.5).max(oag_audio::MIN_BUFFER)
         });
-    let audio = oag_sound::Audio::open(
+    let mut audio = oag_sound::Audio::open(
         &settings.audio,
         cli.dump_audio.clone(),
         tap.as_ref(),
         buffer,
         cli.no_audio,
+    );
+    // The shuffle is presentation randomness: the clock seeds it, the simulation never sees it.
+    audio.seed_music_shuffle(
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos() as u64),
     );
 
     let (pose, camera) = match &cli.pose_from {

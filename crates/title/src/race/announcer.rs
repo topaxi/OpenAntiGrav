@@ -129,6 +129,16 @@ impl SequenceTick {
         matches!(self, Self::Ps3 | Self::Vita)
     }
 
+    /// Whether the build's race cues are lists guarded by four cue variables the
+    /// caller supplies (perspective, severity, surface), as HD's handlers read
+    /// them (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`). Pulse and
+    /// Pure play a race cue as the flat set they were measured with, and 2048
+    /// runs the Vita handlers.
+    #[must_use]
+    pub fn walks_cue_variables(self) -> bool {
+        matches!(self, Self::Ps3)
+    }
+
     /// Whether the build's command handlers are Wipeout 2048's (`0x2e`, `0x29`,
     /// `0x04` and the low-byte marker id), against Pulse's and HD's.
     #[must_use]
@@ -160,59 +170,61 @@ impl ZoneAnnouncer {
 ///
 /// # What is measured
 ///
-/// Read directly against `hdfury-ps3-eu-dec.iso` (`Data\Sound\speech_class.bnk`
-/// extracted and parsed with `oag_formats::sblk`, not assumed from a name
-/// list): a **dedicated** fifteen-cue bank, unmixed with any other voice line,
-/// naming `ZONEMALE` at cue `0` followed by fourteen cues at consecutive
-/// indices `1`-`14` - `MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`,
-/// `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, `MR_Z_SUB`,
-/// `MR_Z_M1`, `MR_Z_SUP`. The same fourteen names, in the same order, also
-/// appear inside the general `speech_zone.bnk` [`ZoneAnnouncer::bank`] reads,
-/// at cue indices `26`-`39` - two copies of the same ladder, one purpose-built
-/// and one folded into the general Zone voice bank.
+/// The lines are the fourteen `MR_*` cues of `Data\Sound\speech_zone.bnk`, at
+/// consecutive cue indices `26`-`39` of the copy a Zone race has loaded
+/// (Fury's `DATA00`, 43 cues): `MR_SVE`, `MR_VEN`, `MR_SFL`, `MR_FLA`,
+/// `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`,
+/// `MR_Z_SUB`, `MR_Z_M1`, `MR_Z_SUP`. The order is a 14/14 match against
+/// [`ZoneStages`]'s own fourteen non-`Start` stage names, read by cue
+/// *index*: `MR_SUP` alone reads as either "Super Phantom" or "Supersonic",
+/// and only the position in a gap-free run resolves it. The dedicated
+/// `speech_class.bnk` (`DATA01`) carries the same names but a Zone race on
+/// the Fury disc does not load it (the live manager's speech slot holds
+/// `speech_zone.bnk`).
 ///
-/// **The order is a 14/14 match against [`ZoneStages`]'s own fourteen
-/// non-`Start` stage names** - Sub Venom, Venom, Sub Flash, Flash, ..., Mach
-/// 1, Supersonic - one cue per non-`Start` stage, contiguous, with no gap.
-/// Read by cue *index*, not by parsing the name: `MR_SUP` alone reads as
-/// either "Super Phantom" or "Supersonic", and only the position in a
-/// fourteen-long, gap-free run resolves it (`MR_Z_SUP`, at the very end,
-/// gets the name `MR_SUP`'s own spelling would suggest for itself). See
-/// `docs/formats/psp-audio.md#speech_zonebnk-names-the-zone-announcer-one-ladder-per-title`.
+/// A line is a timeline, not a waveform: a delay word and a `0x1a` with
+/// operand 0 (a fixed 200 master ticks, 0.83 s at 240 Hz), then two key-ons
+/// on one tick at +30 and +330 degrees. Playing it is
+/// `oag_sound::sfx::ClassAnnouncer`'s job.
 ///
-/// # What is not established
+/// # The trigger
 ///
-/// **No trigger for this ladder has been read out of HD's own executable.**
-/// Nothing traces a call site that plays `MR_VEN` when the speed class steps.
-/// This is exactly the footing [`ZoneAnnouncer`]'s own milestone ladder is
-/// already wired on for this title - see that type's own confidence note -
-/// so playing this cue on the same [`ZoneStages::stage_for`] edge the HUD
-/// text and the colour grade already key off is not a new class of
-/// inference, and keeps all three from being able to disagree about when a
-/// class changed.
+/// Measured live on the Fury EU disc in a plain Zone race
+/// (`docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "The class-step cues"):
+/// at a natural step the race queues the new class's `MR_*` name through
+/// `Sound_QueueAnnouncerCue` (caller `0x762c0`), the announcer drain plays it
+/// from the speech slot 2 to 10 ticks later, and the stage-blend update plays
+/// [`Self::tone`] immediately before the stage commit. Confidence 88 for the
+/// name and bank, 85 for the tone. **Chosen, not measured:** the original
+/// queues the line a few ticks before the commit; the port plays line and tone
+/// on the [`ZoneStages::stage_for`] edge the HUD text and colour grade already
+/// key off, so all three cannot disagree about when a class changed.
 ///
-/// **The non-verbal half of a class change is [`Self::tone`].** HD fires it in
-/// the same branch as the voice line, one call after it, through its generic
-/// named-cue player (`Sound_PlayNamedCue`, confidence 82 for the cue). See
-/// `docs/ghidra/functions/ps3-hdfury-eu/sound.md`, "`ZONEBAR_TRANS` is a
-/// genuine second cue".
+/// **Not this ladder's tone:** `ZONEBAR_TRANS` and `ZONEADVANCE` belong to
+/// Zone Battle's `Zone_UpdateCraftClass` and never play in plain Zone
+/// (confidence 80).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZoneClassAnnouncer {
-    /// `Data\Sound\speech_class.bnk` on HD/Fury - the dedicated bank, not the
-    /// general `speech_zone.bnk` the same fourteen cues are also folded into.
+    /// `Data\Sound\speech_zone.bnk` on HD/Fury, the bank a Zone race has loaded.
     pub bank: &'static str,
     /// The fourteen cue names, in [`ZoneStages`]'s own stage order:
     /// `classes[0]` is stage `1`'s cue, not stage `0`'s - HD's speech bank
     /// names no cue for `Start` at all.
     pub classes: &'static [&'static str],
+    /// What the lines' delay words are counted in.
+    pub tick: SequenceTick,
     /// The tone played with every class step. `None` where unread.
     pub tone: Option<ZoneClassTone>,
 }
 
 /// The non-verbal cue a Zone class step plays beside its voice line.
+///
+/// HD/Fury's is `light_wipe` out of the race's environment bank, the stage's
+/// colour wipe keyed by the stage-blend update (`Environment_UpdateStageBlend`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ZoneClassTone {
-    /// The bank it is named in.
+    /// The bank it is named in. A race loads one copy, so the copy the archive
+    /// set resolves first is the live one.
     pub bank: &'static str,
     /// The cue's name.
     pub cue: &'static str,

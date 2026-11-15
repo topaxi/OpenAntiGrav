@@ -9,8 +9,8 @@
 //!
 //! **Chosen, not measured.** The original's race music is not recovered (see
 //! [`Audio::race_voice`]), so what is resumed is this engine's own playlist: a
-//! plain cycle of the booted disc's soundtrack order. There is no shuffle, so the
-//! "order" is the index and nothing else needs saving.
+//! plain cycle of the booted disc's soundtrack order, or a shuffled deck. Only the index and the
+//! position are saved: a shuffled deck starts afresh around the restored song.
 //!
 //! No file is read or written here; `oag_game::music_state` owns the TOML.
 
@@ -220,7 +220,7 @@ impl Audio {
         listing: &[f64],
     ) -> Result<(), Unusable> {
         saved.check(listing)?;
-        self.race_index = Some(saved.index);
+        self.set_race_index(saved.index);
         self.race_position = f64::from(saved.second);
         self.race_tracks = saved.tracks;
         Ok(())

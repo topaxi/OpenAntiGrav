@@ -59,14 +59,17 @@ mod song_control;
 pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
+mod race_order;
 mod race_song;
 mod resume;
+pub mod shuffle;
 mod survey;
 use library::{Library, NoLibrary, load_entry_kept, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
 pub use race_music::{MusicFetchWorker, RacePick};
 pub use resume::{RaceMusicState, Restored, Unusable};
+pub use shuffle::MusicOrder;
 
 /// A bus volume, as a percentage of unattenuated.
 ///
@@ -546,6 +549,8 @@ pub struct Audio {
     /// is on. `None` until the first race starts one ([`Audio::race_music_pick`]);
     /// never reset by a visit to the menus.
     race_index: Option<usize>,
+    /// `MUSIC ORDER` and the deck a random order plays by.
+    race_order: race_order::RaceOrder,
     /// How many race songs have started this run: what the now-playing display re-triggers on
     /// ([`Audio::now_playing`]). A resume or a source swap of the same song does not count.
     song_serial: u32,
@@ -729,6 +734,7 @@ impl Audio {
             race_voice: None,
             race_from: None,
             race_index: None,
+            race_order: race_order::RaceOrder::new(settings.music_order),
             song_serial: 0,
             race_position: 0.0,
             race_tracks: 0,
@@ -854,7 +860,7 @@ impl Audio {
         }
         let pick = self.race_music_pick();
         if let Some((index, loaded)) = self.cached_race_track(discs, choice, &pick) {
-            self.race_index = Some(index);
+            self.set_race_index(index);
             let seek = (self.race_position > 0.0).then_some(self.race_position);
             self.apply_fetched_race_track(index, Ok(Some(loaded)), seek);
             if self.race_voice.is_some() {

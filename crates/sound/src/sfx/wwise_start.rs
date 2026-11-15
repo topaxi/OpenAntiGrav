@@ -33,7 +33,7 @@ use oag_formats::wwise::hirc::{self, Action, Event, Kind, Seek, Sound as WwiseSo
 use oag_formats::wwise::{Bank, name_hash};
 
 use super::banks::Loaded;
-use super::layers::{Layer, Timeline};
+use super::layers::{self, Layer, Timeline};
 
 /// What an event loads as: the voices, and what was left out.
 pub(super) struct EventCue {
@@ -410,7 +410,7 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
             looping,
             delay: start.at,
             angle: 0,
-            rear_edge: false,
+            rear: layers::RearPan::Front,
             bend: None,
         });
     }

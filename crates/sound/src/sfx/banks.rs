@@ -155,6 +155,7 @@ impl Banks {
         let mut sounds = BTreeMap::new();
         let mut timelines = BTreeMap::new();
         let mut programs = BTreeMap::new();
+        let mut player_timelines = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
@@ -179,6 +180,7 @@ impl Banks {
                 Tables {
                     timelines: &mut timelines,
                     programs: &mut programs,
+                    players: Some(&mut player_timelines),
                 },
                 &mut report,
             );
@@ -189,6 +191,7 @@ impl Banks {
             report,
             timelines,
             programs,
+            player_timelines,
             ..Default::default()
         }
     }
@@ -387,6 +390,7 @@ impl Banks {
                 Tables {
                     timelines,
                     programs,
+                    players: None,
                 },
                 report,
             );
@@ -440,6 +444,7 @@ impl Banks {
                     Tables {
                         timelines: &mut self.timelines,
                         programs: &mut self.programs,
+                        players: None,
                     },
                     &mut report,
                 );
@@ -482,6 +487,7 @@ impl Banks {
                 Tables {
                     timelines: &mut self.timelines,
                     programs: &mut self.programs,
+                    players: None,
                 },
                 &mut report,
             );
@@ -641,6 +647,9 @@ impl Banks {
 struct Tables<'a> {
     timelines: &'a mut BTreeMap<Cue, Vec<Timeline>>,
     programs: &'a mut BTreeMap<Cue, Program>,
+    /// Where a cue's player-seat timelines go, for a title that builds them
+    /// (HD's race cues); `None` where none is built.
+    players: Option<&'a mut BTreeMap<Cue, Vec<Timeline>>>,
 }
 
 /// How a bank's cues are read: what its delays count in, and whether its cue
@@ -675,9 +684,15 @@ fn load_one(
     let Tables {
         timelines,
         programs,
+        players,
     } = tables;
     match load_cue(blob, (cue, name), read) {
         Ok((loaded, skipped, timeline, program)) => {
+            let (timeline, player) = match timeline {
+                Ok(Some(variants)) => (Ok(Some(variants.anyone)), variants.player),
+                Ok(None) => (Ok(None), None),
+                Err(e) => (Err(e), None),
+            };
             let undecoded = if skipped == 0 {
                 String::new()
             } else {
@@ -697,6 +712,14 @@ fn load_one(
                         t.iter().map(|v| v.layers.len()).max().unwrap_or(0)
                     ));
                     timelines.insert(cue, t);
+                    if let (Some(player), Some(players)) = (player, players) {
+                        line.push_str(&format!(
+                            "; the player's own: {} variant(s) of {} voice(s)",
+                            player.len(),
+                            player.iter().map(|v| v.layers.len()).max().unwrap_or(0)
+                        ));
+                        players.insert(cue, player);
+                    }
                 }
                 Ok(None) => extra = not_one_event(cue, &loaded),
                 Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
@@ -724,7 +747,14 @@ fn load_one(
 
 /// What building a cue's timeline came to: none worth having, or a failure that
 /// leaves the flat pick in place.
-type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
+type TimelineResult = anyhow::Result<Option<Variants>>;
+
+/// A cue's timelines, and the player's own version where the title hands the
+/// cue's list a different perspective for the player's craft.
+struct Variants {
+    anyone: Vec<Timeline>,
+    player: Option<Vec<Timeline>>,
+}
 
 /// Resolves one cue in one bank blob and decodes what it binds.
 fn load_cue(
@@ -747,15 +777,26 @@ fn load_cue(
     // that law spreads over layers is unread: it keeps its flat set.
     let timeline = if cue == Cue::Engine {
         Ok(None)
+    } else if tick.walks_cue_variables() && cue.walks_variables() {
+        race_variants(&bank, (cue, name), tick)
     } else {
         layers::timelines(
             &bank,
             name,
             tick,
-            cue.bank() == BankName::Frontend,
-            Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
-            hashed,
+            layers::Walking {
+                front_end: cue.bank() == BankName::Frontend,
+                replace_with_child: Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
+                hashed,
+                ..layers::Walking::default()
+            },
         )
+        .map(|t| {
+            t.map(|anyone| Variants {
+                anyone,
+                player: None,
+            })
+        })
     };
     let program = if cue.repeats() {
         layers::program(&bank, name, tick)
@@ -763,6 +804,45 @@ fn load_cue(
         Ok(None)
     };
     Ok((loaded, skipped, timeline, program))
+}
+
+/// An HD race cue walked with its cue variables: what everyone hears, and the
+/// player's own version when the variables differ for the player's craft.
+///
+/// Both or neither: a cue whose player version cannot be built keeps its flat
+/// pick for everyone, never the other craft's mix in the player's ear.
+fn race_variants(
+    bank: &sblk::Bank,
+    (cue, name): (Cue, &str),
+    tick: oag_title::SequenceTick,
+) -> TimelineResult {
+    let build = |player: bool| {
+        layers::timelines(
+            bank,
+            name,
+            tick,
+            layers::Walking {
+                cue_variables: Some(cue.variables(player)),
+                ..layers::Walking::default()
+            },
+        )
+    };
+    let silent = |timelines: &[Timeline]| timelines.iter().all(|t| t.layers.is_empty());
+    let Some(anyone) = build(false)? else {
+        return Ok(None);
+    };
+    if cue.variables(true) == cue.variables(false) {
+        return Ok((!silent(&anyone)).then_some(Variants {
+            anyone,
+            player: None,
+        }));
+    }
+    Ok(build(true)?
+        .filter(|player| !(silent(player) && silent(&anyone)))
+        .map(|player| Variants {
+            anyone,
+            player: Some(player),
+        }))
 }
 
 /// The length ratio past which a cue's waveforms cannot all be alternates of one

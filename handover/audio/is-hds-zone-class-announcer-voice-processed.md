@@ -14,12 +14,14 @@ exists and there is evidence for it.
 ## What is established
 
 - Only HD/Fury has a speed-class announcer: the fourteen `MR_*` cues in
-  `Data\Sound\speech_class.bnk` (plus `ZONEMALE` at cue 0), also folded into
-  `speech_zone.bnk` at cues 26-39. Pulse has no class ladder, so if the memory
+  `speech_zone.bnk` at cues 26-39 (the bank a Zone race loads; the dedicated
+  `speech_class.bnk` with `ZONEMALE` at cue 0 is not loaded there). Pulse has no class ladder, so if the memory
   is of Pulse it is not this announcer. See `docs/formats/psp-audio.md`,
   "speech_zone.bnk names the zone announcer, one ladder per title".
 - This port plays the disc's own waveforms unprocessed through
-  `oag_sound::sfx::ClassAnnouncer`, on `Bus::Speech` at gain 1.0. All fourteen
+  `oag_sound::sfx::ClassAnnouncer`, on `Bus::Speech` at gain 1.0, each line as
+  the timeline it authors (200 tick lead-in, voices at +30/+330 degrees; the last
+  three classes layer two clips) beside the `light_wipe` wash. All fourteen
   decode (`sfx_ground_truth.rs`,
   `wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues`).
 - Nobody has judged how the voice sounds, and nobody has read whether HD

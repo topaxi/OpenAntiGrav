@@ -363,6 +363,16 @@ impl Session {
                     return;
                 }
             },
+            "audio.music_order" => match text.parse::<oag_sound::MusicOrder>() {
+                Ok(order) => {
+                    self.settings.audio.music_order = order;
+                    self.audio.set_music_order(order);
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;
