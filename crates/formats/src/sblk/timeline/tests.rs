@@ -1052,3 +1052,53 @@ fn collisions_ship_or_wall_follows_variable_one_when_the_replacing_child_is_walk
     );
     assert_eq!(grains(&ship), vec![(0, 0, 0)]);
 }
+
+/// Three independent groups of five: 125 combinations, past the enumeration cap.
+fn many_combinations() -> Vec<u8> {
+    let mut grains = Vec::new();
+    for group in 0..3u32 {
+        grains.push(raw(0x19, hd(5, 1, 0), 0));
+        for alternate in 0..5u32 {
+            grains.push(key((group * 5 + alternate) % 4 * 16, 0, 0));
+        }
+    }
+    build(&[Spec("A", 100, grains)])
+}
+
+#[test]
+fn combinations_past_the_cap_are_sampled_from_a_seed_not_dropped() {
+    let data = many_combinations();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let model = hd_model([0; 4]);
+    assert!(bank.cue_timelines_modelled(&cue, model).is_none());
+
+    let sample = bank.cue_timelines_sampled(&cue, model, 7).expect("sampled");
+    assert_eq!(sample.len(), super::MAX_COMBINATIONS);
+    assert!(
+        sample
+            .iter()
+            .all(|t| t.is_complete() && t.grains.len() == 3)
+    );
+    let distinct: std::collections::BTreeSet<_> = sample.iter().map(grains).collect();
+    assert!(distinct.len() > 10, "{} distinct", distinct.len());
+    assert_eq!(
+        sample.iter().map(grains).collect::<Vec<_>>(),
+        bank.cue_timelines_sampled(&cue, model, 7)
+            .unwrap()
+            .iter()
+            .map(grains)
+            .collect::<Vec<_>>(),
+        "the same seed draws the same timelines"
+    );
+
+    // Under the cap the whole space is enumerated and the seed is unused.
+    let small = alternates();
+    let bank = Bank::parse(&small).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    assert_eq!(
+        bank.cue_timelines_sampled(&cue, WalkModel::default(), 1)
+            .map(|t| t.len()),
+        Some(3)
+    );
+}

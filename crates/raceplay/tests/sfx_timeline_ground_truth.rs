@@ -358,3 +358,92 @@ fn hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_o
         "the whoosh is keyed at tick 0 or tick 5, by the draw"
     );
 }
+
+/// Every voice of every draw of `cue`, by the seat that hears it.
+fn hd_draws(banks: &Banks, cue: Cue, player: bool) -> Vec<Vec<CueVoice>> {
+    let mut rng = Rng::new(13);
+    (0..60)
+        .map(|_| banks.voices_for(cue, player, &mut rng).expect("loads"))
+        .collect()
+}
+
+/// HD's explosion, hit and launch cues, walked with their lists
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, audit rows 3 and 4):
+/// the voices a play keys and the tick the last one starts on, as the bank's
+/// guarded lists author them, against the one waveform the flat pick played.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
+    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let banks = banks(&path);
+    // (cue, heard by the player's craft, voices per play, last voice's tick)
+    let cases: [(Cue, bool, usize, u32); 14] = [
+        (Cue::RocketHitShip, false, 10, 50),
+        (Cue::RocketHitWall, false, 6, 5),
+        (Cue::MissileHitShip, false, 4, 5),
+        (Cue::MissileExpire, false, 17, 105),
+        (Cue::PlasmaHitShip, false, 8, 215),
+        (Cue::RepulsorHit, false, 12, 30),
+        (Cue::Rocket, false, 2, 0),
+        (Cue::Missile, false, 4, 25),
+        (Cue::MineLaunch, true, 8, 95),
+        (Cue::Turbo, true, 6, 90),
+        (Cue::Turbo, false, 3, 82),
+        (Cue::Cannon, true, 3, 10),
+        (Cue::Cannon, false, 2, 10),
+        (Cue::Repulsor, true, 8, 210),
+    ];
+    for (cue, player, voices, last) in cases {
+        let draws = hd_draws(&banks, cue, player);
+        for draw in &draws {
+            assert_eq!(draw.len(), voices, "{} player={player}", cue.name());
+        }
+        let latest = draws
+            .iter()
+            .flatten()
+            .map(|v| (v.delay * HD_TICK).round() as u32)
+            .max();
+        assert_eq!(latest, Some(last), "{} player={player}", cue.name());
+    }
+
+    // The rocket is a left/right pair: 90 and 270 degrees, hard right and left.
+    let pair = &hd_draws(&banks, Cue::Rocket, false)[0];
+    let mut angles: Vec<i32> = pair.iter().map(|v| v.angle).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, vec![90, 270]);
+    let (right_l, right_r) = channel_levels(pair.iter().find(|v| v.angle == 90).unwrap());
+    assert!(right_r > 4.0 * right_l, "90 degrees: {right_l} {right_r}");
+    let (left_l, left_r) = channel_levels(pair.iter().find(|v| v.angle == 270).unwrap());
+    assert!(left_l > 4.0 * left_r, "270 degrees: {left_l} {left_r}");
+
+    // Another craft's absorb is authored silent; the player's is a pair at +-30.
+    assert!(
+        hd_draws(&banks, Cue::Absorb, false)
+            .iter()
+            .all(Vec::is_empty)
+    );
+    let mut absorb: Vec<i32> = hd_draws(&banks, Cue::Absorb, true)[0]
+        .iter()
+        .map(|v| v.angle.rem_euclid(360))
+        .collect();
+    absorb.sort_unstable();
+    assert_eq!(absorb, vec![0, 30, 330]);
+
+    // The census: every one-shot hud, ship and weapons cue plays a timeline but
+    // `.COLLISIONS`, whose severity the game computes from state not read.
+    let flat: Vec<&str> = Cue::ALL
+        .into_iter()
+        .filter(|c| c.walks_variables())
+        .filter(|c| {
+            banks
+                .report
+                .iter()
+                .find(|l| l.starts_with(&format!("sfx: {} ->", c.name())))
+                .is_some_and(|l| !l.contains("plays its timeline"))
+        })
+        .map(Cue::name)
+        .collect();
+    assert_eq!(flat, vec![".COLLISIONS"]);
+}
