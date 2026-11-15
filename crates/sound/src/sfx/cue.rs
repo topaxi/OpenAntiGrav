@@ -145,7 +145,13 @@ impl CueTables for Cue {
             Self::SpeedupPad | Self::Message | Self::Blowup | Self::LockOn | Self::Autopilot => {
                 BankName::Hud
             }
-            Self::Collision | Self::Engine | Self::Magstrip | Self::MagstripStop => BankName::Ship,
+            Self::Collision
+            | Self::Grind
+            | Self::CollisionShield
+            | Self::GrindShield
+            | Self::Engine
+            | Self::Magstrip
+            | Self::MagstripStop => BankName::Ship,
             Self::Absorb
             | Self::Shield
             | Self::MineLaunch
@@ -221,6 +227,9 @@ impl CueTables for Cue {
             Self::Message => "MESSAGE",
             Self::Turbo => "TURBO",
             Self::Collision => ".COLLISIONS",
+            Self::Grind => ".GRIND",
+            Self::CollisionShield => ".COLLSHIELD",
+            Self::GrindShield => ".GRINDSHIELD",
             Self::Absorb => "ABSORB",
             Self::Engine => "~ENGINE",
             Self::Shield => "~SHIELD",
@@ -355,6 +364,8 @@ impl CueTables for Cue {
             // `lw a0, 0x50(a0)` at `0x08924844` in `ShipCollisionFx_Trigger`: the
             // craft's emitter, unbranched, so the player's hull is positional too.
             Self::Collision => Placement::Craft,
+            // The three HD-only contact cues ride the craft as `Collision` does.
+            Self::Grind | Self::CollisionShield | Self::GrindShield => Placement::Craft,
             // `FUN_08840640`'s emitter argument was not disassembled, so this
             // rides `Collision`'s reading of the contact path.
             Self::Absorb => Placement::Craft,

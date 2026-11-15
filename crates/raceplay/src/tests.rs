@@ -26,6 +26,7 @@ mod campaign_event;
 mod cannon_draw;
 mod catch_up;
 mod cockpit_hit;
+mod contact_cues;
 mod correction;
 mod countdown;
 mod craft_cull;
@@ -448,6 +449,7 @@ fn setup(handling: Handling) -> Setup {
         plasma_release_at_display_scale: true,
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
+        contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
         score_law: None,
         flip_law: None,

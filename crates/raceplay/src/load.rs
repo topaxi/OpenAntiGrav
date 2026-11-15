@@ -198,12 +198,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         None => handling::from_blob(&stats_blob),
     }
     .map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
-    // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in
-    // any `<Class>`, so `handling_for` substitutes
-    // `oag_gameplay::handling::PITCH_STAND_IN` - another title's tuning on a ship
-    // whose own is unknown. That is exactly the kind of substitution that looks
-    // like a physics bug three sessions later if nobody wrote it down, so it is
-    // named here with the classes it applied to.
+    // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in any
+    // `<Class>`, so `handling_for` substitutes `oag_gameplay::handling::PITCH_STAND_IN` -
+    // another title's tuning on a ship whose own is unknown. That is exactly the kind of
+    // substitution that looks like a physics bug three sessions later if nobody wrote it
+    // down, so it is named here with the classes it applied to.
     let unauthored: Vec<&str> = stats
         .classes
         .iter()
@@ -1302,6 +1301,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             plasma_release_at_display_scale: title.weapons.plasma_release_at_display_scale.value,
             own_craft_box_hides_track: title.weapons.own_craft_box_hides_track.value,
             reset_triggers: crate::respawn::reset_triggers_for(&title.reset_enables),
+            contact_cues: title.contact_cues,
             opponent_fire: title.weapons.opponent_fire.value,
             score_law: rule.law,
             flip_law: rule.flip,

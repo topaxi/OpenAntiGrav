@@ -82,6 +82,10 @@ pub struct Banks {
     /// Cues loaded from the Wwise event a title posts for them
     /// ([`Self::load_wwise_cues`]), which [`Self::held_voices`] plays whole.
     pub(super) wwise: BTreeSet<Cue>,
+    /// HD's contact cues as the list plays for each block of cue variables it can be handed,
+    /// `[severity, surface, perspective, 0]`; a cue is here for all of its blocks or none.
+    /// See [`Self::contact_voices`].
+    pub(super) contacts: ContactTimelines,
 }
 
 /// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
@@ -109,7 +113,11 @@ impl Banks {
         zone: bool,
         tick: oag_title::SequenceTick,
     ) -> Self {
-        Self::load_cues(archives, banks, zone, tick, &Cue::ALL, &|cue| cue.name())
+        let mut cues = Cue::ALL.to_vec();
+        if tick.walks_cue_variables() {
+            cues.extend(Cue::HD_CONTACT);
+        }
+        Self::load_cues(archives, banks, zone, tick, &cues, &|cue| cue.name())
     }
 
     /// Reads the front end's navigation cues, [`Cue::FRONT_END`], and the results
@@ -156,6 +164,7 @@ impl Banks {
         let mut timelines = BTreeMap::new();
         let mut programs = BTreeMap::new();
         let mut player_timelines = BTreeMap::new();
+        let mut contacts = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
@@ -181,6 +190,7 @@ impl Banks {
                     timelines: &mut timelines,
                     programs: &mut programs,
                     players: Some(&mut player_timelines),
+                    contacts: Some(&mut contacts),
                 },
                 &mut report,
             );
@@ -192,6 +202,7 @@ impl Banks {
             timelines,
             programs,
             player_timelines,
+            contacts,
             ..Default::default()
         }
     }
@@ -391,6 +402,7 @@ impl Banks {
                     timelines,
                     programs,
                     players: None,
+                    contacts: None,
                 },
                 report,
             );
@@ -445,6 +457,7 @@ impl Banks {
                         timelines: &mut self.timelines,
                         programs: &mut self.programs,
                         players: None,
+                        contacts: None,
                     },
                     &mut report,
                 );
@@ -488,6 +501,7 @@ impl Banks {
                     timelines: &mut self.timelines,
                     programs: &mut self.programs,
                     players: None,
+                    contacts: None,
                 },
                 &mut report,
             );
@@ -594,6 +608,23 @@ impl Banks {
         self.voices(cue, rng)
     }
 
+    /// Everything one play of a HD contact cue starts for the cue variables its caller hands the
+    /// list, `[severity, surface, perspective, 0]`, drawn by `rng` as [`Self::voices`] draws.
+    ///
+    /// `None` when the cue has no timeline for that block (it did not build, or `variables` is
+    /// not one the game hands it): a contact never falls back to the flat pick.
+    #[must_use]
+    pub fn contact_voices(
+        &self,
+        cue: Cue,
+        variables: [i8; 4],
+        rng: &mut Rng,
+    ) -> Option<Vec<CueVoice>> {
+        let variants = self.contacts.get(&(cue, variables))?;
+        let index = self.draw(cue, variants.len(), rng);
+        Some(variants[index].voices(rng))
+    }
+
     /// Whether any cue plays from a Wwise event.
     #[must_use]
     pub fn has_wwise_cues(&self) -> bool {
@@ -650,6 +681,9 @@ struct Tables<'a> {
     /// Where a cue's player-seat timelines go, for a title that builds them
     /// (HD's race cues); `None` where none is built.
     players: Option<&'a mut BTreeMap<Cue, Vec<Timeline>>>,
+    /// Where a contact cue's per-block timelines go ([`Banks::contacts`]); `None` where the
+    /// cues loaded are not the contact cues.
+    contacts: Option<&'a mut ContactTimelines>,
 }
 
 /// How a bank's cues are read: what its delays count in, and whether its cue
@@ -685,9 +719,16 @@ fn load_one(
         timelines,
         programs,
         players,
+        contacts,
     } = tables;
     match load_cue(blob, (cue, name), read) {
-        Ok((loaded, skipped, timeline, program)) => {
+        Ok(Decoded {
+            loaded,
+            skipped,
+            timeline,
+            program,
+            contact,
+        }) => {
             let (timeline, player) = match timeline {
                 Ok(Some(variants)) => (Ok(Some(variants.anyone)), variants.player),
                 Ok(None) => (Ok(None), None),
@@ -704,6 +745,31 @@ fn load_one(
                 loaded.waveforms.len()
             );
             let mut extra = None;
+            let mut contact_built = false;
+            let mut contact_failed = None;
+            if let (Some(result), Some(contacts)) = (contact, contacts) {
+                match result {
+                    Ok(blocks) => {
+                        let voices = blocks
+                            .iter()
+                            .flat_map(|(_, t)| t.iter().map(|v| v.layers.len()))
+                            .max()
+                            .unwrap_or(0);
+                        line.push_str(&format!(
+                            "; plays its timeline: {} contact variant block(s) of up to {voices} voice(s)",
+                            blocks.len()
+                        ));
+                        for (variables, built) in blocks {
+                            contacts.insert((cue, variables), built);
+                        }
+                        contact_built = true;
+                    }
+                    Err(e) => {
+                        contact_failed =
+                            Some(format!("sfx: {name} contact variants not built: {e:#}"));
+                    }
+                }
+            }
             match timeline {
                 Ok(Some(t)) => {
                     line.push_str(&format!(
@@ -721,6 +787,7 @@ fn load_one(
                         players.insert(cue, player);
                     }
                 }
+                Ok(None) if contact_built => {}
                 Ok(None) => extra = not_one_event(cue, &loaded),
                 Err(e) => line.push_str(&format!("; timeline not built, flat pick kept: {e}")),
             }
@@ -737,6 +804,7 @@ fn load_one(
             }
             report.push(line);
             report.extend(extra);
+            report.extend(contact_failed);
             sounds.insert(cue, loaded);
         }
         // A report line, not a fallback: nothing is substituted for a cue that
@@ -756,17 +824,83 @@ struct Variants {
     player: Option<Vec<Timeline>>,
 }
 
+/// HD's contact cues' timelines, by cue and by the block of cue variables the list is handed.
+type ContactTimelines = BTreeMap<(Cue, [i8; 4]), Vec<Timeline>>;
+
+/// What [`load_cue`] decoded: the waveforms and the ways the cue plays.
+struct Decoded {
+    loaded: Loaded,
+    skipped: usize,
+    timeline: TimelineResult,
+    program: anyhow::Result<Option<Program>>,
+    contact: ContactResult,
+}
+
+/// A contact cue's timelines for each block of cue variables it can be handed, or why not all
+/// could be built; `None` for a cue that is not walked as one.
+type ContactResult = Option<anyhow::Result<Vec<([i8; 4], Vec<Timeline>)>>>;
+
+/// The blocks of cue variables the game can hand a contact cue's list, `[severity, surface,
+/// perspective, 0]`: the player's `.COLLISIONS` carries perspective 1 and another craft's 2,
+/// `.COLLSHIELD` is the player's alone, and the grind pair never sets one (collision-cues.md,
+/// "`Ship_UpdateCollisionCues`").
+fn contact_blocks(cue: Cue) -> Option<Vec<[i8; 4]>> {
+    let perspectives: &[i8] = match cue {
+        Cue::Collision => &[1, 2],
+        Cue::CollisionShield => &[1],
+        Cue::Grind | Cue::GrindShield => &[0],
+        _ => return None,
+    };
+    let mut blocks = Vec::new();
+    for severity in 0..=2 {
+        for surface in 0..=1 {
+            for &perspective in perspectives {
+                blocks.push([severity, surface, perspective, 0]);
+            }
+        }
+    }
+    Some(blocks)
+}
+
+/// Every block of `cue`'s contact variables as a timeline, all or none. A child cue sees its
+/// parent's four variables (`Scream_DoGrainPlayChild`), so the replacing child (`0x08`) is
+/// walked with them (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "Where the four
+/// variables come from").
+fn contact_variants(
+    bank: &sblk::Bank,
+    (cue, name): (Cue, &str),
+    tick: oag_title::SequenceTick,
+) -> ContactResult {
+    let blocks = contact_blocks(cue)?;
+    let build = || -> anyhow::Result<Vec<([i8; 4], Vec<Timeline>)>> {
+        let mut built = Vec::with_capacity(blocks.len());
+        for variables in blocks {
+            let timelines = layers::timelines(
+                bank,
+                name,
+                tick,
+                layers::Walking {
+                    cue_variables: Some(variables),
+                    replace_with_child: true,
+                    ..layers::Walking::default()
+                },
+            )?;
+            let Some(timelines) = timelines else {
+                anyhow::bail!("the walk at variables {variables:?} is not a complete timeline");
+            };
+            built.push((variables, timelines));
+        }
+        Ok(built)
+    };
+    Some(build())
+}
+
 /// Resolves one cue in one bank blob and decodes what it binds.
 fn load_cue(
     blob: &[u8],
     (cue, name): (Cue, &str),
     Reading { tick, hashed }: Reading,
-) -> anyhow::Result<(
-    Loaded,
-    usize,
-    TimelineResult,
-    anyhow::Result<Option<Program>>,
-)> {
+) -> anyhow::Result<Decoded> {
     let bank = sblk::Bank::parse(blob)?;
     let (loaded, skipped) = if hashed {
         load_track_cue(&bank, name)?
@@ -803,7 +937,18 @@ fn load_cue(
     } else {
         Ok(None)
     };
-    Ok((loaded, skipped, timeline, program))
+    let contact = if tick.walks_cue_variables() {
+        contact_variants(&bank, (cue, name), tick)
+    } else {
+        None
+    };
+    Ok(Decoded {
+        loaded,
+        skipped,
+        timeline,
+        program,
+        contact,
+    })
 }
 
 /// An HD race cue walked with its cue variables: what everyone hears, and the

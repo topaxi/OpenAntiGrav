@@ -742,9 +742,12 @@ impl Race {
             .filter_map(|(slot, step)| step.as_ref().map(|step| (slot, step.evaluated)))
         {
             let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-            self.raise_contact_cue(slot, evaluated.wall.impact, shielded);
+            self.raise_wall_cue(slot, &evaluated.wall, shielded);
             self.note_wall_contact(slot, &evaluated.wall);
         }
+        // After every contact of the tick is noted: the opponents' walls
+        // (`step_opponents`), the craft pairs (`resolve_craft_pairs`) and the walls above.
+        self.raise_impulse_cues();
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a
         // network client seated elsewhere. Every other local person has their own

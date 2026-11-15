@@ -78,6 +78,7 @@ pub const TITLE: &Title = &Title {
     photo_shot: None,
     // Pure's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
+    contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.
     effects_volume_law: oag_title::pre_race::Sourced::inherited(
         oag_title::group_volume::GroupVolumeLaw::Squared,

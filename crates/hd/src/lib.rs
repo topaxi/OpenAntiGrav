@@ -188,6 +188,9 @@ pub const TITLE: &Title = &Title {
     photo_shot: Some(oag_title::photo::Accumulation::HD),
     // HD's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
+    contact_cues: oag_title::contact_cue::ContactCues::Impulse(
+        oag_title::pre_race::Sourced::measured(HD_IMPULSE_LAW),
+    ),
     // HD's authored mix owns the buses.
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,
@@ -338,6 +341,29 @@ pub const TITLE: &Title = &Title {
         ],
         origin: oag_title::Origin::Measured,
     }),
+};
+
+/// HD's collision and grind cue law: the floors, steps, re-arms and volumes
+/// `Ship_UpdateCollisionCues` (`0x000d8bd0`) reads
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`").
+pub const HD_IMPULSE_LAW: oag_title::contact_cue::ImpulseLaw = oag_title::contact_cue::ImpulseLaw {
+    // The original compares `acosf(|dot|) < 0.7` rad. `acos` is decreasing, so that is
+    // `|dot| > cos(0.7)`, and `cos(0.7) = 0.7648421872844885`.
+    nose_on_dot: 0.764_842_2,
+    hit_floor: 3.0,
+    hit_floor_side: 18.0,
+    hit_medium: 25.0,
+    hit_large: 50.0,
+    hit_wait: 6,
+    // The TOC float `0x3d124925`.
+    hit_volume_per_impulse: 1.0 / 28.0,
+    hit_volume_base: 0.2,
+    grind_floor: 0.5,
+    grind_medium: 4.0,
+    grind_large: 8.0,
+    grind_wait: 1,
+    grind_volume_per_impulse: 0.125,
+    grind_volume_base: 0.25,
 };
 
 /// Where Wipeout HD keeps its music.

@@ -70,7 +70,7 @@
 use oag_audio::{Bus, Play, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_gameplay::cue::{Cue, CueEvent};
+use oag_gameplay::cue::{ContactCue, ContactSurface, Cue, CueEvent};
 
 use super::{Audio, TICK_HZ};
 
@@ -340,7 +340,20 @@ impl Audio {
                     continue;
                 };
                 let player = event.point.is_none() && slot == player_slot;
-                let Some(started) = banks.voices_for(event.cue, player, &mut voices.rng) else {
+                // A contact cue plays the list the game hands those variables, at the
+                // request's volume; an event with none plays as every other cue does.
+                let (started, request_volume) = match event.contact {
+                    Some(contact) => (
+                        banks.contact_voices(
+                            event.cue,
+                            contact_variables(event.cue, contact, player),
+                            &mut voices.rng,
+                        ),
+                        contact.volume,
+                    ),
+                    None => (banks.voices_for(event.cue, player, &mut voices.rng), 1.0),
+                };
+                let Some(started) = started else {
                     continue;
                 };
                 // Handles dropped: a one-shot is fire-and-forget, and a refused
@@ -350,7 +363,7 @@ impl Audio {
                     &started,
                     event.cue.bus(),
                     VoicePlace {
-                        gain: pan.gain,
+                        gain: pan.gain * request_volume,
                         pan: pan.pan,
                         front: pan.front,
                     },
@@ -868,6 +881,28 @@ fn leach_attach_point(
     let (owner, _) = (*craft.get(usize::from(beam.owner))?)?;
     let (target, _) = (*craft.get(usize::from(beam.target))?)?;
     Some((owner + target) * 0.5)
+}
+
+/// The four cue variables `Ship_UpdateCollisionCues` hands a contact cue's list:
+/// `[severity, surface, perspective, 0]`, the perspective being 0 for the grind pair, 1 for the
+/// player's craft and 2 for another's
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "`Ship_UpdateCollisionCues`").
+fn contact_variables(cue: Cue, contact: ContactCue, player: bool) -> [i8; 4] {
+    let perspective = match (cue, player) {
+        (Cue::Grind | Cue::GrindShield, _) => 0,
+        (_, true) => 1,
+        (_, false) => 2,
+    };
+    let surface = match contact.surface {
+        ContactSurface::Craft => 0,
+        ContactSurface::Track => 1,
+    };
+    [
+        i8::try_from(contact.severity).unwrap_or(i8::MAX),
+        surface,
+        perspective,
+        0,
+    ]
 }
 
 /// Where one cue is heard from, or [`None`] if out of range entirely.
