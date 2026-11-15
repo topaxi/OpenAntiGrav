@@ -423,7 +423,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
 
 /// Wipeout HD/Fury's Zone milestone announcer.
 ///
-/// `Data\Sound\speech_zone.bnk` (`DATA01.PSARC`) names fifteen numbered cues -
+/// `Data\Sound\speech_zone.bnk` names fifteen numbered cues -
 /// every five zones to 50, then every ten to 100 - a third ladder, not Pulse's
 /// or Pure's re-read. It also carries a `ready`/`321_GO`/`go` countdown set and
 /// the fourteen `MR_*` speed-class lines [`ZONE_CLASS_ANNOUNCER`] wires - see
@@ -438,19 +438,19 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
 };
 
 /// Wipeout HD/Fury's Zone **speed-class** announcer - the voice line called
-/// on a speed-class step, not a zone-count milestone. See
-/// [`oag_title::ZoneClassAnnouncer`] for the evidence and what is and is not
-/// established about it.
+/// on a speed-class step, not a zone-count milestone - and the `light_wipe`
+/// tone keyed with it. See [`oag_title::ZoneClassAnnouncer`] for the evidence.
 pub const ZONE_CLASS_ANNOUNCER: &oag_title::ZoneClassAnnouncer = &oag_title::ZoneClassAnnouncer {
-    bank: r"Data\Sound\speech_class.bnk",
+    bank: r"Data\Sound\speech_zone.bnk",
     classes: &[
         "MR_SVE", "MR_VEN", "MR_SFL", "MR_FLA", "MR_SRA", "MR_RAP", "MR_SPH", "MR_PHA", "MR_SUP",
         "MR_ZEN", "MR_SUZ", "MR_Z_SUB", "MR_Z_M1", "MR_Z_SUP",
     ],
+    tick: oag_title::SequenceTick::Ps3,
     // The race's environment-bank slot (`*0x00b6cc50`), `env0_zone.bnk` in Zone.
     tone: Some(oag_title::ZoneClassTone {
         bank: r"Data\Sound\env0_zone.bnk",
-        cue: "ZONEBAR_TRANS",
+        cue: "light_wipe",
         tick: oag_title::SequenceTick::Ps3,
     }),
 };

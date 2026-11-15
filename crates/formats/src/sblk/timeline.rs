@@ -55,7 +55,9 @@
 //!   are read but not modelled, so they stay in [`Timeline::unread`].
 //! - `0x1a` is a **random wait** that delays the commands after it. With
 //!   [`WalkModel::tail_waits`] one that no key-on or child follows is passed
-//!   (it delays nothing audible); any other is unread.
+//!   (it delays nothing audible); with [`WalkModel::zero_waits`] one whose
+//!   operand is zero is passed (`rand16 % 1` adds nothing); any other is
+//!   unread.
 //! - Every other opcode is reported in [`Timeline::unread`], not skipped
 //!   silently: `0x1a` adds a random wait, `0x08` replaces the voice's playback
 //!   state, `0x04` starts an LFO. A timeline that met any is not the whole cue.
@@ -157,6 +159,13 @@ pub struct WalkModel {
     /// Pass a `0x1a` random wait that nothing audible follows. Off by default so
     /// no other cue's census moves; the countdown's `HBEAT` ends on one.
     pub tail_waits: bool,
+    /// Pass a `0x1a` whose operand is zero. The handler adds
+    /// `rand16 % (operand + 1)` ticks to the next command's delay, so a zero
+    /// operand adds exactly nothing and the wait is deterministic (HD's
+    /// `speech_zone.bnk` `MR_*` lines are a delay word and a `0x1a` 0, then
+    /// their key-ons). A larger operand stays unread. Off by default so no
+    /// other cue's census moves.
+    pub zero_waits: bool,
 }
 
 /// One waveform started at one moment.
@@ -419,9 +428,9 @@ impl Bank<'_> {
                     // No marker is an error return: the cue ends.
                     None => return,
                 }
-            } else if walk.model.tail_waits
-                && opcode == RANDOM_WAIT
-                && self.nothing_audible_after(cue, pc)
+            } else if opcode == RANDOM_WAIT
+                && ((walk.model.zero_waits && word & 0x00ff_ffff == 0)
+                    || (walk.model.tail_waits && self.nothing_audible_after(cue, pc)))
             {
                 walk.out.passed.push(opcode);
             } else if walk.model.vita && opcode == RANDOM_GOTO {
