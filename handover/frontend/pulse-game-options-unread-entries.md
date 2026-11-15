@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-11-06
-summary: "Pulse Game Options: Concave/Flat warp maths unread; Music playlist row missing; Multiplayer Tags wired, its axis and gate unread; HD unwired"
+updated: 2026-11-15
+summary: "Pulse Game Options: Concave/Flat warp maths unread; Multiplayer Tags wired, its axis and gate unread; HD unwired (Music Order landed)"
 ---
 
 # Pulse Game Options: the entries nobody has read
@@ -17,7 +17,7 @@ default and off entries are wired. What is left needs the executable.
 - **Dynamic HUD `FE_CONCAVE` and `FE_FLAT`** (PS2 has `FE_CONCAVE` only). Bit 1 of `+0xd0` on the panel groups is a vertex warp
   mode (readers `Text_Draw`, `Image_Draw`, `Hud_UpdateSpeedBar`); read `FUN_08919c2c` and the `FUN_088cc9f4` flag, then
   offer the entries. The unread HUD sway (`sway: None` in `crates/pulse/src/hud.rs`) is separate code.
-- **Music playlist** (`Music Order`: Sequential, Random). Not added in ours (no shuffle in `oag_sound::song_control`).
+- ~~**Music playlist** (`Music Order`: Sequential, Random)~~ Landed as MUSIC ORDER on the AUDIO page, every title (`docs/architecture/music-threads.md`, "Music order").
 - **HD ghost and tags rows** (tags: checked, applies, not wired: `HudLayouts::player_tags` is `None`). HD's `DATA06` list has `Multiplayer Tags` and `GhostOption`; Omega's own list is unread; Pure
   has no front-end XML (executable-built list, unread); 2048 unread.
 - **PS2** has neither Multiplayer Tags nor Auto Load Ghost; the PSP list wins, so both pressings offer the ghost rows.

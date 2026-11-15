@@ -10,7 +10,7 @@ playlist. No confidence score applies.
 
 One playlist per title, not per circuit or per mode. It is a plain cycle through the
 **booted disc's** soundtrack in its own order (`next_race_index` is `(index + 1) % len`).
-There is no shuffle, so the order is the index and nothing else is saved. The
+The order is the index and the second; a `random` `MUSIC ORDER` (`docs/architecture/music-threads.md`, "Music order") saves nothing more, and a shuffled round starts afresh around the restored song. The
 `MUSIC SOURCE` setting (PSP or PS2 release of Pulse) only changes which recording plays;
 the index is always in the booted order, so the saved state is independent of it.
 

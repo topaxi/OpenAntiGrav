@@ -155,6 +155,25 @@ and USA) is one row, from the first image found; a title on two platforms is two
 (`WIPEOUT X (PSP)`, `WIPEOUT X (PS2)`) and contributes its songs once, from the first enabled
 row in id order, so no song plays from two encodes.
 
+**Music order.** `[audio] music_order` is `sequential` (default, as the disc's `Music Order` list
+defaults) or `random`, one row, `MUSIC ORDER`, on the AUDIO page for every title. It is not on the MUSIC
+page, which is left out of the tree with a single source. Sequential is the numbered list above. Random
+plays a deck (`oag_sound::shuffle::Shuffle`): every song once in a shuffled order, then a fresh shuffle
+that never opens on the song that just ended, so no song repeats before all have played. Next and
+previous walk it; previous goes back through what played (and starts the song over when nothing earlier
+is remembered), and going forward replays that trail before the deck is touched again. The deck follows
+the playlist as it changes: a scan that lands adds its songs to the round at random places, a source
+switched off drops its songs. The first song of a run under Random is drawn from the whole playlist on
+the fetch worker (the length is not known earlier), never the PS2 menu's own track. A saved place from
+`music.toml` is the song just played and the rest of the round is every other song. The fetch ahead is
+the deck's `peek_next`, so the boundary reuses it as before.
+
+The shuffle is presentation randomness: it has its own `oag_core::Rng`, seeded by the host from the
+clock (`Audio::seed_music_shuffle`; tests use the fixed default), and nothing in `World`, the state hash
+or the race's `Rng` touches it. It orders the race playlist only: a menu plays its authored loop (the
+PSP's `frontend1.at3`, HD's mix, the PS2's track 0), which is not a playlist, so the setting does not
+change menu music. Applies from the next song on; the song playing goes on.
+
 **Menus.** The front end's music is unchanged: it is the disc's authored loop (the PSP's
 `frontend1.at3`, HD's mix tables, the PS2's track 0), and the pool does not replace authored
 data. The pool feeds the race playlist only.

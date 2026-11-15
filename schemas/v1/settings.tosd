@@ -309,6 +309,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.audio.music_order]
+type = "string"
+optional = true
+
 [types.audio.spatial_audio]
 type = "string"
 optional = true

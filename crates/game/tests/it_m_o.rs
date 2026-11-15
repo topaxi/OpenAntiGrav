@@ -37,6 +37,7 @@ mod movie_container_audio_ground_truth;
 mod movie_ground_truth;
 mod mp4_movie_ground_truth;
 mod mp_time_trial_ground_truth;
+mod music_order_row;
 mod music_pool_ground_truth;
 mod music_resume_ground_truth;
 mod now_playing_ground_truth;
