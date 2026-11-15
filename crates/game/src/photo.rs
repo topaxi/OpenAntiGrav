@@ -63,6 +63,14 @@ pub mod strings {
     pub const INTERNAL: &str = "OAG_PHOTO_INTERNAL";
     pub const CLOSE: &str = "OAG_PHOTO_CLOSE";
     pub const TRACK: &str = "OAG_PHOTO_TRACK";
+    pub const FREE: &str = "OAG_PHOTO_FREE";
+    pub const WALK: &str = "OAG_PHOTO_WALK";
+    pub const SLIDE_LIFT: &str = "OAG_PHOTO_SLIDE_LIFT";
+    pub const ZOOM_ROLL: &str = "OAG_PHOTO_ZOOM_ROLL";
+    pub const FREE_KEYS: &str = "OAG_PHOTO_FREE_KEYS";
+    pub const DRAG: &str = "OAG_PHOTO_DRAG";
+    pub const LOOK: &str = "OAG_PHOTO_LOOK";
+    pub const MOVE: &str = "OAG_PHOTO_MOVE";
     pub const HUD: &str = "OAG_PHOTO_HUD";
     pub const ON: &str = "OAG_PHOTO_ON";
     pub const OFF: &str = "OAG_PHOTO_OFF";
@@ -142,6 +150,8 @@ pub enum Chip {
     Take,
     /// Leave the mode.
     Back,
+    /// What a drag does on the free lens: look, or move. Drawn only on that lens.
+    Drag,
 }
 
 /// The chips, in order.
@@ -177,13 +187,22 @@ pub fn chip_rect(chip: Chip, grid: (f32, f32)) -> [f32; 4] {
     ]
 }
 
-/// The chip under a point on the grid, if any.
+/// Where the drag chip sits: under the camera chip, the width of a chip.
 #[must_use]
-pub fn chip_at(grid: (f32, f32), at: (f32, f32)) -> Option<Chip> {
-    CHIPS.into_iter().find(|&chip| {
-        let [x, y, w, h] = chip_rect(chip, grid);
-        at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h
-    })
+pub fn drag_rect(grid: (f32, f32)) -> [f32; 4] {
+    let [x, y, w, h] = chip_rect(Chip::Camera, grid);
+    [x, y + h + GAP, w, h]
+}
+
+/// The chip under a point on the grid, if any. `free` is whether the free lens is up, which is
+/// the only lens with a drag chip.
+#[must_use]
+pub fn chip_at(grid: (f32, f32), at: (f32, f32), free: bool) -> Option<Chip> {
+    let inside = |[x, y, w, h]: [f32; 4]| at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h;
+    CHIPS
+        .into_iter()
+        .find(|&chip| inside(chip_rect(chip, grid)))
+        .or_else(|| (free && inside(drag_rect(grid))).then_some(Chip::Drag))
 }
 
 const PANEL_WIDTH: f32 = 176.0;
@@ -413,6 +432,7 @@ pub fn draw_list(
         Lens::Internal => strings::INTERNAL,
         Lens::Close => strings::CLOSE,
         Lens::Track => strings::TRACK,
+        Lens::Free => strings::FREE,
     };
     // A chip says its row and its value; a row whose word is too long for the chip (Pulse's
     // own "PHOTO CAMERA MODE") gives the value alone.
@@ -439,6 +459,15 @@ pub fn draw_list(
         Chip::Effects => say(strings::EFFECTS),
         Chip::Take => say(strings::TAKE),
         Chip::Back => say(strings::BACK),
+        Chip::Drag => fitted(
+            say(strings::DRAG),
+            say(if photo.drag_moves() {
+                strings::MOVE
+            } else {
+                strings::LOOK
+            }),
+            width,
+        ),
     };
     for c in CHIPS {
         let rect = chip_rect(c, grid);
@@ -447,6 +476,16 @@ pub fn draw_list(
             rect[0] + rect[2] / 2.0,
             rect[1] + 3.0,
             chip(c),
+            Align::Centre,
+        ));
+    }
+    if photo.lens() == Lens::Free {
+        let rect = drag_rect(grid);
+        list.push(Draw::Fill { rect, color: BAND });
+        list.push(text(
+            rect[0] + rect[2] / 2.0,
+            rect[1] + 3.0,
+            chip(Chip::Drag),
             Align::Centre,
         ));
     }
@@ -484,8 +523,10 @@ pub fn draw_list(
         lines.push(say(strings::PANEL_KEYS));
     } else {
         lines.extend(lens_lines(photo, say, button));
-        if photo.lens() != Lens::Internal {
-            lines.push(say(strings::PAD_KEYS));
+        match photo.lens() {
+            Lens::Internal => {}
+            Lens::Free => lines.push(say(strings::FREE_KEYS)),
+            Lens::Close | Lens::Track => lines.push(say(strings::PAD_KEYS)),
         }
     }
     if photo.effects().rewinds() {
@@ -521,6 +562,19 @@ fn lens_lines(
             format!("{} + {stick} {}", button(Button::Square), say(strings::PAN)),
         ],
         Lens::Track => vec![format!("{stick} {}", say(strings::ZOOM_TILT))],
+        Lens::Free => vec![
+            format!(
+                "{stick} {}    {} + {stick} {}",
+                say(strings::WALK),
+                button(Button::Select),
+                say(strings::ZOOM_ROLL),
+            ),
+            format!(
+                "{} + {stick} {}",
+                button(Button::Square),
+                say(strings::SLIDE_LIFT)
+            ),
+        ],
     }
 }
 

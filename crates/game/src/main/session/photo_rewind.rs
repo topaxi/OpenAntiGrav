@@ -211,6 +211,8 @@ impl super::Session {
             || pad.next
             || pointer.clicked
             || pointer.back
+            || pointer.drag != (0.0, 0.0)
+            || pointer.scroll != 0
             || input.stick_x.abs() > ABANDON_STICK
             || input.stick_y.abs() > ABANDON_STICK
             || view.right.0.abs() > ABANDON_STICK

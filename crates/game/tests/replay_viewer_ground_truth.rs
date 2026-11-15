@@ -318,11 +318,11 @@ fn photo_mode_and_the_viewer_switch_both_ways_at_the_tick_the_player_chose() {
         &format!(
             "{TO_THE_LIST} ticks 30; select watch_replay; press cross; \
              until replay=playing within 4000; ticks 400; screenshot DIR/shots/viewer.png; \
-             press select; until photo=internal within 50; ticks 20; \
+             press select; until photo=free within 50; ticks 20; \
              {to_the_rewind_row} hold left 30; ticks 5; screenshot DIR/shots/photo-scrubbed.png; \
              press circle; until photo=none within 50; ticks 40; \
              screenshot DIR/shots/viewer-after.png; \
-             press select; until photo=internal within 50; ticks 5; \
+             press select; until photo=free within 50; ticks 5; \
              {to_the_rewind_row} hold left 30; ticks 20; {down} {down} hold right 1; ticks 120; \
              press circle; until photo=none within 50; ticks 30; quit"
         ),
