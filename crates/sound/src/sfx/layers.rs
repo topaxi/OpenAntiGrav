@@ -153,8 +153,9 @@ impl Timeline {
 /// pick already plays (one centred grain at tick zero, no audible bend).
 ///
 /// `zero_waits` passes a `0x1a` whose operand is zero (an exact wait, see
-/// [`WalkModel::zero_waits`]); `front_end` also lets a rear-half grain play
-/// centred instead of refusing the timeline.
+/// [`WalkModel::zero_waits`]). `front_end` lets a rear-half grain play centred
+/// instead of refusing the timeline, and on the PS3 tick reads a `0x19`
+/// group's count in the operand's high byte.
 ///
 /// # Errors
 ///

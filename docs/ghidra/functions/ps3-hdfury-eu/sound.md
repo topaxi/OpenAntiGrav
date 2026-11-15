@@ -651,6 +651,8 @@ not a call table, and is not evidence of a group.
 
 ## `ZONEBAR_TRANS`, a call site found
 
+> **Superseded 2026-11-15:** `ZONEBAR_TRANS` is Zone Battle's cue, not a plain-Zone class step's tone; the step plays `light_wipe`. See [the class-step cues](#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
+
 2026-09-15. A handover thread on HD's Zone ladder names `ZONEBAR_TRANS`, a cue
 string in `env0_zone.bnk` (not `speech_zone.bnk`,
 which only carries the fifteen `MR_*` names), as a candidate for the Zone
@@ -726,6 +728,8 @@ whether the eight-argument call is itself a cue trigger (and if so, whether
 `0x400` is a bus/category flag) or a different kind of event.
 
 ## `ZONEBAR_TRANS` is a genuine second cue, not a UI/telemetry event, and its dispatch primitive is named
+
+> **Superseded 2026-11-15:** `ZONEBAR_TRANS` is Zone Battle's cue, not a plain-Zone class step's tone; the step plays `light_wipe`. See [the class-step cues](#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
 
 2026-09-15, picked at random by `/oag-handover` (narrowed to this thread and
 the rendering one by the invocation's own arguments, then chosen between the
@@ -1201,10 +1205,13 @@ Ground truth: `crates/game/tests/sfx_ground_truth.rs`,
   (event ids `name_hash("<cue>__<bank>")`, found by walking the `HIRC` events of the 107 of 117 banks that parse in the base and patch
   archives, control `_321_NGP__Weapons_NGP` hit). Omega sets `zone_class_announcer` to `None`; its trigger was not read
   in `eboot.bin` and Omega's racing is incomplete.
-- **2048: checked, differs.** Its plain Zone banks carry neither: `env0_zone.bnk` is one cue, `speech_zone_NGP.bnk` has 20
-  cues and no `MR_*`. The `MR_*` names are in `speech_det.bnk` and `speech_elim.bnk` (Detonator's and Eliminator's speech)
-  and `light_wipe` is in `env1_vinetak.bnk`, a circuit bank, so 2048 does not reach this pair through its Zone banks. Its
-  trigger was not read.
+- **2048: checked, differs for its Zone banks; two banks not checkable.** Its plain Zone banks carry neither:
+  `env0_zone.bnk` is one cue, `speech_zone_NGP.bnk` has 20 cues and no `MR_*`. The `MR_*` names are in `speech_det.bnk`
+  and `speech_elim.bnk` (Detonator's and Eliminator's speech) and `light_wipe` is in `env1_vinetak.bnk`, a circuit bank,
+  so 2048 does not reach this pair through its Zone banks. `Speech_NGP.bnk` and `Speech_NGP_Grid.bnk` (where Omega keeps
+  its `MR_*` events) are refused by the SBlk reader (`StreamNames`), so their cues are not checkable; a byte scan for the
+  ASCII names and the zero-seeded FNV hash of `MR_VEN`, `MR_SFL`, `light_wipe` and `ZONEBAR_TRANS` finds none, which is
+  not conclusive. Its trigger was not read.
 
 ### Not read
 

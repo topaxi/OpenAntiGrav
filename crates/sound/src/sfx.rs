@@ -268,6 +268,7 @@ impl Audio {
             return;
         }
         let warm = std::mem::take(&mut self.engine_warm_ticks);
+        let wav_frame = self.dump_frames();
         let voices = self.sfx.get_or_insert_with(|| {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
@@ -382,10 +383,17 @@ impl Audio {
             // Both are timelines played dry, the line on its own authored
             // lead-in (`oag_title::ZoneClassAnnouncer`).
             for stage in class_announcements {
-                if let Some(tone) = class_announcer.tone_voices(&mut voices.rng) {
+                let tone = class_announcer.tone_voices(&mut voices.rng);
+                let line = class_announcer.line_voices(stage, &mut voices.rng);
+                log::trace!(
+                    "sfx: class step to stage {stage} at wav frame {wav_frame:?}: tone {} voice(s), line {} voice(s)",
+                    tone.as_ref().map_or(0, Vec::len),
+                    line.as_ref().map_or(0, Vec::len)
+                );
+                if let Some(tone) = tone {
                     let _ = layers::start(mixer, &tone, Bus::Sfx, layers::Where::DRY);
                 }
-                if let Some(line) = class_announcer.line_voices(stage, &mut voices.rng) {
+                if let Some(line) = line {
                     let _ = layers::start(mixer, &line, Bus::Speech, layers::Where::DRY);
                 }
             }

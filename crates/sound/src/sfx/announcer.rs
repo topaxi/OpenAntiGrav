@@ -278,7 +278,10 @@ fn load_tone(
         return Vec::new();
     }
     // `light_wipe` keys voices in the rear half of the pan law, which the
-    // mixer does not model; they play centred (`layers::timelines`).
+    // mixer does not model; the front-end reading plays them centred
+    // (`layers::timelines`'s `front_end`, which on the PS3 tick also reads a
+    // `0x19` group's count in the high byte, as HD's handler does; this cue has
+    // no `0x19`).
     timelines_reported(&bank, cue, tick, true, report).unwrap_or_default()
 }
 
@@ -287,10 +290,10 @@ fn timelines_reported(
     bank: &sblk::Bank,
     name: &str,
     tick: oag_title::SequenceTick,
-    rear_centred: bool,
+    front_end: bool,
     report: &mut Vec<String>,
 ) -> Option<Vec<Timeline>> {
-    match layers::timelines(bank, name, tick, rear_centred, false, false, true) {
+    match layers::timelines(bank, name, tick, front_end, false, false, true) {
         Ok(Some(timelines)) => {
             report.push(format!(
                 "class announcer: {name} plays its timeline: {} variant(s) of {} voice(s)",

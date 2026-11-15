@@ -483,6 +483,20 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
         "the live env bank is not the DATA01 copy"
     );
 
+    let table = opened
+        .title
+        .race
+        .zone_class_announcer
+        .expect("HD names a class announcer");
+    let speech = archives
+        .read_name(table.bank)
+        .expect("speech_zone.bnk reads");
+    let speech = oag_formats::sblk::Bank::parse(&speech).expect("speech_zone.bnk decodes");
+    assert_eq!(
+        speech.cue_count, 43,
+        "DATA00's speech_zone.bnk, not DATA01's 42"
+    );
+
     // `light_wipe` through its timeline: the `0x24` goto skips the first six
     // key-ons, six voices are left (cmds 117-122), five on tick 0 and one 10
     // ticks (1/24 s) later, none of them one of the skipped six.
