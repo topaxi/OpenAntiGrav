@@ -989,3 +989,5 @@
 0x002fcd70	function	SoundEmitter_Update	78	cue-variables.md
 0x002fee20	function	SoundEmitterCue_Init	80	cue-variables.md
 0x002fdc00	function	SoundEmitterCue_Update	80	cue-variables.md
+0x000d8bd0	function	Ship_UpdateCollisionCues	90	collision-cues.md
+0x000d8910	function	Ship_RecordContactImpulse	78	collision-cues.md
