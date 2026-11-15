@@ -152,6 +152,10 @@ impl Timeline {
 /// a grain angle in the rear half the pan law does not model, or a cue a flat
 /// pick already plays (one centred grain at tick zero, no audible bend).
 ///
+/// `zero_waits` passes a `0x1a` whose operand is zero (an exact wait, see
+/// [`WalkModel::zero_waits`]); `front_end` also lets a rear-half grain play
+/// centred instead of refusing the timeline.
+///
 /// # Errors
 ///
 /// A waveform the timeline reaches does not decode.
@@ -162,6 +166,7 @@ pub(super) fn timelines(
     front_end: bool,
     replace_with_child: bool,
     hashed: bool,
+    zero_waits: bool,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
@@ -180,6 +185,7 @@ pub(super) fn timelines(
         globals: replace_with_child.then_some([0; oag_formats::sblk::timeline::GLOBAL_SLOTS]),
         vita: tick.vita_handlers(),
         tail_waits: replace_with_child,
+        zero_waits,
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);

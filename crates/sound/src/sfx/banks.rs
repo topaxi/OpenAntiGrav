@@ -755,6 +755,7 @@ fn load_cue(
             cue.bank() == BankName::Frontend,
             Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
             hashed,
+            false,
         )
     };
     let program = if cue.repeats() {

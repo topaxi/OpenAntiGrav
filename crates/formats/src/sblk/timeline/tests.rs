@@ -434,6 +434,7 @@ const GOTO_MODEL: WalkModel = WalkModel {
     globals: None,
     vita: false,
     tail_waits: false,
+    zero_waits: false,
 };
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
@@ -474,6 +475,55 @@ fn a_goto_skips_to_the_marker_with_its_id_and_counts_the_markers_own_delay() {
     let t = bank.cue_timeline_modelled(&cue, &[], GOTO_MODEL);
     assert!(t.is_complete());
     assert_eq!(ticks(&t), vec![(0, 0), (9, 32)]);
+}
+
+/// The shape HD's `speech_zone.bnk` `MR_VEN` has: a `0x1a` with operand 0 on a
+/// delay of 200, then two key-ons with delay 0.
+fn zero_wait_then_two_keys() -> Vec<u8> {
+    build(&[Spec(
+        "MR_VEN",
+        100,
+        vec![raw(0x1a, 0, 200), key(0, 30, 0), key(16, 330, 0)],
+    )])
+}
+
+const ZERO_WAIT_MODEL: WalkModel = WalkModel {
+    zero_waits: true,
+    ..GOTO_MODEL
+};
+
+#[test]
+fn a_zero_operand_random_wait_is_unread_unless_the_walk_passes_it() {
+    let data = zero_wait_then_two_keys();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("MR_VEN").expect("cue");
+    assert_eq!(bank.cue_timeline(&cue).unread, vec![0x1a]);
+    let passed = bank.cue_timeline_modelled(&cue, &[], ZERO_WAIT_MODEL);
+    assert!(passed.is_complete());
+    assert_eq!(passed.passed, vec![0x1a]);
+}
+
+#[test]
+fn a_passed_zero_wait_keeps_its_own_delay_for_every_key_on_after_it() {
+    // Delays are relative: the keys follow a 200 tick wait, both on one tick.
+    let data = zero_wait_then_two_keys();
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline_modelled(
+        &bank.cue_named("MR_VEN").expect("cue"),
+        &[],
+        ZERO_WAIT_MODEL,
+    );
+    assert_eq!(ticks(&t), vec![(200, 0), (200, 16)]);
+}
+
+#[test]
+fn a_random_wait_with_an_operand_stays_unread_even_when_zero_waits_are_passed() {
+    // `rand16 % 6` extra ticks: not deterministic, so not a timeline.
+    let data = build(&[Spec("A", 100, vec![raw(0x1a, 5, 10), key(0, 0, 0)])]);
+    let bank = Bank::parse(&data).expect("parse");
+    let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], ZERO_WAIT_MODEL);
+    assert_eq!(t.unread, vec![0x1a]);
+    assert!(!t.is_complete());
 }
 
 #[test]
@@ -616,6 +666,7 @@ const VITA_MODEL: WalkModel = WalkModel {
     globals: None,
     vita: true,
     tail_waits: false,
+    zero_waits: false,
 };
 
 /// 2048's marker id is the operand's low byte: a goto to marker 2 lands on the

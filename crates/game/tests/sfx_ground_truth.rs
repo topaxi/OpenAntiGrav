@@ -468,10 +468,87 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
         says("MR_SUZ (stage 11) -> 2 waveform(s)"),
         "the once-silent class stopped decoding both its waveforms"
     );
+
+    // The banks are the copies a Zone race has loaded (Fury's DATA00): the env
+    // bank is the 67-cue one that names `light_wipe` and not `ZONEBAR_TRANS`,
+    // the speech bank the 43-cue one the `MR_*` lines sit in.
+    let tone = opened.title.race.zone_class_announcer.and_then(|t| t.tone);
+    let tone = tone.expect("HD names a class-step tone");
+    assert_eq!(tone.cue, "light_wipe", "plain Zone's step tone");
+    let env = archives.read_name(tone.bank).expect("env0_zone.bnk reads");
+    let env = oag_formats::sblk::Bank::parse(&env).expect("env0_zone.bnk decodes");
+    assert!(env.cue_named("light_wipe").is_some(), "the live env bank");
+    assert!(
+        env.cue_named("ZONEBAR_TRANS").is_none(),
+        "the live env bank is not the DATA01 copy"
+    );
+
+    // `light_wipe` through its timeline: the `0x24` goto skips the first six
+    // key-ons, six voices are left (cmds 117-122), five on tick 0 and one 10
+    // ticks (1/24 s) later, none of them one of the skipped six.
+    let tone = announcer.tone_voices(&mut rng).expect("light_wipe builds");
+    assert_eq!(tone.len(), 6, "light_wipe's live voice set: {tone:?}");
+    let delays: Vec<f64> = tone.iter().map(|v| v.delay).collect();
+    assert_eq!(delays[..5], [0.0; 5], "five voices on the first tick");
+    assert!((delays[5] - 10.0 / 240.0).abs() < 1e-9, "{delays:?}");
+    let mut angles: Vec<i32> = tone.iter().map(|v| v.angle).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, [30, 30, 140, 150, 210, 220]);
+
+    // The class line is `speech_zone`'s timeline, not a flat waveform: a
+    // 200 tick lead-in (a delay word and a `0x1a` 0), then two voices on one
+    // tick at +30 and +330 degrees.
+    for stage in 1..=14 {
+        let line = announcer.line_voices(stage, &mut rng).expect("a line");
+        // Each pair (a clip at +30 and again at +330) is one stereo voice; the
+        // three last classes layer two clips.
+        assert_eq!(line.len(), if stage <= 11 { 2 } else { 4 }, "stage {stage}");
+        assert!(
+            line.iter()
+                .all(|v| (v.delay - 200.0 / 240.0).abs() < 1e-9 && matches!(v.angle, 30 | 330)),
+            "stage {stage}: {line:?}"
+        );
+    }
+    let line = announcer.line_voices(2, &mut rng).expect("MR_VEN builds");
+    assert_eq!(line.len(), 2, "MR_VEN's two voices: {line:?}");
+    for voice in &line {
+        assert!((voice.delay - 200.0 / 240.0).abs() < 1e-9, "{line:?}");
+    }
+    let mut angles: Vec<i32> = line.iter().map(|v| v.angle).collect();
+    angles.sort_unstable();
+    assert_eq!(angles, [30, 330]);
+}
+
+/// Plain Wipeout HD (the PSN install) ships one copy of each bank, `DATA01`'s,
+/// and the resolver reaches it by the same name: its `env0_zone.bnk` names
+/// `light_wipe` (and `ZONEBAR_TRANS`), so the class step plays the same tone
+/// and the same fourteen lines there. Whether plain HD's executable keys them
+/// at a plain-Zone step was not run.
+#[test]
+#[ignore = "needs the installed PSN download in data/extracted/ps3/"]
+fn plain_hd_s_class_step_resolves_light_wipe_and_the_fourteen_lines_from_its_one_copy() {
+    let Some(dir) = oag_testdata::exact("data/extracted/ps3/hd-psn-eu") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&dir.display().to_string()).expect("HD PSN opens");
+    let announcer = oag_sound::sfx::ClassAnnouncer::load(
+        &mut archives,
+        oag_hd::TITLE.race.zone_class_announcer,
+    );
+    for line in &announcer.report {
+        println!("{line}");
+    }
+    let mut rng = oag_core::Rng::new(3);
     assert!(
         announcer.tone_voices(&mut rng).is_some(),
-        "the class-step tone ZONEBAR_TRANS did not decode"
+        "light_wipe did not build from plain HD's one env0_zone.bnk"
     );
+    for stage in 1..=14 {
+        assert!(
+            announcer.line_voices(stage, &mut rng).is_some(),
+            "stage {stage}"
+        );
+    }
 }
 
 #[test]
