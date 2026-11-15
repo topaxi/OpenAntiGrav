@@ -264,3 +264,16 @@ impl<E: Extension> Race<E> {
         commands
     }
 }
+
+/// What `E` answers when the host asks whether it runs in `race`: the description goes through
+/// the host's writer and the export's body, as `oag_wants_race` would run it.
+#[must_use]
+pub fn wants_race<E: Extension>(race: &oag_ext_abi::RaceInfo) -> bool {
+    let mut io = Box::new([0_u8; IO_LEN]);
+    race.write(&mut io);
+    match crate::ask::<E>(&io) {
+        oag_ext_abi::RUN => true,
+        oag_ext_abi::SKIP => false,
+        other => panic!("oag_wants_race returned {other}"),
+    }
+}

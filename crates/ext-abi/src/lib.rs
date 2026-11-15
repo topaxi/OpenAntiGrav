@@ -64,6 +64,10 @@ pub use malformed::Malformed;
 pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS};
 pub use name::ModName;
 pub use pickup::{Colour, Icon, Pickup};
+pub use race::{
+    RACE_ABI_AT, RACE_CAMPAIGN, RACE_CLASS_AT, RACE_CRAFTS_AT, RACE_FLAGS_AT, RACE_LEN, RACE_MODE_AT,
+    RACE_OPTIONS_AT, RACE_PEOPLE_AT, RACE_TITLE_AT, RACE_WEAPONS, RUN, RaceInfo, RaceMode, SKIP,
+};
 pub use scene::{
     MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_PARAMS,
     MAX_VIEW_GENERATION, ViewUpdate,
@@ -79,7 +83,7 @@ pub use warning::{Warning, WarningSide};
 pub const ABI: u32 = 1;
 /// The layout revision within [`ABI`]: bumped by hand on any edit to the layout. A
 /// module built before revisions existed returns the bare major and is revision 0.
-pub const REVISION: u32 = 5;
+pub const REVISION: u32 = 6;
 const _: () = assert!(REVISION > 0 && REVISION < 256);
 const _: () = assert!(CRAFTS_AT + CRAFT_LEN * MAX_CRAFTS <= IO_LEN);
 const _: () = assert!(MAX_CRAFTS <= MAX_SLOTS as usize);
@@ -1456,6 +1460,7 @@ mod malformed;
 pub mod motion;
 mod name;
 mod pickup;
+mod race;
 mod scene;
 mod sound;
 pub mod track;

@@ -37,6 +37,7 @@ use wasmtime::{
 use oag_ext_abi::track::TRACK_LEN;
 use oag_ext_abi::{
     ABI, ABI_WORD, Command, Craft, Event, IO_LEN, MAX_MEMORY_PAGES, MAX_STATE_BYTES, REVISION,
+    RaceInfo,
 };
 
 mod reply;
@@ -217,6 +218,8 @@ struct HostData {
 pub struct Module {
     pre: InstancePre<HostData>,
     limits: Limits,
+    /// The module exports `oag_wants_race`.
+    checks_race: bool,
 }
 
 impl std::fmt::Debug for Module {
@@ -357,7 +360,24 @@ impl Module {
         let pre = linker
             .instantiate_pre(&module)
             .map_err(|e| LoadError::Start(format!("{e:#}")))?;
-        let mut loaded = Self { pre, limits };
+        // Optional: a module that picks its races exports the question's answer.
+        let checks_race = match module.get_export("oag_wants_race") {
+            None => false,
+            Some(ExternType::Func(func)) => {
+                returns_a_word("oag_wants_race", &func)?;
+                true
+            }
+            Some(_) => {
+                return Err(LoadError::Export(
+                    "`oag_wants_race` has the wrong kind".to_string(),
+                ));
+            }
+        };
+        let mut loaded = Self {
+            pre,
+            limits,
+            checks_race,
+        };
         // A first instance at load, so a module that cannot start (too much memory, a
         // trapping start function, the wrong ABI) is refused here and never mid-race.
         let (mut store, instance) = loaded
@@ -429,6 +449,48 @@ impl Module {
         store.set_fuel(self.limits.fuel)?;
         let instance = self.pre.instantiate(&mut store)?;
         Ok((store, instance))
+    }
+
+    /// Asks the module whether it runs in `race`, once, before the race is built: a fresh
+    /// instance, the description at the start of the buffer, `oag_wants_race` called under
+    /// the module's own fuel budget (a load cost, never a tick's). A module that exports no
+    /// `oag_wants_race` runs in every race.
+    ///
+    /// # Errors
+    ///
+    /// A [`Fault`] when the call traps, runs out of fuel or answers neither
+    /// [`oag_ext_abi::RUN`] nor [`oag_ext_abi::SKIP`]; the caller leaves the module out of
+    /// the race, since a broken check must not run a module its guest meant to withhold.
+    pub fn wants_race(&self, race: &RaceInfo) -> Result<bool, Fault> {
+        if !self.checks_race {
+            return Ok(true);
+        }
+        let (mut store, instance) = self.instantiate().map_err(trap)?;
+        let memory: Memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| Fault::Trap("no memory".to_string()))?;
+        let io = instance
+            .get_typed_func::<(), u32>(&mut store, "oag_io")
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(trap)? as usize;
+        let mut buffer = Box::new([0_u8; IO_LEN]);
+        race.write(&mut buffer);
+        memory.write(&mut store, io, &buffer[..]).map_err(|e| {
+            Fault::Trap(format!("the I/O buffer at {io:#x} is outside memory: {e}"))
+        })?;
+        let answer = instance
+            .get_typed_func::<(), u32>(&mut store, "oag_wants_race")
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(trap)?;
+        match answer {
+            oag_ext_abi::RUN => Ok(true),
+            oag_ext_abi::SKIP => Ok(false),
+            other => Err(Fault::Reply(format!(
+                "oag_wants_race returned {other}, not {} (run) or {} (skip)",
+                oag_ext_abi::RUN,
+                oag_ext_abi::SKIP
+            ))),
+        }
     }
 
     /// Runs one tick on a fresh instance. `state` is the module's blob
