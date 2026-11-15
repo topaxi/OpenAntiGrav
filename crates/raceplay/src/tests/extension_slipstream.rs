@@ -521,3 +521,65 @@ fn the_tunnels_tick_count_never_skips_a_tick_through_the_exit() {
         "the exit tick follows the last tunnel tick, 59"
     );
 }
+
+/// The mod's source with its real committed module and limits, as the game gathers it.
+fn real_source(slipstream: &oag_mod::Mod) -> crate::extensions::Source {
+    let manifest = &slipstream.manifest;
+    let extension = manifest.extension.as_ref().expect("[extension]");
+    let name = extension.rules.as_ref().expect("rules").module.clone();
+    let wasm = slipstream
+        .read(&name)
+        .unwrap()
+        .expect("the committed module");
+    let mut source = source(slipstream);
+    source.module = name;
+    source.memory_pages = extension.memory_pages;
+    source.state_bytes = extension.state_bytes;
+    source.read = std::sync::Arc::new(move || Ok(wasm.clone()));
+    source
+}
+
+/// A single race or a tournament leg with weapons on loads it; with weapons off, in
+/// Eliminator, Zone, Time Trial, Speed Lap, Head to Head and Detonator it is not loaded, in
+/// any title.
+#[test]
+fn it_is_loaded_for_a_single_race_or_a_tournament_with_weapons_and_for_no_other_race() {
+    use oag_race::Mode;
+    let Some(slipstream) = open() else { return };
+    let real = real_source(&slipstream);
+    let modes = [
+        Mode::TimeTrial,
+        Mode::SpeedLap,
+        Mode::Zone,
+        Mode::SingleRace,
+        Mode::Eliminator,
+        Mode::Tournament,
+        Mode::Head2Head,
+        Mode::Detonator,
+    ];
+    for (title, _) in TITLES {
+        for mode in modes {
+            for weapons in [false, true] {
+                let options = crate::Options {
+                    mode,
+                    weapons_override: Some(weapons),
+                    ..crate::Options::default()
+                };
+                let mut report = Vec::new();
+                let left = crate::extensions::admit(
+                    vec![real.clone()],
+                    title,
+                    None,
+                    &options,
+                    &mut report,
+                );
+                let wanted = weapons && matches!(mode, Mode::SingleRace | Mode::Tournament);
+                assert_eq!(
+                    left.len(),
+                    usize::from(wanted),
+                    "{title}, {mode:?}, weapons {weapons}: {report:?}"
+                );
+            }
+        }
+    }
+}

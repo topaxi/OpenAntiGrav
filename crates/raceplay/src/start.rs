@@ -330,27 +330,7 @@ impl Race {
         let full_grid = start_position.is_some()
             && (multiplayer_time_trial || (!no_opponents && (mode.has_opponents() || opponents)));
         // How many of the grid's other seven slots are actually driven.
-        // Every opponent-fielding mode except Head2Head fields all seven;
-        // Head2Head fields exactly one - see [`Mode::opponent_count`]'s own
-        // doc for the measurement. The `--opponents` escape hatch always
-        // asks for the full seven, matching what it did before this field
-        // existed.
-        let field_opponents = if multiplayer_time_trial {
-            // The people and nobody else, each on a grid slot of their own: person `k`
-            // takes seat `k`, the back row first. **Chosen, not measured**: the original has no
-            // such mode on the grid, and `grid.md`'s "a short grid packs to the back" is
-            // contradicted by the measured Head to Head field of two ([`grid_row`]).
-            people.min(GRID_SLOTS) - 1
-        } else if no_opponents {
-            0
-        } else if mode.field_is_fixed() {
-            // Head2Head: two craft, whoever flies them. A second person takes the
-            // one opponent's slot, so the people never meet an AI craft.
-            mode.opponent_count()
-        } else {
-            mode.opponent_count()
-                .max(if opponents { GRID_SLOTS - 1 } else { 0 })
-        };
+        let field_opponents = spawn::field_opponents(mode, people, no_opponents, opponents);
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.

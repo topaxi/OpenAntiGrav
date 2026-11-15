@@ -808,11 +808,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
     // The mods' sources are found once, here, and read again by `prepare` below; their
     // own PNGs go into the HUD's sheet, so they are read and decoded first.
-    let extension_sources = crate::extensions::gather(
-        &options.extensions,
-        options.find_extensions.as_ref(),
-        &mut report,
-    );
+    let extension_sources =
+        crate::extensions::sources_for_race(options, &title.slug(), &mut report);
     #[cfg(feature = "view")]
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);

@@ -547,3 +547,51 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         "the field brought a craft past the viewer: {judged:?}"
     );
 }
+
+/// A race on `16_Track` in `mode` with weapons `weapons`, loaded through `race::load` with the
+/// mod on: whether the load runs it (the race is modded, the report says MODDED) or leaves it
+/// out as if it were off.
+fn loads_it(mode: oag_race::Mode, weapons: bool) -> Option<bool> {
+    let source = slipstream()?;
+    let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(TRACK.to_string()),
+        class: "VENOM".to_string(),
+        mode,
+        weapons_override: Some(weapons),
+        extensions: vec![source],
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let modded = loaded.report.iter().any(|l| l.contains("MODDED"));
+    let declined = loaded
+        .report
+        .iter()
+        .any(|l| l.contains("oag.slipstream") && l.contains("not run in this race"));
+    assert_eq!(modded, !declined, "{:?}", loaded.report);
+    assert_eq!(race::Race::start(loaded.setup).is_modded(), modded);
+    Some(modded)
+}
+
+macro_rules! race_gate {
+    ($($name:ident: $mode:ident, $weapons:literal => $runs:literal;)+) => {$(
+        #[test]
+        #[ignore = "needs data/images/pulse-psp-eu.chd, the official mods and --features extensions"]
+        fn $name() {
+            if let Some(modded) = loads_it(oag_race::Mode::$mode, $weapons) {
+                assert_eq!(modded, $runs);
+            }
+        }
+    )+};
+}
+
+race_gate! {
+    a_single_race_with_weapons_runs_it: SingleRace, true => true;
+    a_tournament_leg_with_weapons_runs_it: Tournament, true => true;
+    a_single_race_without_weapons_does_not_load_it: SingleRace, false => false;
+    eliminator_does_not_load_it: Eliminator, true => false;
+    zone_does_not_load_it: Zone, false => false;
+    a_time_trial_does_not_load_it: TimeTrial, false => false;
+    a_speed_lap_does_not_load_it: SpeedLap, false => false;
+}

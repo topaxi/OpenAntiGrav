@@ -274,6 +274,10 @@ pub struct Options {
     /// that package's [`oag_title::AddOn::hud`] in place of the title's own, for the modes it
     /// lists. Set by the campaign map's cell launch (`Session::launch_tier_cell`).
     pub add_on_campaign: Option<String>,
+    /// The race is an event of a campaign (an original's cell, a downloadable one's, a mod's, a
+    /// 2048 event). What a simulation module is told about its race
+    /// (`oag_ext_abi::RACE_CAMPAIGN`); nothing else reads it.
+    pub campaign: bool,
     /// The kill count that ends an Eliminator event, or `None` for
     /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     ///

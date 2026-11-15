@@ -387,6 +387,12 @@ fn layout_fold() -> u64 {
         u32::from(MAX_PICKUP_KINDS),
         u32::from(Pickup::Other(0).code()),
         u32::from(Pickup::Other(MAX_PICKUP_KINDS - 1).code()),
+        RACE_LEN as u32,
+        RACE_OPTIONS_AT as u32,
+        u32::from(RACE_WEAPONS),
+        u32::from(RACE_CAMPAIGN),
+        RUN,
+        SKIP,
     ];
     // Each code by name: a reordered variant moves a byte's meaning on the wire.
     let codes = [
@@ -424,25 +430,30 @@ fn layout_fold() -> u64 {
     .chain(WarningSide::ALL.iter().map(|side| u32::from(side.code())))
     .chain(HudElement::ALL.iter().map(|e| u32::from(e.code())))
     .chain(Anchor::ALL.iter().map(|a| u32::from(a.code())))
-    .chain(SoundMode::ALL.iter().map(|m| m.code()));
+    .chain(SoundMode::ALL.iter().map(|m| m.code()))
+    .chain(RaceMode::ALL.iter().map(|m| u32::from(m.code())));
     let commands = every_command().into_iter().flat_map(|c| c.encode_pooled(0));
     let events = every_event().into_iter().flat_map(Event::encode);
     let craft = a_craft().encode();
     let tracking = a_tracking().encode();
     let aim = Aim::from_offset(61.0, -3.0, 0.4).encode();
+    let mut race_io = [0; IO_LEN];
+    a_race().write(&mut race_io);
+    let race = race_io[..RACE_LEN].to_vec();
     fnv(consts.into_iter().chain(codes).chain(
         commands
             .chain(events)
             .chain(craft)
             .chain(tracking)
             .chain(aim)
+            .chain(race)
             .map(u32::from),
     ))
 }
 
 /// The revision and the layout it names. The ABI changes in place before release (no
 /// revision bump); the fold is recorded again with each layout edit.
-const REVISION_AND_FOLD: (u32, u64) = (5, 0xf61c_22ce_5593_61ba);
+const REVISION_AND_FOLD: (u32, u64) = (6, 0x2253_437d_baa3_23a7);
 
 #[test]
 fn the_layout_is_the_revision_it_says() {
@@ -1417,5 +1428,45 @@ fn a_portal_views_exit_is_a_progress_or_a_trigger() {
             Command::decode(&view(exit).encode()).is_err(),
             "{exit:?} is not a portal's exit"
         );
+    }
+}
+
+fn a_race() -> RaceInfo {
+    RaceInfo {
+        title: channel_key("wipeout-hd"),
+        class: channel_key("venom"),
+        mode: RaceMode::Eliminator,
+        weapons: true,
+        campaign: false,
+        people: 2,
+        crafts: 8,
+        options: [3, 0, 1, 2],
+    }
+}
+
+#[test]
+fn a_race_description_reads_back_as_written() {
+    let mut io = [0xAA; IO_LEN];
+    for mode in RaceMode::ALL {
+        for (weapons, campaign) in [(false, false), (true, false), (false, true), (true, true)] {
+            let race = RaceInfo {
+                mode: *mode,
+                weapons,
+                campaign,
+                ..a_race()
+            };
+            race.write(&mut io);
+            assert_eq!(RaceInfo::read(&io), Some(race));
+        }
+    }
+}
+
+#[test]
+fn a_race_description_with_an_unknown_mode_does_not_read() {
+    let mut io = [0; IO_LEN];
+    a_race().write(&mut io);
+    for code in [0, RaceMode::ALL.len() as u8 + 1, 255] {
+        io[RACE_MODE_AT] = code;
+        assert_eq!(RaceInfo::read(&io), None, "mode code {code}");
     }
 }

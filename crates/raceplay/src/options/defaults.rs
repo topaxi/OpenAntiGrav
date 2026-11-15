@@ -49,6 +49,7 @@ impl Default for Options {
             language: None,
             hud_style: None,
             add_on_campaign: None,
+            campaign: false,
             eliminator_kill_target: None,
             eliminator_score_target: None,
             laps_override: None,
