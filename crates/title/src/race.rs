@@ -770,8 +770,8 @@ pub enum ZoneCraft {
     /// Distinct from [`Self::OwnShip`], which composes under the player's own
     /// team directory and cannot reach another tree: 2048's native craft live
     /// under `Ships\<team>2048\<n>`, the Zone hull under `hdships\Zone`. On
-    /// HD `root` is the player's own tree (`Data\Ships\zone`); what makes it this
-    /// shape is the livery key (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
+    /// HD `root` is the player's own tree (`Data\Ships`, `ship` is `zone`); what makes
+    /// it this shape is the livery key (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
     ///
     /// **Source: decompiled, one source tree read in three builds**, so one call
     /// site. The ship-model loaders switch on the game mode and for mode 6 format

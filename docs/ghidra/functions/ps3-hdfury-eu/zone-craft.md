@@ -17,7 +17,7 @@ request `data/ships/zone/zoneship_zone/team.gtf` reads `data/ships/zone/zoneship
 
 **Confidence: 80.** This is a static read of one function, with every string resolved through
 the function's own TOC. The disc's own data corroborates it independently (see "Census"), and
-2048 and Omega read the same structure. There was no live RPCS3 run.
+2048 and Omega read the same structure. There was no live RPCS3 run. This sits in the rubric's 70-84 "Probable" band ("Decompilation only, consistent call sites", ceiling 84; `docs/reverse-engineering/confidence-rubric.md`). It is 5 above the 2048 and Omega reads (75) because the disc's own folder layout independently requires the swap.
 
 ## `Ship_ReloadModelForSkin` - `0x000dbdc8`
 
@@ -71,7 +71,7 @@ next ones to try are those in the model/texture range: `0x003df6d8`, `0x003eeb08
 Disc: `hdfury-ps3-eu-dec.iso`, `PS3_GAME/USRDIR/DATA02.PSARC`, read with
 `scripts/psarc.py list` and `cat`.
 
-- **The hull's own requests.** `data/ships/zone/ship.rcsmodel` names nine textures, all under `data/ships/zone/zoneship_zone/`: `team`, `zone_tp_1024`, `zone_tp_1024_n`, `zone_glass`, `cf_damage_lights`, `colours_flashing_glow`, `damage_lights_n`, `dg_flash3` and `dg_flasha`. Our build reads them as 10 requests, because one texture is asked for twice.
+- **The hull's own requests.** `data/ships/zone/ship.rcsmodel` names nine textures, all under `data/ships/zone/zoneship_zone/`: `team`, `zone_tp_1024`, `zone_tp_1024_n`, `zone_glass`, `cf_damage_lights`, `colours_flashing_glow`, `damage_lights_n`, `dg_flash3` and `dg_flasha`. Our hull build reports 10 swapped reads; which texture is read twice was not checked.
 - **The default folder is incomplete.** `zoneship_zone/` ships only `team.gtf`, `zone_tp_1024.gtf`, `cf_flash.gtf` and `cf_flash3.gtf`. A hull that is never swapped asks for five textures that do not exist. The game cannot have shipped that unswapped, which is the data-side corroboration of the substitution.
 - **Twelve team folders.** `zoneship_ag_sys`, `assegai`, `auricom`, `egx`, `faisar`, `goteki`, `harimau`, `icaras`, `mirage`, `piranha`, `quirex` and `triakis` each ship all nine. `zoneship_dead/` is the death shell.
 - **The definition.** `Data\Plugins\frontend\definition.xml` ships in five archives. The copies in `DATA00`, `DATA03`, `DATA05` and `DATA06` author twelve `PI_TeamModel name="zone"`, each with `modellocation="Data\Ships\Zone"` and a `texturelocation` naming one of the folders above, with `AG_Systems` -> `zoneship_ag_sys` and `Feisar` -> `zoneship_faisar` (sic). `DATA02`'s copy authors eight. Ours resolves the twelve-team copy (`hd_zone_hull_wears_the_picked_teams_livery` asserts 12).
@@ -101,3 +101,4 @@ texture swap (`oag_livery`'s `zone_livery`) are the existing ones.
 - **The wreck and the LODs.** The original's table is global, so `shipwreck.vex` and `ship_lod*.vex` pick up the livery too. Ours routes only the hull through the swap; `oag_livery::wreck` reads unswapped.
 - **Fury `_c1` variants** inherit their base team's livery through `zone_livery::liveries`. No HD variant was exercised in the test.
 - **The table's reader:** see "The table's reader was not found" above.
+- **Plain PSN HD** (`hd-psn-eu`) was not exercised. Its definition and folders were not censused; the swap falls back to the default skin, with a report line, if a folder is missing.
