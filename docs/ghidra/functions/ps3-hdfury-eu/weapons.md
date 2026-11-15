@@ -1696,9 +1696,11 @@ flight, and compares the point with `beam + 0xc920`; state 3 (`0x00153a0c`) with
 on the same walked, bent and wobbled path the strip draws, by the bend's table; the simulation's
 trip period and the view's fraction both read the wrapped track gap (`Craft::progress` and the
 course length); the burst plays on the shooter. A title with no strip (Omega in this engine) keeps
-the straight line between the bodies, same direction. Not changed: ours starts the trip at the
-fire, where the original's ball clock starts at state 4 (0.7 s later), so our first drain lands
-0.7 s early.
+the straight line between the bodies, same direction. The simulation's trip clock starts once the
+beam is held, 0.7 s after the fire (`trip::HELD_AFTER_SECONDS`: the 0.4 s ball, TOC `-0x22c8`, and
+the 0.3 s reveal, TOC `-0x22c0`), as the original's ball clock starts with state 4. The HD
+Eliminator pace this moved is on [race-modes.md](../../../gameplay/race-modes.md), "The pace of a
+score Eliminator".
 
 **Frame pair** (`data/reference/hd-capture/leach-ball/`, not tracked): `original_leach0_0.png` (the
 held beam above, rival 10 units ahead, ball at fraction 0.667 by the player's nose) against

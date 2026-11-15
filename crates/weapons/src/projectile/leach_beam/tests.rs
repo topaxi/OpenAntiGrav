@@ -334,7 +334,8 @@ fn a_trip_wraps_once_a_period_and_keeps_the_remainder() {
 /// **HD's cadence: a transfer once a ball trip, not once a tick.** Between
 /// arrivals nothing moves; at each arrival `damage` leaves the victim (times
 /// `energy_multiplier` the first time) and `repair` reaches the shooter. Two
-/// craft 20 apart make the shortest trip, 0.3 s, 18 ticks.
+/// craft 20 apart make the shortest trip, 0.3 s, 18 ticks, and the first trip
+/// starts once the beam is held, 0.7 s (42 ticks) after the fire.
 #[test]
 fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
     let stats = LeachBeamStats {
@@ -347,7 +348,7 @@ fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
     ships[1].physics.shield = 90.0;
     let mut beam = Beam::locked(0, 1, &stats).per_trip();
     let mut taken = Vec::new();
-    for tick in 0..60 {
+    for tick in 0..100 {
         let before = ships[1].physics.shield;
         let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         let lost = before - ships[1].physics.shield;
@@ -357,7 +358,11 @@ fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
         }
     }
     let ticks: Vec<_> = taken.iter().map(|(tick, _)| *tick).collect();
-    assert_eq!(ticks, [17, 35, 53], "an arrival every 18 ticks");
+    assert_eq!(
+        ticks,
+        [59, 77, 95],
+        "held at tick 42, then an arrival every 18 ticks"
+    );
     assert!((taken[0].1 - 3.0).abs() < 1e-4, "first trip {}", taken[0].1);
     assert!(
         (taken[1].1 - 1.5).abs() < 1e-4,
@@ -376,16 +381,17 @@ fn the_trip_period_reads_the_track_gap_not_the_straight_distance() {
     ships[1].standing.progress = Some(400.0);
     let mut beam = Beam::locked(0, 1, &stats).per_trip();
     let mut arrivals = Vec::new();
-    for tick in 0..121 {
+    for tick in 0..163 {
         if beam.advance(&mut ships, 2, rules(), COURSE, DT).drained {
             arrivals.push(tick);
         }
     }
-    // Two seconds: two 1.0 s trips, where 20 units in space would make six.
+    // Two seconds after the hold: two 1.0 s trips, where 20 units in space
+    // would make six.
     assert_eq!(arrivals.len(), 2, "arrivals at ticks {arrivals:?}");
     assert!(
-        arrivals[0] >= 59,
-        "the first arrival a second in, {arrivals:?}"
+        arrivals[0] >= 101,
+        "the first arrival a second into the hold, {arrivals:?}"
     );
 }
 
@@ -401,4 +407,19 @@ fn the_gap_folds_into_half_a_lap_either_way() {
         1000.0,
         "not located: the course length"
     );
+}
+
+/// No transfer before the beam is held: the ball's clock starts with state 4
+/// (`trip::HELD_AFTER_SECONDS`), so nothing drains during the ball's flight
+/// and the reveal, however short the trip.
+#[test]
+fn nothing_drains_before_the_beam_is_held() {
+    let mut ships = field(trip::PERIOD_MIN_LENGTH);
+    let mut beam = Beam::locked(0, 1, &stats()).per_trip();
+    let before_held = (trip::HELD_AFTER_SECONDS / DT) as u32;
+    for tick in 0..before_held {
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
+        assert!(!report.drained, "tick {tick}");
+    }
+    assert_eq!(beam.trip, Some(0.0), "the ball's clock has not started");
 }

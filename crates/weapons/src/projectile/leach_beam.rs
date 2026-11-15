@@ -152,6 +152,14 @@ pub mod trip {
     pub const PERIOD_MIN_SECONDS: f32 = 0.3;
     /// The longest trip, seconds (`DAT_008a9c90`).
     pub const PERIOD_MAX_SECONDS: f32 = 1.0;
+    /// The beam's age at which the ball starts its trips: `LeachBall_Advance`
+    /// runs only in `LeachBeam_Update`'s state 4, entered after the 0.4 s ball
+    /// flight (state 2, `2.5 * clock`, TOC `-0x22c8`) and the 0.3 s reveal
+    /// (state 3, `3.3333 * clock`, TOC `-0x22c0`). Live, the ball's clock read
+    /// 0.2 after one 0.3 s wrap at 0.5 s into state 4
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+    /// strip").
+    pub const HELD_AFTER_SECONDS: f32 = 0.7;
 
     /// The signed distance along the course from the shooter to the target,
     /// folded into half a lap either way: `0x000d0398`, which `BeamPath_Rebuild`
@@ -290,6 +298,7 @@ impl Beam {
         dt: f32,
     ) -> Report {
         let mut report = Report::default();
+        let held_before = self.age >= trip::HELD_AFTER_SECONDS;
         self.age += dt;
 
         if self.kind == Kind::Unlocked {
@@ -311,6 +320,11 @@ impl Beam {
         }
 
         if let Some(elapsed) = self.trip.as_mut() {
+            // The ball's clock runs from the first tick the beam starts
+            // already held, as state 4's does from the tick after its entry.
+            if !held_before {
+                return report;
+            }
             let length = trip::gap(
                 slot(ships, ship_count, self.owner).and_then(Craft::progress),
                 slot(ships, ship_count, self.target).and_then(Craft::progress),

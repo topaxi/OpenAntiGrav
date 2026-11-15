@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-15
-summary: "LeachBeam: HD ball rides the strip (wired); ball clock should start at state 4; shield steps and states 2/3 unread"
+summary: "LeachBeam: HD ball rides the strip, trip clock from state 4 (wired); shield steps and states 2/3 unread"
 ---
 
 # The LeachBeam against the original: what still differs after the 2026-09-23 rebuild
@@ -29,17 +29,6 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   applies `slowShipFactor` on arrival ticks only). ~~The length the trip
   period reads~~: closed 2026-11-15, it is the craft's gap along the course
   (`weapons.md`, "The ball rides the strip"), wired.
-
-- **HD's ball clock starts at state 4, ours at the fire** (2026-11-15,
-  `hd-leach-2`, ready to wire). `LeachBall_Advance` runs only in
-  `LeachBeam_Update`'s state 4 (live: ball clock 0.19997 after one 0.3 s wrap
-  at 0.5 s into state 4), so the original's first drain lands 0.4 s ball +
-  0.3 s reveal after the fire, plus one period. `Beam::per_trip` starts
-  `trip` at `Some(0.0)` at the fire and advances it every tick, so ours drains
-  0.7 s early. Fix: hold `trip` until the beam's age passes 0.7 s (the state
-  timeline lives in `oag_fx::leach_strip::{BALL_SECONDS, REVEAL_SECONDS}`,
-  render-side; the simulation needs its own copy), with a test on the first
-  arrival tick. Moves drain counts in `oag-weapons` tests and any HD race hash.
 
 - **HD's state 2 and 3 points along the strip are unread** (2026-11-15).
   State 2 calls `BeamPath_PointAt` with `1 - 2.5 * clock` (shooter to target
