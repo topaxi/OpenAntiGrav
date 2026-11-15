@@ -78,11 +78,13 @@ asset file.
 
 ## Open
 
-- **2026-11-15: `ZONEBAR_TRANS` is wired** beside the `MR_*` line, from
-  `DATA01`'s `env0_zone.bnk` (`DATA00`'s copy lacks the cue). Open: which
-  copy a Fury pressing's plain Zone race reads, and whether the original
-  fires it on every zone or only on a class step. See
-  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-tones-bank).
+- **2026-11-15: the class step plays `light_wipe` and the `MR_*` timeline from
+  the live banks** (`DATA00`'s `env0_zone.bnk` and `speech_zone.bnk`; the
+  earlier `ZONEBAR_TRANS` and `speech_class.bnk` reading is superseded:
+  `ZONEBAR_TRANS` is Zone Battle's). Open: the other two
+  `Environment_UpdateStageBlend` cue sites, zone steps past 2->3, and the 2 to
+  10 tick offset between line and wipe (both play at the edge here). See
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-class-step-cues-light_wipe-and-an-mr_-line-from-the-banks-a-zone-race-loads).
 - **What sets the float `Hud_UpdateZoneSpeedClass` compares.** It arrives as
   `f1` from its single caller, which forwards its own argument; nothing traced
   it back to the zone counter's storage. The units rest on the two observations
@@ -134,7 +136,9 @@ reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
 The maintainer asked whether a class change's blend effect and sound could be
 reproduced. Investigated both; one is, one is written up instead.
 
-**The sound is wired.** `Data\Sound\speech_class.bnk` (`DATA01.PSARC`) is a
+**The sound is wired. (Superseded 2026-11-15: a Zone race loads
+`speech_zone.bnk`, not `speech_class.bnk`, and the tone is `light_wipe`, not
+`ZONEBAR_TRANS`; see the Open list.)** `Data\Sound\speech_class.bnk` (`DATA01.PSARC`) is a
 **dedicated** fifteen-cue bank - extracted and parsed directly with
 `oag_formats::sblk`, not assumed from a name list - naming `ZONEMALE` at cue
 `0` and fourteen consecutive cues at `1`-`14`: `MR_SVE`, `MR_VEN`, `MR_SFL`,

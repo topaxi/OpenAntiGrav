@@ -1082,33 +1082,134 @@ timeline.
   `0x25`-`0x2c`.** The table covers at least 40 entries past `0x927614`;
   only seven are read.
 
-## The class-step tone's bank
+## The class-step cues: `light_wipe` and an `MR_*` line, from the banks a Zone race loads
 
-2026-11-15. `Zone_UpdateCraftClass` (`0x0006c600`) plays `ZONEBAR_TRANS` as
-`Sound_PlayBankCue(*0x00b6cc28, *0x00b6cc50, "ZONEBAR_TRANS", 0x400, 0, 0, 0, 0)`:
-the TOC slots `0x008a6ee4` and `0x008a6ee8` read `0x00b6cc28` (the sound
-manager, the same first argument `HBEAT` and the menu cues pass) and
-`0x00b6cc50`. The bank handle at `0x00b6cc50` is the **race's environment
-bank**: `FUN_003120b8` plays `~UNDERWATER` out of the same handle (TOC slot
-`0x008b5048`), and `~UNDERWATER` is an environment-bank cue. In Zone that
-bank is `Data\Sound\env0_zone.bnk`. Confidence 75: the handle's writer was
-not read, only its two readers.
+2026-11-15, Fury EU disc (`hdfury-ps3-eu-dec.iso`) in RPCS3 (interpreter), plain Racebox Zone. Breakpoints on
+`Sound_PlayBankCue` (`0x002ffa58`), `Sound_QueueAnnouncerCue` (`0x00310bd8`), `CellMs_SetVoiceRate` (`0x006332e0`) and
+the stage-commit store (`0x003da74c`), read at five boots. Ticks are the SCREAM master tick (240 Hz).
 
-**Two copies of `env0_zone.bnk` ship, and only one names the cue.** On
-`hdfury-ps3-eu-dec.iso`, `DATA00.PSARC`'s copy (2,868,752 bytes) names no
-`ZONEBAR_TRANS`; `DATA01.PSARC`'s (4,492,608 bytes) does, as a timeline cue
-of five voices. The only other bank carrying the string is `DATA00`'s
-`weapons_nitro.bnk`. `DATA00` is Fury's archive and loads last
-(`hd-frontend.md`, "`DATA00`'s copy is the live one"), so whether a Fury
-pressing's plain Zone race reaches `DATA01`'s copy, or `DATA00`'s copy serves
-Fury's Zone Battle and Detonator modes only, is not settled; the maintainer's
-reading is the latter. This engine plays the copy that names the cue
-(`oag_sound::sfx::ClassAnnouncer`), and the ground truth
-`wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues` asserts it
-decodes.
+**This replaces the section that stood here, which read `ZONEBAR_TRANS` as the class step's tone.** It is not: it belongs
+to Zone Battle.
 
-**Not read**: the writer of `0x00b6cc50` per mode, which settles the Fury
-question; and whether `Zone_UpdateCraftClass`'s branch fires on every zone or
-only on a class step (it wraps a `0`-`14` rung counter). This engine fires the
-tone on the class-step edge the voice line already uses.
+### Which banks are live (conf 90)
 
+The manager `0x3240e730` holds a bank table at `mgr+0x170+4*slot`. Read in a Racebox Zone race on two boots (and in
+Zone Battle):
+
+| slot | cues / commands | bank |
+| ---: | --- | --- |
+| 5 | 67 / 166 | the environment bank (`*0x00b6cc50` = 5): `DATA00.PSARC` `env0_zone.bnk` |
+| 6 | 84 / 1230 | the weapons and ship bank |
+| 8 | 43 / 175 | the speech bank (`*0x00b6cc48` = 8): `DATA00.PSARC` `speech_zone.bnk` |
+
+No 68-cue environment bank, no 15-cue `speech_class.bnk` and no `weapons_nitro.bnk` is loaded. Fury ships two
+`env0_zone.bnk` (`DATA00`'s 2,868,752 bytes, 67 cues, **no** `ZONEBAR_TRANS`; `DATA01`'s 4,492,608 bytes, 68 cues) and
+two `speech_zone.bnk` (43 and 42 cues). The archive set resolves `DATA00` first, which is the copy a race has loaded, so
+a read by name is the live copy. Plain Wipeout HD (the PSN install) ships one copy of each, `DATA01`'s (the same size),
+which names `light_wipe` and the `MR_*` lines too: the same read by name reaches it
+(`plain_hd_s_class_step_resolves_light_wipe_and_the_fourteen_lines_from_its_one_copy`). Whether plain HD's executable
+keys them at a plain-Zone step was not run.
+
+### `ZONEBAR_TRANS` and `ZONEADVANCE` are Zone Battle's (conf 80)
+
+`Zone_UpdateCraftClass` (`0x0006c600`) and `0x0006d958` ran 0 times in 90 s of plain Zone and 32 and 4 times in 150 s of
+Zone Battle. `ZONEBAR_TRANS` has exactly one call site (`0x0006ca2c`, in that function). Calling it by hand against
+slot 5 prints `SCREAM: Didn't find sound named -> ZONEBAR_TRANS` and keys no voice (conf 90, two boots), so in Zone
+Battle it cannot play from the environment bank either; what Zone Battle plays is not settled and is not wired.
+
+### A natural plain-Zone class step
+
+`T` is the tick of the stage commit, the store to `H[0].current` at `0x003da74c`. The spread in the offsets is the
+breakpoint hop slowing the game against the SCREAM clock, not a different order; with the bank hook off the queue is 7-8
+ticks before the commit.
+
+| step | event | tick | offset | caller (lr) | bank |
+| --- | --- | ---: | ---: | --- | --- |
+| zone 2->3 | `Sound_QueueAnnouncerCue("MR_SFL")` | 25830 | T-23 | `0x762c4` | - |
+| zone 2->3 | `Sound_PlayBankCue("MR_SFL")` | 25840 | T-13 | `0x30fc0c` | slot 8, 43 cues |
+| zone 2->3 | `Sound_PlayBankCue("light_wipe")` | 25853 | T-0 | **`0x3db500`** | slot 5, 67 cues |
+| zone 2->3 | stage commit | 25853 | T | `0x3db500` | - |
+| zone 1->2 | `Sound_QueueAnnouncerCue("MR_VEN")` | 24104 | T-8 | `0x762c4` | - |
+
+The order is the same in all three boots: the line is queued, played 2 to 10 ticks later, and `light_wipe` is keyed
+0 to 5 ticks before the commit.
+
+- **`light_wipe` (conf 85; at the 1->2 step inferred from the commit's `lr` alone, 70).** The `lr 0x3db500` is the
+  return of the `bl 0x0067a7d8` at `0x003db4fc`, a TOC thunk that tail-branches to `Sound_PlayBankCue`. The thunk has
+  three callers (`0x3da6e4`, `0x3da718`, `0x3db4fc`), all inside `Environment_UpdateStageBlend` (`0x003da540` to
+  `0x003de1ff`, named at confidence 85 in
+  [zone-effectsettings-loader.md](zone-effectsettings-loader.md#2026-08-30-a-ninth-pass-the-0x00-write-is-found---environment_updatestageblend-at-0x003da540-confidence-85)).
+  No `bl` runs between the call and the commit store: the cue is keyed in the same update as the commit. The call site
+  loads `r5` from a fixed TOC slot (`lwz r5,-0x57a8(r2)` at `0x003db4d8`, which holds the pointer to `light_wipe` at
+  `0x007b2e78`), `r4` = 5, `r6` = 0x400, `r7` to `r10` = 0. It is the stage's colour wipe, not a HUD tone. The other
+  two call sites did not fire at the 1->2 and 2->3 steps and their cues were not read.
+- **`MR_*` (conf 88 for name, bank and lr).** The new class's `MR_*` literal is queued by the code at `0x000762c0`
+  (`lr 0x762c4`; four of four observations, a function-pointer call with no direct caller, the function not named,
+  conf 40 that it belongs to the SPZone race manager) and played by the announcer drain at `0x0030fc08` into speech
+  slot 8. The fourteen literals are at `0x0077d728` to `0x0077d830` (and a second copy at `0x0077e630`): `MR_SVE`,
+  `MR_VEN`, `MR_SFL`, `MR_FLA`, `MR_SRA`, `MR_RAP`, `MR_SPH`, `MR_PHA`, `MR_SUP`, `MR_ZEN`, `MR_SUZ`, `MR_Z_SUB`,
+  `MR_Z_M1`, `MR_Z_SUP` (conf 90, byte scan). The name passed is the one of the rung reached (zone 1->2 `MR_VEN`,
+  2->3 `MR_SFL`).
+
+### What the cues are
+
+`light_wipe` is cue 63 of `DATA00` `env0_zone.bnk` (volume 127, 14 commands). Command 0 is a `0x24` goto (marker id 0)
+that jumps over commands 1 to 6 (six key-ons) to the `0x23` marker at command 7 (**confirmed live**: those six voices
+never keyed). Commands 8 to 13 key six voices, on live voices 5 to 10 with nothing keyed between:
+
+| command | waveform | rate | angle | delay |
+| ---: | --- | --- | ---: | ---: |
+| 8, 9 | 393,744 B PCM16 (mode 0x0180), centre -60/0 | 48,000 Hz (pitch word 4096) | +30, +150 | 0 |
+| 10, 11 | 32,272 B ADPCM (mode 0x0100), centre -60/0 | 48,000 Hz | +30, +210 | 0 |
+| 12 | 53,936 B ADPCM (mode 0x0104), centre -67/66, bend range 2/2 | 32,988 Hz (pitch word 2815) | +220 | 0 |
+| 13 | same waveform | 32,988 Hz | +140 | 10 |
+
+All six at note 60, bend 0 (the cue's bend range 2/2 never draws). The wash lasts about 4.1 s (the PCM16 pair; derived
+from length and rate, not heard). Angles 140 to 220 are in the rear half of the pan law. Rate rows seen once (one boot).
+
+`MR_VEN` (cue 27 of `DATA00` `speech_zone.bnk`) is a `0x1a` whose operand is 0 on a delay word of 200, then two key-ons
+on delay 0 at +30 and +330 degrees, both 48,000 Hz, bend 0. A delay word counts from the previous command, not from the
+cue start (live: key-ons with delay 0 after the delay-200 command fire 200 ticks late; `MR_VEN` seen at +208 and +211
+after its play call, 200 plus start latency, both voices on the same tick). The `0x1a` handler (dispatch
+`0x00927614 + 4*0x1a`, handler `0x00625e38`) returns `rand16 % (operand + 1)` as extra delay on the next command, so
+operand 0 adds exactly nothing: a fixed 200 ticks, 0.83 s (conf 85). `MR_SFL` has the same shape (not re-measured
+live, 80 by transfer). All fourteen are this shape in the shipped bank; the last three layer two clips, so four voices.
+
+### What this port plays
+
+On the class-step edge (`ZoneStages::stage_for`, the edge the HUD text and the colour grade key off), dry:
+`light_wipe` through its timeline (`WalkModel::goto_markers` skips the six; rear-half grains play centred, **chosen, not
+measured**, because the mixer is stereo and does not model the rear branch of `Scream_PanVolumePair`) and the
+stage's `MR_*` line through its timeline (`WalkModel::zero_waits` passes the `0x1a` 0; the voices start at 200 ticks).
+**Chosen, not measured:** both start at the edge. The original queues the line a few ticks before the commit and keys
+`light_wipe` just before it, so line and wipe differ by 2 to 10 ticks (8 to 40 ms) there. `oag_hd::race::ZONE_CLASS_ANNOUNCER`
+names `speech_zone.bnk` and `light_wipe`; no `ZONEBAR_TRANS` plays in plain Zone. A tone that does not build is silence
+and a loader-report line, not a flat pick of one of its twelve waveforms.
+
+Ground truth: `crates/game/tests/sfx_ground_truth.rs`,
+`wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues` (the live `env0_zone.bnk` names `light_wipe` and not
+`ZONEBAR_TRANS`; six voices with the delays and angles above; all fourteen lines at 200 ticks, +30/+330) and
+`crates/hd/tests/hd_title_ground_truth.rs`,
+`the_speed_class_announcer_names_the_zone_speech_bank_by_cue_index`; the walk in
+`crates/formats/src/sblk/timeline/tests.rs`.
+
+### Omega and 2048 (CLAUDE.md lineage rule)
+
+- **Omega: checked, applies, not wired.** The same cues ship as Wwise events: `light_wipe__env0_zone` in
+  `env0_zone.bnk` (and `light_wipe__env0_det`), `MR_VEN__Speech_NGP`, `MR_SFL__Speech_NGP` and
+  `ZONEADVANCE__Speech_NGP` in `English(US)/Speech_NGP.bnk`, `ZONEBAR_TRANS__Weapons_NGP` in `English(US)/Weapons_NGP.bnk`
+  (event ids `name_hash("<cue>__<bank>")`, found by walking the `HIRC` events of the 107 of 117 banks that parse in the base and patch
+  archives, control `_321_NGP__Weapons_NGP` hit). Omega sets `zone_class_announcer` to `None`; its trigger was not read
+  in `eboot.bin` and Omega's racing is incomplete.
+- **2048: checked, differs.** Its plain Zone banks carry neither: `env0_zone.bnk` is one cue, `speech_zone_NGP.bnk` has 20
+  cues and no `MR_*`. The `MR_*` names are in `speech_det.bnk` and `speech_elim.bnk` (Detonator's and Eliminator's speech)
+  and `light_wipe` is in `env1_vinetak.bnk`, a circuit bank, so 2048 does not reach this pair through its Zone banks. Its
+  trigger was not read.
+
+### Not read
+
+The writer of `0x00b6cc50` per mode (the evidence above is the live value); the two other `Sound_PlayBankCue` thunk
+callers inside `Environment_UpdateStageBlend`; zone steps beyond 2->3 (zone 3->4 was never reached: with the bank hook
+armed the game ran about 10 times slow against the sound clock); whether `light_wipe` also plays at every stage change
+in any mode whose environment bank has it (the Detonator bank has the cue too); which function holds `0x762c0`.
+Whether the voice is processed at runtime (a DSP stage on the speech bus) is unread.
