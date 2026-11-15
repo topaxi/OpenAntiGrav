@@ -1071,7 +1071,10 @@ timeline.
   disassembly.
 - **Which `var_ref` value means severity, and which means ship-vs-wall**, for
   `.COLLISIONS`' guard `0x22` grains specifically. Blocked on the item above,
-  or on a breakpoint during a real collision.
+  or on a breakpoint during a real collision. **Settled 2026-11-15**: neither is in
+  the global table. Local variable 1 is the surface and local variable 0 the
+  severity, both supplied by the caller; see
+  [cue-variables.md](cue-variables.md#the-collision-family-which-closes-soundmds-open-item).
 - **Why `0x05`'s variable-indirect fields index `sysvar_table` at `-6 - value`
   while `0x22`'s indexes it at `-1 - value`.** Both read the same global;
   the differing offset was not chased further this session.
@@ -1080,7 +1083,8 @@ timeline.
   **`FUN_0062a618`** (`0x19`'s RNG call) - none was read.
 - **Opcodes `0x00`-`0x04`, `0x07`, `0x09`-`0x18`, `0x1a`-`0x21`,
   `0x25`-`0x2c`.** The table covers at least 40 entries past `0x927614`;
-  only seven are read.
+  only seven are read. **2026-11-15**: every opcode HD's banks use is read
+  now, on [cue-variables.md](cue-variables.md#the-opcodes-read-this-pass).
 
 ## The class-step tone's bank
 

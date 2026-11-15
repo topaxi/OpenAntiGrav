@@ -125,6 +125,11 @@ Two structural facts to expect, both different from every other binary here:
   sound with: `XFadeSystem_AddCrossFader` and its update path, the ship-side
   cache and instance, and `Ship_UpdateEngineCrossfade`, the per-tick writer of
   four input channels (three of four terms recovered, one unidentified).
+- [cue-variables.md](cue-variables.md) - the four cue variables a command list
+  reads (listener perspective, severity, surface) and who writes them, the
+  rest of the grain opcodes HD's banks use, `SPEEDUPPAD`'s list and call path,
+  and the ranked audit of every race cue this engine plays against the
+  original's list.
 - [sound.md](sound.md) - the SCREAM grain-opcode dispatch table
   (`0x00927614`), the located `0x05`/`0x06`/`0x08` "play/stop a child cue"
   handlers, guard `0x22`'s three-way variable-versus-immediate skip (the
