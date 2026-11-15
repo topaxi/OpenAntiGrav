@@ -51,10 +51,25 @@ fn recording(ticks: u64) -> (Replay, Vec<String>) {
     (race.recorded().expect("recording"), text)
 }
 
+/// A viewer over the fixture and a race not yet handed to it.
+fn unbegun(replay: Replay) -> (Box<Viewer>, Box<Race>) {
+    // `Viewer::open` rebuilds the recorded race and `Race::start` builds another; a debug
+    // build copies several `Race` values through those frames, about 2 MiB together, so they
+    // run on a larger stack (as in `timeline.rs`).
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(move || {
+            let viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
+            (viewer, Box::new(Race::start(fixture())))
+        })
+        .expect("spawns")
+        .join()
+        .expect("the viewer and the race open")
+}
+
 /// A viewer over the fixture and the race it draws, handed over as the session hands it.
 fn open(replay: Replay) -> (Box<Viewer>, Box<Race>) {
-    let mut viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
-    let mut race = Box::new(Race::start(fixture()));
+    let (mut viewer, mut race) = unbegun(replay);
     viewer.begin(&mut race).expect("the launch settings");
     while viewer.built().is_none() {
         std::thread::sleep(std::time::Duration::from_millis(2));
@@ -353,8 +368,7 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
 #[test]
 fn nothing_moves_until_the_first_keyframe_is_in() {
     let (replay, _) = recording(TICKS);
-    let mut viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
-    let mut race = Box::new(Race::start(fixture()));
+    let (mut viewer, mut race) = unbegun(replay);
     viewer.begin(&mut race).expect("the launch settings");
     let before = format!("{:?}", race.sim);
     let mut held = 0;
@@ -374,8 +388,7 @@ fn nothing_moves_until_the_first_keyframe_is_in() {
 #[test]
 fn the_race_on_screen_does_not_record() {
     let (replay, _) = recording(TICKS);
-    let viewer = Box::new(Viewer::open(fixture(), replay).expect("opens"));
-    let mut race = Box::new(Race::start(fixture()));
+    let (viewer, mut race) = unbegun(replay);
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     assert!(race.recording());
     viewer.begin(&mut race).expect("settings");

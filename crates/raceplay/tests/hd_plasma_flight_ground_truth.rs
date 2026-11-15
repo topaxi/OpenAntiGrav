@@ -24,7 +24,7 @@ use oag_tables::weapons::Weapon;
 /// The resting craft of the straight shot, and its yaw off the spline (degrees).
 const STRAIGHT: ([f32; 3], f32) = ([-132.2678, -49.5985, -175.2943], 1.867);
 /// The craft of the shot at the wall.
-const YAWED: ([f32; 3], f32) = ([-132.2410, -49.5996, -175.3121], 12.805);
+const YAWED: ([f32; 3], f32) = ([-132.241, -49.5996, -175.3121], 12.805);
 
 /// Where the original's bolt sat for all sixty charging ticks of each shot.
 const ORIGINAL_CHARGE_POINT: [f32; 3] = [-127.6546, -49.8659, -175.5523];
