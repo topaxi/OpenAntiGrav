@@ -32,7 +32,7 @@ Nothing below needs more reverse engineering unless the row says so.
 | 5 | A record with no friction throws `WO_SHIP_COLL_SPARK_NODAMAGE` (kind 2), a one-shot | `0x000e7730`, kind 2 at `0x002d9d18` | `Trigger::CollisionSparkNoDamage` exists and no HD caller reaches it (no anchors) | **RE first**: which HD records carry no friction (the cage, the floor) is not read |
 | 6 | Damage smoke: a hit that changes the state (MILD, MODERATE, CRITICAL) kills the previous state's effects outright, particles included | `0x002a1994` on, `0x0027f7b0(.., 1)`, `0x00285868` | `damage_fx.rs` lets the old state's smoke finish | keep the `Playing` handles per craft and `psys::Stage::kill` them when the state changes |
 | 7 | Damage smoke carries the craft's velocity over 60 | `0x002a1c18`..`0x002a1c4c` | no velocity | `oag_fx::psys::carried` (`carry`, `play_carried`) on the riding instance |
-| 8 | Damage smoke anchor: the node's origin plus `1.5` of its third row (`2.0` once dead), minus `1.9` of the second row under a view flag | `0x002a0268` | the craft's origin | **read which node `object + 0x38` is first** (if it is the craft's root, row 2 is forward); then one line in `throw_damage_smoke` and `advance_damage_smoke` |
+| 8 | Damage smoke anchor: the engine flare node's origin plus `1.5` of that node's Z row (`2.0` once dead), minus `1.9` of its Y row under a view flag | `0x002a0268`; the object is the `EngineFlare` at `craft + 0x5f70` | the craft's origin | take the flare node's matrix where the engine flare is placed today and offset along its Z; **which way that Z points along the hull is unsettled** (engine-trail.md), so check the result against a frame before keeping it |
 | 9 | An RPCS3-against-ours pair of a weapon hit: one film is taken (table on particle-triggers.md), ours was not rendered | `scripts/rpcs3-hd-missile-film.py`, `scripts/hd-missile-film-pair.py --film DIR --out OURS` | - | render ours from a fresh film and judge rows 1, 6 and 7 on it; the film is game data, kept under `data/`, not tracked |
 
 Leads read in passing, not followed:
@@ -63,5 +63,5 @@ Leads read in passing, not followed:
    0.75 s (the struck rival alone).
 2. Rows 1 and 2 together (one change, one test: a pair contact on HD starts the seat's attached
    spark and the next contact-free tick stops it).
-3. Rows 6 and 7 (small, `damage_fx.rs` alone), then row 8 after its one read.
+3. Rows 6 and 7 (small, `damage_fx.rs` alone), then row 8 against a frame.
 4. Rows 3 and 4 after the slot-5 read; row 5 after its read.

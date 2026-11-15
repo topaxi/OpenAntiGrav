@@ -270,8 +270,12 @@ Lane `hd-impact`. Four corrections to "The damage smoke" above, each from the di
    of its third row. When `ship + 0x5f43` is set and a global object is absent or has flag
    bits `6` clear, it also subtracts `1.9` (`0x008b2f48`) of the second row
    (`0x002a0340`..`0x002a0378`). `object + 0x1c0` is then the identity with that translation,
-   `object + 0x200` the node's own three rows with it. Which node `object + 0x38` is, and so
-   whether row 2 is the craft's forward axis, is not read. Confidence 80 for the arithmetic.
+   `object + 0x200` the node's own three rows with it. The object is the craft's
+   `EngineFlare` (`craft + 0x5f70`) and `*(object + 0x38)` its node, whose row 2 is "the flare
+   node's own Z axis" on [engine-trail.md](engine-trail.md): **the smoke leaves the engine
+   flare's node, `1.5` along that node's Z**, not the craft's origin. Which way that axis
+   points along the hull is the sign engine-trail.md leaves open. Confidence 80 for the
+   arithmetic, 75 for the node.
 4. **The hold is `3.3` and the thresholds are `70` and `40`**, as read before (`0x008b2fb0`,
    `0x008b2fb4`, `0x008b2fb8`); unchanged.
 5. **`~SHIP_ONFIRE` is not this smoke's sound.** Its one reference is `Ship_SetState`
