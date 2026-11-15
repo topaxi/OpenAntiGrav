@@ -1,5 +1,5 @@
 use super::*;
-use oag_ext_abi::{RACE_MODE_AT, RACE_FLAGS_AT, RaceMode};
+use oag_ext_abi::{RACE_FLAGS_AT, RACE_MODE_AT, RaceMode};
 
 const IO: i32 = 1024;
 
@@ -80,8 +80,8 @@ fn a_check_that_traps_or_runs_out_of_fuel_is_a_fault() {
         traps.wants_race(&race(RaceMode::SingleRace, true)),
         Err(Fault::Trap(_))
     ));
-    let spins = Module::compile(&picky("(loop $l (br $l)) i32.const 1"), Limits::default())
-        .unwrap();
+    let spins =
+        Module::compile(&picky("(loop $l (br $l)) i32.const 1"), Limits::default()).unwrap();
     assert_eq!(
         spins.wants_race(&race(RaceMode::SingleRace, true)),
         Err(Fault::OutOfFuel)

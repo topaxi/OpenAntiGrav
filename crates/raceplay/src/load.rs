@@ -808,9 +808,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
     // The mods' sources are found once, here, and read again by `prepare` below; their
     // own PNGs go into the HUD's sheet, so they are read and decoded first.
-    let extension_sources = crate::extensions::gather(
-        &options.extensions,
-        options.find_extensions.as_ref(),
+    let extension_sources = crate::extensions::admit(
+        crate::extensions::gather(
+            &options.extensions,
+            options.find_extensions.as_ref(),
+            &mut report,
+        ),
+        &title.slug(),
+        options.foreign_track.as_deref(),
+        options,
         &mut report,
     );
     #[cfg(feature = "view")]

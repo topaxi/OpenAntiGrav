@@ -6,7 +6,8 @@
 //! A guest exports `memory`, `oag_abi() -> u32` (returns [`ABI_WORD`]),
 //! `oag_io() -> u32` (the address of an [`IO_LEN`]-byte buffer in its memory),
 //! `tick() -> u32` (0 on success) and, optionally, `oag_state_len() -> u32` (its state
-//! blob's length, checked against the manifest). Before `tick` the host writes the
+//! blob's length, checked against the manifest) and `oag_wants_race() -> u32` (asked once
+//! before the race is built whether it runs in it: [`race`]). Before `tick` the host writes the
 //! observation; after it, the host reads the state blob back from where it wrote it and
 //! the reply from [`REPLY_AT`].
 //!
@@ -65,8 +66,9 @@ pub use motion::{Distance, MAX_PROBE_RADIUS, MAX_SPEED_FACTOR, MAX_TRANSIT_TICKS
 pub use name::ModName;
 pub use pickup::{Colour, Icon, Pickup};
 pub use race::{
-    RACE_ABI_AT, RACE_CAMPAIGN, RACE_CLASS_AT, RACE_CRAFTS_AT, RACE_FLAGS_AT, RACE_LEN, RACE_MODE_AT,
-    RACE_OPTIONS_AT, RACE_PEOPLE_AT, RACE_TITLE_AT, RACE_WEAPONS, RUN, RaceInfo, RaceMode, SKIP,
+    RACE_ABI_AT, RACE_CAMPAIGN, RACE_CLASS_AT, RACE_CRAFTS_AT, RACE_FLAGS_AT, RACE_LEN,
+    RACE_MODE_AT, RACE_OPTIONS_AT, RACE_PEOPLE_AT, RACE_TITLE_AT, RACE_WEAPONS, RUN, RaceInfo,
+    RaceMode, SKIP,
 };
 pub use scene::{
     MAX_BEAM_HALF_WIDTH, MAX_BEAMS_PER_TICK, MAX_FOV_OFFSET_DEG, MAX_SHADER_PARAMS,
@@ -1460,7 +1462,7 @@ mod malformed;
 pub mod motion;
 mod name;
 mod pickup;
-mod race;
+pub mod race;
 mod scene;
 mod sound;
 pub mod track;

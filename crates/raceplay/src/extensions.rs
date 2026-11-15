@@ -29,6 +29,8 @@
 
 use std::sync::Arc;
 
+mod admit;
+pub use admit::admit;
 mod channel;
 #[cfg(feature = "extensions")]
 mod on;
