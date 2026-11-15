@@ -248,6 +248,41 @@ Pulse's add-on zips go in a folder called `dlc` next to `images` (for example
 `~/.local/share/oag/dlc`, or `dlc` beside the AppImage). Not re-verified for this page. See
 [DLC packs](../formats/dlc-pack.md).
 
+### Demos
+
+Three official Wipeout demos exist as packages. Two of them race here; checked
+2026-11-15 on Linux, each one with a headless race.
+
+| Demo | Plays here? | What it holds |
+| --- | --- | --- |
+| Wipeout HD trial (PS3, `NPHA80039`, the Asian Store's) | **Yes, all of Wipeout HD** | The same four archives as the full Store version, byte for byte (`data01.psarc` to `data04.psarc` against `NPEA00057` v3.00): eight circuits, twelve teams, no Fury. The original locks the trial in its executable, which this project does not run. |
+| Wipeout 2048 demo (Vita, `PCSF00110` EU, `PCSA00043` US, `PCSC90003` JP) | **Yes, one circuit** | Checked on the EU one; US and JP not tried. One `PSP2/data.psarc` (575 MB) in the full game's layout: the `tower` circuit and five 2048 teams (Feisar, AG Systems, Auricom, Piranha, Qirex). |
+| Wipeout Pulse demo (PSP, `NPEG90003` EU, `NPUG70008` US) | No | No game archives: its data is packed inside the encrypted executable (`EBOOT.BIN`, 13.9 MB; `BOOT.BIN` is blank), and this project reads no PSP executable. Checked on the EU one. |
+
+**The HD trial** installs like the full Store version, without a licence file:
+follow [Wipeout HD from the PSN download](#wipeout-hd-from-the-psn-download)
+steps 2 to 4 with the trial's package and copy `dev_hdd0/game/NPHA80039` instead
+of `NPEA00057`. Everything that section says about the Store version holds for
+it. A bare `--race` opens Vineta K.
+
+**The 2048 demo** needs its archive decrypted, which Vita3K's installer does:
+
+1. Install the package with the licence string (zRIF) that comes with the demo:
+   `vita3k --pkg path/to/demo.pkg --zrif <zRIF>`. Run it on a virtual display or
+   expect a window; it installs and exits.
+2. Link the decrypted archive into the folder layout 2048 is read from:
+
+   ```sh
+   mkdir -p data/extracted/vita/PCSF00110/base/PSP2
+   ln -s ~/.local/share/Vita3K/Vita3K/ux0/app/PCSF00110/PSP2/data.psarc \
+     data/extracted/vita/PCSF00110/base/PSP2/data.psarc
+   ```
+
+3. Race its one circuit by name:
+   `oag-game data/extracted/vita/PCSF00110 --race --track /data/art/published/environments/tower/track.vex`.
+   A bare `--race` fails, because the default circuit (`altima`) is not in the
+   demo. The front end was not tried.
+
 ## 4. Start it, and what you should see
 
 Start the program: double-click `oag-game.exe` (Windows), the AppImage (Linux,
