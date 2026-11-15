@@ -435,6 +435,7 @@ const GOTO_MODEL: WalkModel = WalkModel {
     vita: false,
     tail_waits: false,
     zero_waits: false,
+    cue_variables: None,
 };
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
@@ -667,6 +668,7 @@ const VITA_MODEL: WalkModel = WalkModel {
     vita: true,
     tail_waits: false,
     zero_waits: false,
+    cue_variables: None,
 };
 
 /// 2048's marker id is the operand's low byte: a goto to marker 2 lands on the
@@ -736,5 +738,367 @@ fn a_vita_random_goto_is_an_alternate_over_its_markers() {
         history.unread,
         vec![0x2e],
         "mode 1 keeps a history: not modelled"
+    );
+}
+
+/// `[a, b, c]` as HD's operand word (`a` in the high byte).
+const fn hd(a: u8, b: u8, c: u8) -> u32 {
+    (a as u32) << 16 | (b as u32) << 8 | c as u32
+}
+
+fn hd_model(variables: [i8; 4]) -> WalkModel {
+    WalkModel {
+        goto_markers: true,
+        cue_variables: Some(variables),
+        ..WalkModel::default()
+    }
+}
+
+/// `weapons.bnk`'s `SPEEDUPPAD` (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`,
+/// "`SPEEDUPPAD`"): a body, a 100 % bend, then a switch on variable 2 over
+/// three markers.
+fn speedup_pad() -> Vec<u8> {
+    let end = hd(0x63, 0, 0);
+    build(&[Spec(
+        "SPEEDUPPAD",
+        120,
+        vec![
+            key(0, 0, 0),
+            raw(0x1b, hd(100, 0, 0), 0),
+            raw(0x22, hd(2, 1, 0), 0),
+            raw(0x24, hd(0, 0, 0), 0),
+            raw(0x22, hd(2, 1, 1), 0),
+            raw(0x24, hd(1, 0, 0), 0),
+            raw(0x22, hd(2, 1, 2), 0),
+            raw(0x24, hd(2, 0, 0), 0),
+            raw(0x24, end, 0),
+            raw(0x23, hd(0, 0, 0), 0),
+            key(16, 220, 0),
+            key(32, 140, 10),
+            raw(0x24, end, 0),
+            raw(0x23, hd(1, 0, 0), 0),
+            key(16, 0, 0),
+            key(32, 0, 10),
+            raw(0x24, end, 0),
+            raw(0x23, hd(2, 0, 0), 0),
+            raw(0x19, hd(2, 1, 0), 0),
+            key(16, 0, 0),
+            key(32, 0, 5),
+            raw(0x24, end, 0),
+            raw(0x23, end, 0),
+        ],
+    )])
+}
+
+fn grains(t: &super::Timeline) -> Vec<(u32, u32, i32)> {
+    t.grains
+        .iter()
+        .map(|g| (g.tick, g.sound.offset, g.angle))
+        .collect()
+}
+
+#[test]
+fn hd_variable_zero_keys_the_body_and_a_rear_pair_under_one_bend() {
+    let data = speedup_pad();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("SPEEDUPPAD").expect("cue");
+    let t = bank.cue_timeline_modelled(&cue, &[], hd_model([0, 0, 0, 0]));
+    assert!(t.is_complete(), "{:?}", t.unread);
+    assert_eq!(grains(&t), vec![(0, 0, 0), (0, 16, 220), (10, 32, 140)]);
+    assert_eq!(t.bends, vec![100]);
+    assert!(
+        t.grains.iter().all(|g| g.bend == Some(0)),
+        "the body keyed before the bend follows it too"
+    );
+}
+
+#[test]
+fn hd_variable_one_centres_every_voice_and_two_alternates_between_the_pair() {
+    let data = speedup_pad();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("SPEEDUPPAD").expect("cue");
+    let one = bank.cue_timeline_modelled(&cue, &[], hd_model([0, 0, 1, 0]));
+    assert_eq!(grains(&one), vec![(0, 0, 0), (0, 16, 0), (10, 32, 0)]);
+
+    let two = bank
+        .cue_timelines_modelled(&cue, hd_model([0, 0, 2, 0]))
+        .expect("one group");
+    let seen: Vec<_> = two.iter().map(grains).collect();
+    assert_eq!(
+        seen,
+        vec![vec![(0, 0, 0), (0, 16, 0)], vec![(0, 0, 0), (5, 32, 0)]]
+    );
+    assert!(two.iter().all(|t| t.is_complete()));
+
+    let three = bank.cue_timeline_modelled(&cue, &[], hd_model([0, 0, 3, 0]));
+    assert_eq!(grains(&three), vec![(0, 0, 0)]);
+}
+
+#[test]
+fn without_the_hd_model_the_same_cue_is_not_walked_to_its_voices() {
+    let data = speedup_pad();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("SPEEDUPPAD").expect("cue");
+    let pulse = bank.cue_timeline_modelled(
+        &cue,
+        &[],
+        WalkModel {
+            goto_markers: true,
+            ..WalkModel::default()
+        },
+    );
+    assert!(
+        !pulse.is_complete(),
+        "Pulse's walk reads HD's guard wrongly"
+    );
+}
+
+#[test]
+fn a_variable_outside_the_handlers_four_is_unread() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![raw(0x22, hd(0xfe, 1, 0), 0), key(0, 0, 0)],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    assert_eq!(
+        bank.cue_timeline_modelled(&cue, &[], hd_model([0; 4]))
+            .unread,
+        vec![0x22]
+    );
+}
+
+#[test]
+fn set_and_increment_write_this_handler_and_a_child_starts_with_a_copy() {
+    // The parent sets variable 1 to 5, increments it, and starts a child that
+    // guards on 6; the child's own increment is not seen by the parent.
+    let data = build(&[
+        Spec(
+            "P",
+            100,
+            vec![
+                raw(0x1e, hd(1, 5, 0), 0),
+                raw(0x20, hd(1, 0, 0), 0),
+                Grain::Child {
+                    cue: 1,
+                    delay: 0,
+                    volume: 127,
+                },
+                raw(0x22, hd(1, 1, 6), 0),
+                key(0, 0, 0),
+                key(16, 0, 7),
+            ],
+        ),
+        Spec(
+            "C",
+            100,
+            vec![
+                raw(0x22, hd(1, 1, 6), 0),
+                key(32, 0, 0),
+                raw(0x20, hd(1, 0, 0), 0),
+                raw(0x22, hd(1, 1, 7), 0),
+                key(48, 0, 3),
+            ],
+        ),
+    ]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("P").expect("cue");
+    let t = bank.cue_timeline_modelled(&cue, &[], hd_model([0; 4]));
+    assert!(t.is_complete(), "{:?}", t.unread);
+    // The child sees 6 (skips nothing, keys 32), then its own 7 (keys 48 at
+    // tick 3); the parent's variable is still 6 (skips nothing past its guard).
+    assert_eq!(
+        grains(&t),
+        vec![(0, 32, 0), (0, 0, 0), (3, 48, 0), (7, 16, 0)]
+    );
+}
+
+#[test]
+fn an_increment_stops_at_127() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x1e, hd(0, 127, 0), 0),
+            raw(0x20, hd(0, 0, 0), 0),
+            raw(0x22, hd(0, 1, 127), 0),
+            key(0, 0, 0),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let t = bank.cue_timeline_modelled(&cue, &[], hd_model([0; 4]));
+    assert_eq!(grains(&t), vec![(0, 0, 0)], "127 stayed 127");
+}
+
+#[test]
+fn hd_s_random_goto_is_an_alternate_over_its_marker_ids() {
+    let end = hd(0x63, 0, 0);
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x25, hd(4, 6, 0), 0),
+            raw(0x23, hd(4, 0, 0), 0),
+            key(0, 0, 0),
+            raw(0x24, end, 0),
+            raw(0x23, hd(5, 0, 0), 0),
+            key(16, 0, 0),
+            raw(0x24, end, 0),
+            raw(0x23, hd(6, 0, 0), 0),
+            key(32, 0, 0),
+            raw(0x23, end, 0),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let all = bank
+        .cue_timelines_modelled(&cue, hd_model([0; 4]))
+        .expect("one group");
+    assert_eq!(all.len(), 3);
+    let offsets: Vec<u32> = all.iter().map(|t| t.grains[0].sound.offset).collect();
+    assert_eq!(offsets, vec![0, 16, 32]);
+    assert_eq!((all[0].groups[0].count, all[0].groups[0].stride), (3, 0));
+}
+
+#[test]
+fn hd_s_stop_ends_the_cue_and_a_late_bend_reaches_the_voices_already_keyed() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            key(0, 0, 0),
+            raw(0x1b, hd(50, 0, 0), 4),
+            key(16, 0, 4),
+            raw(0x18, 0, 0),
+            key(32, 0, 0),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let t = bank.cue_timeline_modelled(&cue, &[], hd_model([0; 4]));
+    assert!(t.is_complete(), "{:?}", t.unread);
+    assert_eq!(grains(&t), vec![(0, 0, 0), (8, 16, 0)]);
+    assert_eq!(t.bends, vec![50]);
+    assert!(t.grains.iter().all(|g| g.bend == Some(0)));
+}
+
+#[test]
+fn hd_s_bend_percent_is_the_high_operand_byte() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![raw(0x1b, hd(100, 0, 0), 0), key(0, 0, 0)],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    assert_eq!(
+        bank.cue_timeline_modelled(&cue, &[], hd_model([0; 4]))
+            .bends,
+        vec![100]
+    );
+    assert_eq!(
+        bank.cue_timeline(&cue).bends,
+        vec![0],
+        "Pulse reads the low byte"
+    );
+}
+
+#[test]
+fn collisions_ship_or_wall_follows_variable_one_when_the_replacing_child_is_walked() {
+    // `.COLLISIONS`: `22 01 01 00 / 08 ship / 22 01 01 01 / 08 wall`.
+    let data = build(&[
+        Spec(
+            ".COLLISIONS",
+            100,
+            vec![
+                raw(0x22, hd(1, 1, 0), 0),
+                Grain::ReplaceChild {
+                    cue: 1,
+                    delay: 0,
+                    volume: 127,
+                },
+                raw(0x22, hd(1, 1, 1), 0),
+                Grain::ReplaceChild {
+                    cue: 2,
+                    delay: 0,
+                    volume: 127,
+                },
+            ],
+        ),
+        Spec("c_CShipShip", 100, vec![key(0, 0, 0)]),
+        Spec("c_CShipWall", 100, vec![key(16, 0, 0)]),
+    ]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named(".COLLISIONS").expect("cue");
+    // The race model leaves `0x08` unread: severity is unknown, so the cue
+    // keeps its flat pick.
+    let race = bank.cue_timeline_modelled(&cue, &[], hd_model([0, 1, 0, 0]));
+    assert!(!race.is_complete());
+    let walked = WalkModel {
+        globals: Some([0; super::GLOBAL_SLOTS]),
+        ..hd_model([0, 1, 0, 0])
+    };
+    let wall = bank.cue_timeline_modelled(&cue, &[], walked);
+    assert_eq!(grains(&wall), vec![(0, 16, 0)]);
+    let ship = bank.cue_timeline_modelled(
+        &cue,
+        &[],
+        WalkModel {
+            cue_variables: Some([0; 4]),
+            ..walked
+        },
+    );
+    assert_eq!(grains(&ship), vec![(0, 0, 0)]);
+}
+
+/// Three independent groups of five: 125 combinations, past the enumeration cap.
+fn many_combinations() -> Vec<u8> {
+    let mut grains = Vec::new();
+    for group in 0..3u32 {
+        grains.push(raw(0x19, hd(5, 1, 0), 0));
+        for alternate in 0..5u32 {
+            grains.push(key((group * 5 + alternate) % 4 * 16, 0, 0));
+        }
+    }
+    build(&[Spec("A", 100, grains)])
+}
+
+#[test]
+fn combinations_past_the_cap_are_sampled_from_a_seed_not_dropped() {
+    let data = many_combinations();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let model = hd_model([0; 4]);
+    assert!(bank.cue_timelines_modelled(&cue, model).is_none());
+
+    let sample = bank.cue_timelines_sampled(&cue, model, 7).expect("sampled");
+    assert_eq!(sample.len(), super::MAX_COMBINATIONS);
+    assert!(
+        sample
+            .iter()
+            .all(|t| t.is_complete() && t.grains.len() == 3)
+    );
+    let distinct: std::collections::BTreeSet<_> = sample.iter().map(grains).collect();
+    assert!(distinct.len() > 10, "{} distinct", distinct.len());
+    assert_eq!(
+        sample.iter().map(grains).collect::<Vec<_>>(),
+        bank.cue_timelines_sampled(&cue, model, 7)
+            .unwrap()
+            .iter()
+            .map(grains)
+            .collect::<Vec<_>>(),
+        "the same seed draws the same timelines"
+    );
+
+    // Under the cap the whole space is enumerated and the seed is unused.
+    let small = alternates();
+    let bank = Bank::parse(&small).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    assert_eq!(
+        bank.cue_timelines_sampled(&cue, WalkModel::default(), 1)
+            .map(|t| t.len()),
+        Some(3)
     );
 }

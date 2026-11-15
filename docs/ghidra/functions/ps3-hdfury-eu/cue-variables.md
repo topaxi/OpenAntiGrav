@@ -22,6 +22,10 @@ adds what a cue's command list **reads** while it runs.
    engine plays one of the three at random, centred and undetuned. That is the "sometimes
    doesn't sound correct": three different wrong sounds, one of them the body alone.
 
+**Wired, 2026-11-15, lane `hd-cue-walk`**: see [Wired](#wired). Rows 1, 3 and 4 of the audit below play
+their lists now, row 7's bend and row 8's rear half for the race cues; the "this engine" paragraphs describe the engine
+before that change.
+
 ## Names
 
 | Address | Kind | Name | Confidence |
@@ -303,4 +307,56 @@ craft emitter in the chase view; another craft's are `[_,_,2,_]`.
 - **Zone, Detonator and Eliminator weapon banks**: `weapons_zone.bnk`, `weapons_det.bnk` and
   `weapons_nitro.bnk` each carry their own `SPEEDUPPAD` (same list). Which a mode loads is not
   read; this engine always reads `weapons.bnk`.
-- **2048**: its banks run the Vita handlers (`WalkModel::vita`), not these. Not checked.
+- **2048**: see [Lineage](#lineage).
+
+## Wired
+
+2026-11-15, lane `hd-cue-walk`. `WalkModel::cue_variables` (`crates/formats/src/sblk/timeline.rs`) walks a cue with the
+table's operand bytes and four variables; `SequenceTick::walks_cue_variables` (the PS3 tick) selects it for the one-shot
+hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE` keep their waveform). Pulse, Pure and
+2048 keep the walk they had.
+
+- **Perspective** (`CueTables::variables(player)`): another craft's emitter 2; the player's craft 1 (chase view) where
+  the cue rides it; 0 for the cues the original plays unplaced from the player's seat (`SPEEDUPPAD`, `TURBO`) and for a
+  projectile's own emitter and everything it hits (`ROCKET`, `MISSILE`, `PLASMA`, the explosions), which the live table
+  measured as `[0,0,0,0]`. `Banks` builds both seats' timelines and `voices_for` picks; both or neither. The cockpit
+  view (0 in the original) is not read; `ABSORB`, `SHURIKEN` and the player's `CANNON` have no capture of their own. All
+  **chosen**, the rest measured.
+- **Severity and surface stay 0**, and `0x08` stays unwalked in the race model, so `.COLLISIONS` keeps its flat pick
+  (severity's source, `FUN_000d8bd0`, is unread). The walk itself reaches `c_CShipWall`'s first block with `[0,1,0,0]`
+  (unit test `collisions_ship_or_wall_follows_variable_one_*`).
+- **Rear half of the pan law**: a grain at 90 to 270 degrees pans at `sin(angle)` (`pan_of_angle_folded`). Pulse's
+  `Scream_PanVolumePair` rear branch reads the table at `a' - 180` with the pair swapped and one term negated; the two
+  gains are then `pan_gains` at `sin(angle)` exactly (unit test), and the negation is a phase inversion dropped here
+  (**chosen**). That law is read on Pulse's executable; HD's own pan table is not.
+- **Combinations**: a cue's alternate groups are independent draws (`ROCKEXPLSHIP` seven groups, 46,080 combinations,
+  `SHURIKENEXPL` seventeen). Past 64 the loader samples 64 timelines from a seed (`Bank::cue_timelines_sampled`) and a
+  play picks one at random.
+- **Ground truth** (Fury disc, `crates/raceplay/tests/sfx_timeline_ground_truth.rs`, one test
+  `hd_s_race_cues_play_the_lists_the_bank_authors` loading the banks once and running named checks):
+  `hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others` (player: 3 voices at ticks 0, 0,
+  10, angles 0/220/140, one shared bend inside two semitones, left/right levels through the mixer; another craft: 2
+  voices, the whoosh at tick 0 or 5) and `hd_s_explosion_and_launch_cues_play_their_layered_voices` (voices per play and
+  last tick per cue, the rocket's hard left/right pair, `ABSORB` silent for another craft, and the census: only
+  `.COLLISIONS` is flat among the one-shot cues) and `hd_s_plasma_hit_wall_detunes_from_play_to_play` (the 100 % bend).
+  The first two were run with `walks_cue_variables` off and both fail (1 voice, not 3; 1 voice, not 10).
+- **Census** of `oag-game <hd iso> --race --dry-run` with `RUST_LOG=debug` (51 cue lines): timelines 16 before, 38 after;
+  flat picks 35 before, 13 after (`.COLLISIONS`, 11 held cues, speech `cont_elim`).
+- **Mix**: layered voices were not dropped. With the mixer's limiter off, the share of audible output samples that hard
+  clip, worst of 40 draws: `QUAKELAUNCH` 15.6 % (a timeline before this change too; a single voice 4.1 %), `REPULSOR`
+  9.9 %, `CANNONEXPLSHIP` 9.2 %, `SHURIKENEXPL` (17 voices) 4.9 %, `ROCKEXPLSHIP` 4.9 %, `REPULSORHIT` 4.1 %; every other
+  cue under 3 %. The game's limiter is on.
+- **Not modelled, so a list that has one keeps its flat pick**: `0x1c` (fixed bend), `0x26` (wait for voices), `0x04`
+  (modulators), `0x29` (key off), a nonzero `0x1a` wait, and a variable outside the handler's four. None of the one-shot
+  cues walked above has one.
+
+## Lineage
+
+- **2048: checked, applies in shape, not wired.** `weapons.bnk` (79 cues) and `shipHD.bnk` (100 cues) carry `0x22` guards
+  too (28 and 58 commands, run through the Vita walk), among `0x04`, `0x1a`, `0x1b`, `0x1c` and `0x29`. Their handlers are
+  the Vita ones (`WalkModel::vita`: marker ids in the low byte, `0x2e` for the random goto): the guard's byte positions and
+  which variable is the perspective are unread, and 2048's tick is the Vita race build's (`SequenceTick::Vita` is wired for
+  the countdown only). It keeps the flat pick; the walk here is HD's, not borrowed for it.
+- **Omega: checked, differs.** Its banks are Wwise: a cue's perspective is a separate authored event (`<cue>_PC__<bank>`,
+  the player's version, already played through `Banks::player_timelines`) and switch containers, not variables in a list.
+  The `variables` table does not apply.

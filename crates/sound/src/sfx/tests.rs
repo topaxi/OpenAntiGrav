@@ -358,7 +358,7 @@ fn marked(marker: usize) -> Vec<layers::Timeline> {
             looping: false,
             delay: 0.0,
             angle: 0,
-            rear_edge: false,
+            rear: layers::RearPan::Front,
             bend: None,
         }],
         bends: Vec::new(),
@@ -394,4 +394,39 @@ fn the_player_hears_its_own_version_of_a_cue_or_nothing() {
     assert_eq!(sample(Cue::Rocket, true), Some(3));
     assert_eq!(sample(Cue::LeachEnergy, false), Some(4));
     assert_eq!(sample(Cue::LeachEnergy, true), None);
+}
+
+#[test]
+fn hd_s_cue_variables_carry_the_perspective_the_originals_caller_sets() {
+    // Measured live (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`).
+    assert_eq!(Cue::SpeedupPad.variables(true), [0, 0, 0, 0]);
+    assert_eq!(Cue::SpeedupPad.variables(false), [0, 0, 2, 0]);
+    assert_eq!(Cue::Turbo.variables(true), [0, 0, 0, 0]);
+    assert_eq!(Cue::MineLaunch.variables(true), [0, 0, 1, 0]);
+    assert_eq!(Cue::Cannon.variables(false), [0, 0, 2, 0]);
+    for cue in [
+        Cue::Rocket,
+        Cue::Missile,
+        Cue::Plasma,
+        Cue::RocketHitShip,
+        Cue::PlasmaHitWall,
+    ] {
+        assert_eq!(cue.variables(true), [0; 4], "{}", cue.name());
+        assert_eq!(cue.variables(false), [0; 4], "{}", cue.name());
+    }
+}
+
+#[test]
+fn only_one_shot_ship_hud_and_weapon_cues_are_walked_with_variables() {
+    assert!(Cue::SpeedupPad.walks_variables() && Cue::RocketHitShip.walks_variables());
+    // Held cues loop and re-key; the engine is one voice; speech has its own walk.
+    for cue in [
+        Cue::Shield,
+        Cue::Blowup,
+        Cue::LockOn,
+        Cue::Engine,
+        Cue::Ready,
+    ] {
+        assert!(!cue.walks_variables(), "{}", cue.name());
+    }
 }

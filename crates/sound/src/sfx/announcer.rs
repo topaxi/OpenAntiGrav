@@ -293,7 +293,16 @@ fn timelines_reported(
     front_end: bool,
     report: &mut Vec<String>,
 ) -> Option<Vec<Timeline>> {
-    match layers::timelines(bank, name, tick, front_end, false, false, true) {
+    match layers::timelines(
+        bank,
+        name,
+        tick,
+        layers::Walking {
+            front_end,
+            zero_waits: true,
+            ..layers::Walking::default()
+        },
+    ) {
         Ok(Some(timelines)) => {
             report.push(format!(
                 "class announcer: {name} plays its timeline: {} variant(s) of {} voice(s)",

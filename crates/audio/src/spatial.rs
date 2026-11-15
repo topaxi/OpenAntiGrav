@@ -585,6 +585,21 @@ pub fn pan_of_angle_to_rear_edge(degrees: i32) -> Option<f32> {
     pan_of_angle(degrees)
 }
 
+/// [`pan_of_angle`] across the whole circle: `sin(angle)` for every angle.
+///
+/// The rear branch of `Scream_PanVolumePair` (`a' >= 180`) reads the table at
+/// `a' - 180` with the pair swapped and one term negated, so the two gains are
+/// `(sin((a' - 180) / 2), cos((a' - 180) / 2))`. Their squares are
+/// `(1 + cos a') / 2` and `(1 - cos a') / 2`, which is [`pan_gains`] at
+/// `pan = -cos(a') = sin(angle)` exactly: in stereo a rear voice sits where its
+/// mirror in the front half does. The negated term is a phase inversion for a
+/// surround decode; it is dropped here (**chosen**), as [`pan_of_angle_to_rear_edge`]
+/// drops it. That law is read on Pulse's executable; HD's own pan table is not.
+#[must_use]
+pub fn pan_of_angle_folded(degrees: i32) -> f32 {
+    (degrees.rem_euclid(360) as f32).to_radians().sin()
+}
+
 /// The component of the direction to a source along `axis`, in `-1..=1`.
 /// `right` gives the pan, `forward` the front/back cue.
 fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {

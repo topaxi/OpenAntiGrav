@@ -91,6 +91,7 @@ impl Bank<'_> {
             cue_volume: cue.volume,
             scale: 1.0,
             bend: None,
+            locals: [0; 4],
         };
         let mut commands = Vec::with_capacity(cue.commands);
         let mut keyed = Vec::with_capacity(cue.commands);
