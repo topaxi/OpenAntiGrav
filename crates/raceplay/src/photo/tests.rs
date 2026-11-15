@@ -647,7 +647,7 @@ fn the_free_lens_walks_the_eye_along_its_own_axes() {
 #[test]
 fn holding_a_direction_speeds_the_free_lens_up_and_letting_go_slows_it() {
     let (mut photo, craft, _) = on_free();
-    let mut step_length = |photo: &mut Photo, pad: Pad| {
+    let step_length = |photo: &mut Photo, pad: Pad| {
         let before = photo.pose(&craft, None).eye;
         photo.step(pad, &[0]);
         (photo.pose(&craft, None).eye - before).length()
