@@ -220,7 +220,9 @@ impl Race {
                 person,
                 shield,
             );
-            for (cue, contact) in heard.into_iter().flatten() {
+            let [hit, grind] = heard;
+            let grind = grind.filter(|_| law.value.grind_played);
+            for (cue, contact) in hit.into_iter().chain(grind) {
                 self.sim.cues.push(CueEvent::contact(cue, slot, contact));
             }
         }

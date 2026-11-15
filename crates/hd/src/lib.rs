@@ -364,6 +364,9 @@ pub const HD_IMPULSE_LAW: oag_title::contact_cue::ImpulseLaw = oag_title::contac
     grind_wait: 1,
     grind_volume_per_impulse: 0.125,
     grind_volume_base: 0.25,
+    // Held back until the wall contact's dwell and chatter are the original's (collision-cues.md,
+    // "Grind held back").
+    grind_played: false,
 };
 
 /// Where Wipeout HD keeps its music.

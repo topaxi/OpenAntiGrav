@@ -53,4 +53,9 @@ pub struct ImpulseLaw {
     pub grind_volume_per_impulse: f32,
     /// A grind's volume at no impulse.
     pub grind_volume_base: f32,
+    /// Whether a grind (and its Shield twin) is played at all. The law above is the original's;
+    /// this is a held-back switch of ours, because the engine's wall contacts outnumber and
+    /// outlast the original's and the grind restarts every other tick of a contact
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Wired", "Grind held back").
+    pub grind_played: bool,
 }

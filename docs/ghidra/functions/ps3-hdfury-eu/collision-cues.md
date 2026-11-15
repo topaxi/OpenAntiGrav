@@ -249,7 +249,7 @@ to 67. `.GRIND` (cue 40) branches on variable 1 as `.COLLISIONS` does, to `c_GSh
 
 2026-11-16, lane `hd-impact`. HD/Fury only (`oag_title::contact_cue::ContactCues::Impulse`,
 the numbers in `oag_hd::HD_IMPULSE_LAW`); Pulse, Pure, 2048 and Omega keep the re-armed
-`.COLLISIONS` they had.
+`.COLLISIONS` they had. **The player's grind is decided but not played** ("Grind held back").
 
 - **Simulation side** (`crates/raceplay/src/cues.rs`): each tick keeps every craft's largest
   contact impulse, from the wall response's largest single contact
@@ -300,17 +300,45 @@ the numbers in `oag_hd::HD_IMPULSE_LAW`); Pulse, Pure, 2048 and Omega keep the r
 - **The pair's impulse is this engine's pair resolver's** (Pulse's `-1.1` law with the
   craft's masses); HD's own `Body_ResolveContactPair` is at confidence 60 and not ported.
 
-**What a race sounds like, measured.** A 60 s headless Fury single race (Venom, Talon's
-Junction, the player on full throttle swinging the stick with a 2.5 s period) raised for the
-player 34 wall hits (9 small, 11 medium, 14 large) and 471 grinds, and for the field 2 wall
-hits and 2 craft hits. The same input on RPCS3 (capture 1, 150 s) gave the player 7 hits and
-10 grinds: **this engine's craft stays on a wall for some thirty ticks after a hit, the
-original's leaves within a frame or two**, so the grind, which the law restarts every other
-tick of a contact, runs far longer here. That is the wall response's difference, heard
-through a faithful trigger. Rendered offline (`--race --hold cross,left --ticks 1200
---dump-audio`, the craft held into a wall for 20 s): the mix's RMS is `0.154` against `0.116`
-before the change, and the limiter works on 75,819 of 960,000 frames, never under a gain of
-`0.7` (before: none).
+**What a race sounds like, measured.** See "Grind held back" below: the player's grind is
+wired in the law and not played.
+
+## Grind held back
+
+2026-11-16, lane `hd-impact-2`. `ImpulseLaw::grind_played` is `false` for HD
+(`oag_hd::HD_IMPULSE_LAW`): `decide_contact_cues` still decides the grind and the banks still
+build its blocks, and `Race::raise_impulse_cues` drops the grind (and `.GRINDSHIELD`, the same
+block) before it reaches the cue list. `.COLLISIONS` and `.COLLSHIELD` play. Setting the field
+to `true` plays it again (`OAG_SWEEP_GRIND=1` in the sweep below).
+
+**Why.** The retrigger rule is the original's, so it was not changed: with `grind_frames = 1`
+the original starts a new `.GRIND` every other frame of a contact and holds no voice. Capture 2
+(`scripts/rpcs3-hd-collision-cue.py`, craft scraping craft) shows runs of 23 starts in 0.73 s
+and 8 in 0.26 s, about 31 a second, the rate this engine starts at. What differs is how much
+contact there is: the same script (cross held, stick swung with a 2.5 s period) gave the
+original 10 player grinds and 7 player hits in 150 s (capture 1), and this engine, a 60 s
+headless Fury race (Venom, Talon's Junction, `crates/raceplay/tests/zz_contact_sweep.rs`):
+
+| Run (60 s, full throttle) | Player `.GRIND` starts | Player `.COLLISIONS` starts |
+| --- | ---: | ---: |
+| this branch, grind played, stick swung (full amplitude) | **471** | 34 |
+| this branch, grind played, stick centred | **1,577** | 2 |
+| this branch, grind held back (as shipped) | 0 | 34 (stick swung), 2 (centred) |
+| main's law (`ContactCues::Rearmed`; `WallResponse` gained report-only fields, so the trajectory is main's) | none: main has no grind cue | 47 (stick swung), 65 (centred) |
+| the original, capture 1 (150 s) | 10 | 7 |
+
+Two causes, both on the wall response and not on the cue: contacts last long (110 episodes in
+the swung run, the longer ones 30 to 90 ticks; the original's 10 are single starts), and many
+are chatter, one start every 4 to 6 ticks. Played, one `.GRIND` voice lasts 0.31 to 0.71 s, so
+a sustained scrape holds 15 to 20 at once (HD's pool is 128). The script's
+swing defaults to the full stick (`--amplitude 1.0`) as the sweep's does, but the captures'
+command lines were not kept with amplitudes, so the ratio, about 100 times, is an order of
+magnitude and not a measurement. `.COLLISIONS` starts do
+not rise against main (34 against 47).
+
+**To play it again:** make the contact the original's (`hd-wall-response-leftovers.md`'s dwell
+and chatter), re-run the sweep until the grind starts in a swung-stick minute are in the
+original's range, then set `grind_played: true`.
 
 ## Lineage
 

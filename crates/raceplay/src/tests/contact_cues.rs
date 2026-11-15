@@ -155,6 +155,16 @@ fn hd() -> ContactCues {
     ContactCues::Impulse(oag_title::pre_race::Sourced::measured(law()))
 }
 
+/// HD's law with the grind switched on, to keep the grind's wiring tested while it is held back.
+fn hd_with_grind() -> ContactCues {
+    ContactCues::Impulse(oag_title::pre_race::Sourced::measured(
+        oag_title::contact_cue::ImpulseLaw {
+            grind_played: true,
+            ..law()
+        },
+    ))
+}
+
 fn raised(race: &Race, slot: u8) -> Vec<oag_gameplay::cue::CueEvent> {
     race.pending_cues()
         .iter()
@@ -194,9 +204,9 @@ fn a_hard_craft_bump_is_a_craft_surface_hit_on_both_hulls() {
     }
 }
 
-#[test]
-fn a_gentle_craft_bump_is_a_grind_for_the_person_and_silent_for_the_opponent() {
-    let mut race = closing(0.5, hd());
+/// A gentle bump (`impulse` over the grind floor, under the hit's) on a two-craft fixture.
+fn gentle_bump(contact_cues: ContactCues) -> Race {
+    let mut race = closing(0.5, contact_cues);
     race.resolve_craft_pairs();
     race.raise_impulse_cues();
     let impulse = race.pair_impulses[0];
@@ -204,9 +214,32 @@ fn a_gentle_craft_bump_is_a_grind_for_the_person_and_silent_for_the_opponent() {
         impulse > 0.5 && impulse < 18.0,
         "the fixture bump is not gentle: {impulse}"
     );
+    race
+}
+
+#[test]
+fn a_gentle_craft_bump_is_a_grind_for_the_person_and_silent_for_the_opponent() {
+    let race = gentle_bump(hd_with_grind());
     let person: Vec<_> = raised(&race, 0).iter().map(|event| event.cue).collect();
     assert_eq!(person, [Cue::Grind]);
     assert!(raised(&race, 1).is_empty(), "{:?}", race.pending_cues());
+}
+
+#[test]
+fn hd_s_grind_is_held_back_and_its_hit_is_not() {
+    assert!(!law().grind_played, "HD's grind is held back");
+    let race = gentle_bump(hd());
+    assert!(race.pending_cues().is_empty(), "{:?}", race.pending_cues());
+
+    let mut race = closing(20.0, hd());
+    race.resolve_craft_pairs();
+    race.raise_impulse_cues();
+    let cues: Vec<_> = raised(&race, 0).iter().map(|event| event.cue).collect();
+    assert_eq!(
+        cues,
+        [Cue::Collision],
+        "a hard bump still hits, and never grinds"
+    );
 }
 
 #[test]
