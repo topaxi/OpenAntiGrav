@@ -255,15 +255,9 @@ Three official Wipeout demos exist as packages. Two of them race here; checked
 
 | Demo | Plays here? | What it holds |
 | --- | --- | --- |
-| Wipeout HD trial (PS3, `NPHA80039`, the Asian Store's) | **Yes, all of Wipeout HD** | The same four archives as the full Store version, byte for byte (`data01.psarc` to `data04.psarc` against `NPEA00057` v3.00): eight circuits, twelve teams, no Fury. The original locks the trial in its executable, which this project does not run. |
+| Wipeout HD trial (PS3) | Yes | Installs like the Store version below. |
 | Wipeout 2048 demo (Vita, `PCSF00110` EU, `PCSA00043` US, `PCSC90003` JP) | **Yes, one circuit** | Checked on the EU one; US and JP not tried. One `PSP2/data.psarc` (575 MB) in the full game's layout: the `tower` circuit and five 2048 teams (Feisar, AG Systems, Auricom, Piranha, Qirex). |
 | Wipeout Pulse demo (PSP, `NPEG90003` EU, `NPUG70008` US) | No | No game archives: its data is packed inside the encrypted executable (`EBOOT.BIN`, 13.9 MB; `BOOT.BIN` is blank), and this project reads no PSP executable. Checked on the EU one. |
-
-**The HD trial** installs like the full Store version, without a licence file:
-follow [Wipeout HD from the PSN download](#wipeout-hd-from-the-psn-download)
-steps 2 to 4 with the trial's package and copy `dev_hdd0/game/NPHA80039` instead
-of `NPEA00057`. Everything that section says about the Store version holds for
-it. A bare `--race` opens Vineta K.
 
 **The 2048 demo** needs its archive decrypted, which Vita3K's installer does:
 
