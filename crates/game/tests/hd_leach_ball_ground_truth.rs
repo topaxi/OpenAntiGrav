@@ -67,10 +67,12 @@ fn floor_of(png: &[u8]) -> Vec<u8> {
 }
 
 /// Talon's Junction with rivals, tick 280: a locked LeachBeam put on slot 1 at
-/// tick 276, photographed from a camera 7 units off the ball (which sits at
-/// about `(-0.6, -51.9, -194.8)` then), or the same frame with no beam. The camera sits 1.846
-/// lower than it did (`y = -47.04`): HD's grid craft hover that much lower since the grid hover
-/// landed, rivals included.
+/// tick 276, photographed from a camera 7 units off the ball, or the same frame
+/// with no beam. Until the beam is held (0.7 s) the ball waits at fraction 0,
+/// the strip's target end: the target's anchor, about `(6.7, -53.5, -195.8)`
+/// then, 1.6 under its body (`oag_fx::leach_strip::point_at`;
+/// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+/// strip").
 ///
 /// **Four ticks after the green light and no input**, so slot 1 has barely
 /// left its grid mark and the ball, which starts at the target, is where the
@@ -85,7 +87,7 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "280"])
-        .arg("--camera-pose=-0.58,-48.886,-188.2,0,-0.45,-0.89,0,1,0")
+        .arg("--camera-pose=6.72,-50.49,-189.25,0,-0.45,-0.89,0,1,0")
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
@@ -126,10 +128,11 @@ fn the_leach_ball_glows_face_on_from_the_real_eye() {
         "the ball is not glowing face-on: its eye is the world's origin again"
     );
     // The ball's colour tap is decoded on fetch (unit 0 gamma nibble 7,
-    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the
-    // box reads 1,330 near-white pixels decoded and 1,518 with the tap raw.
+    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): at
+    // this framing the box reads 1,505 near-white pixels decoded and 1,653 with
+    // the tap raw.
     assert!(
-        with < 1450,
+        with < 1580,
         "the ball's colour tap is read raw, as the console does not: {with}"
     );
 }

@@ -442,9 +442,18 @@ fn race_to_target(
 /// the pace is made on the median over all twelve.
 const PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=12;
 
-/// Runs `PACE_SEEDS` four at a time and answers their outcomes, sorted by laps.
-fn pace_laps(image: &std::path::Path, difficulty: oag_ai::Difficulty) -> Vec<Outcome> {
-    let seeds: Vec<u64> = PACE_SEEDS.collect();
+/// Novice's seeds: twice `PACE_SEEDS`, because with HD's LeachBeam drain on its measured trip
+/// law Novice's median moved four laps between seeds 1 to 12 (10) and 13 to 24 (6), more than
+/// one set of twelve can pin (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator").
+const NOVICE_PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=24;
+
+/// Runs `seeds` four at a time and answers their outcomes, sorted by laps.
+fn pace_laps(
+    image: &std::path::Path,
+    difficulty: oag_ai::Difficulty,
+    seeds: std::ops::RangeInclusive<u64>,
+) -> Vec<Outcome> {
+    let seeds: Vec<u64> = seeds.collect();
     let mut laps = Vec::new();
     for chunk in seeds.chunks(4) {
         std::thread::scope(|scope| {
@@ -468,7 +477,8 @@ fn median_laps(sorted: &[Outcome]) -> u32 {
 }
 
 /// A Novice score Eliminator lasts about as long as the original's (nine laps to 200 on Vineta K,
-/// n = 1), a third either way, as the median over `PACE_SEEDS`: ten measured, nine with the
+/// n = 1), a third either way, as the median over `NOVICE_PACE_SEEDS`: seven measured; over
+/// seeds 1 to 12 alone, ten measured, nine with the
 /// craft's up as the launch normal. The median is more than six laps, which it was not (one to
 /// three) while opponents steered for pads and bunched.
 ///
@@ -483,7 +493,7 @@ fn median_laps(sorted: &[Outcome]) -> u32 {
 #[ignore = "needs a disc image in data/images/"]
 fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
     let Some(image) = image() else { return };
-    let laps = pace_laps(&image, oag_ai::Difficulty::Novice);
+    let laps = pace_laps(&image, oag_ai::Difficulty::Novice, NOVICE_PACE_SEEDS);
     let median = median_laps(&laps);
     assert!(
         (6..=12).contains(&median),
@@ -506,7 +516,7 @@ fn a_novice_score_eliminator_reaches_its_target_at_about_the_originals_pace() {
 #[ignore = "needs a disc image in data/images/"]
 fn an_elite_score_eliminator_takes_more_than_a_few_laps() {
     let Some(image) = image() else { return };
-    let laps = pace_laps(&image, oag_ai::Difficulty::Elite);
+    let laps = pace_laps(&image, oag_ai::Difficulty::Elite, PACE_SEEDS);
     assert!(
         laps.iter().all(|race| race.ended.is_some()),
         "every Elite race reaches 200 within 1,000 s: {laps:?}"

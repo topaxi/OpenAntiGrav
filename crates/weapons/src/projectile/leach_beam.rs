@@ -141,18 +141,50 @@ pub struct Beam {
 /// first) move once a trip. HD's pending damage reaches the shield unscaled
 /// (`Ship_ApplyPendingDamage_q`, `0x000e8de0`).
 pub mod trip {
-    /// Beam length at or under which a trip takes [`PERIOD_MIN_SECONDS`]
-    /// (`DAT_008a9c88`). **What the length is, is chosen**: the original reads
-    /// `strip+0x10`, whose writer is unread; this engine passes the straight
-    /// distance between the two craft.
+    /// Track gap at or under which a trip takes [`PERIOD_MIN_SECONDS`]
+    /// (`DAT_008a9c88`). The length the period reads is the [`gap`] between
+    /// the two craft along the course, not the beam's drawn length.
     pub const PERIOD_MIN_LENGTH: f32 = 20.0;
-    /// Beam length at or over which a trip takes [`PERIOD_MAX_SECONDS`]
+    /// Track gap at or over which a trip takes [`PERIOD_MAX_SECONDS`]
     /// (`DAT_008a9c8c`).
     pub const PERIOD_MAX_LENGTH: f32 = 100.0;
     /// The shortest trip, seconds (`DAT_008a9c80`).
     pub const PERIOD_MIN_SECONDS: f32 = 0.3;
     /// The longest trip, seconds (`DAT_008a9c90`).
     pub const PERIOD_MAX_SECONDS: f32 = 1.0;
+    /// The beam's age at which the ball starts its trips: `LeachBall_Advance`
+    /// runs only in `LeachBeam_Update`'s state 4, entered after the 0.4 s ball
+    /// flight (state 2, `2.5 * clock`, TOC `-0x22c8`) and the 0.3 s reveal
+    /// (state 3, `3.3333 * clock`, TOC `-0x22c0`). Live, the ball's clock read
+    /// 0.2 after one 0.3 s wrap at 0.5 s into state 4
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+    /// strip").
+    pub const HELD_AFTER_SECONDS: f32 = 0.7;
+
+    /// The signed distance along the course from the shooter to the target,
+    /// folded into half a lap either way: `0x000d0398`, which `BeamPath_Rebuild`
+    /// stores at `strip + 0x140` and `LeachBall_Advance` reads as its length
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "The ball rides the
+    /// strip"; live, the stored gap equals the two craft's `+0x7010` difference).
+    /// A craft not yet located gives the course length, as the original's
+    /// does, so the trip takes its longest period.
+    #[must_use]
+    pub fn gap(shooter: Option<f32>, target: Option<f32>, course_length: f32) -> f32 {
+        let (Some(shooter), Some(target)) = (shooter, target) else {
+            return course_length;
+        };
+        let mut gap = target - shooter;
+        if course_length > 0.0 {
+            let half = course_length * 0.5;
+            while gap > half {
+                gap -= course_length;
+            }
+            while gap < -half {
+                gap += course_length;
+            }
+        }
+        gap
+    }
 
     /// `LeachBall_Advance`'s remap: `|length|` clamped to
     /// `[PERIOD_MIN_LENGTH, PERIOD_MAX_LENGTH]` and mapped linearly onto
@@ -262,9 +294,11 @@ impl Beam {
         ships: &mut [S; MAX_SHIPS],
         ship_count: u8,
         rules: oag_physics::DamageRules,
+        course_length: f32,
         dt: f32,
     ) -> Report {
         let mut report = Report::default();
+        let held_before = self.age >= trip::HELD_AFTER_SECONDS;
         self.age += dt;
 
         if self.kind == Kind::Unlocked {
@@ -286,11 +320,16 @@ impl Beam {
         }
 
         if let Some(elapsed) = self.trip.as_mut() {
-            let length = slot(ships, ship_count, self.owner)
-                .zip(slot(ships, ship_count, self.target))
-                .map_or(0.0, |(owner, target)| {
-                    (owner.physics().body.position - target.physics().body.position).length()
-                });
+            // The ball's clock runs from the first tick the beam starts
+            // already held, as state 4's does from the tick after its entry.
+            if !held_before {
+                return report;
+            }
+            let length = trip::gap(
+                slot(ships, ship_count, self.owner).and_then(Craft::progress),
+                slot(ships, ship_count, self.target).and_then(Craft::progress),
+                course_length,
+            );
             if !trip::advance(elapsed, dt, length) {
                 return report;
             }

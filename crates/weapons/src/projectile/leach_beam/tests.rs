@@ -30,8 +30,9 @@ fn rules() -> DamageRules {
     }
 }
 
-/// Two craft, both racing, `apart` units from each other on the x axis, each
-/// with a shield pool part-drained so a repair has room to land.
+/// Two craft, both racing, `apart` units from each other on the x axis and
+/// along the course, each with a shield pool part-drained so a repair has room
+/// to land.
 fn field(apart: f32) -> [Ship; MAX_SHIPS] {
     let mut ships: [Ship; MAX_SHIPS] = std::array::from_fn(|_| Ship::default());
     for (index, ship) in ships.iter_mut().enumerate().take(2) {
@@ -39,9 +40,13 @@ fn field(apart: f32) -> [Ship; MAX_SHIPS] {
         ship.handling.dimensions.shield = 100.0;
         ship.physics.shield = 50.0;
         ship.physics.body.position = Vec3::new(apart * index as f32, 0.0, 0.0);
+        ship.standing.progress = Some(apart * index as f32);
     }
     ships
 }
+
+/// The course the craft race on, long enough that no test gap folds.
+const COURSE: f32 = 5000.0;
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -66,7 +71,7 @@ fn a_beam_fired_with_no_lock_drains_nobody_and_expires_on_its_own_clock() {
 
     let mut ticks = 0;
     loop {
-        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         ticks += 1;
         assert!(!report.drained, "an unlocked beam drained somebody");
         if report.retired {
@@ -95,13 +100,13 @@ fn the_first_draining_tick_costs_the_multiplier_and_the_rest_do_not() {
 
     let victim_before = ships[1].physics.shield;
     let shooter_before = ships[0].physics.shield;
-    beam.advance(&mut ships, 2, rules(), DT);
+    beam.advance(&mut ships, 2, rules(), COURSE, DT);
     let first_taken = victim_before - ships[1].physics.shield;
     let first_given = ships[0].physics.shield - shooter_before;
 
     let victim_mid = ships[1].physics.shield;
     let shooter_mid = ships[0].physics.shield;
-    beam.advance(&mut ships, 2, rules(), DT);
+    beam.advance(&mut ships, 2, rules(), COURSE, DT);
     let second_taken = victim_mid - ships[1].physics.shield;
     let second_given = ships[0].physics.shield - shooter_mid;
 
@@ -133,7 +138,7 @@ fn what_the_victim_loses_the_shooter_gains_on_the_race_table() {
     let mut beam = Beam::locked(0, 1, &stats());
     let total_before = ships[0].physics.shield + ships[1].physics.shield;
     for _ in 0..10 {
-        beam.advance(&mut ships, 2, rules(), DT);
+        beam.advance(&mut ships, 2, rules(), COURSE, DT);
     }
     let total_after = ships[0].physics.shield + ships[1].physics.shield;
     assert!(
@@ -147,17 +152,17 @@ fn what_the_victim_loses_the_shooter_gains_on_the_race_table() {
 fn a_target_that_pulls_beyond_range_breaks_the_link_and_the_beam_lingers() {
     let mut ships = field(50.0);
     let mut beam = Beam::locked(0, 1, &stats());
-    assert!(beam.advance(&mut ships, 2, rules(), DT).drained);
+    assert!(beam.advance(&mut ships, 2, rules(), COURSE, DT).drained);
 
     ships[1].physics.body.position = Vec3::new(300.0, 0.0, 0.0);
-    let report = beam.advance(&mut ships, 2, rules(), DT);
+    let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
     assert!(report.disconnected, "300 units apart and still connected");
     assert!(!report.retired, "retired without lingering");
     assert!(!beam.connected());
 
     let broken_at = beam.disconnected_at.expect("a broken link records when");
     let mut ticks = 0;
-    while !beam.advance(&mut ships, 2, rules(), DT).retired {
+    while !beam.advance(&mut ships, 2, rules(), COURSE, DT).retired {
         ticks += 1;
         assert!(ticks < 600, "a disconnected beam never retired");
     }
@@ -171,7 +176,7 @@ fn a_held_link_lets_go_on_its_authored_active_time() {
     let mut beam = Beam::locked(0, 1, &stats());
     let mut drained_ticks = 0;
     loop {
-        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         if report.drained {
             drained_ticks += 1;
         }
@@ -202,7 +207,7 @@ fn a_shielded_shooter_leaches_nothing() {
     let mut beam = Beam::locked(0, 1, &stats());
     let victim_before = ships[1].physics.shield;
     let shooter_before = ships[0].physics.shield;
-    beam.advance(&mut ships, 2, rules(), DT);
+    beam.advance(&mut ships, 2, rules(), COURSE, DT);
     assert_eq!(ships[1].physics.shield, victim_before);
     assert_eq!(ships[0].physics.shield, shooter_before);
 }
@@ -215,7 +220,7 @@ fn a_shielded_target_breaks_the_link() {
     let mut ships = field(50.0);
     ships[1].physics.shield_pickup_timer = 1.0;
     let mut beam = Beam::locked(0, 1, &stats());
-    let report = beam.advance(&mut ships, 2, rules(), DT);
+    let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
     assert!(report.disconnected);
     assert!(!report.drained);
 }
@@ -231,7 +236,7 @@ fn every_draining_tick_arms_the_victims_thrust_scale_and_not_the_shooters() {
     for _ in 0..3 {
         // The composition root consumes it between ticks; model that.
         ships[1].pending_thrust_scale = 1.0;
-        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         assert!(report.drained);
         assert_eq!(ships[1].pending_thrust_scale, 0.8);
         assert_eq!(ships[0].pending_thrust_scale, 1.0);
@@ -246,7 +251,7 @@ fn a_victim_that_is_not_racing_is_not_throttled() {
     ships[1].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
     let mut beam = Beam::locked(0, 1, &stats());
 
-    beam.advance(&mut ships, 2, rules(), DT);
+    beam.advance(&mut ships, 2, rules(), COURSE, DT);
     assert_eq!(ships[1].pending_thrust_scale, 1.0);
 }
 
@@ -257,9 +262,9 @@ fn a_kill_breaks_the_link() {
     for state in [CraftState::Destroyed, CraftState::Eliminated] {
         let mut ships = field(50.0);
         let mut beam = Beam::locked(0, 1, &stats());
-        assert!(beam.advance(&mut ships, 2, rules(), DT).drained);
+        assert!(beam.advance(&mut ships, 2, rules(), COURSE, DT).drained);
         ships[1].physics.craft_state = state;
-        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         assert!(report.disconnected, "{state:?} target kept the link");
         assert!(!report.drained);
     }
@@ -271,7 +276,10 @@ fn a_dead_shooter_breaks_the_link() {
     let mut ships = field(50.0);
     let mut beam = Beam::locked(0, 1, &stats());
     ships[0].physics.craft_state = CraftState::Destroyed;
-    assert!(beam.advance(&mut ships, 2, rules(), DT).disconnected);
+    assert!(
+        beam.advance(&mut ships, 2, rules(), COURSE, DT)
+            .disconnected
+    );
 }
 
 /// A broken link never re-forms: the respawned target is not drained again.
@@ -280,11 +288,14 @@ fn a_respawned_target_is_not_drained() {
     let mut ships = field(50.0);
     let mut beam = Beam::locked(0, 1, &stats());
     ships[1].physics.craft_state = CraftState::Eliminated;
-    assert!(beam.advance(&mut ships, 2, rules(), DT).disconnected);
+    assert!(
+        beam.advance(&mut ships, 2, rules(), COURSE, DT)
+            .disconnected
+    );
     ships[1].physics.craft_state = CraftState::Racing;
     let shield = ships[1].physics.shield;
     for _ in 0..10 {
-        assert!(!beam.advance(&mut ships, 2, rules(), DT).drained);
+        assert!(!beam.advance(&mut ships, 2, rules(), COURSE, DT).drained);
     }
     assert_eq!(ships[1].physics.shield, shield);
     assert!(!beam.connected());
@@ -323,7 +334,8 @@ fn a_trip_wraps_once_a_period_and_keeps_the_remainder() {
 /// **HD's cadence: a transfer once a ball trip, not once a tick.** Between
 /// arrivals nothing moves; at each arrival `damage` leaves the victim (times
 /// `energy_multiplier` the first time) and `repair` reaches the shooter. Two
-/// craft 20 apart make the shortest trip, 0.3 s, 18 ticks.
+/// craft 20 apart make the shortest trip, 0.3 s, 18 ticks, and the first trip
+/// starts once the beam is held, 0.7 s (42 ticks) after the fire.
 #[test]
 fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
     let stats = LeachBeamStats {
@@ -336,9 +348,9 @@ fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
     ships[1].physics.shield = 90.0;
     let mut beam = Beam::locked(0, 1, &stats).per_trip();
     let mut taken = Vec::new();
-    for tick in 0..60 {
+    for tick in 0..100 {
         let before = ships[1].physics.shield;
-        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
         let lost = before - ships[1].physics.shield;
         assert_eq!(report.drained, lost > 0.0, "tick {tick}");
         if lost > 0.0 {
@@ -346,11 +358,68 @@ fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
         }
     }
     let ticks: Vec<_> = taken.iter().map(|(tick, _)| *tick).collect();
-    assert_eq!(ticks, [17, 35, 53], "an arrival every 18 ticks");
+    assert_eq!(
+        ticks,
+        [59, 77, 95],
+        "held at tick 42, then an arrival every 18 ticks"
+    );
     assert!((taken[0].1 - 3.0).abs() < 1e-4, "first trip {}", taken[0].1);
     assert!(
         (taken[1].1 - 1.5).abs() < 1e-4,
         "second trip {}",
         taken[1].1
     );
+}
+
+/// The trip's length is the gap along the course, `0x000d0398`, not the
+/// distance in space: two craft side by side across a hairpin, close in space
+/// and far apart on the course, make the longest trip.
+#[test]
+fn the_trip_period_reads_the_track_gap_not_the_straight_distance() {
+    let stats = stats();
+    let mut ships = field(trip::PERIOD_MIN_LENGTH);
+    ships[1].standing.progress = Some(400.0);
+    let mut beam = Beam::locked(0, 1, &stats).per_trip();
+    let mut arrivals = Vec::new();
+    for tick in 0..163 {
+        if beam.advance(&mut ships, 2, rules(), COURSE, DT).drained {
+            arrivals.push(tick);
+        }
+    }
+    // Two seconds after the hold: two 1.0 s trips, where 20 units in space
+    // would make six.
+    assert_eq!(arrivals.len(), 2, "arrivals at ticks {arrivals:?}");
+    assert!(
+        arrivals[0] >= 101,
+        "the first arrival a second into the hold, {arrivals:?}"
+    );
+}
+
+#[test]
+fn the_gap_folds_into_half_a_lap_either_way() {
+    assert_eq!(trip::gap(Some(10.0), Some(30.0), 1000.0), 20.0);
+    assert_eq!(trip::gap(Some(30.0), Some(10.0), 1000.0), -20.0);
+    // Either side of the line: the target just past it, the shooter just short.
+    assert_eq!(trip::gap(Some(990.0), Some(5.0), 1000.0), 15.0);
+    assert_eq!(trip::gap(Some(5.0), Some(990.0), 1000.0), -15.0);
+    assert_eq!(
+        trip::gap(None, Some(5.0), 1000.0),
+        1000.0,
+        "not located: the course length"
+    );
+}
+
+/// No transfer before the beam is held: the ball's clock starts with state 4
+/// (`trip::HELD_AFTER_SECONDS`), so nothing drains during the ball's flight
+/// and the reveal, however short the trip.
+#[test]
+fn nothing_drains_before_the_beam_is_held() {
+    let mut ships = field(trip::PERIOD_MIN_LENGTH);
+    let mut beam = Beam::locked(0, 1, &stats()).per_trip();
+    let before_held = (trip::HELD_AFTER_SECONDS / DT) as u32;
+    for tick in 0..before_held {
+        let report = beam.advance(&mut ships, 2, rules(), COURSE, DT);
+        assert!(!report.drained, "tick {tick}");
+    }
+    assert_eq!(beam.trip, Some(0.0), "the ball's clock has not started");
 }

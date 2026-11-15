@@ -1107,6 +1107,30 @@ pin ends is also checked for a board ranked on points
 "Landed"). Between seeds the same tier spans 2 to 17 laps, so a
 single seed's bound fell out when the shield moved one seed from 11 laps to 7.
 
+**HD's LeachBeam drain on its measured trip law (2026-11-15, `hd-leach-2`).** Two changes to the
+per-trip drain, both read off `EBOOT.elf` and checked on RPCS3
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md#the-ball-rides-the-strip-2026-11-15-hd-leach-2)):
+the trip's length is the two craft's gap along the course (`Craft_GetTrackGap`, `0x000d0398`,
+stored at `strip + 0x140` by `BeamPath_Rebuild`), not their distance in space; and the ball's clock
+runs only in `LeachBeam_Update`'s state 4 (`0x00153960`), 0.7 s after the fire. Both make drains
+rarer, so opponents score damage points more slowly. Novice, the leading opponent's completed laps,
+one binary per row:
+
+| Drain | Seeds | Median | Sorted laps |
+| --- | --- | ---: | --- |
+| straight distance, from the fire (before) | 1-12 | 10 | (recorded above) |
+| track gap, from the fire | 1-12 | 13 | 2, 5, 6, 9, 10, 12, 14, 14, 16, 17, 19, 20 |
+| track gap, from state 4 | 1-12 | 10 | 4, 4, 5, 5, 7, 10, 11, 16, 17, 17, 18, 20 |
+| track gap, from state 4 | 13-24 | 6 | 3, 5, 5, 6, 6, 6, 6, 7, 7, 10, 17, 18 |
+| track gap, from state 4 | 1-24 | 7 | the two rows above together |
+
+On seeds 1 to 12 the track gap alone made 243 arrivals where the straight distance made 306, and
+the not-located fallback (the course length) never fired. With the clock in place the median moved
+four laps between two sets of twelve seeds, more than one set can pin, so the Novice pin now takes
+the median over seeds 1 to 24 (`NOVICE_PACE_SEEDS`). The window stays 6 to 12, anchored on the
+original's 9 laps (n = 1, a third either way); 7 sits inside it. Elite keeps seeds 1 to 12 and
+passed unchanged.
+
 ### Firing on the original's law (2026-10-03)
 
 **Read, then ported.** An opponent now decides when to fire its Rocket, Missile, Plasma,

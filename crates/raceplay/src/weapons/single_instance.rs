@@ -283,6 +283,15 @@ impl Race {
         }
     }
 
+    /// The course's length, or 0 with no course: what a LeachBeam's trip
+    /// folds the craft's track gap by, and the strip's wobble divides by.
+    pub(crate) fn leach_course_length(&self) -> f32 {
+        self.sim
+            .course
+            .as_deref()
+            .map_or(0.0, |course| course.length())
+    }
+
     /// One tick of the beam in pool entry `at`.
     fn advance_one_leach_beam(
         &mut self,
@@ -290,10 +299,12 @@ impl Race {
         mut beam: oag_weapons::projectile::leach_beam::Beam,
     ) {
         let rules = self.sim.damage_rules();
+        let course_length = self.leach_course_length();
         let report = beam.advance(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,
             rules,
+            course_length,
             self.sim.dt,
         );
         // A swallowed hit is the only thing that makes the target's shell

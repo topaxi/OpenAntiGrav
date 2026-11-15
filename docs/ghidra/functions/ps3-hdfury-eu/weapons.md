@@ -1614,3 +1614,120 @@ sixteen entries at `+0x190` as `ThickLine_bighalo` `FatLine` streaks from
 `lightrays_glow` chunk, not a core one; confidence 90), and a `Bloom adaption boost`
 override (6.0 easing back to the authored value, confidence 80). Its "Corrections"
 section lists which claims of the 2026-10-07/08 entries above it supersedes.
+
+## The ball rides the strip (2026-11-15, `hd-leach-2`)
+
+Read statically from `/hdfury/EBOOT-ps3-hdfury-eu.elf` (TOC `r2 = 0x008ad4d8`), then checked on
+one held beam on RPCS3 (own config, Racebox Single Race, Talon's Junction, Venom, Feisar; the
+player placed 30 units behind the nearest rival; `scripts/rpcs3-hd-whiteout.py --leach`, which
+dumps every field below in the same pause). Closes the 2026-09-25 section's two open questions:
+what `param_4[4]` is, and which end of the strip is fraction 0.
+
+**The ball's argument is the drawn strip's path, at `strip + 0x130`.** `LeachBeam_Update`'s state-4
+case (`0x00153960`, jump table `0x001536e0`, entry 4) runs the ball when `beam + 0xc931` and
+`+0xc932` are both 0: `0x00153b84` passes `dt`, the ball `beam + 0xc820` and `beam + 0x6550` to the
+thunk `0x00114ef0` (`or r5, r6, r6; b LeachBall_Advance`). `0x6550 - 0x6420 = 0x130`, so
+`LeachBall_Advance`'s `param_4` is the path object inside the drawn strip, and its words are:
+
+| path offset | strip offset | what | writer |
+| --- | --- | --- | --- |
+| `+0x00` | `+0x130` | the shooter (`beam + 0xc94c`) | `BeamPath_Rebuild` (`0x001179c8`) |
+| `+0x04` | `+0x134` | the target (craft of index `beam + 0xc93c`) | same |
+| `+0x08` | `+0x138` | the walked craft, the one ahead | same, by the gap's sign |
+| `+0x0c` | `+0x13c` | the other craft | same |
+| `+0x10` | `+0x140` | **the gap**, `Craft_GetTrackGap(shooter, target)` | same, every tick |
+| `+0x14` | `+0x144` | sample count | `BeamPath_Build` |
+| `+0x20 + i*0x50` | `+0x150 + i*0x50` | sample `i` (walked end first) | walk, bend, wobble |
+| `+0x5de0 + 4i` | `+0x5f10 + 4i` | running length at sample `i` | `BeamPath_BendToTarget` |
+
+`beam + 0xc94c` is the shooter: of the two beam inits, `0x00154360` (no target) stores only
+`+0xc94c` (`0x0015441c`), `0x00154558` stores `+0xc94c` (`0x00154610`) and `+0xc93c` (`0x001545f8`);
+the call at `0x00153694` passes `r4 = *(beam + 0xc94c)` and `r5` = the craft looked up from
+`+0xc93c`. The undrawn `+0x50` strip has the same rebuild without the wobble, `0x001178f8`.
+
+**The gap, `Craft_GetTrackGap` (`0x000d0398`, confidence 85).** `target + 0x7010 - shooter + 0x7010`
+(the distance into the lap, `ai-controls.md`), folded into half a lap either way by two loops
+against `0.5 * course` (`0.5` at `0x008a8b04`, the course length `**(craft + 0x6f64)`). When either
+craft's `+0x782c` is 0 (not located) it returns the course length. Live: the stored gap read
+**9.4921875**, the two craft's `+0x7010` were 3746.838 and 3737.346 (difference 9.492). The
+sign test in `BeamPath_Rebuild` is against `0x008a9cbc` = 0.0: a positive gap walks the target.
+
+**The period reads the gap.** `LeachBall_Advance` remaps `|path + 0x10|`, clamped to [20, 100],
+onto [0.3, 1.0] s (the 2026-09-25 constants), so the trip's length is the track gap between the two
+craft, not the strip's length and not their distance in space. Live: gap 9.49, ball `+0x20`
+(period) **0.3**, `+0x1c` (clock) 0.19997, `+0x24` (fraction) **0.66657** = 0.19997 / 0.3. The
+clock had wrapped once at 0.3 s into state 4 (beam clock 0.49997), so the ball runs only in state 4.
+Confidence 90.
+
+**`BeamPath_PointAt` (`0x00116308`, confidence 90).** Real prototype `(r3 path, f1 fraction, r5
+out)` (Ghidra's drops the out pointer; read off the three call sites, e.g. `0x00114e2c..0x00114e40`).
+With `n = path + 0x14` and `total = cum[n-1]`: `d = fraction * total`; if `path + 0x08 == path +
+0x00` (the shooter was walked) `d = total - d`; `d` clamped to [0, total]; the first `i >= 1` with
+`cum[i] >= d` brackets it and the point is `lerp(sample[i-1], sample[i], (d - cum[i-1]) / (cum[i] -
+cum[i-1]))` (`0x002a3bf0`). With `total <= 0` or `n < 2` it returns sample 0; if no bracket is found
+it returns 0 and `LeachBall_Advance` uses a constant vector (TOC `-0x3854`).
+
+So **fraction 0 is always the target's end and 1 the shooter's**: sample 0 is the walked craft;
+when that is the target no flip is applied and fraction 0 is sample 0; when it is the shooter the
+flip puts fraction 0 at the far end, the target's. The ball travels target to shooter, carrying the
+energy, and the 2026-09-25 "chosen" direction is now measured.
+
+**The table is the bend's, the points are the wobble's.** `BeamPath_BendToTarget`'s second loop
+(`0x0011622c..0x001162cc`, raw disassembly past Ghidra's `halt_baddata`) rebuilds `+0x5f10` from the
+bent points at `+0x150 + i*0x50`; `BeamPath_AddWobble` moves those points afterwards and writes no
+`+0x5f10`. So the ball is lerped between wobbled points by pre-wobble lengths. Live, four samples:
+the dumped table read `[0, 5.392, 9.280, 9.717]` where the wobbled points' own segment sums are
+`[0, 5.395, 9.275, 9.858]`; the lookup on the dumped points and table at the dumped fraction gives
+`(80.9847, -46.2307, 163.0922)`, the ball's placed point `+0xd0` to 1e-5
+(`oag_fx::leach_strip::tests::the_live_ball_point_is_the_lookup_on_the_dumped_strip`).
+
+**The burst is on the shooter.** At each wrap the inlined `ABSORB` spawn takes the matrix at
+`*(*(path + 0x00) + 0x6944) + 0x1d0`, the shooter's, so `WO_LEACHBEAM_ABSORB` plays where the
+ball has just arrived (confidence 75: the `+0x6944` object is not otherwise read). Before each spawn
+`0x0013c8e8(ball, shooter)` runs, not read.
+
+**The other two callers, not wired.** State 2 (`0x00153714`) calls the lookup with `1.0 - 2.5 *
+clock` (constants `0x008ab1f0` = 1.0, `0x008ab21c` = 2.5), shooter to target over the 0.4 s ball
+flight, and compares the point with `beam + 0xc920`; state 3 (`0x00153a0c`) with `3.3333 * clock`
+(`0x008ab1e8`), 0 to 1 over the reveal. What each places is not read; both run along the same path.
+
+**Wired** (`oag_fx::leach_strip::{cumulative, point_at}`, `oag_raceplay`'s
+`leach_ball_on_strip`, `oag_weapons::projectile::leach_beam::trip::gap`): the ball model is placed
+on the same walked, bent and wobbled path the strip draws, by the bend's table; the simulation's
+trip period and the view's fraction both read the wrapped track gap (`Craft::progress` and the
+course length); the burst plays on the shooter. A title with no strip (Omega in this engine) keeps
+the straight line between the bodies, same direction. The simulation's trip clock starts once the
+beam is held, 0.7 s after the fire (`trip::HELD_AFTER_SECONDS`: the 0.4 s ball, TOC `-0x22c8`, and
+the 0.3 s reveal, TOC `-0x22c0`), as the original's ball clock starts with state 4. The HD
+Eliminator pace this moved is on [race-modes.md](../../../gameplay/race-modes.md), "The pace of a
+score Eliminator".
+
+**Frame pair** (`data/reference/hd-capture/leach-ball/`, not tracked): `original_leach0_0.png` (the
+held beam above, rival 10 units ahead, ball at fraction 0.667 by the player's nose) against
+`ours_pinned_336.png`: ours with the original's four dumped samples pinned
+(`--force-leach-lock 276:1 --leach-path path_leach0_0.txt --ticks 336`) and a camera built from the
+player's dumped pose with HD's Far rig (eye `(0, 3.0, -11.25)` in the body frame, fov 67.3, `pair.png`
+crops both). Both draw the ball on the strip; the framing is approximate (no `viewProj` was read for
+this frame, and our craft stay on the grid) and the fractions differ (ours runs its own clock).
+
+**Lineage.** Omega (`eboot-ps4-omega-eu-v107.bin`): **checked, applies, not wired**. The only
+`EABL` immediate is in `FUN_0136e340`, the same ball advance: `(|path[4]| clamped 20..100 - 20) *
+0.00875 + 0.3`, the same wrap, `ABSORB` on `*(path[0] + 0x75c8) + 0x10`, and the lookup inlined with
+the same flip (`param_4[2] == *param_4`, 8-byte words; table at `+0x5dec + 4n`). Our Omega draws no
+strip, so its ball keeps the straight line. 2048 (`eboot-vita-2048-eu-v104.elf`): **checked,
+applies**. `FUN_811ec158` (the only reader of `"WO_LEACHBEAM_ABSORB"`) is the same advance with
+the same clamp; it calls `FUN_811ef50a(path, out)` (`d = cum[n-1] * fraction`) into `FUN_811ef3ca`,
+which carries the same flip and bracket walk (0x48-byte samples, table at `+0x5478`). 2048 also
+plays `WO_LEACHBEAM_BALL` (`ABBL`) on its ball, which HD's advance does not. Not checkable live (no
+Vita or PS4 memory readout in this lane).
+
+**Capture notes.** An attached `rpcs3-drive.py serve` takes no pad input while a GDB client is
+connected (a menu cursor did not move with one connected and did with none), so the capture script
+connects only after the walk. A `serve --load-state` race state leaves the TTY without a screen
+line (`--in-race`). Of 3 + 1 shots on the fresh race, one held (the other three ended in state 6).
+
+| address | name | confidence | evidence |
+| --- | --- | ---: | --- |
+| `0x00116308` | `BeamPath_PointAt` | 90 | Decompile plus raw call sites; live point equal to the lookup to 1e-5 |
+| `0x000d0398` | `Craft_GetTrackGap` | 85 | Decompile, TOC `0x008a8b04` = 0.5; live gap equal to the `+0x7010` difference |
+| `0x001178f8` | `BeamPath_RebuildUnwobbled` | 75 | Same body as `BeamPath_Rebuild` less the `BeamPath_AddWobble` call; called at `0x00153680` with `r30 = beam + 0x50` (`addi r30, r3, 0x50` at `0x00153628`), the undrawn strip |
