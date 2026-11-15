@@ -251,9 +251,9 @@ pub struct CaptureOptions {
     /// With [`Self::pose_boost`]: the speed in units/s to advance the exhaust
     /// at, instead of `120`. `--pose-speed`.
     pub pose_speed: Option<f32>,
-    /// `--pose-hold`: put ship 0 back on its start pose before the frame is drawn. See
+    /// `--pose-hold`, `--pose-hold-ticks`: when ship 0 is put back on its start pose. See
     /// [`pose_hold`].
-    pub pose_hold: bool,
+    pub pose_hold: pose_hold::Hold,
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
@@ -474,7 +474,7 @@ pub fn capture(
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
-    let start_pose = options.pose_hold.then(|| pose_hold::StartPose::of(&race));
+    let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
     let warmed_boost = options

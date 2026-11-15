@@ -6,7 +6,8 @@
 `DIR/NN.png` and `NN.json` are one paused frame each (the original's frame, the camera read out of the RSX
 pushbuffer, the player's pose and the lap clock, plus the clock window the shot happened in). For every one this
 renders ours at the same craft pose and camera (`--pose`, `--camera-pose`, `--camera-fov`, `--pose-hold`), the
-weapon given (`--give`) and fired at the same lap-clock second, `ticks = GO + round(clock * 60) - HUD_LAG`, and
+weapon given (`--give`) and fired at the same lap-clock second from that pose (`--pose-hold-ticks`: a resting craft
+turns under the clock, and a shot fired from the turned hull flies somewhere else), `ticks = GO + round(clock * 60) - HUD_LAG`, and
 writes `ours_NN.png`, `theirs_NN.png` and `side_NN.png`. The craft rests on its grid slot in both, so the shot
 leaves from the same place; the shot's second is only known to the press window, so `--fire-clock` places it
 inside that window (default: the window's end) and a sweep over it is how the phase is chosen.
@@ -91,7 +92,7 @@ def main():
         cmd = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(), "--opponents",
                "--mode", "single_race", "--give", args.weapon, "--input-script", script,
                "--pose=%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw), "--camera-pose=" + numbers,
-               "--camera-fov", "%.4f" % camera["fov_y_deg"], "--pose-hold"] + flags + args.extra
+               "--camera-fov", "%.4f" % camera["fov_y_deg"], "--pose-hold", "--pose-hold-ticks"] + flags + args.extra
         run(cmd + ["--ticks", ticks, "--screenshot", out / ("ours_%s.png" % stem)])
         subprocess.run(["cp", record["screenshot"], str(out / ("theirs_%s.png" % stem))], check=True)
         run(["magick", "montage", out / ("theirs_%s.png" % stem), out / ("ours_%s.png" % stem), "-tile", "2x1",
