@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-16
-summary: "HD .COLLISIONS plays from the impulse law, .GRIND is held back (grind_played) until wall contacts are the original's; open: stale pair normal, pan, cage contacts, 2048 and Omega"
+summary: "HD .COLLISIONS plays from the impulse law; .GRIND held back until wall contacts match the original; open: pair normal, pan, cage, 2048, Omega"
 size: M (50)
 difficulty: medium (55)
 ---
