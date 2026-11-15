@@ -241,6 +241,71 @@ craft hit (`WO_ROCKET_EXPLO`) was not captured. Omega and 2048: **checked, appli
 not wired** - both author their own `WO_ROCKET_EXPLO` (`psys_omega_ground_truth.rs`)
 and already read their sprites.
 
+## 2026-11-15: the damage smoke re-read, and a film of a hit
+
+Lane `hd-impact`. Four corrections to "The damage smoke" above, each from the disassembly of
+`ShipDamageFx_Update` (`0x002a17e8`) and its anchor helper `0x002a0268`, and one negative.
+
+1. **The handles are particle instances, and a state change kills the old smoke.**
+   `object + 0x1ac` and `+0x1b0` take the handle of the effect just spawned (`*0x00ad5fd4`),
+   `+0x1a4` and `+0x1a8` the instance `0x0027c288` finds for it on `*(manager) + 0x468c`:
+   the lookup [engine-trail.md](engine-trail.md) ("What the float and the velocity do") reads
+   as the particle instance, confidence 80. On a hit that changes the state the function calls
+   `0x0027f7b0(manager, handle, 1)` for both (`0x002a1994` on), and with a non-zero third
+   argument that is `0x00285868(instance)`: it zeroes the live count (`+0x148`), clears flag
+   bits `0x11` and frees every particle on the instance's list (`+0x1b8`), then the same for
+   its children (`+0x24`) and siblings (`+0x1b0`). So the previous state's smoke, particles
+   and all, is gone the moment the next state's starts. "Sound handles ... the smoke is not
+   released, it finishes" above is wrong on both counts. Confidence 82.
+2. **The smoke carries the craft's velocity over 60.** After each spawn, when the instance is
+   found (and outside the Zone mask), `0x002a1c18`..`0x002a1c4c` loads the body's velocity
+   (`*(ship + 0x6944) + 0x190`), multiplies by the float at `0x008b2fac` (`1/60`) and hands it
+   to `0x00283b40(instance, &v)`, the call the trail-hit effect and the contact spark make
+   ([ship-collision-fx.md](ship-collision-fx.md)). Confidence 82.
+3. **The anchor is `1.5` along the node's third row, plus.** `0x002a0268` reads the owner's
+   node matrix `M = *(object + 0x38)` and builds
+   `at = M.row3 - M.row2 * s`, `s = -1.5` (`0xbfc00000`), or `-2.0` once the death flag
+   (`object + 0x2b4`) is set (`0x002a0308`..`0x002a033c`: `vmaddfp v0 = row2 * s`,
+   `vsubfp v31 = row3 - v0`). So the point is the node's origin **plus** `1.5` (dead: `2.0`)
+   of its third row. When `ship + 0x5f43` is set and a global object is absent or has flag
+   bits `6` clear, it also subtracts `1.9` (`0x008b2f48`) of the second row
+   (`0x002a0340`..`0x002a0378`). `object + 0x1c0` is then the identity with that translation,
+   `object + 0x200` the node's own three rows with it. Which node `object + 0x38` is, and so
+   whether row 2 is the craft's forward axis, is not read. Confidence 80 for the arithmetic.
+4. **The hold is `3.3` and the thresholds are `70` and `40`**, as read before (`0x008b2fb0`,
+   `0x008b2fb4`, `0x008b2fb8`); unchanged.
+5. **`~SHIP_ONFIRE` is not this smoke's sound.** Its one reference is `Ship_SetState`
+   (`0x000e1e20`, the string at `0x00782528` through TOC slot `0x008a9018`, loaded at
+   `0x000e2358`): the state-4 branch (jump table at `0x000e1eec`, case 4 at `0x000e20e8`)
+   plays it on the craft's emitter with the handle kept at `ship + 0x7a30`, after
+   `0x000d96c8` (the only function that names `~SHIP_DESTROYED`). The state-5 branch
+   (`0x000e2088`) is the one that calls `ShipDamageFx_Update` (`0x000e20d8`), the death
+   plume's caller. Both belong to the wreck sequence, not to a weapon hit. Read to this
+   depth only. Confidence 75.
+
+**This engine** (`oag_raceplay::damage_fx`): lets an old state's smoke finish (1), gives the
+smoke no velocity (2), anchors at the craft's origin (3). All three are open, ready to wire;
+`psys::Stage::kill` and the carried-play calls in `oag_fx::psys::carried` are the two pieces
+1 and 2 need.
+
+### A film of a hit
+
+RPCS3 0.0.43-20574, `hd-racebox-talons-venom-weapons-grid`, `scripts/rpcs3-hd-missile-film.py
+--ages 0.05,0.1,0.2,0.33,0.5,0.75,1.0,1.33,1.7,2.0,2.5,3.0`: the player's Missile into the
+rival 12 units ahead, single game frames from the hit. One run:
+
+| Age | What the frame shows |
+| --- | --- |
+| 0.05 to 0.2 s | the Missile's blast over the rival, the screen washed out by 0.2 s |
+| 0.33 s | the rival clear of the blast, pale embers hanging in the air where it was |
+| 0.5 to 0.75 s | the rival flying on with small bright sparks over its hull, no dark smoke |
+| 1.0 to 2.0 s | the player has caught the slowed rival and the hulls touch: an orange spark shower beside them, white streaks on the player's wing at 1.33 s |
+| 2.5, 3.0 s | the rival out of frame |
+
+The run does not say which effect each spark is: a rival's first Missile hit leaves it above
+70 shield (`WO_DAMAGE_MILD`), and from 1.0 s the contact's own spark overlaps it. A pair
+against this engine was not rendered in this pass.
+
 ## Names applied
 
 | Address | Name | Confidence | Evidence |

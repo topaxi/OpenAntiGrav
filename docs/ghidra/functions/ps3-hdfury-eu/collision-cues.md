@@ -114,11 +114,8 @@ if record[0] == 0 and record.class(+0x44) == 2: a reset surface, Ship_SetState(s
 ```
 
 After the loop the player's craft runs `Ship_UpdateContactRumble` (`0x000d10c8`, call at
-`0x000ec8f4`) with the kept forward offset. `Ship_SpawnContactFx` is this page's working name
-for `0x000e6fd8`, not a row in `names.tsv`: only its head is read (it picks the nearest of the
-ten `Ship Collision Fx` locators at `ship + 0x79d0` to the record's point with
-`FUN_002d91e8`, the same squared distance `Ship_DispatchCollisionFx` uses,
-[ship-collision-fx.md](ship-collision-fx.md)); what it spawns is open, below.
+`0x000ec8f4`) with the kept forward offset. `Ship_SpawnContactFx` (`0x000e6fd8`) is the
+contact's spark: [ship-collision-fx.md](ship-collision-fx.md), "who owns the looping spark".
 
 So the cue's input is the same impulse the shield drain spends, record by record, and the
 frame's **largest** one, not their sum.
@@ -272,10 +269,6 @@ to 67. `.GRIND` (cue 40) branches on variable 1 as `.COLLISIONS` does, to `c_GSh
 
 ## Not determined
 
-- **What `Ship_SpawnContactFx` (`0x000e6fd8`) spawns.** Its head is the nearest-locator pick;
-  the tail (`0x000e71cc` on) builds a transform and calls `0x000a97f0`. It is HD's contact
-  spark, with intensity `min(|p| * 0.0125, 1)`, only for a contact within 100 units of a view
-  and never under a Shield. The effect name and the per-locator gate are unread.
 - **`0x00307d00(volume, -1, 0)`**, called before each of the player's `Sound_PlayBankCue`s.
 - **How the pan argument is applied** (`r7` of `Sound_PlayBankCue`, degrees by the look of
   `-90`).
