@@ -332,12 +332,14 @@ hud, ship and weapons cues (`CueTables::walks_variables`; held cues and `~ENGINE
 - **Combinations**: a cue's alternate groups are independent draws (`ROCKEXPLSHIP` seven groups, 46,080 combinations,
   `SHURIKENEXPL` seventeen). Past 64 the loader samples 64 timelines from a seed (`Bank::cue_timelines_sampled`) and a
   play picks one at random.
-- **Ground truth** (Fury disc, `crates/raceplay/tests/sfx_timeline_ground_truth.rs`):
+- **Ground truth** (Fury disc, `crates/raceplay/tests/sfx_timeline_ground_truth.rs`, one test
+  `hd_s_race_cues_play_the_lists_the_bank_authors` loading the banks once and running named checks):
   `hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others` (player: 3 voices at ticks 0, 0,
   10, angles 0/220/140, one shared bend inside two semitones, left/right levels through the mixer; another craft: 2
   voices, the whoosh at tick 0 or 5) and `hd_s_explosion_and_launch_cues_play_their_layered_voices` (voices per play and
   last tick per cue, the rocket's hard left/right pair, `ABSORB` silent for another craft, and the census: only
-  `.COLLISIONS` is flat among the one-shot cues). Both fail with `walks_cue_variables` off (1 voice, not 3).
+  `.COLLISIONS` is flat among the one-shot cues) and `hd_s_plasma_hit_wall_detunes_from_play_to_play` (the 100 % bend).
+  The first two were run with `walks_cue_variables` off and both fail (1 voice, not 3; 1 voice, not 10).
 - **Census** of `oag-game <hd iso> --race --dry-run` with `RUST_LOG=debug` (51 cue lines): timelines 16 before, 38 after;
   flat picks 35 before, 13 after (`.COLLISIONS`, 11 held cues, speech `cont_elim`).
 - **Mix**: layered voices were not dropped. With the mixer's limiter off, the share of audible output samples that hard

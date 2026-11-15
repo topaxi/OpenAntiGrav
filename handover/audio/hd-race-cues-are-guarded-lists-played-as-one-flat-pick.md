@@ -34,9 +34,9 @@ table). The Zone class-step cues
 - ~~Per-perspective timelines~~: `CueTables::variables(player)` gives the perspective; `Banks` builds the other craft's
   timelines and the player's own (`player_timelines`, read by `voices_for`), both or neither.
 - ~~Row 1, `SPEEDUPPAD`~~: the player's pad is the body and two rear whooshes (220 and 140 degrees, 10 ticks apart, one
-  bend draw), another craft's the body and one whoosh. `sfx_timeline_ground_truth::hd_s_speedup_pad_*`.
+  bend draw), another craft's the body and one whoosh. `sfx_timeline_ground_truth::hd_s_race_cues_play_the_lists_the_bank_authors`.
 - ~~Rows 3 and 4~~: every one-shot hud, ship and weapons cue but `.COLLISIONS` plays its layered voices
-  (`hd_s_explosion_and_launch_cues_*`); `ABSORB` is silent for another craft, as authored.
+  (same test, `hd_s_explosion_and_launch_cues_*`); `ABSORB` is silent for another craft, as authored.
 - ~~Row 6~~ for the race cues (`PLASMAHITWALL`, `QUAKELAUNCH`): the bend reads 100 %.
 - ~~Row 8~~ for the race cues: a rear-half grain pans as `sin(angle)` (`RearPan::Fold`, `oag_audio::spatial::pan_of_angle_folded`,
   the rear branch of `Scream_PanVolumePair` without its phase inversion, **chosen**; read on Pulse's executable, HD's own

@@ -140,20 +140,14 @@ fn a_layered_cue_keys_each_voice_on_at_its_authored_delay() {
 
 /// Wipeout HD's SCREAM runs a 240 Hz master tick (`SequenceTick::Ps3`), not the
 /// PSP's 258.4: the same authored tick counts land later in seconds.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn hd_s_layered_cues_key_on_at_the_ps3_tick() {
-    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let banks = banks(&path);
+fn hd_s_layered_cues_key_on_at_the_ps3_tick(banks: &Banks) {
     // (cue, the delays of its voices in master ticks), read off the bank.
     let cases: [(Cue, &[u32]); 2] = [
         (Cue::Plasma, &[0, 15, 215, 230]),
         (Cue::PlasmaHitWall, &[0, 0, 15, 15, 40]),
     ];
     for (cue, ticks) in cases {
-        let started = voices(&banks, cue);
+        let started = voices(banks, cue);
         assert_eq!(started.len(), ticks.len(), "{}", cue.name());
         let mut end = 0.0f64;
         for (voice, &t) in started.iter().zip(ticks) {
@@ -294,14 +288,9 @@ fn channel_levels(voice: &CueVoice) -> (f32, f32) {
 /// the player's own pad (perspective 0) keys a body, then a whoosh behind-left
 /// at tick 0 and one behind-right ten ticks on, under one bend draw of up to two
 /// semitones; another craft's pad (perspective 2) is the body and one whoosh.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others() {
-    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let banks = banks(&path);
-
+fn hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others(
+    banks: &Banks,
+) {
     let mut rng = Rng::new(3);
     let mut pitches = Vec::new();
     for _ in 0..200 {
@@ -371,13 +360,7 @@ fn hd_draws(banks: &Banks, cue: Cue, player: bool) -> Vec<Vec<CueVoice>> {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, audit rows 3 and 4):
 /// the voices a play keys and the tick the last one starts on, as the bank's
 /// guarded lists author them, against the one waveform the flat pick played.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
-    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let banks = banks(&path);
+fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
     // (cue, heard by the player's craft, voices per play, last voice's tick)
     let cases: [(Cue, bool, usize, u32); 14] = [
         (Cue::RocketHitShip, false, 10, 50),
@@ -396,7 +379,7 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
         (Cue::Repulsor, true, 8, 210),
     ];
     for (cue, player, voices, last) in cases {
-        let draws = hd_draws(&banks, cue, player);
+        let draws = hd_draws(banks, cue, player);
         for draw in &draws {
             assert_eq!(draw.len(), voices, "{} player={player}", cue.name());
         }
@@ -409,7 +392,7 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
     }
 
     // The rocket is a left/right pair: 90 and 270 degrees, hard right and left.
-    let pair = &hd_draws(&banks, Cue::Rocket, false)[0];
+    let pair = &hd_draws(banks, Cue::Rocket, false)[0];
     let mut angles: Vec<i32> = pair.iter().map(|v| v.angle).collect();
     angles.sort_unstable();
     assert_eq!(angles, vec![90, 270]);
@@ -420,11 +403,11 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
 
     // Another craft's absorb is authored silent; the player's is a pair at +-30.
     assert!(
-        hd_draws(&banks, Cue::Absorb, false)
+        hd_draws(banks, Cue::Absorb, false)
             .iter()
             .all(Vec::is_empty)
     );
-    let mut absorb: Vec<i32> = hd_draws(&banks, Cue::Absorb, true)[0]
+    let mut absorb: Vec<i32> = hd_draws(banks, Cue::Absorb, true)[0]
         .iter()
         .map(|v| v.angle.rem_euclid(360))
         .collect();
@@ -446,4 +429,30 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices() {
         .map(Cue::name)
         .collect();
     assert_eq!(flat, vec![".COLLISIONS"]);
+}
+
+/// The bend is read at 100 % on HD's walked cues: `PLASMAHITWALL`'s voices detune
+/// from play to play (the operand byte was read as 0 %, so every play was identical).
+fn hd_s_plasma_hit_wall_detunes_from_play_to_play(banks: &Banks) {
+    let pitches: std::collections::BTreeSet<u32> = hd_draws(banks, Cue::PlasmaHitWall, false)
+        .iter()
+        .flatten()
+        .map(|v| v.pitch.to_bits())
+        .collect();
+    assert!(pitches.len() > 20, "{} distinct pitches", pitches.len());
+}
+
+/// One pass over Fury's banks, loaded once, for every claim about how HD's race
+/// cues play.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_race_cues_play_the_lists_the_bank_authors() {
+    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let banks = banks(&path);
+    hd_s_layered_cues_key_on_at_the_ps3_tick(&banks);
+    hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others(&banks);
+    hd_s_explosion_and_launch_cues_play_their_layered_voices(&banks);
+    hd_s_plasma_hit_wall_detunes_from_play_to_play(&banks);
 }
