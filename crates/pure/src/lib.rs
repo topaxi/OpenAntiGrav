@@ -161,6 +161,11 @@ pub const TITLE: &Title = &Title {
             true,
             "Wipeout Pulse",
         ),
+        // Pulse's law, inherited: Pure's `Plasma_Launch` caller is unread.
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            true,
+            "Wipeout Pulse",
+        ),
         // Pulse's raycast, gate and box; a box hit runs no arm (`psp-pure-usa/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Holds,

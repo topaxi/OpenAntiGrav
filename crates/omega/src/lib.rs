@@ -208,6 +208,12 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // HD's law, inherited: Omega's `Plasma_Launch` (`0x0135d5d0`) takes the node matrix as
+        // HD's does; whether the walker orthonormalises it is unread (`ps4-omega-eu/plasma.md`).
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::inherited(
+            false,
+            "Wipeout HD",
+        ),
         // The projectile query walks track meshes only (`ps4-omega-eu/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Absent,

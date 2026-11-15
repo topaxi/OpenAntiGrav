@@ -38,6 +38,11 @@ const ORIGINAL_FLOWN: [(f32, f32); 4] = [
     (0.9924, 142.61),
 ];
 
+/// The original's bolt's speed over its first four flying ticks, km/h, each step's length
+/// over its own `dt` (the original's `dt` runs 0.016 to 0.0173 s): Venom's ramp
+/// `(1 - age) * 200 + age * 850` from the first tick, with no hold at a lower speed.
+const ORIGINAL_FIRST_TICKS_KMH: [f32; 4] = [212.9, 211.2, 221.6, 229.5];
+
 /// Where and at what flight age the original's bolt met the wall.
 const ORIGINAL_WALL: ([f32; 3], f32) = ([1.4376, -50.3203, -207.0496], 0.95);
 
@@ -156,6 +161,18 @@ fn a_bolt_charges_on_the_ship_muzzle_and_flies_the_originals_first_second() {
         (launch_kmh - 200.0).abs() < 0.5,
         "a resting craft's bolt left at {launch_kmh:.1} km/h, launchSpeed is 200"
     );
+    // HD's bolt leaves at the full release speed (`plasma.md`, "Measured live"): Pulse's
+    // 0.75 hold would fly 150 km/h here. 15 km/h covers the original's uneven `dt`.
+    for (tick, kmh) in ORIGINAL_FIRST_TICKS_KMH.iter().enumerate() {
+        let a = positions[RELEASE + tick].expect("the released bolt is live");
+        let b = positions[RELEASE + tick + 1].expect("the released bolt is live");
+        let flew = (b - a).length() * 60.0 * 3.6;
+        assert!(
+            (flew - kmh).abs() < 15.0,
+            "flying tick {}: the bolt flew {flew:.1} km/h, the original's {kmh}",
+            tick + 1
+        );
+    }
     for (age, expected) in ORIGINAL_FLOWN {
         let flown = (at_age(&positions, age) - charge_point).length();
         assert!(

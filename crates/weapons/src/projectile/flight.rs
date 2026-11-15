@@ -6,9 +6,9 @@
 
 use super::{
     FALL_ACCELERATION, FloorArms, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS,
-    MAX_PROJECTILES, OwnCraftProbe, Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
-    SweepHit, TriggerRadii, cannon, disruptor, mine, missile, nearest_hit, own_box_blocks, plasma,
-    rocket, shuriken,
+    MAX_PROJECTILES, OwnCraftProbe, PlasmaRelease, Projectile, Projectiles, RIDE_HEIGHT,
+    SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, cannon, disruptor, mine, missile, nearest_hit,
+    own_box_blocks, plasma, rocket, shuriken,
 };
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -33,7 +33,8 @@ impl Projectiles {
     ///
     /// `floor_arms` is how the title's weapons write their velocity on a floor
     /// ([`FloorArms`]). `own_craft` is how the first probes treat the firing craft
-    /// ([`OwnCraftProbe`]).
+    /// ([`OwnCraftProbe`]). `plasma_release` is how fast a Plasma bolt leaves the node
+    /// ([`PlasmaRelease`]).
     // One table block per weapon that flies at an authored speed, plus the cage and
     // the title's floor arms; a parameter struct is deferred until another asks.
     #[allow(clippy::too_many_arguments)]
@@ -50,6 +51,7 @@ impl Projectiles {
         class: &str,
         floor_arms: FloorArms,
         own_craft: OwnCraftProbe,
+        plasma_release: PlasmaRelease,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
         // Looked up once: a string match on the class name, the same for every bolt.
@@ -109,12 +111,12 @@ impl Projectiles {
                         * KMH_PER_UNIT_PER_SECOND
                         + stats.launch_speed;
                     projectile.launch_speed_kmh = launch_kmh;
-                    // The bolt leaves at 0.75 x the release speed and holds it until
-                    // its first floor ride, as the Rocket does: `Plasma_Launch`
+                    // On Pulse the bolt leaves at 0.75 x the release speed and holds it
+                    // until its first floor ride, as the Rocket does: `Plasma_Launch`
                     // takes the weapon-node matrix, which carries the craft's display
-                    // scale. See [`plasma::LAUNCH_SPEED_SCALE`].
-                    projectile.velocity = heading
-                        * (launch_kmh / KMH_PER_UNIT_PER_SECOND * plasma::LAUNCH_SPEED_SCALE);
+                    // scale. HD's node is orthonormalised first. See [`PlasmaRelease`].
+                    projectile.velocity =
+                        heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND * plasma_release.scale());
                 }
                 continue;
             }
@@ -210,11 +212,24 @@ impl Projectiles {
             // A probe the box held runs no arm at all (Pure's weapons branch on the hit kind
             // themselves and have no case for a box, `psp-pure-usa/own-craft-box.md`).
             let mut held = false;
-            let probe = if kind == Weapon::Cannon
-                || matches!(
-                    (kind, own_craft),
-                    (Weapon::Plasma, OwnCraftProbe::PlasmaWindow(window)) if age < window
-                ) {
+            let in_plasma_window = matches!(
+                (kind, own_craft),
+                (Weapon::Plasma, OwnCraftProbe::PlasmaWindow(window)) if age < window
+            );
+            // An unscaled release rides its ramp from the first tick, window or not: HD's
+            // bolt flies 211.2, 221.6 and 229.5 km/h on its second to fourth ticks off a
+            // 200 km/h release (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured
+            // live").
+            if in_plasma_window
+                && plasma_release == PlasmaRelease::Unscaled
+                && let Some(kmh) = pinned_kmh
+                && projectile.velocity.length_squared() > 0.0
+            {
+                projectile.velocity =
+                    projectile.velocity.normalize() * missile::speed_units_on_surface(kmh);
+                to = from + projectile.velocity * dt;
+            }
+            let probe = if kind == Weapon::Cannon || in_plasma_window {
                 None
             } else {
                 let segment_end = to - projectile.surface * probe_length;

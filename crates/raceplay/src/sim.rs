@@ -423,6 +423,9 @@ pub struct RaceSim {
     /// Whether the projectiles' floor arms are Pulse's decompiled laws - see
     /// [`Setup::floor_arms_steer_to_ride_point`].
     pub(super) floor_arms_steer_to_ride_point: bool,
+    /// Whether a Plasma bolt leaves at the craft's display scale - see
+    /// [`Setup::plasma_release_at_display_scale`].
+    pub(super) plasma_release_at_display_scale: bool,
     /// What the firing craft's box does to its projectiles' first probes - see
     /// [`Setup::own_craft_box_hides_track`].
     pub(super) own_craft_box_hides_track: oag_title::weapons::OwnCraftBox,

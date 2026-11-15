@@ -552,6 +552,31 @@ pub enum FloorArms {
     ParallelToFloor,
 }
 
+/// How fast a Plasma bolt leaves the craft's weapon node, until its first floor ride.
+///
+/// `Weapons::plasma_release_at_display_scale` picks per title.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlasmaRelease {
+    /// Pulse's: `Plasma_Launch` takes the weapon-node matrix with the craft's display scale
+    /// in it, so the bolt leaves at [`plasma::LAUNCH_SPEED_SCALE`] x its release speed.
+    DisplayScaled,
+    /// HD's: the node matrix is orthonormalised before `Plasma_Launch` reads it, so the bolt
+    /// leaves at its release speed, on its ramp from the first tick
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured live").
+    Unscaled,
+}
+
+impl PlasmaRelease {
+    /// What the release speed is multiplied by.
+    #[must_use]
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::DisplayScaled => plasma::LAUNCH_SPEED_SCALE,
+            Self::Unscaled => 1.0,
+        }
+    }
+}
+
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
 ///
 /// Returns the impacts so a caller can put a spark where each landed. `hits` is
@@ -566,7 +591,7 @@ pub enum FloorArms {
 /// impacts see the pre-blast poses and array index is not part of the physics.
 #[allow(
     clippy::too_many_arguments,
-    reason = "the seven facts of a tick it always took, now with the pool and the occupied craft passed in place of the `World` that held both"
+    reason = "the facts of a tick and the title's flight laws, with the pool and the occupied craft passed in place of the `World` that held both"
 )]
 pub fn step<R: Raycaster + ?Sized, S: Craft>(
     projectiles: &mut Projectiles,
@@ -578,6 +603,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
     class: &str,
     floor_arms: FloorArms,
     own_craft: OwnCraftProbe,
+    plasma_release: PlasmaRelease,
     push: BlastPush,
     rules: oag_physics::DamageRules,
     hits: &mut [WeaponHit],
@@ -597,6 +623,7 @@ pub fn step<R: Raycaster + ?Sized, S: Craft>(
         class,
         floor_arms,
         own_craft,
+        plasma_release,
     );
 
     blast::apply_impacts(ships, weapons, &impacts, push, rules, hits);

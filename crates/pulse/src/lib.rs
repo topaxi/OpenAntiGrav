@@ -144,6 +144,8 @@ pub const TITLE: &Title = &Title {
         pads_stamp_in_eliminator: oag_title::pre_race::Sourced::measured(true),
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::measured(true),
+        // Measured: `docs/ghidra/functions/psp-pulse-usa/plasma.md`, the first records at 0.75.
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(true),
         // Measured on PPSSPP: 2,302 probes of 56 captures, 0 mispredicted (`rocket-visuals.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::measured(
             oag_title::weapons::OwnCraftBox::Falls,

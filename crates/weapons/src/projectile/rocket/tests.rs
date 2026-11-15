@@ -50,6 +50,7 @@ fn tick(projectiles: &mut Projectiles, world: &CollisionWorld) {
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     );
 }
 

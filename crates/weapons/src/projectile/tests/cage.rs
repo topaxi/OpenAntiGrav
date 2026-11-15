@@ -60,6 +60,7 @@ fn advance(
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     )
 }
 
@@ -108,6 +109,7 @@ fn without_a_cage_the_same_flight_goes_on() {
         "VENOM",
         crate::projectile::FloorArms::SteerToRidePoint,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     );
     assert!(impacts[0].is_none());
     assert!(projectiles.slots[0].kind.is_some());
