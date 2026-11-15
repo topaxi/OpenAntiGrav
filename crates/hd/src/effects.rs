@@ -72,34 +72,84 @@ pub const EFFECTS: &Effects = &{
             Trigger::BombRays,
             EffectSpec::new(engine_effects::BOMB_RAYS_EFFECT, Origin::Measured),
         )
+        // `Plasma_Init` and `Plasma_Launch`; `plasma.md`, "The effects and their triggers".
+        .with(
+            Trigger::PlasmaCharging,
+            EffectSpec::new(engine_effects::PLASMA_CHARGING_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::PlasmaLaunch,
+            EffectSpec::new(engine_effects::PLASMA_LAUNCH_EFFECT, Origin::Measured),
+        )
+        // The disc ships `wo_plasma_flash.pob` and the executable never names it: the
+        // detonation is `WO_PLASMA_LIGHTNING_EXPAND` (same section).
+        .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
     effects.sprites = SPRITES;
     effects.extents = EXTENTS;
+    effects.far_bars = FAR_BARS;
+    effects.templates = TEMPLATES;
     effects
 };
+
+/// The effects whose class-6 particles draw as HD's view-space bar: the engine's two
+/// trail hits, and the Plasma's five, whose lightning is that class. Paired against the
+/// original phase by phase: with the bar the launch's and the blast's white blobs are
+/// lightning (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
+const FAR_BARS: &[&str] = &[
+    engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+    engine_effects::PLASMA_LAUNCH_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+];
+
+/// The effects whose sprite templates play: the Plasma head's ring and glow and the
+/// wind-up's glow. The release's `FLASH` and the blast's `START_FLASH` stay muted: with
+/// them on the frame whites out for their few ticks where the original's does not, and
+/// why is unread (same page).
+const TEMPLATES: &[&str] = &[
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+];
 
 /// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
 /// smoke"), the Quake's wave, and the Missile's two heads, whose red
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
-/// "The Missile's red rings"). Every other HD effect still draws the
-/// procedural profile until a matched capture says its sprite reads right.
+/// "The Missile's red rings"), and the Plasma's five, paired against the
+/// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
+/// still draws the procedural profile until a matched capture says its sprite
+/// reads right.
 const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
+    engine_effects::PLASMA_FLARE_EFFECT,
+    engine_effects::PLASMA_CHARGING_EFFECT,
+    engine_effects::PLASMA_LAUNCH_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
 ];
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,
 /// which the original draws as a band of fire across the whole road
-/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`). Every other HD effect keeps
-/// its emitters at their anchors until a matched capture says otherwise.
-const EXTENTS: &[&str] = &[engine_effects::QUAKE_EFFECT];
+/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), and the Plasma blast's two,
+/// whose lightning fills the blast instead of bunching at its centre (`plasma.md`,
+/// "The pairs"). Every other HD effect keeps its emitters at their anchors until a
+/// matched capture says otherwise.
+const EXTENTS: &[&str] = &[
+    engine_effects::QUAKE_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+    engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+];
 
 /// The activation and hit colours are read off HD's executable; the settled
 /// target is each team's own authored `ShieldColour`

@@ -303,6 +303,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_projectile_flares();
+            self.advance_plasma_launch();
         }
         // `slot` is read only by the drawn blast below.
         #[cfg_attr(not(feature = "view"), allow(unused_variables))]

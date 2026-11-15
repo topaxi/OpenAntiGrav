@@ -394,8 +394,10 @@ pub mod slots {
     /// texture is addressed by the **model's own clock**, the declared
     /// `UV_offset` parameter - `AnimNode_GetTime`'s `node + 0xc0`, which
     /// `WeaponExplosions_Draw` sets to the blast's age - not the scene's
-    /// `time`. Matched by `mesh::rcs::rim_glow`'s fingerprint. See
-    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, 2026-10-05.
+    /// `time`. Unlit: the tap times the vertex colour, its alpha the tap's
+    /// channel sum. Matched by `mesh::rcs::rim_glow`'s fingerprint. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The blast's three
+    /// programs".
     pub const CLOCK_SCROLL_RING: u32 = 1 << 15;
 
     /// The same for the explosion halo's program
@@ -493,6 +495,17 @@ pub mod slots {
     /// block `@0x19b0`): [`BOMB_SHOCK`]'s rings with a `1 - Shockwave_scalar`
     /// fade on the alpha. [`RIM_EDGE`] and [`CLOCK_SCROLL_RING`] together.
     pub const MISSILE_SHOCK: u32 = RIM_EDGE | CLOCK_SCROLL_RING;
+
+    /// The Plasma explosion's sphere (`plasmasphere_glow.rcsmaterial`, block
+    /// `@0x2690`): a lit Fresnel shell whose exponent and fade are the blast's
+    /// age, with a noise-modulated sun highlight read from the second binding.
+    /// [`RIM_EDGE`] and [`CLOCK_SCROLL_HALO`] together, for [`BOMB_FIRE`]'s reason.
+    pub const PLASMA_SPHERE: u32 = RIM_EDGE | CLOCK_SCROLL_HALO;
+
+    /// The four bits the weapon programs are carried on, alone or in pairs: a
+    /// test for one program compares the word under this mask.
+    pub const WEAPON_PROGRAM_BITS: u32 =
+        RIM_GLOW | RIM_EDGE | CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO;
 
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".

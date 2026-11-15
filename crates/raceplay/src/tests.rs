@@ -73,6 +73,7 @@ mod extensions;
 mod field;
 mod hash;
 mod hd_effect_sprites;
+mod hd_plasma_effects;
 mod hd_sprite;
 mod headless;
 mod held_buttons;

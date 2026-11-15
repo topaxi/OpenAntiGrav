@@ -324,6 +324,9 @@ pub struct RaceView {
     /// alone.
     pub(super) projectile_flare_orbit:
         [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
+    /// HD's Plasma release effects riding their craft - see
+    /// [`super::plasma_launch`].
+    pub(super) plasma_launch: super::plasma_launch::PlasmaLaunch,
     /// The [`Trigger::Quake`] instance riding the travelling
     /// wave, or `None` when no Quake is in flight. One slot, not an array,
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that

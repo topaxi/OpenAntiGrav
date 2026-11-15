@@ -169,7 +169,7 @@ pub(super) fn particle_effect(
         _ => None,
     };
     let (mut sprites, mut absent) = (0usize, Vec::new());
-    let mut effect = psys::Effect::parse_with(&blob, scale, &mut |authored| {
+    let mut effect = psys::Effect::parse_listed(&blob, scale, kept.templates, &mut |authored| {
         let ext = ext?;
         let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
         let entry = if ext == "gnf" {

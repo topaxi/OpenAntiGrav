@@ -474,18 +474,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let view_dir = normalize(scene.fog.camera - in.world);
     let ramp_facing = dot(view_dir, n);
     let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);
-    var first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
-    // **The Plasma explosion's ring and halo scroll on the model's own clock**
-    // (`slots::CLOCK_SCROLL_RING`/`_HALO`): their programs' `UV_offset` is
-    // `node + 0xc0`, the blast's age, not the scene's `time`. Read off the
-    // two programs' own microcode (docs/ghidra/functions/ps3-hdfury-eu/
-    // plasma.md) - ring: `n = tex(u, v + 0.01 t).a`, then
-    // `uv + 0.15 n + 0.1 t` on both axes; halo: `n = tex(u, v + 0.4 t).a`,
-    // then `(2u + 0.1 t, v + 0.14 t + 0.1 n)`. **Only where the colour tap
-    // samples**; the programs' own colour and alpha combine is not
-    // reproduced here, the path below stands in for it.
+    let first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
+    // The model's own clock: `UV_offset`, `Shockwave_scalar` and `AlphaAnim` of
+    // the weapon programs answered whole below are all `node + 0xc0`, the blast's
+    // age, not the scene's `time`.
     let clock = uniforms.model_clock;
-    // The Bomb's two programs are carried as pairs of these bits and are
+    // The Bomb's two programs are carried as pairs of the weapon bits and are
     // answered whole below (`slots::BOMB_FIRE`, `slots::BOMB_SHOCK`).
     let bomb_fire = (in.slots & 6144u) == 6144u;
     let bomb_shock = (in.slots & 98304u) == 98304u;
@@ -494,19 +488,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let missile_core = (in.slots & 34816u) == 34816u;
     let missile_rays = (in.slots & 67584u) == 67584u;
     let missile_shock = (in.slots & 36864u) == 36864u;
-    let missile_any = missile_core || missile_rays || missile_shock;
-    if (in.slots & 32768u) != 0u && !bomb_shock && !missile_any {
-        let n = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
-        ).a;
-        first_uv = in.texcoord + vec2<f32>(0.15 * n + 0.1 * clock);
-    } else if (in.slots & 65536u) != 0u && !bomb_shock && !missile_any {
-        let n = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
-        ).a;
-        first_uv = vec2<f32>(
-            2.0 * in.texcoord.x + 0.1 * clock,
-            in.texcoord.y + 0.04 * clock + 0.1 * n + 0.1 * clock,
-        );
-    }
+    // The Plasma blast's three: the ring and the halo a bit each, the sphere a
+    // pair (`slots::CLOCK_SCROLL_RING`, `_HALO`, `PLASMA_SPHERE`), compared under
+    // the four weapon bits (`slots::WEAPON_PROGRAM_BITS`).
+    let weapon_program = in.slots & 104448u;
+    let plasma_ring = weapon_program == 32768u;
+    let plasma_halo = weapon_program == 65536u;
+    let plasma_sphere = weapon_program == 69632u;
     // **Pulse's slope-mode level selection**: `log2(|z| * slope) + bias` off view
     // depth, clamped to the levels the texture has - the GE's rule, in place of
     // the derivatives `textureSample` would use. On only for a model carrying
@@ -1636,6 +1624,104 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let wave_alpha = in.sun_mask * (wave_diagonal.x + wave_diagonal.y + wave_diagonal.z)
             * (1.0 - clock);
         return vec4<f32>(wave_tap * in.colour.rgb, clamp(wave_alpha, 0.0, 1.0));
+    }
+    // **The Plasma blast's three programs** (`hd_plasmaring_glow` `@0x1900`,
+    // `hd_plasmahalo_glow` `@0x1960`, `plasmasphere_glow` `@0x2690`), `t` the
+    // blast's age (`UV_offset`); docs/ghidra/functions/ps3-hdfury-eu/plasma.md,
+    // "The blast's three programs". Each ends on the lit programs' `/2`.
+    //
+    //     ring    n   = tex(u, 4 (v + 0.01 t)).a
+    //             c   = tex((u, v) + 0.15 n + 0.1 t).rgb          raw (unit 0 nibble 0)
+    //             out = (c VertexColour1.rgb, VertexColour2.a sum(c))
+    //     halo    n   = tex(u, v + 0.4 t).a
+    //             c   = tex(2u + 0.1 t, v + 0.14 t + 0.1 n).rgb   decoded (nibble 7)
+    //             out = (c VertexColour.rgb VertexColour.a, sum(c) / 3)
+    //     sphere  n   = plasma(u, 4 (v + 0.01 t)).a
+    //             c   = plasma((u, v) + 0.2 n + 0.4 t).rgb        decoded
+    //             f   = 2 sat(1 - N.V)^(2 t)
+    //             rgb = f c (sat(N.L) sun + ambient) (1.93, 1.2, 8)
+    //                   + 20 noise(5u + 10 t, 15v + 10 t) (N.H)^32 sat(8 N.L) sun
+    //             a   = f sum(c) (1 - 0.585 t)
+    //
+    //             rgb += probe(reflect(-V, N)) iblScalePower
+    if plasma_ring {
+        let ring_n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, 4.0 * (in.texcoord.y + 0.01 * clock)),
+        ).a;
+        let ring_c = textureSample(
+            albedo,
+            albedo_sampler,
+            in.texcoord + vec2<f32>(0.15 * ring_n + 0.1 * clock),
+        ).rgb;
+        return vec4<f32>(
+            scene.light.output_scale * ring_c * in.colour.rgb,
+            clamp(in.sun_mask * (ring_c.x + ring_c.y + ring_c.z), 0.0, 1.0),
+        );
+    }
+    if plasma_halo {
+        let halo_n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
+        ).a;
+        let halo_texel = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(
+                2.0 * in.texcoord.x + 0.1 * clock,
+                in.texcoord.y + 0.14 * clock + 0.1 * halo_n,
+            ),
+        ).rgb;
+        let halo_c = mix(halo_texel, decode(halo_texel), encoded_out * linear_out);
+        return vec4<f32>(
+            scene.light.output_scale * halo_c * in.colour.rgb * in.sun_mask,
+            clamp((halo_c.x + halo_c.y + halo_c.z) * 0.333252, 0.0, 1.0),
+        );
+    }
+    if plasma_sphere {
+        let sphere_n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, 4.0 * (in.texcoord.y + 0.01 * clock)),
+        ).a;
+        let sphere_texel = textureSample(
+            albedo,
+            albedo_sampler,
+            in.texcoord + vec2<f32>(0.2 * sphere_n + 0.4 * clock),
+        ).rgb;
+        let sphere_c = mix(sphere_texel, decode(sphere_texel), encoded_out * linear_out);
+        let noise_texel = textureSample(
+            lightmap,
+            albedo_sampler,
+            vec2<f32>(5.0 * in.texcoord.x + 10.0 * clock, 15.0 * in.texcoord.y + 10.0 * clock),
+        ).rgb;
+        let sphere_noise = mix(noise_texel, decode(noise_texel), encoded_out * linear_out);
+        let sphere_rim = clamp(1.0 - dot(n, to_eye), 0.0, 1.0);
+        // `LG2`, `MUL 2 t`, `EX2 x2`; `0^0` taken as `1`, the age-0 frame's value
+        // everywhere else on the shell.
+        let sphere_f = 2.0 * pow(max(sphere_rim, 1.0e-6), 2.0 * clock);
+        let sphere_ndl = dot(n, scene.light.direction);
+        let sphere_half = normalize(to_eye + scene.light.direction);
+        let sphere_spec = pow(clamp(dot(n, sphere_half), 0.0, 1.0), 32.0)
+            * clamp(8.0 * sphere_ndl, 0.0, 1.0);
+        let sphere_light = clamp(sphere_ndl, 0.0, 1.0) * scene.light.sun + scene.light.ambient;
+        // The paraboloid reflection, at the hull's address. The map bound for a draw that
+        // is no craft's is the circuit's sky, as the scenery glass reads it, and
+        // `iblScalePower` there is `(1, 1, 1, 0)`: the glass's measured value, not read on
+        // this draw (docs/rendering/hd-track-tone.md, "The glass program").
+        let sphere_sky = textureSampleLevel(
+            sky_probe_tex,
+            shadow_sampler,
+            env_probe_uv(reflect(-to_eye, n)),
+            0.0,
+        ).rgb;
+        let sphere_rgb = sphere_f * sphere_c * sphere_light * vec3<f32>(1.93025, 1.20047, 8.0)
+            + 20.0 * sphere_noise * sphere_spec * scene.light.sun
+            + sphere_sky;
+        let sphere_a = sphere_f * (sphere_c.x + sphere_c.y + sphere_c.z) * (1.0 - 0.584961 * clock);
+        return vec4<f32>(scene.light.output_scale * sphere_rgb, clamp(sphere_a, 0.0, 1.0));
     }
     // **The Bomb's shockwave rings** (`slots::BOMB_SHOCK`,
     // `hd_bombfire_shockwaves_glow` block `@0x1950`), `Shockwave_scalar` being
