@@ -412,6 +412,21 @@ impl Effect {
         scale: ColourScale,
         external: &mut dyn FnMut(&str) -> Option<Sprite>,
     ) -> Result<Self, Error> {
+        Self::parse_listed(data, scale, false, external)
+    }
+
+    /// [`Self::parse_with`], and with `template_paths` a sprite template whose file embeds
+    /// no pixels also asks `external` for the sprite its own record names (Wipeout HD): for
+    /// an effect a title lists for its templates.
+    ///
+    /// # Errors
+    /// As [`Self::parse`].
+    pub fn parse_listed(
+        data: &[u8],
+        scale: ColourScale,
+        template_paths: bool,
+        external: &mut dyn FnMut(&str) -> Option<Sprite>,
+    ) -> Result<Self, Error> {
         let system = ParticleSystem::parse(data)?;
         let records = system.emitters(data)?;
         if records.len() > MAX_EMITTER_STATES {
@@ -442,7 +457,7 @@ impl Effect {
             rides_owner_frame: true,
             skipped_templates: 0,
         };
-        effect.add_templates(&system, data, &records, scale, external);
+        effect.add_templates(&system, data, &records, scale, template_paths, external);
         Ok(effect)
     }
 

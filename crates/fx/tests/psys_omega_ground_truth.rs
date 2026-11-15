@@ -107,12 +107,21 @@ fn every_emitter_names_a_gnf_that_ships_and_decodes() {
         .cloned()
         .collect();
     let mut sprites = BTreeSet::new();
+    let mut templates = (0usize, 0usize);
     for entry in entries.iter().filter(|e| !e.contains("/Get/")) {
         let blob = archive.read_path(entry).expect("reads");
         let Ok(system) = pob::ParticleSystem::parse(&blob) else {
             continue;
         };
         for emitter in system.emitters(&blob).expect("walks") {
+            for template in &emitter.initial_particles {
+                templates.0 += 1;
+                templates.1 += usize::from(
+                    system
+                        .template_texture_path(&blob, template)
+                        .is_some_and(|path| path.to_ascii_lowercase().ends_with(".tga")),
+                );
+            }
             let authored = system
                 .texture_path(&blob, &emitter)
                 .unwrap_or_else(|| panic!("{entry}: {} names no texture", emitter.name));
@@ -125,6 +134,13 @@ fn every_emitter_names_a_gnf_that_ships_and_decodes() {
         }
     }
     assert!(sprites.len() > 100, "{} sprite names", sprites.len());
+    // A sprite template names its own texture at `+0x87c` here as on HD
+    // (`oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`): every record, none wired.
+    assert_eq!(
+        templates,
+        (55, 55),
+        "template records, and those naming a .tga"
+    );
     let mut absent = Vec::new();
     for name in &sprites {
         match archive.read_path(name) {

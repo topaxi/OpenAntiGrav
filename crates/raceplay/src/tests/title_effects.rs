@@ -13,7 +13,9 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 17] = [
+const OWN: [Trigger; 19] = [
+    Trigger::PlasmaCharging,
+    Trigger::PlasmaLaunch,
     Trigger::BombGlow,
     Trigger::DisruptorHead,
     Trigger::DisruptorExplo,
@@ -49,8 +51,9 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         // Pure has no LeachBeam at all (`PURE_ABSENT`), so it names none of the
         // beam's effects, the energy one included.
         let pure = !PURE_ABSENT.contains(&trigger);
-        // HD drops the PS2 engine-flare particle too (`HD_ABSENT`).
-        let hd = !HD_ABSENT.contains(&trigger);
+        // HD drops the PS2 engine-flare particle too (`HD_ABSENT`), and the Plasma flash
+        // its executable never names (`HD_UNNAMED`).
+        let hd = !HD_ABSENT.contains(&trigger) && !HD_UNNAMED.contains(&trigger);
         let pulse = !PULSE_ABSENT.contains(&trigger);
         assert_eq!(has(trigger), [pulse, pure, hd, false, false], "{trigger:?}");
     }
@@ -135,6 +138,15 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
     // blast does.
     assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
+    // `Plasma_Init` and `Plasma_Launch` (HD, `0x00120fe8`, `0x0011f810`) name them; 2048 and
+    // Omega ship the files and are "checked, applies, not wired".
+    for plasma in [Trigger::PlasmaCharging, Trigger::PlasmaLaunch] {
+        assert_eq!(
+            has(plasma),
+            [false, false, true, false, false],
+            "{plasma:?}"
+        );
+    }
     // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
     for own in [
         Trigger::BombGlow,
@@ -194,6 +206,19 @@ const HD_ABSENT: [Trigger; 3] = [
     Trigger::MagstripZone,
     Trigger::EngineFlare,
 ];
+
+/// `WO_PLASMA_FLASH`: HD's disc ships the file and its executable never names it, the
+/// detonation being `WO_PLASMA_LIGHTNING_EXPAND` (`ps3-hdfury-eu/plasma.md`, "The effects
+/// and their triggers").
+const HD_UNNAMED: [Trigger; 1] = [Trigger::PlasmaBlast];
+
+#[test]
+fn hd_asks_for_none_of_the_effects_its_executable_never_names() {
+    for trigger in HD_UNNAMED {
+        assert!(oag_hd::TITLE.effect_on(trigger).is_none(), "{trigger:?}");
+    }
+    assert!(!oag_hd::TITLE.effects.names().contains(&"WO_PLASMA_FLASH"));
+}
 
 #[test]
 fn hd_asks_for_none_of_the_effects_its_disc_does_not_author() {
@@ -261,7 +286,8 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             !OWN.contains(t)
                 && *t != Trigger::WreckExplosion
                 && !(title.name == oag_pulse::TITLE.name && PULSE_ABSENT.contains(t))
-                && !(title.name == oag_hd::TITLE.name && HD_ABSENT.contains(t))
+                && !(title.name == oag_hd::TITLE.name
+                    && (HD_ABSENT.contains(t) || HD_UNNAMED.contains(t)))
                 && !(title.name == oag_pure::TITLE.name && PURE_ABSENT.contains(t))
                 && !(at >= 3 && UNAUTHORED.contains(t))
                 && !(at == 4 && matches!(t, Trigger::MagstripSparks | Trigger::MagstripZone))
@@ -356,8 +382,8 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
     // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
-    // Disruptor launch.
-    assert_eq!(crate::RACE_EFFECTS.len(), 51);
+    // Disruptor launch; 53 with HD's Plasma wind-up and release.
+    assert_eq!(crate::RACE_EFFECTS.len(), 53);
 }
 
 #[test]

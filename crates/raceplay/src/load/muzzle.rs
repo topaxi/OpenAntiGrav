@@ -1,5 +1,5 @@
-//! Each grid slot's `Ship Muzzle` locator, read off its own hull for the
-//! simulation: the weapon node a Plasma bolt charges on and is released from
+//! Each grid slot's `Ship Muzzle` locator, read off its own hull (or, on Wipeout HD, the
+//! `Locators.vex` beside it) for the simulation: the weapon node a Plasma bolt charges on and is released from
 //! (`oag_weapons::projectile::plasma::muzzle`).
 //!
 //! Read here, in both halves of the crate, rather than taken off the liveries:
@@ -42,7 +42,9 @@ pub(super) fn per_slot(
                 .ships_for(team)
                 .hull_entry_name(team, zone, variant);
             match archives.read_name(&name) {
-                Ok(blob) => oag_vex::vex::ship_muzzle(&blob).map(Vec3::from),
+                Ok(blob) => oag_vex::vex::ship_muzzle(&blob)
+                    .or_else(|| beside_the_hull(archives, &name))
+                    .map(Vec3::from),
                 Err(error) => {
                     report.push(format!(
                         "{name}: not read for the Plasma's weapon node ({error}); the bolt \
@@ -53,4 +55,18 @@ pub(super) fn per_slot(
             }
         })
         .collect()
+}
+
+/// The team's locator file, where Wipeout HD keeps the node (`ship_muzzle`, class
+/// `0x3e2`, which `ShipMuzzle_AttachToShip` `0x002dae70` stores at `ship+0x5f34`).
+const LOCATORS_ENTRY: &str = "Locators.vex";
+
+/// The locator out of the `Locators.vex` beside the hull `name`, for a hull file that
+/// authors none itself (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The muzzle").
+fn beside_the_hull(archives: &mut oag_assets::Archives, name: &str) -> Option<[f32; 3]> {
+    let at = name.rfind(['\\', '/'])?;
+    let blob = archives
+        .read_name(&format!("{}{LOCATORS_ENTRY}", &name[..=at]))
+        .ok()?;
+    oag_vex::vex::ship_muzzle(&blob)
 }

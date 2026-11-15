@@ -255,6 +255,7 @@ impl Race {
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
         let floor_arms = self.floor_arms();
         let own_craft = self.own_craft_probe();
+        let plasma_release = self.plasma_release();
         let impacts = oag_weapons::projectile::step(
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
@@ -268,6 +269,7 @@ impl Race {
             &self.sim.class,
             floor_arms,
             own_craft,
+            plasma_release,
             match self.sim.blast_push {
                 oag_title::weapons::BlastPush::Posted => oag_weapons::projectile::BlastPush::Posted,
                 oag_title::weapons::BlastPush::Immediate => {
@@ -303,6 +305,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_projectile_flares();
+            self.advance_plasma_launch();
         }
         // `slot` is read only by the drawn blast below.
         #[cfg_attr(not(feature = "view"), allow(unused_variables))]

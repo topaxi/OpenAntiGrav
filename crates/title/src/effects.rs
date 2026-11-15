@@ -87,6 +87,10 @@ pub enum Trigger {
     PlasmaLightningExpand,
     /// HD's Plasma detonation, 1.3 s later.
     PlasmaLightningCollapse,
+    /// HD's Plasma wind-up, started with the head and riding the bolt.
+    PlasmaCharging,
+    /// HD's Plasma release, riding the firing craft's `Ship Muzzle` node.
+    PlasmaLaunch,
     /// A Shuriken in flight.
     ShurikenFlare,
     /// A Shuriken's trail, riding beside its head.
@@ -172,7 +176,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 48] = [
+    pub const ALL: [Self; 50] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -182,6 +186,8 @@ impl Trigger {
         Self::PlasmaBlast,
         Self::PlasmaLightningExpand,
         Self::PlasmaLightningCollapse,
+        Self::PlasmaCharging,
+        Self::PlasmaLaunch,
         Self::ShurikenFlare,
         Self::ShurikenTrail,
         Self::ShurikenBounce,

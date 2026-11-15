@@ -22,6 +22,9 @@ fn only_pure_lists_effects_for_the_pool_bar_and_only_the_absorb_burst() {
         oag_omega::TITLE,
     ] {
         assert!(title.effects.pool_bars.is_empty(), "{}", title.name);
+    }
+    // HD lists its Plasma head and wind-up for their templates (`hd_effect_sprites`).
+    for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert!(title.effects.templates.is_empty(), "{}", title.name);
     }
     assert_eq!(oag_pure::TITLE.effects.pool_bars, [ABSORB_EFFECT]);

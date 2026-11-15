@@ -112,6 +112,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         assert!(impacts.iter().all(Option::is_none), "nothing to hit");
         let p = projectiles.slots[0];
@@ -154,6 +155,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -201,6 +203,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         if let Some(hit) = impacts.into_iter().flatten().next() {
             impact = Some(hit);
@@ -238,6 +241,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 "VENOM",
                 crate::projectile::FloorArms::SteerToRidePoint,
                 crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+                crate::projectile::PlasmaRelease::DisplayScaled,
             )
             .into_iter()
             .flatten()
@@ -274,6 +278,7 @@ fn an_inactive_slot_is_not_a_target() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -306,6 +311,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 "VENOM",
                 crate::projectile::FloorArms::SteerToRidePoint,
                 crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+                crate::projectile::PlasmaRelease::DisplayScaled,
             )
             .into_iter()
             .flatten()
@@ -346,6 +352,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -378,6 +385,7 @@ fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         assert!(
             impacts.iter().all(Option::is_none),
@@ -420,6 +428,7 @@ fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         for impact in impacts.iter().flatten() {
             assert_eq!(impact.kind, Weapon::Mine, "only the mine reports an ending");
@@ -483,6 +492,7 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
@@ -529,6 +539,7 @@ fn without_rocket_stats_an_impact_only_frees_its_slot() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [],
@@ -694,6 +705,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             class,
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         let after = projectiles.slots[0];
         if after.kind.is_some() && after.bounces > 0 {
@@ -733,6 +745,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             class,
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
     }
     assert_eq!(
@@ -800,6 +813,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
             class,
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         highest = highest.max(projectiles.slots[0].bounces);
         if projectiles.live() == 0 {
@@ -854,6 +868,7 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
             class,
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();
@@ -944,6 +959,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
             crate::projectile::BlastPush::Posted,
             oag_physics::DamageRules::default(),
             &mut [crate::projectile::WeaponHit::default(); 2],
@@ -990,6 +1006,7 @@ fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
             "VENOM",
             crate::projectile::FloorArms::SteerToRidePoint,
             crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+            crate::projectile::PlasmaRelease::DisplayScaled,
         );
         ticks += 1;
         ended = impacts.into_iter().flatten().next();

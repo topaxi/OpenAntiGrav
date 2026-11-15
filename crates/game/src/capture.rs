@@ -540,7 +540,7 @@ pub fn run(
                 pose_boost: None,
                 pose_intensity: None,
                 pose_speed: None,
-                pose_hold: false,
+                pose_hold: crate::race_capture::pose_hold::Hold::Off,
                 pose_lean: None,
                 field_lean: Vec::new(),
                 field_warmup: None,

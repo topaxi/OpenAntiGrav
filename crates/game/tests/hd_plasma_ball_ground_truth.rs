@@ -1,4 +1,4 @@
-//! Wipeout HD's Plasma bolt head draws a dark core inside a bright rim, on a real disc.
+//! Wipeout HD's Plasma bolt head draws a violet core inside a bright rim, on a real disc.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -17,16 +17,20 @@
 //! whose camera is the origin: the rim then came out of the direction to the
 //! world's origin and the whole disc painted white. Nothing in the model, the
 //! program or the cull was wrong, so only a frame tells the two apart.
+//!
+//! The head's two glow sprites (`WO_PLASMA_HEAD`'s templates) draw over the ball, so
+//! the dark face of the program reads violet in the frame, as the original's bolt does
+//! on its craft's nose (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The pairs").
 
 use std::path::Path;
 
 const SIZE: (usize, usize) = (960, 544);
 
-/// The red channel of every pixel of a PNG this project's own writer made.
+/// Every pixel of a PNG this project's own writer made, as `[r, g, b]`.
 ///
 /// That writer stores its deflate blocks uncompressed and filters nothing
 /// (`oag_texture::png`), so a reader needs only the chunk and block framing.
-fn red_of(png: &[u8]) -> Vec<u8> {
+fn rgb_of(png: &[u8]) -> Vec<[u8; 3]> {
     let mut at = 8;
     let mut zlib = Vec::new();
     while at + 8 <= png.len() {
@@ -54,13 +58,19 @@ fn red_of(png: &[u8]) -> Vec<u8> {
         "an RGBA PNG of the frame's size"
     );
     raw.chunks_exact(stride)
-        .flat_map(|row| row[1..].as_chunks::<4>().0.iter().map(|p| p[0]))
+        .flat_map(|row| {
+            row[1..]
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|p| [p[0], p[1], p[2]])
+        })
         .collect()
 }
 
 /// Talon's Junction's grid at tick 112, a plasma shot released at tick 100,
 /// or nothing fired.
-fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
+fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<[u8; 3]> {
     let out = scratch.join("frame.png");
     let script = scratch.join("fire.inputs");
     std::fs::write(&script, "100 none\n2 square\n1000 none\n").expect("the input script");
@@ -87,37 +97,37 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
             .arg(&script);
     }
     assert!(command.status().expect("running oag-game").success());
-    red_of(&std::fs::read(&out).expect("the frame"))
+    rgb_of(&std::fs::read(&out).expect("the frame"))
 }
 
-/// Pixels dark enough to be the bolt's core, in the box the bolt sits in
-/// ahead of the nose: the middle of the frame, above the cockpit.
-/// Pixels of the bolt's box that are dark in `frame` and **not** dark in the
-/// control (`frame` itself when `control` is `None`).
-///
-/// Counting only what the bolt added is what keeps this about the bolt: the
-/// start line under it is HD's authored dark constant diffuse since 2026-10-19
-/// (it was a normal map drawn as colour, bright purple), so 2,070 of the box's
-/// 12,000 road pixels are dark with no bolt in the frame at all.
-fn dark_core(frame: &[u8], control: Option<&[u8]>) -> usize {
-    (230..330)
-        .flat_map(|y| (420..540).map(move |x| (x, y)))
-        // Re-cut to `< 40` on 2026-10-20 (`hd-scenery-materials`): the start line's constant
-        // diffuse is now bound sRGB-encoded (57 where it was 9), so the road reads
-        // brighter and the old `< 24` left the control at 171, under its own floor;
-        // at 40 the control counts 1,311 and the bolt adds 380. Was `< 40`; HD's lit programs end on a /2 output scale (2026-10-09), so the
-        // road and the bolt's core both read darker, and 24 keeps the control
-        // under 50 (18) with the bolt over 200 (275).
-        .filter(|&(x, y)| {
-            let at = y * SIZE.0 + x;
-            frame[at] < 40 && control.is_none_or(|c| c[at] >= 40)
-        })
+/// The bolt on the nose at tick 112: its inner disc, and the box round the whole ball.
+/// The ball is the live object's size (`0.5625`) on the hull's `Ship Muzzle` node.
+const INNER: (usize, usize, usize, usize) = (470, 266, 490, 286);
+const BALL: (usize, usize, usize, usize) = (455, 250, 505, 300);
+
+/// Pixels of `frame` inside `[x0, x1) x [y0, y1)` for which `keep` holds.
+fn count(
+    frame: &[[u8; 3]],
+    (x0, y0, x1, y1): (usize, usize, usize, usize),
+    keep: impl Fn(i32, i32, i32) -> bool,
+) -> usize {
+    (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| frame[y * SIZE.0 + x]))
+        .filter(|&[r, g, b]| keep(i32::from(r), i32::from(g), i32::from(b)))
         .count()
+}
+
+fn violet(r: i32, g: i32, b: i32) -> bool {
+    r - g > 30 && b - g > 30
+}
+
+fn white(r: i32, g: i32, b: i32) -> bool {
+    r > 235 && g > 235 && b > 235
 }
 
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
+fn the_plasma_bolts_head_has_a_violet_core_not_a_white_disc() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
@@ -127,30 +137,28 @@ fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();
 
-    let (with, without) = (dark_core(&fired, Some(&control)), dark_core(&control, None));
+    let (core_violet, core_white) = (count(&fired, INNER, violet), count(&fired, INNER, white));
+    let ball_white = count(&fired, BALL, white);
     println!(
-        "dark pixels the bolt adds to its box: {with}; dark pixels of the road alone: {without}"
+        "inner disc: {core_violet} violet, {core_white} white of 400; ball box: {ball_white} white"
     );
-    // With both the halved lit output and the encoded-mean adaptation
-    // (2026-10-09) the bolt counts 190 and the control 16: the core is a
-    // gradient, so the `< 24` cut takes less of it, and a white disc would
-    // count about what the control does. The floor keeps the two far apart.
-    // **Re-measured 2026-10-19: the bolt adds 119** new dark pixels over a road
-    // that is dark in 2,070 of the box's pixels with no bolt (see `dark_core`),
-    // part of the core landing on pixels already dark, so the floor is 60.
-    assert!(
-        (1000..3500).contains(&without),
-        "the control's box is not the dark start line any more"
+    assert_eq!(
+        count(&control, BALL, violet) + count(&control, BALL, white),
+        0,
+        "the control's box holds neither colour: it is the road"
     );
+    // 392 violet and 4 white of the inner disc's 400. A disc shaded with the eye at
+    // the world's origin has `rim` near 1 all over and is white inside too.
     assert!(
-        with > 60,
-        "the bolt's core is not dark: a white disc is the eye read from the origin"
+        core_violet > 300 && core_white < 50,
+        "the bolt's core is not violet: a white disc is the eye read from the origin"
     );
     // The head's colour tap is decoded on fetch (unit 0 gamma nibble 7,
-    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the bolt
-    // adds 1,024 dark pixels decoded and 569 with the tap raw.
+    // `docs/rendering/hd-unlit-programs.md`, "The weapon units, read live"): the rim
+    // whitens 423 pixels of the ball's box decoded and 951 with the tap raw (and the
+    // inner disc reads 216 violet, 106 white).
     assert!(
-        with > 800,
-        "the bolt's colour tap is read raw, as the console does not: {with}"
+        ball_white < 650,
+        "the bolt's colour tap is read raw, as the console does not: {ball_white}"
     );
 }

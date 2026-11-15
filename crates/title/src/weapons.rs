@@ -104,6 +104,15 @@ pub struct Weapons {
     /// `Plasma_Update` is its own function with a ride height of 4.0
     /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
     pub floor_arms_steer_to_ride_point: crate::pre_race::Sourced<bool>,
+    /// Whether a Plasma bolt leaves at the craft's display scale (`true`, 0.75 x its release
+    /// speed until its first floor ride) or at its release speed (`false`).
+    ///
+    /// Pulse's `Plasma_Launch` takes the weapon-node matrix with the scale in it: released at
+    /// 634.61 km/h, the first records fly 475.9 (`docs/ghidra/functions/psp-pulse-usa/plasma.md`).
+    /// HD's caller orthonormalises the node matrix first, and live the first flying tick reads
+    /// 210.8 km/h off a 200 km/h release, Venom's ramp with no hold
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "Measured live").
+    pub plasma_release_at_display_scale: crate::pre_race::Sourced<bool>,
     /// Whether the firing craft's own box collider hides the track from a projectile's surface
     /// probe, and what a probe that meets it does. See [`OwnCraftBox`].
     pub own_craft_box_hides_track: crate::pre_race::Sourced<OwnCraftBox>,

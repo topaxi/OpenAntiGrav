@@ -37,6 +37,7 @@ fn once(
         "VENOM",
         floor_arms,
         crate::projectile::OwnCraftProbe::PlasmaWindow(0.04),
+        crate::projectile::PlasmaRelease::DisplayScaled,
     );
     assert!(impacts[0].is_none(), "{kind:?} rode the floor");
     projectiles.slots[0]

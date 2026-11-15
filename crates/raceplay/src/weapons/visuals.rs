@@ -22,6 +22,10 @@ use super::*;
 /// The LeachBeam pool's size: how many entries the render-side state has.
 const LEACH_POOL: usize = oag_weapons::projectile::leach_beam::POOL_SIZE;
 
+/// The row lengths of HD's bolt ball matrix, model `X`, `Y`, `Z`: `0.75^2`, `0.75^2` and
+/// `0.75^3`, read off the live object on two shots (`plasma.md`, "The bolt's two frames").
+pub(crate) const PLASMA_BALL_SCALE: [f32; 3] = [0.5625, 0.5625, 0.421_875];
+
 impl Race {
     /// Keeps [`Trigger::LeachbeamCharging`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
@@ -712,10 +716,16 @@ impl Race {
                 }
                 _ => (projectile.position, None),
             };
-            let second = if projectile.kind == Some(oag_tables::weapons::Weapon::Shuriken) {
-                Some(Trigger::ShurikenTrail)
-            } else {
-                name
+            let (orbiting, second) = match projectile.kind {
+                Some(oag_tables::weapons::Weapon::Shuriken) => {
+                    (orbiting, Some(Trigger::ShurikenTrail))
+                }
+                // HD's wind-up effect is started beside the head, on the bolt's own
+                // matrix (`Plasma_Init`); a title without the trigger rides nothing.
+                Some(oag_tables::weapons::Weapon::Plasma) => {
+                    (Some(primary), Some(Trigger::PlasmaCharging))
+                }
+                _ => (orbiting, name),
             };
             // Only the primary anchor ever carries a non-neutral scale - see
             // `plasma_flare_scale`. The Missile's orbiting anchor rides at
@@ -798,6 +808,22 @@ impl Race {
             {
                 let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
                 self.view.stage.orient(instance, up);
+            }
+            // HD's head and wind-up effects emit about the bolt's effect frame, whose
+            // `+Y` is the firing craft's backward axis; Pulse's head keeps world up.
+            if projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
+                && self.view.handles.get(Trigger::PlasmaCharging).is_some()
+            {
+                let up = crate::plasma_launch::effect_up(projectile.velocity);
+                for instance in [
+                    self.view.projectile_flare[slot],
+                    self.view.projectile_flare_orbit[slot],
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    self.view.stage.orient(instance, up);
+                }
             }
             if let Some((ticks, _)) = late {
                 let dt = self.sim.dt;
@@ -1085,6 +1111,23 @@ impl Race {
         // original's own `n` (`rocket+0x100`), seeded to world up at
         // spawn. It, then world up, then any perpendicular, so a
         // projectile flying along one of them still gets a basis.
+        if kind == oag_tables::weapons::Weapon::Plasma {
+            // HD's bolt ball, the one title that draws one: the live object's visual
+            // matrix (`plasma+0x150`) has model `X` down the carried up, `Y` across and
+            // `Z` along the firing direction, 0.5625, 0.5625 and 0.4219 long, charging
+            // and flying alike (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The
+            // bolt's two frames").
+            let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
+            let flat = forward - up * forward.dot(up);
+            if let Some(front) = flat.try_normalize() {
+                return Mat4::from_cols(
+                    (-up * PLASMA_BALL_SCALE[0]).extend(0.0),
+                    (up.cross(front) * PLASMA_BALL_SCALE[1]).extend(0.0),
+                    (front * PLASMA_BALL_SCALE[2]).extend(0.0),
+                    projectile.position.extend(1.0),
+                );
+            }
+        }
         if kind == oag_tables::weapons::Weapon::Shuriken {
             // `Shuriken_Update` (`0x08877bdc`) keeps the carried
             // normal exact as row 1 and flattens the velocity

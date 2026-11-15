@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-09
-summary: "Missile film kept and paired: clearing conflict resolved; open: streak strip too wide late, bloom boost, Plasma launch, Bomb/Mine/Leach pairs"
+updated: 2026-11-15
+summary: "Missile and Plasma paired and wired; open: Plasma core/glow/flash/haze/lights, streak strip too wide late, bloom boost, Bomb/Mine/Leach pairs"
 difficulty: medium (30)
 ---
 
@@ -208,6 +208,22 @@ nothing). Bomb: the original draws the core with the eye inside it (same state a
 lead is closed (0.996105 is our own law at age 0.81), but ours' core still whitens an inside-the-blast frame where the film is yellower
 (`hd-blast-fill`: mean blue 250 against 120-216), cause open; the next measurement is the original at a known age and eye offset. Tools:
 `scripts/rpcs3-hd-whiteout.py`, `scripts/rsx-draw-list.py`.
+
+## 2026-11-15 (`hd-plasma`): the Plasma paired phase by phase; what is left
+
+Landed: see plasma.md (HD), 2026-11-15 section. Open, in the order a player notices (causes and addresses there):
+
+1. The flying bolt lacks the original's white-hot core; the head's two templates load, whether they draw is open.
+2. The charge glow at 0.9 s is faint (`WO_PLASMA_CHARGING`'s `GLOW` template's scale as played).
+3. The release burst is too wide and violet; `FLASH`/`START_FLASH` are muted because they white the frame out (cause
+   unread, same symptom as Pure's absorb burst).
+4. The blast after 0.5 s: the original's haze and two explosion lights (`*0x008aa260 +0x30/+0xa0`) are unwired.
+5. The sphere's probe and `iblScalePower` are the glass's, not read on the sphere's draw (two RSX dumps missed it).
+6. Past 1 s on a banked climb ours bends with the road; the original holds its heading (HD's floor arms unread).
+7. The Plasma's lights (wind-up two, release one, blast two) are unwired.
+
+No new RPCS3 capture is needed to start 1-3 (the frames are reproducible with `scripts/hd-weapon-pair.py`,
+state 7, Talon's Junction, Feisar Venom); 4, 5 and 7 need RE; 6 needs HD's `Plasma_Update` floor arm read.
 
 ## Next Steps
 
@@ -434,9 +450,9 @@ and centroid (`weapons.md`, "The Missile's red rings"). Tools: `scripts/rpcs3-hd
   presses). A fire in the first second after GO fires nothing; `--fire-after 3` and `--hold 1.0` are the defaults that fired.
 - **State 8's visual**: a green-cyan shell around the whole craft, no muzzle flash, HUD "Machine Gun" damage 5. Settle
   which weapon it is (the Shield is state 5 in `rpcs3-capture.md`) before touching the Cannon's look.
-- **Plasma's launch**: purple lightning rays and a forward blue ripple wave at 0.4 s that ours lacks (candidates
-  `WO_PLASMA_LAUNCH`, `_CHARGING`, or the wired `_LIGHTNING_EXPAND` not playing). Hold ours' button like the original's
-  (~0.5 s), film out to 3 s on one fresh grid for the growing sphere, and find the trigger before drawing anything.
+- ~~**Plasma's launch**~~ **wired 2026-11-15** (`hd-plasma`): `WO_PLASMA_CHARGING` and `WO_PLASMA_LAUNCH` on their
+  read triggers, the muzzle node, the ball's frame, the blast's three programs and the release speed; every phase
+  paired. What still differs is listed with cause and address in plasma.md (HD), "Open", and below.
 - **Rocket**: the original's smoke is blue-grey and fans wider; ours white and tight (the ribbon vertex RGB, chosen).
 - ~~**Missile ribbon**~~ **drawn** (see the next section). The heads' own scale and orbit are unread (`0x0011e640` stores the two matrices at `+0xf0`/`+0x130`); `HD_Mine_halo` unwired.
 

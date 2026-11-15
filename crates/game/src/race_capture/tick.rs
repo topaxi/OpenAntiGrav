@@ -50,12 +50,17 @@ pub(super) fn advance_one_tick(
             race.give_weapon(slot, weapon);
         }
     }
+    let held_pose =
+        (options.pose_hold == pose_hold::Hold::EveryTick).then(|| pose_hold::StartPose::of(race));
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
         (None, None) => {
             race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
         }
+    }
+    if let Some(pose) = held_pose {
+        pose.restore_at_rest(race);
     }
     // After the tick, as an impact arms it: the frame this tick ends on shows
     // the shake at progress 0.

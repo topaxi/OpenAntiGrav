@@ -511,6 +511,17 @@ impl Race {
         }
     }
 
+    /// How fast this title's Plasma bolt leaves the craft's weapon node,
+    /// `oag_title::weapons::Weapons::plasma_release_at_display_scale`.
+    #[must_use]
+    pub fn plasma_release(&self) -> oag_weapons::projectile::PlasmaRelease {
+        if self.sim.plasma_release_at_display_scale {
+            oag_weapons::projectile::PlasmaRelease::DisplayScaled
+        } else {
+            oag_weapons::projectile::PlasmaRelease::Unscaled
+        }
+    }
+
     /// How a projectile's first probes treat the firing craft,
     /// `oag_title::weapons::Weapons::own_craft_box_hides_track` ([`own_craft_probe_for`]).
     #[must_use]

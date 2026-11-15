@@ -285,6 +285,7 @@ fn update(
         "VENOM",
         race.floor_arms(),
         race.own_craft_probe(),
+        race.plasma_release(),
         BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut hits,

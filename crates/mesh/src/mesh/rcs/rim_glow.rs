@@ -28,8 +28,9 @@
 //! Plasma explosion's ring and halo: the same skeleton again (a noise alpha
 //! tap displacing the colour tap, both scrolled) but over the declared
 //! `UV_offset` - the model's own clock - instead of the engine's `time`. They
-//! sit here because the classification is the same fingerprint; what they
-//! change in the picture is only where the texture is sampled.
+//! sit here because the classification is the same fingerprint. Their
+//! programs are unlit and answered whole, as is the explosion's sphere
+//! ([`slots::PLASMA_SPHERE`]), the one shape here with three samplers.
 //!
 //! # The fingerprint
 //!
@@ -64,6 +65,9 @@ struct Shape {
     mnemonics: &'static [&'static str],
     literals: &'static [[f32; 4]],
     parameters: &'static [u32],
+    /// How many samplers the program declares: one for every shape but the
+    /// Plasma explosion's sphere.
+    samplers: usize,
 }
 
 /// `hd_plasmaring_glow.rcsmaterial`, block `@0x1900` (`DATA02`): the
@@ -82,6 +86,7 @@ const PLASMA_RING: Shape = Shape {
         [1.442_694_9, 0.0, 0.0, 0.0],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, UV_OFFSET],
+    samplers: 1,
 };
 
 /// `hd_plasmahalo_glow.rcsmaterial`, block `@0x1960` (`DATA02`): the
@@ -101,6 +106,60 @@ const PLASMA_HALO: Shape = Shape {
         [0.0, 0.0, 0.0, 0.333_251_95],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, UV_OFFSET],
+    samplers: 1,
+};
+
+/// `iblScalePower`: the reflection probe's gain and desaturation (`oag_raceplay::env_probes`).
+const IBL_SCALE_POWER: u32 = 0x7480_de6d;
+
+/// `plasmasphere_glow.rcsmaterial`, block `@0x2690` (`DATA02`): the
+/// explosion's sphere, a lit Fresnel shell over the plasma picture whose
+/// exponent and fade are the blast's age. Earns [`slots::PLASMA_SPHERE`].
+/// See `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The blast's three
+/// programs".
+const PLASMA_SPHERE: Shape = Shape {
+    bit: slots::PLASMA_SPHERE,
+    mnemonics: &[
+        "MOV", "DP3", "DIVSQ", "ADD", "MOV", "DP3", "DIVSQ", "DP3", "DIVSQ", "DP3", "DP3", "ADD",
+        "MOV", "MUL", "ADD", "MOV", "MOV", "SGT", "DP3", "MOV", "MOV", "MAD", "MOV", "TEX", "LG2",
+        "MOV", "MOV", "MAD", "MOV", "MUL", "MUL", "MUL", "MUL", "EX2", "MAD", "MUL", "MOV", "MAD",
+        "TEX", "MAD", "FENCT", "MOV", "TEX", "MOV", "MAD", "MUL", "ADD", "ADD", "MUL", "ADD",
+        "FENCT", "MOV", "TEX", "DP3", "LG2", "MUL", "MUL", "MUL", "MOV", "MUL", "MAD", "MOV",
+        "MAD", "EX2", "MUL", "EX2", "MUL", "MOV", "MUL", "ADD", "MAD", "MUL", "MUL", "MUL", "MUL",
+        "MAD", "MAD", "ADD", "MAD", "MAD",
+    ],
+    literals: &[
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0, 0.0],
+        [0.01, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.2, 0.0, 0.0],
+        [2.0, 0.0, 0.0, 0.0],
+        [5.0, 0.0, 0.0, 0.0],
+        [0.4, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 15.0],
+        [10.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0, 0.0],
+        [0.25, 0.0, 0.0, 0.0],
+        [0.300_048_83, 0.589_843_75, 0.109_985_35, 0.0],
+        [32.0, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+        [0.0, 20.0, 0.0, 0.0],
+        [0.584_960_94, 0.0, 0.0, 0.0],
+        [0.0, 1.930_254_5, 1.200_468_9, 8.0],
+    ],
+    parameters: &[
+        rcsmaterial::SUN_DIRECTION,
+        rcsmaterial::SUN_COLOUR,
+        FOG_COLOUR,
+        GLOBAL_ALPHA_SCALER,
+        IBL_SCALE_POWER,
+        rcsmaterial::CONSTANT_AMBIENT,
+        UV_OFFSET,
+    ],
+    samplers: 3,
 };
 
 /// `AlphaAnim`, bound by pointer to the model's own clock (`node + 0xc0`).
@@ -147,6 +206,7 @@ const BOMB_FIRE: Shape = Shape {
         GLOBAL_ALPHA_SCALER,
         TIME,
     ],
+    samplers: 1,
 };
 
 /// `hd_bomb_halo.rcsmaterial`, block `@0x19c0` (`DATA02`): the laid Bomb's
@@ -166,6 +226,7 @@ const BOMB_HALO: Shape = Shape {
         [0.0, 0.0, 0.0, 0.099_975_586],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+    samplers: 1,
 };
 
 /// `hd_bombfire_shockwaves_glow.rcsmaterial`, block `@0x1950` (`DATA02`): the
@@ -183,6 +244,7 @@ const BOMB_SHOCK: Shape = Shape {
         [1.442_694_9, 0.0, 0.0, 0.0],
     ],
     parameters: &[SHOCKWAVE_SCALAR, FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+    samplers: 1,
 };
 
 /// `hd_missile_explosion_core_glow.rcsmaterial`, block `@0x17f0` (`DATA02`):
@@ -196,6 +258,7 @@ const MISSILE_CORE: Shape = Shape {
     ],
     literals: &[[1.442_694_9, 0.0, 0.0, 0.0]],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+    samplers: 1,
 };
 
 /// `hd_missile_explosion_lightrays_glow.rcsmaterial`, block `@0x17f0`
@@ -214,6 +277,7 @@ const MISSILE_RAYS: Shape = Shape {
         [1.442_694_9, 0.0, 0.0, 0.0],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+    samplers: 1,
 };
 
 /// `hd_missile_explosion_shockwaves_glow.rcsmaterial`, block `@0x19b0`
@@ -231,6 +295,7 @@ const MISSILE_SHOCK: Shape = Shape {
         [1.442_694_9, 0.0, 0.0, 0.0],
     ],
     parameters: &[SHOCKWAVE_SCALAR, FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+    samplers: 1,
 };
 
 /// `hd_leachbeam_ball_glow.rcsmaterial`, block `@0x19b0` (`DATA00`).
@@ -255,6 +320,7 @@ const LEACH_BALL: Shape = Shape {
         [1.442_694_9, 0.0, 0.0, 0.0],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, TIME],
+    samplers: 1,
 };
 
 /// `plasmasphere_subtractive_glow.rcsmaterial`, block `@0x18d0` (`DATA02`).
@@ -275,6 +341,7 @@ const PLASMA_HEAD: Shape = Shape {
         [1000.0, 0.0, 0.0, 0.0],
     ],
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, RIM_EDGE_ALPHA, TIME],
+    samplers: 1,
 };
 
 /// The [`slots`] bit a material's resolved program earns, or `0`.
@@ -291,9 +358,6 @@ pub(super) fn classify(
     program: &fragment::Program,
     authored_alpha: Option<f32>,
 ) -> u32 {
-    if declared.samplers.len() != 1 {
-        return 0;
-    }
     let mut parameters = declared.parameters.clone();
     parameters.sort_unstable();
     for shape in [
@@ -301,6 +365,7 @@ pub(super) fn classify(
         &PLASMA_HEAD,
         &PLASMA_RING,
         &PLASMA_HALO,
+        &PLASMA_SPHERE,
         &BOMB_FIRE,
         &BOMB_SHOCK,
         &BOMB_HALO,
@@ -310,7 +375,10 @@ pub(super) fn classify(
     ] {
         let mut wanted = shape.parameters.to_vec();
         wanted.sort_unstable();
-        if parameters != wanted || !mnemonics_match(program, shape.mnemonics) {
+        if declared.samplers.len() != shape.samplers
+            || parameters != wanted
+            || !mnemonics_match(program, shape.mnemonics)
+        {
             continue;
         }
         if literals(declared, program) != shape.literals {
@@ -327,12 +395,13 @@ pub(super) fn classify(
 /// The colours of an HD glow chunk whose vertices declare none, for the
 /// materials whose programs read them off the vertex.
 ///
-/// - **The Bomb's and the Missile's shockwave rings** (stride 22): two colour
+/// - **The Bomb's and the Missile's shockwave rings and the Plasma ring** (stride 22): two colour
 ///   fields, `[a.rgb, b.a]` - the first's `R G B` and the second's `A`, which
 ///   their programs multiply in and take their alpha from.
-/// - **The Missile's core** (stride 18): the one colour field every vertex
-///   ends in (`ff ff ff ff` on the sphere), whose `A` the program multiplies
-///   into its alpha.
+/// - **The Missile's core and the Plasma halo** (stride 18): the one colour
+///   field every vertex ends in (`ff ff ff ff` on the Missile's sphere), whose
+///   `A` the core's program multiplies into its alpha and the halo's vertex
+///   program into the colour.
 pub(super) fn inline_light(
     roles: u32,
     mesh: &oag_rcs::rcsmodel::Mesh,
@@ -341,10 +410,16 @@ pub(super) fn inline_light(
     stride: usize,
 ) -> Option<Vec<[f32; 4]>> {
     let has = |pair: u32| roles & pair == pair;
-    if has(slots::BOMB_SHOCK) || has(slots::MISSILE_SHOCK) {
+    // The Plasma ring's vertex program hands over the same two fields
+    // (`MOV o[TC0].xyz, v[3]`, `MOV o[TC3].z, v[4].w`, block `@0x1770`).
+    let plasma_ring = roles & slots::WEAPON_PROGRAM_BITS == slots::CLOCK_SCROLL_RING;
+    if has(slots::BOMB_SHOCK) || has(slots::MISSILE_SHOCK) || plasma_ring {
         return mesh.inline_two_colours(data, submesh, stride).ok();
     }
-    if has(slots::MISSILE_CORE) {
+    // The Plasma halo's vertex program premultiplies the same single field
+    // (`MUL o[TC0].xyz, v[3].xyzx, v[3].wwww`, block `@0x17e0`).
+    let plasma_halo = roles & slots::WEAPON_PROGRAM_BITS == slots::CLOCK_SCROLL_HALO;
+    if has(slots::MISSILE_CORE) || plasma_halo {
         let bytes = mesh.inline_colours(data, submesh).ok()?;
         return Some(
             bytes

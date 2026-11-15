@@ -109,6 +109,22 @@ pub const PLASMA_LIGHTNING_EXPAND_EFFECT: &str = "WO_PLASMA_LIGHTNING_EXPAND";
 /// `Race::ignite_blast`.
 pub const PLASMA_LIGHTNING_COLLAPSE_EFFECT: &str = "WO_PLASMA_LIGHTNING_COLLAPSE";
 
+/// What HD/Fury plays on a Plasma bolt while it winds up, beside its head.
+///
+/// **Recovered, confidence 88.** `Plasma_Init` (`0x00120fe8`) spawns `WO_PLASMA_HEAD` and then
+/// this (name at `0x00783848`, call `0x00121264`) on the same matrix, the bolt's `+0xb0`, and
+/// `Plasma_Detonate` releases both. Nothing stops it at the release: its emitters are
+/// authored about a second long (`docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, "The
+/// effects and their triggers").
+pub const PLASMA_CHARGING_EFFECT: &str = "WO_PLASMA_CHARGING";
+
+/// What HD/Fury plays when a Plasma bolt leaves, on the firing craft's `Ship Muzzle` node.
+///
+/// **Recovered, confidence 85.** `Plasma_Launch` (`0x0011f810`) spawns it (name at
+/// `0x00783818`, call `0x0011fc08`) on the node's own matrix when the craft's cockpit-view
+/// byte `+0x5f42` is clear, so it rides the craft (same page).
+pub const PLASMA_LAUNCH_EFFECT: &str = "WO_PLASMA_LAUNCH";
+
 /// The effect the original attaches to every blade at launch.
 ///
 /// **Recovered, confidence 88.** `Shuriken_Init` (`0x08877280`) spawns it with

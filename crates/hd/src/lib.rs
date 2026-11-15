@@ -255,6 +255,9 @@ pub const TITLE: &Title = &Title {
         launch_normal_is_track_up: oag_title::pre_race::Sourced::measured(true),
         // Pulse's arms are measured; this title's own are unread.
         floor_arms_steer_to_ride_point: oag_title::pre_race::Sourced::chosen(false),
+        // Read statically off `Plasma_Launch` (`0x0011f810`) and measured live on RPCS3:
+        // `ps3-hdfury-eu/plasma.md`, "Measured live".
+        plasma_release_at_display_scale: oag_title::pre_race::Sourced::measured(false),
         // A box branch is read, but its surface filter and row sign are open, 65
         // (`ps3-hdfury-eu/own-craft-box.md`).
         own_craft_box_hides_track: oag_title::pre_race::Sourced::chosen(

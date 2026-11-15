@@ -805,7 +805,10 @@ pub(crate) fn run_race(
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
-                pose_hold: cli.pose_hold,
+                pose_hold: oag_game::race_capture::pose_hold::Hold::from_flags(
+                    cli.pose_hold,
+                    cli.pose_hold_ticks,
+                ),
                 pose_lean: pose_lean(cli)?,
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,

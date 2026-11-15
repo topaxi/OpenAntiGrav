@@ -25,6 +25,11 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::QUAKE_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
             oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+            oag_title::engine_effects::PLASMA_FLARE_EFFECT,
+            oag_title::engine_effects::PLASMA_CHARGING_EFFECT,
+            oag_title::engine_effects::PLASMA_LAUNCH_EFFECT,
+            oag_title::engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
+            oag_title::engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
         ]
     );
     let names = oag_hd::TITLE.effects.names();
@@ -33,21 +38,26 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
     }
 }
 
-/// Only HD and Pure lift the extent law, and only for the Quake's wave, the
-/// one effect a matched capture of the original has shown spreading across the
-/// road on each (Pure's `Quake_Update`, `psp-pure-usa/quake.md`).
+/// Only HD and Pure lift the extent law: both for the Quake's wave, the one effect a
+/// matched capture of the original has shown spreading across the road on each (Pure's
+/// `Quake_Update`, `psp-pure-usa/quake.md`), and HD for the Plasma blast's two lightning
+/// effects besides (`ps3-hdfury-eu/plasma.md`, "The pairs").
 #[test]
-fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake() {
+fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_blast() {
+    use oag_title::engine_effects as n;
     for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert!(title.effects.extents.is_empty(), "{}", title.name);
     }
+    assert_eq!(oag_pure::TITLE.effects.extents, [n::QUAKE_EFFECT]);
+    assert_eq!(
+        oag_hd::TITLE.effects.extents,
+        [
+            n::QUAKE_EFFECT,
+            n::PLASMA_LIGHTNING_EXPAND_EFFECT,
+            n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+        ]
+    );
     for title in [oag_hd::TITLE, oag_pure::TITLE] {
-        assert_eq!(
-            title.effects.extents,
-            [oag_title::engine_effects::QUAKE_EFFECT],
-            "{}",
-            title.name
-        );
         let names = title.effects.names();
         for listed in title.effects.extents {
             assert!(names.contains(listed), "{listed} is loaded by the race");
@@ -183,19 +193,38 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
     Some(effect)
 }
 
-/// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw; it is a per-effect
-/// choice, not a title-wide one.
+/// HD, 2048 and Omega list the trail-hit burst for HD's class-6 bar draw, and HD the
+/// Plasma's five effects, whose lightning is that class; a per-effect choice, not a
+/// title-wide one.
 #[test]
-fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw() {
-    use oag_title::engine_effects::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
-    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+fn hd_2048_and_omega_list_the_trail_hit_burst_for_the_far_bar_draw_and_hd_its_plasma() {
+    use oag_title::engine_effects as n;
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(
             title.effects.far_bars,
-            [TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT],
+            [n::TRAIL_HITSHIP_EFFECT, n::TRAIL_HITSHIP_RED_EFFECT],
             "{}",
             title.name
         );
     }
+    assert_eq!(
+        oag_hd::TITLE.effects.far_bars,
+        [
+            n::TRAIL_HITSHIP_EFFECT,
+            n::TRAIL_HITSHIP_RED_EFFECT,
+            n::PLASMA_FLARE_EFFECT,
+            n::PLASMA_CHARGING_EFFECT,
+            n::PLASMA_LAUNCH_EFFECT,
+            n::PLASMA_LIGHTNING_EXPAND_EFFECT,
+            n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
+        ]
+    );
+    // The head's and the wind-up's sprite templates play; the release's and the blast's
+    // flashes stay muted.
+    assert_eq!(
+        oag_hd::TITLE.effects.templates,
+        [n::PLASMA_FLARE_EFFECT, n::PLASMA_CHARGING_EFFECT]
+    );
 }
 
 /// `WO_TRAIL_HITSHIP`'s two emitters are class 6 (`+0x4c8` aspect 1.0 and 2.0). Listed, both

@@ -275,6 +275,8 @@ mod perfect_start;
 pub mod photo;
 mod pilot_assist;
 pub mod pilots;
+#[cfg(feature = "view")]
+mod plasma_launch;
 pub mod player_step;
 #[cfg(feature = "view")]
 mod player_tags;

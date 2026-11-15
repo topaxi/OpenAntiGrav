@@ -1119,6 +1119,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) pose_hold: bool,
 
+    /// With `--pose-hold` and `--screenshot`: also put the craft back on that pose, at rest,
+    /// after every tick.
+    ///
+    /// For a weapon fired from a resting craft: the shot then leaves along the pose's own
+    /// heading, where `--pose-hold` alone fires it from wherever the craft has turned to and
+    /// only draws the hull back on the pose.
+    #[arg(long, requires = "pose_hold")]
+    pub(crate) pose_hold_ticks: bool,
+
     /// With `--pose-from`: also draw the craft with the lean and barrel-roll phase the pose's own trace row recorded
     /// (`steer_lean`, `roll_phase`), put on after the ticks.
     ///

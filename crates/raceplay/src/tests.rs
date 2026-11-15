@@ -73,6 +73,7 @@ mod extensions;
 mod field;
 mod hash;
 mod hd_effect_sprites;
+mod hd_plasma_effects;
 mod hd_sprite;
 mod headless;
 mod held_buttons;
@@ -444,6 +445,7 @@ fn setup(handling: Handling) -> Setup {
         autopilot_pad_grants: false,
         launch_normal_is_track_up: true,
         floor_arms_steer_to_ride_point: true,
+        plasma_release_at_display_scale: true,
         own_craft_box_hides_track: oag_title::weapons::OwnCraftBox::Falls,
         reset_triggers: oag_race::recovery::ResetTriggers::PULSE,
         opponent_fire: oag_title::weapons::OpponentFire::PULSE,
