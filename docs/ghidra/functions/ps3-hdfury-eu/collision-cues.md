@@ -254,7 +254,9 @@ to 67. `.GRIND` (cue 40) branches on variable 1 as `.COLLISIONS` does, to `c_GSh
   `{severity, other == 0, perspective}`, the shield swap on slot bit `0x10` and the mode-14
   branch. Two differences: the pan is `-90 * 0.35` out of the cockpit (the same `-31.5`), and
   the collision cue is named `.COLLISIONS_1` when a settings test fails
-  (`FUN_81000930(&DAT_8153fc40, -1) == 0`). Decompile only, confidence 80. Not wired: 2048's
+  (`FUN_81000930(&DAT_8153fc40, -1) == 0`). The executable carries the four names twice; the
+  second copy (`0x814e2ffc`) is referenced from `0x812cf720`, in code Ghidra has not made a
+  function of, unread. Decompile only, confidence 80. Not wired: 2048's
   race cues are still a flat pick ([cue-variables.md](cue-variables.md), "Lineage"), and a grind
   every other frame through a flat pick would be worse than the cue it has.
 - **Omega: checked, differs in delivery.** `FUN_0130b100` (`/omega/eboot-ps4-omega-eu-v107.bin`)
