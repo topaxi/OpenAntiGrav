@@ -646,6 +646,76 @@ fn own_texture_path(system: &ParticleSystem, blob: &[u8], emitter: &Emitter) -> 
         .then(|| String::from_utf8_lossy(raw).into_owned())
 }
 
+/// What HD's sprite templates name: a template record carries its own texture path at
+/// `+0x87c`, where an emitter's is at `+0x4c4`
+/// (`oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`, `docs/formats/pob.md`, "An HD template
+/// names its sprite at `+0x87c`").
+#[derive(Default)]
+struct TemplateNames {
+    records: usize,
+    named: usize,
+    shipped: usize,
+    /// The emitter's own field read on a template record: never a path.
+    by_emitter_field: usize,
+    missing: std::collections::BTreeSet<String>,
+}
+
+impl TemplateNames {
+    fn check(
+        &mut self,
+        system: &ParticleSystem,
+        blob: &[u8],
+        emitter: &Emitter,
+        gtf_basenames: &std::collections::HashSet<String>,
+    ) {
+        for template in &emitter.initial_particles {
+            self.records += 1;
+            if system
+                .texture_path(blob, template)
+                .is_some_and(|path| path.to_ascii_lowercase().ends_with(".tga"))
+            {
+                self.by_emitter_field += 1;
+            }
+            let Some(path) = system.template_texture_path(blob, template) else {
+                continue;
+            };
+            let lower = path.to_ascii_lowercase();
+            let Some(stem) = lower
+                .rsplit(['\\', '/'])
+                .next()
+                .and_then(|name| name.strip_suffix(".tga"))
+            else {
+                continue;
+            };
+            self.named += 1;
+            let gtf = format!("{stem}.gtf");
+            if gtf_basenames.contains(&gtf) {
+                self.shipped += 1;
+            } else {
+                self.missing.insert(gtf);
+            }
+        }
+    }
+
+    fn assert_all_named(self) {
+        println!(
+            "hd: {} sprite template record(s), {} naming a .tga at +0x87c, {} of those shipped \
+             as a .gtf, {} naming one at the emitter's +0x4c4; not shipped: {:?}",
+            self.records, self.named, self.shipped, self.by_emitter_field, self.missing
+        );
+        assert_eq!(self.records, 38, "hd: the disc's sprite template records");
+        assert_eq!(
+            (self.named, self.shipped),
+            (self.records, self.records),
+            "hd: every template record names a shipped texture at +0x87c"
+        );
+        assert_eq!(
+            self.by_emitter_field, 0,
+            "hd: the emitter's +0x4c4 is not a template's field"
+        );
+    }
+}
+
 /// HD does not embed sprite pixels the way PSP does (see
 /// `oag_pob::texture`'s module doc), but every emitter still names its
 /// own texture through the identical `+0x4c4` field, and HD ships the
@@ -689,10 +759,12 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
     let mut resolved = std::collections::BTreeSet::new();
     let mut unresolved = std::collections::BTreeSet::new();
     let mut no_own_reference = 0usize;
+    let mut templates = TemplateNames::default();
     for blob in &blobs {
         let system = ParticleSystem::parse(blob).expect("parse");
         let parsed = system.emitters(blob).expect("emitters");
         for emitter in &parsed {
+            templates.check(&system, blob, emitter, &gtf_basenames);
             let Some(path) = own_texture_path(&system, blob, emitter) else {
                 no_own_reference += 1;
                 continue;
@@ -726,6 +798,7 @@ fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
         "hd: every emitter named its own texture in the session this was measured - \
          a nonzero count here is a real change, not noise"
     );
+    templates.assert_all_named();
     // The exact unresolved set is asserted, not just its size, per this
     // project's own "measurement, not a tolerance" convention -
     // `vandergraf_balls_1024x1024.gtf` ships under a size-renamed sibling

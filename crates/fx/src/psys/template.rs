@@ -23,6 +23,10 @@
 //! and instance initialiser are Pulse's
 //! (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw").
 //!
+//! Where the file embeds none (Wipeout HD), a listed effect's template takes the sprite its
+//! record names at `+0x87c` (`oag_pob::texture::TEMPLATE_TEXTURE_PATH_FIELD`) from the
+//! caller, as an emitter takes its own.
+//!
 //! The sprite is the template record's own, at `+0x890`
 //! (`FUN_08928b10` binds it for a template particle): on the collision sparks it is
 //! the pool the parent shares, on the explosion's `Glow` a 32x32 radial glow
@@ -50,6 +54,7 @@ impl Effect {
         data: &[u8],
         records: &[pob::Emitter],
         scale: ColourScale,
+        template_paths: bool,
         external: &mut dyn FnMut(&str) -> Option<super::Sprite>,
     ) {
         let parents: Vec<usize> = self.roots.clone();
@@ -61,7 +66,11 @@ impl Effect {
                 // The template's own sprite, not its parent's: none is a stand-in.
                 let Some(sprite) =
                     super::Sprite::from_template(system, data, template).or_else(|| {
-                        let path = system.texture_path(data, template)?;
+                        let path = system.texture_path(data, template).or_else(|| {
+                            template_paths
+                                .then(|| system.template_texture_path(data, template))
+                                .flatten()
+                        })?;
                         external(path)
                     })
                 else {
