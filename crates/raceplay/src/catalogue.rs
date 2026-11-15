@@ -1117,6 +1117,30 @@ pub fn all_tracks_of_kind(documents: &[String], kind: &str) -> Vec<Track> {
     out
 }
 
+/// The circuit entry a race opens when the caller names none: `default` (the
+/// title's own, `oag_title::race::RaceDefaults::track`) when `shipped` has it,
+/// else the first of `tracks` that `shipped` has, in the order the title's
+/// definition lists them. `None` when the source ships no circuit at all.
+///
+/// A source can ship fewer circuits than its title declares: the 2048 demo holds
+/// `tower` alone, and the title's default is `altima`.
+/// `shipped` is "does this source's archive set hold this entry", asked of
+/// [`oag_assets::Archives::locate`] by the caller.
+#[must_use]
+pub fn circuit_to_open(
+    default: &str,
+    tracks: &[Track],
+    shipped: impl Fn(&str) -> bool,
+) -> Option<String> {
+    if shipped(default) {
+        return Some(default.to_string());
+    }
+    tracks
+        .iter()
+        .map(Track::entry_name)
+        .find(|entry| shipped(entry))
+}
+
 /// [`tracks_named`] across `documents`, the first spelling of an id winning -
 /// on the same partial-pack-set terms as [`all_tracks`].
 #[must_use]

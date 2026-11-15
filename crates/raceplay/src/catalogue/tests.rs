@@ -527,3 +527,43 @@ fn a_circuit_reads_the_key_its_name_is_filed_under() {
     assert_eq!(tracks[0].name_key(), "Track_Altima_0");
     assert_eq!(tracks[1].name_key(), "01_Track");
 }
+
+/// Shaped like 2048's circuit plugin: the title's default first, then others, one reversed.
+const SHIPPING_DEFINITION: &str = r#"
+<Screen name="Top">
+  <PI_Track name="altima"><Values type="Race" location="Data\art\published\environments\altima"/></PI_Track>
+  <PI_Track name="tower"><Values type="Race" location="Data\art\published\environments\tower"/></PI_Track>
+  <PI_Track name="arena"><Values type="Race" location="Data\art\published\environments\arena"/></PI_Track>
+</Screen>
+"#;
+
+const ALTIMA: &str = r"Data\art\published\environments\altima\track.vex";
+const TOWER: &str = r"Data\art\published\environments\tower\track.vex";
+const ARENA: &str = r"Data\art\published\environments\arena\track.vex";
+
+#[test]
+fn a_source_without_the_default_circuit_opens_the_first_it_ships_in_the_titles_order() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    let held = [ARENA, TOWER];
+    assert_eq!(
+        circuit_to_open(ALTIMA, &tracks, |entry| held.contains(&entry)),
+        Some(TOWER.to_string()),
+        "tower is listed before arena, so it wins over the file order of the archive"
+    );
+}
+
+#[test]
+fn a_source_with_the_default_circuit_opens_it_even_when_others_are_listed_first() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    let held = [TOWER, ARENA];
+    assert_eq!(
+        circuit_to_open(ARENA, &tracks, |entry| held.contains(&entry)),
+        Some(ARENA.to_string())
+    );
+}
+
+#[test]
+fn a_source_with_no_circuit_at_all_opens_none() {
+    let tracks = tracks(SHIPPING_DEFINITION);
+    assert_eq!(circuit_to_open(ALTIMA, &tracks, |_| false), None);
+}
