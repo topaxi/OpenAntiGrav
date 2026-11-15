@@ -129,6 +129,16 @@ impl SequenceTick {
         matches!(self, Self::Ps3 | Self::Vita)
     }
 
+    /// Whether the build's race cues are lists guarded by four cue variables the
+    /// caller supplies (perspective, severity, surface), as HD's handlers read
+    /// them (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`). Pulse and
+    /// Pure play a race cue as the flat set they were measured with, and 2048
+    /// runs the Vita handlers.
+    #[must_use]
+    pub fn walks_cue_variables(self) -> bool {
+        matches!(self, Self::Ps3)
+    }
+
     /// Whether the build's command handlers are Wipeout 2048's (`0x2e`, `0x29`,
     /// `0x04` and the low-byte marker id), against Pulse's and HD's.
     #[must_use]

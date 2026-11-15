@@ -24,7 +24,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use oag_audio::spatial::{pan_of_angle, pan_of_angle_to_rear_edge, pan_volume_gain};
+use oag_audio::spatial::{
+    pan_of_angle, pan_of_angle_folded, pan_of_angle_to_rear_edge, pan_volume_gain,
+};
 use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_core::Rng;
 use oag_formats::sblk::Bank;
@@ -33,6 +35,32 @@ use oag_formats::sblk::timeline::WalkModel;
 use oag_title::SequenceTick;
 
 use super::banks::decode_waveform;
+
+/// How a voice authored in the rear half of the pan law is placed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RearPan {
+    /// The front half only: a rear angle makes a cue keep its flat pick.
+    #[default]
+    Front,
+    /// Plus the first rear angle, 90 degrees ([`pan_of_angle_to_rear_edge`]);
+    /// the countdown cues.
+    Edge,
+    /// The whole circle, as the stereo projection `sin(angle)`
+    /// ([`pan_of_angle_folded`]); HD's race cues.
+    Fold,
+}
+
+impl RearPan {
+    /// The pan of a voice at `angle` degrees, or `None` where this law has none.
+    #[must_use]
+    pub fn pan(self, angle: i32) -> Option<f32> {
+        match self {
+            Self::Front => pan_of_angle(angle),
+            Self::Edge => pan_of_angle_to_rear_edge(angle),
+            Self::Fold => Some(pan_of_angle_folded(angle)),
+        }
+    }
+}
 
 /// One waveform of a timeline cue.
 #[derive(Debug, Clone)]
@@ -45,9 +73,8 @@ pub struct Layer {
     pub delay: f64,
     /// Pan angle in degrees, the descriptor's plus any child records'.
     pub angle: i32,
-    /// Whether the cue pans a 90 degree voice to the rear edge of the pan law
-    /// ([`pan_of_angle_to_rear_edge`]); only the countdown cues do.
-    pub rear_edge: bool,
+    /// How the cue pans a voice in the rear half of the pan law.
+    pub rear: RearPan,
     /// The random bend that detunes it, when one was in force.
     pub bend: Option<Bend>,
 }
@@ -79,8 +106,8 @@ pub struct CueVoice {
     /// Seconds after the cue starts.
     pub delay: f64,
     pub angle: i32,
-    /// See [`Layer::rear_edge`].
-    pub rear_edge: bool,
+    /// See [`Layer::rear`].
+    pub rear: RearPan,
     /// Playback rate multiplier from the bend draw, `1.0` for none.
     pub pitch: f32,
 }
@@ -94,7 +121,7 @@ impl CueVoice {
             looping,
             delay: 0.0,
             angle: 0,
-            rear_edge: false,
+            rear: RearPan::Front,
             pitch: 1.0,
         }
     }
@@ -132,12 +159,23 @@ impl Timeline {
                     looping: layer.looping,
                     delay: layer.delay,
                     angle: layer.angle,
-                    rear_edge: layer.rear_edge,
+                    rear: layer.rear,
                     pitch,
                 }
             })
             .collect()
     }
+}
+
+/// How [`timelines`] reads a cue; the default is a Pulse-style walk of a race cue.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Walking {
+    pub front_end: bool,
+    pub replace_with_child: bool,
+    pub hashed: bool,
+    pub zero_waits: bool,
+    /// The four cue variables of an HD race-cue walk.
+    pub cue_variables: Option<[i8; 4]>,
 }
 
 /// Every alternate combination of `name` as a timeline, when it is worth one.
@@ -155,7 +193,10 @@ impl Timeline {
 /// `zero_waits` passes a `0x1a` whose operand is zero (an exact wait, see
 /// [`WalkModel::zero_waits`]). `front_end` lets a rear-half grain play centred
 /// instead of refusing the timeline, and on the PS3 tick reads a `0x19`
-/// group's count in the operand's high byte.
+/// group's count in the operand's high byte. `cue_variables` walks the list as
+/// HD's race-cue handlers do ([`WalkModel::cue_variables`]): every rear angle
+/// pans ([`RearPan::Fold`]), and a one-voice play is still a timeline, since
+/// another perspective may differ.
 ///
 /// # Errors
 ///
@@ -164,11 +205,15 @@ pub(super) fn timelines(
     bank: &Bank,
     name: &str,
     tick: SequenceTick,
-    front_end: bool,
-    replace_with_child: bool,
-    hashed: bool,
-    zero_waits: bool,
+    walking: Walking,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
+    let Walking {
+        front_end,
+        replace_with_child,
+        hashed,
+        zero_waits,
+        cue_variables,
+    } = walking;
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
     };
@@ -187,11 +232,23 @@ pub(super) fn timelines(
         vita: tick.vita_handlers(),
         tail_waits: replace_with_child,
         zero_waits,
+        cue_variables,
     };
-    let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
+    let all = if cue_variables.is_some() {
+        bank.cue_timelines_sampled(&cue, model, u64::from(cue.index))
+    } else {
+        bank.cue_timelines_modelled(&cue, model)
+    };
+    let Some(all) = all else {
         return Ok(None);
     };
-    if all.is_empty() || all.iter().any(|t| !t.is_complete() || t.grains.is_empty()) {
+    // A perspective can author silence (HD's `ABSORB` for another craft).
+    let silent_ok = cue_variables.is_some();
+    if all.is_empty()
+        || all
+            .iter()
+            .any(|t| !t.is_complete() || (t.grains.is_empty() && !silent_ok))
+    {
         return Ok(None);
     }
     let audible_bend = |g: &oag_formats::sblk::timeline::Grain| {
@@ -204,7 +261,7 @@ pub(super) fn timelines(
             && t.grains[0].scale == 1.0
             && !audible_bend(&t.grains[0])
     });
-    if flat {
+    if flat && cue_variables.is_none() {
         return Ok(None);
     }
     // HD's `navUp` and `navDown` key `whooshUp`/`whooshDown` at 180 degrees
@@ -213,17 +270,24 @@ pub(super) fn timelines(
     // `pan_for` plays such a voice unpanned and centred: **chosen, not
     // measured**, and better than the flat pick, which would play the whoosh
     // alone or a tick alone.
+    let rear = if cue_variables.is_some() {
+        RearPan::Fold
+    } else if replace_with_child {
+        RearPan::Edge
+    } else {
+        RearPan::Front
+    };
     if !front_end
         && all
             .iter()
             .flat_map(|t| &t.grains)
-            .any(|g| edge_pan(g.angle, replace_with_child).is_none())
+            .any(|g| rear.pan(g.angle).is_none())
     {
         return Ok(None);
     }
 
     let mut decoder = Decoder {
-        rear_edge: replace_with_child,
+        rear,
         ..Decoder::default()
     };
     let mut out = Vec::with_capacity(all.len());
@@ -308,8 +372,8 @@ pub(super) fn guarded(
 /// waveform, the [`Sound`] once per waveform and gain.
 #[derive(Default)]
 struct Decoder {
-    /// Stamped on every [`Layer`] built: the cue pans to the rear edge.
-    rear_edge: bool,
+    /// Stamped on every [`Layer`] built.
+    rear: RearPan,
     pcm: BTreeMap<u32, Vec<i16>>,
     sounds: BTreeMap<(u32, u32), Arc<Sound>>,
 }
@@ -351,7 +415,7 @@ impl Decoder {
             looping: grain.sound.is_looping(),
             delay: f64::from(grain.tick) / ticks_per_second,
             angle: grain.angle,
-            rear_edge: self.rear_edge,
+            rear: self.rear,
             bend: grain.bend.map(|draw| Bend {
                 draw,
                 down: grain.sound.bend_down,
@@ -434,29 +498,20 @@ impl Where {
     };
 }
 
-/// [`pan_of_angle`], or with the rear edge when the cue asks for it.
-fn edge_pan(angle: i32, rear_edge: bool) -> Option<f32> {
-    if rear_edge {
-        pan_of_angle_to_rear_edge(angle)
-    } else {
-        pan_of_angle(angle)
-    }
-}
-
 /// The pan a voice at `angle` takes under `at`.
 ///
 /// A dry cue with all voices centred keeps no pan, as every single-waveform cue
 /// did. Once any voice is off-centre every voice takes its authored angle, so a
 /// centred grain is not 3 dB louder beside a panned one. A placed cue shifts the
 /// emitter's pan by the angle.
-fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear_edge: bool) -> Option<f32> {
+fn pan_for(at: Where, angle: i32, any_off_centre: bool, rear: RearPan) -> Option<f32> {
     match at.pan {
         Some(pan) if angle == 0 => Some(pan),
         Some(pan) => {
             let emitter = pan.clamp(-1.0, 1.0).asin().to_degrees().round() as i32;
-            edge_pan(emitter + angle, rear_edge).or(Some(pan))
+            rear.pan(emitter + angle).or(Some(pan))
         }
-        None if any_off_centre => edge_pan(angle, rear_edge),
+        None if any_off_centre => rear.pan(angle),
         None => None,
     }
 }
@@ -476,7 +531,7 @@ pub fn start(mixer: &mut Mixer, voices: &[CueVoice], bus: Bus, at: Where) -> Vec
         };
         let Some(id) = mixer.play(Play {
             gain: at.gain,
-            pan: pan_for(at, voice.angle, any_off_centre, voice.rear_edge),
+            pan: pan_for(at, voice.angle, any_off_centre, voice.rear),
             front: at.front,
             pitch: voice.pitch,
             ..base
@@ -505,7 +560,7 @@ mod tests {
             looping: false,
             delay,
             angle,
-            rear_edge: false,
+            rear: RearPan::Front,
             bend,
         }
     }
@@ -553,10 +608,10 @@ mod tests {
 
     #[test]
     fn a_dry_cue_pans_only_once_a_voice_is_off_centre() {
-        assert_eq!(pan_for(Where::DRY, 0, false, false), None);
-        assert_eq!(pan_for(Where::DRY, 0, true, false), Some(0.0));
-        let right = pan_for(Where::DRY, 30, true, false).unwrap();
-        let left = pan_for(Where::DRY, 330, true, false).unwrap();
+        assert_eq!(pan_for(Where::DRY, 0, false, RearPan::Front), None);
+        assert_eq!(pan_for(Where::DRY, 0, true, RearPan::Front), Some(0.0));
+        let right = pan_for(Where::DRY, 30, true, RearPan::Front).unwrap();
+        let left = pan_for(Where::DRY, 330, true, RearPan::Front).unwrap();
         assert!((right - 0.5).abs() < 1e-6 && (left + 0.5).abs() < 1e-6);
     }
 
@@ -567,9 +622,9 @@ mod tests {
             pan: Some(0.5),
             front: 1.0,
         };
-        assert_eq!(pan_for(at, 0, false, false), Some(0.5));
+        assert_eq!(pan_for(at, 0, false, RearPan::Front), Some(0.5));
         // 30 degrees from an emitter at 30 degrees is 60.
-        let shifted = pan_for(at, 30, true, false).unwrap();
+        let shifted = pan_for(at, 30, true, RearPan::Front).unwrap();
         assert!(
             (shifted - 60f32.to_radians().sin()).abs() < 1e-3,
             "{shifted}"

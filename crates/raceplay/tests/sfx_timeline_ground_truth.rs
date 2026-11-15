@@ -262,3 +262,99 @@ fn titles_without_a_measured_tick_keep_the_flat_pick() {
         assert_eq!(started.len(), 1, "{file}");
     }
 }
+
+const HD_TICK: f64 = 240.0;
+
+/// The summed absolute level on each output channel of one voice played alone.
+fn channel_levels(voice: &CueVoice) -> (f32, f32) {
+    let mut mixer = Mixer::new(RATE);
+    let _ = start_voices(
+        &mut mixer,
+        std::slice::from_ref(&CueVoice {
+            delay: 0.0,
+            ..voice.clone()
+        }),
+        Bus::Sfx,
+        VoicePlace::DRY,
+    );
+    let mut out = vec![0.0f32; 2 * 4096];
+    let (mut left, mut right) = (0.0, 0.0);
+    for _ in 0..8 {
+        mixer.render(&mut out);
+        for frame in out.chunks(2) {
+            left += frame[0].abs();
+            right += frame[1].abs();
+        }
+    }
+    (left, right)
+}
+
+/// `SPEEDUPPAD` on Fury, walked with HD's operand layout and cue variables
+/// (`docs/ghidra/functions/ps3-hdfury-eu/cue-variables.md`, "`SPEEDUPPAD`"):
+/// the player's own pad (perspective 0) keys a body, then a whoosh behind-left
+/// at tick 0 and one behind-right ten ticks on, under one bend draw of up to two
+/// semitones; another craft's pad (perspective 2) is the body and one whoosh.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_s_speedup_pad_is_a_body_and_two_rear_whooshes_for_the_player_and_one_for_others() {
+    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let banks = banks(&path);
+
+    let mut rng = Rng::new(3);
+    let mut pitches = Vec::new();
+    for _ in 0..200 {
+        let mine = banks
+            .voices_for(Cue::SpeedupPad, true, &mut rng)
+            .expect("the pad loads");
+        assert_eq!(mine.len(), 3, "body and two whooshes");
+        let ticks: Vec<f64> = mine.iter().map(|v| v.delay * HD_TICK).collect();
+        for (got, want) in ticks.iter().zip([0.0, 0.0, 10.0]) {
+            assert!((got - want).abs() < 1e-6, "{ticks:?}");
+        }
+        let angles: Vec<i32> = mine.iter().map(|v| v.angle).collect();
+        assert_eq!(angles, vec![0, 220, 140]);
+        assert_eq!(mine[1].pitch, mine[2].pitch, "one bend draw for the pair");
+        assert_eq!(mine[0].pitch, 1.0, "the body has no bend range");
+        pitches.push(mine[1].pitch);
+    }
+    let low = pitches.iter().copied().fold(f32::MAX, f32::min);
+    let high = pitches.iter().copied().fold(f32::MIN, f32::max);
+    let two_semitones = 2f32.powf(2.0 / 12.0);
+    assert!(
+        low >= 1.0 / two_semitones - 1e-4 && high <= two_semitones + 1e-4,
+        "{low} {high}"
+    );
+    assert!(
+        low < 0.95 && high > 1.05,
+        "the bend is drawn, not fixed: {low} {high}"
+    );
+
+    // Behind-left and behind-right, through the mixer: the 220 degree whoosh
+    // is louder on the left, the 140 degree one on the right.
+    let mine = banks
+        .voices_for(Cue::SpeedupPad, true, &mut Rng::new(5))
+        .unwrap();
+    let (l, r) = channel_levels(&mine[1]);
+    assert!(l > 1.3 * r, "220 degrees: left {l} right {r}");
+    let (l, r) = channel_levels(&mine[2]);
+    assert!(r > 1.3 * l, "140 degrees: left {l} right {r}");
+
+    // Another craft's pad: the body and one of the two whooshes, centred.
+    let mut late = std::collections::BTreeSet::new();
+    for _ in 0..200 {
+        let theirs = banks
+            .voices_for(Cue::SpeedupPad, false, &mut rng)
+            .expect("the pad loads");
+        assert_eq!(theirs.len(), 2, "body and one whoosh");
+        assert_eq!(theirs[0].delay, 0.0);
+        assert!(theirs.iter().all(|v| v.angle == 0));
+        late.insert((theirs[1].delay * HD_TICK).round() as u32);
+    }
+    assert_eq!(
+        late.into_iter().collect::<Vec<_>>(),
+        vec![0, 5],
+        "the whoosh is keyed at tick 0 or tick 5, by the draw"
+    );
+}

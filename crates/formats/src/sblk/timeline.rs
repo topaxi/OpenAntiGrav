@@ -291,6 +291,15 @@ fn variable_guard_skips(word: u32, variables: &[i8; 4]) -> Option<bool> {
     })
 }
 
+/// SplitMix64, the draw behind [`Bank::cue_timelines_sampled`].
+fn splitmix64(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
 /// Where a walk is: shared state that threads through children.
 struct Walk<'a> {
     model: WalkModel,
@@ -368,26 +377,67 @@ impl Bank<'_> {
     /// [`Self::cue_timelines`] under an explicit [`WalkModel`].
     #[must_use]
     pub fn cue_timelines_modelled(&self, cue: &Cue, model: WalkModel) -> Option<Vec<Timeline>> {
+        self.timelines_of(cue, model, None)
+    }
+
+    /// [`Self::cue_timelines_modelled`], and when the combinations pass
+    /// [`MAX_COMBINATIONS`] (HD's explosions draw five to seventeen independent
+    /// groups) [`MAX_COMBINATIONS`] of them drawn from `seed` instead of `None`.
+    /// Each group's pick is uniform and independent, so a play that picks one of
+    /// the drawn timelines at random is a sample of the original's draw, not the
+    /// whole space.
+    #[must_use]
+    pub fn cue_timelines_sampled(
+        &self,
+        cue: &Cue,
+        model: WalkModel,
+        seed: u64,
+    ) -> Option<Vec<Timeline>> {
+        self.timelines_of(cue, model, Some(seed))
+    }
+
+    fn timelines_of(
+        &self,
+        cue: &Cue,
+        model: WalkModel,
+        seed: Option<u64>,
+    ) -> Option<Vec<Timeline>> {
         let first = self.cue_timeline_modelled(cue, &[], model);
         let counts: Vec<u8> = first.groups.iter().map(|g| g.count.max(1)).collect();
         let total = counts
             .iter()
-            .try_fold(1usize, |n, &c| n.checked_mul(usize::from(c)))?;
-        if total > MAX_COMBINATIONS {
-            return None;
-        }
-        let mut out = Vec::with_capacity(total);
-        for combination in 0..total {
-            let mut rest = combination;
-            let picks: Vec<u8> = counts
-                .iter()
-                .map(|&c| {
-                    let pick = (rest % usize::from(c)) as u8;
-                    rest /= usize::from(c);
-                    pick
+            .try_fold(1usize, |n, &c| n.checked_mul(usize::from(c)))
+            .filter(|&n| n <= MAX_COMBINATIONS);
+        let picks: Vec<Vec<u8>> = match (total, seed) {
+            (Some(total), _) => (0..total)
+                .map(|combination| {
+                    let mut rest = combination;
+                    counts
+                        .iter()
+                        .map(|&c| {
+                            let pick = (rest % usize::from(c)) as u8;
+                            rest /= usize::from(c);
+                            pick
+                        })
+                        .collect()
                 })
-                .collect();
-            let timeline = self.cue_timeline_modelled(cue, &picks, model);
+                .collect(),
+            (None, Some(seed)) => {
+                let mut state = seed;
+                (0..MAX_COMBINATIONS)
+                    .map(|_| {
+                        counts
+                            .iter()
+                            .map(|&c| (splitmix64(&mut state) % u64::from(c)) as u8)
+                            .collect()
+                    })
+                    .collect()
+            }
+            (None, None) => return None,
+        };
+        let mut out = Vec::with_capacity(picks.len());
+        for picks in &picks {
+            let timeline = self.cue_timeline_modelled(cue, picks, model);
             if timeline.groups != first.groups {
                 return None;
             }
