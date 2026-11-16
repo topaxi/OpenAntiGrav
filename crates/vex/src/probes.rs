@@ -108,11 +108,11 @@ fn be_f32(b: &[u8], at: usize) -> f32 {
     f32::from_bits(be_u32(b, at))
 }
 
-fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+pub(crate) fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+pub(crate) fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
@@ -124,7 +124,7 @@ fn mid(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+pub(crate) fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [
         a[0] + (b[0] - a[0]) * t,
         a[1] + (b[1] - a[1]) * t,
@@ -134,7 +134,7 @@ fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 
 /// The fraction of `axis` that `from_origin` reaches, clamped to `0..=1`; a
 /// degenerate axis reads as the start.
-fn project01(from_origin: [f32; 3], axis: [f32; 3]) -> f32 {
+pub(crate) fn project01(from_origin: [f32; 3], axis: [f32; 3]) -> f32 {
     let len2 = dot(axis, axis);
     if len2 <= f32::EPSILON {
         return 0.0;

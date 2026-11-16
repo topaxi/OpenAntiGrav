@@ -106,6 +106,17 @@ pub const PSP2_SUN_DIFFUSE_COLOUR: &str = "Lighting.Sun diffuse colour";
 /// Authored 0.3 to 20 over Omega's 29 circuit files.
 pub const OMEGA_SUN_DIFFUSE_INTENSITY: &str = "Lighting.Sun diffuse intensity";
 
+/// Omega's `"Lighting.Ship diffuse brightness"`: the weight of a hull's spherical-harmonic
+/// ambient in the sun (`K`), authored 0.2 to 1.0 by all 38 circuit files
+/// (`docs/ghidra/functions/ps4-omega-eu/hull-tone.md`, "The bound constants"). 2048 registers the
+/// same key; HD's hull has no such weight.
+pub const OMEGA_SHIP_DIFFUSE_BRIGHTNESS: &str = "Lighting.Ship diffuse brightness";
+
+/// Its `(shadow)` twin (`Ks`), the weight inside the hull's own sun shadow; equal to
+/// [`OMEGA_SHIP_DIFFUSE_BRIGHTNESS`] in every circuit file that authors it, and absent from the
+/// four Zone files.
+pub const OMEGA_SHIP_DIFFUSE_SHADOW: &str = "Lighting.Ship diffuse brightness (shadow)";
+
 /// Omega's `"Lighting.Sun specular colour"`: an RGB term, where HD authors only the scalar
 /// [`SUN_SPECULAR_SCALE`]. The sun lobe of the panel-map road reads it times
 /// [`OMEGA_SUN_SPECULAR_INTENSITY`] (`docs/ghidra/functions/ps4-omega-eu/sun-intensity.md`,
