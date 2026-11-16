@@ -9,7 +9,8 @@ already named ([pickup-icon-uv-table.md](../vita-2048-eu-v104/pickup-icon-uv-tab
 
 ## What it is
 
-**Confidence 90** (decompiled in two executables that agree, the layout's placement matches both
+**Confidence 92** (decompiled in two executables that agree; the running original draws it on the
+grid on both titles and after GO on four 2048 single-race frames; the layout's placement matches the
 originals' frames to a few pixels, and the wired widget lands on the ring in ours).
 
 The white arc behind the craft on the 2048-mode grid, with a translucent split bowl inside it and a
@@ -45,10 +46,12 @@ to 978; the ring in `omega/queens-mall-2048`'s original measures x 765 to 1155 a
 - **`PlayerDot` is named by no code**: `search_strings("PlayerDot")` finds nothing in either
   executable, so the child stays as authored.
 
-[2048-hud.md](../../../formats/2048-hud.md) once listed the radar as "never seen in any state
-reached", and the same page later recorded "the white ring round the hull" as unmatched: the ring
-is the radar. Why the earlier capture list missed it is not checked; the time-trial and Zone
-roots include no radar file.
+**Seen mid-race on the running original**: the 2048 Vita3K captures `data/reference/2048-hud/`
+`36-w-5.png`, `50-r4-20.png`, `50-r4-40.png` and `21-race2-start.png` (single races, laps 1 to 3,
+after GO) all show the arc and the dot round the craft. [2048-hud.md](../../../formats/2048-hud.md)
+once listed `Radar` and `PlayerDot` as "never seen in any state reached" while recording "the white
+ring round the hull" as unmatched: they are the same thing, seen and not recognised. The time-trial
+and Zone roots include no radar file.
 
 ## The dots: read, not wired
 
