@@ -125,15 +125,18 @@ fn used(id: &str, sha: &str) -> oag_replay::header::ModUse {
 fn the_check_names_what_differs() {
     let a = used("test.a", "a");
     assert_eq!(check_recorded(&[], &[]), Ok(()));
-    assert_eq!(check_recorded(&[a.clone()], &[a.clone()]), Ok(()));
+    assert_eq!(
+        check_recorded(std::slice::from_ref(&a), std::slice::from_ref(&a)),
+        Ok(())
+    );
 
-    let missing = check_recorded(&[a.clone()], &[]).unwrap_err();
+    let missing = check_recorded(std::slice::from_ref(&a), &[]).unwrap_err();
     assert!(
         missing.contains("test.a") && missing.contains("does not load it"),
         "{missing}"
     );
 
-    let build = check_recorded(&[a.clone()], &[used("test.a", "b")]).unwrap_err();
+    let build = check_recorded(std::slice::from_ref(&a), &[used("test.a", "b")]).unwrap_err();
     assert!(
         build.contains("test.a") && build.contains("another build"),
         "{build}"
@@ -141,20 +144,20 @@ fn the_check_names_what_differs() {
 
     let mut version = a.clone();
     version.version = "1.1.0".to_string();
-    let version = check_recorded(&[a.clone()], &[version]).unwrap_err();
+    let version = check_recorded(std::slice::from_ref(&a), &[version]).unwrap_err();
     assert!(version.contains("version 1.1.0"), "{version}");
 
     let mut layout = a.clone();
     layout.state_bytes = 16;
-    let layout = check_recorded(&[a.clone()], &[layout]).unwrap_err();
+    let layout = check_recorded(std::slice::from_ref(&a), &[layout]).unwrap_err();
     assert!(layout.contains("layout differs"), "{layout}");
 
     let mut picks = a.clone();
     picks.picks = vec![1, 0, 0, 0];
-    let picks = check_recorded(&[a.clone()], &[picks]).unwrap_err();
+    let picks = check_recorded(std::slice::from_ref(&a), &[picks]).unwrap_err();
     assert!(picks.contains("picks"), "{picks}");
 
-    let extra = check_recorded(&[], &[a.clone()]).unwrap_err();
+    let extra = check_recorded(&[], std::slice::from_ref(&a)).unwrap_err();
     assert!(
         extra.contains("test.a") && extra.contains("did not have"),
         "{extra}"
