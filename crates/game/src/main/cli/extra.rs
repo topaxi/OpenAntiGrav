@@ -941,17 +941,18 @@ pub(crate) struct ShotArgs {
     #[arg(long, value_name = "FILE.png")]
     pub(crate) from_png: Option<PathBuf>,
 
-    /// Open a screenshot of ours in the replay viewer: the game starts, and once the main menu
-    /// is up the race the shot carries is loaded and watched from the start, paused on the tick
-    /// the shot was taken at (press CROSS to play it again from the beginning). A file that is no
-    /// screenshot of ours, has no input stream, was taken on another title or needs a
+    /// Open a screenshot of ours, or a replay file (`.oagr`), in the replay viewer: the game
+    /// starts, and once the main menu is up the race the file carries is loaded. A replay plays
+    /// from the start; a screenshot opens paused on the tick it was taken at (press CROSS to play
+    /// it from the beginning). A file that is neither, has no input stream, was taken on another title or needs a
     /// simulation mod this machine lacks is told to the player over the main menu. The same
     /// opens by dropping the file on the window over the main menu or the attract demo. Needs
     /// the same title's disc, found as every other run finds it; use `--from-png` to draw the
     /// frame again headless instead.
     #[arg(
         long,
-        value_name = "FILE.png",
+        value_name = "FILE",
+        visible_alias = "watch",
         conflicts_with_all = ["from_png", "png_info", "race", "screenshot", "dry_run"]
     )]
     pub(crate) replay_png: Option<PathBuf>,

@@ -812,6 +812,8 @@ fn a_dropped_screenshot_opens_the_viewer_on_its_tick_and_a_refused_one_says_why(
     // The same race without its stream, and a file that is not a PNG at all.
     std::fs::write(profile.dir.join("no-stream.png"), without_stream(&bytes)).expect("writing it");
     std::fs::write(profile.dir.join("not-a-shot.txt"), "hello").expect("writing it");
+    // The same run as a replay file, which plays from the start where the shot opens paused.
+    std::fs::write(profile.dir.join("cut.oagr"), record.replay.to_bytes()).expect("writing it");
     let modded_record = oag_game::shot_meta::read(&std::fs::read(&modded).expect("the shot"))
         .expect("it reads back")
         .record
@@ -844,14 +846,16 @@ fn a_dropped_screenshot_opens_the_viewer_on_its_tick_and_a_refused_one_says_why(
     // The main menu opens it; CROSS plays it from the start; CIRCLE leaves for the main menu.
     script += "drop DIR/plain.png; until stage=race within 4000; until replay=ended within 3000; \
                ticks 10; screenshot DIR/shots/at-the-shot.png; press cross; until replay=playing within 100; \
-               ticks 30; press circle; until stage=menu within 400; expect page=main; quit";
+               ticks 30; press circle; until stage=menu within 400; expect page=main; \
+               drop DIR/cut.oagr; until stage=race within 4000; until replay=playing within 3000; \
+               press circle; until stage=menu within 400; expect page=main; quit";
     let (status, states) = profile.drive(&image, &script, &[]);
     assert!(status.success());
 
     let seen = notices(&states);
     let wants = if modded_names.is_empty() { 2 } else { 3 };
     assert_eq!(seen.len(), wants, "{seen:?}");
-    assert!(seen[0].contains("NOT A SCREENSHOT"), "{}", seen[0]);
+    assert!(seen[0].contains("NEITHER A REPLAY NOR"), "{}", seen[0]);
     assert!(seen[1].contains("INPUT STREAM"), "{}", seen[1]);
     if let Some(name) = modded_names.first() {
         assert!(
@@ -879,6 +883,15 @@ fn a_dropped_screenshot_opens_the_viewer_on_its_tick_and_a_refused_one_says_why(
             .iter()
             .any(|state| text(state, "replay") == Some("playing")),
         "CROSS plays it from the start"
+    );
+    let from_file = states
+        .iter()
+        .rfind(|state| text(state, "replay") == Some("playing"))
+        .expect("a replay file dropped on the main menu plays");
+    assert!(
+        text(from_file, "replay_at")
+            .is_some_and(|at| at.ends_with("/300/300") || at.contains("/300/")),
+        "{from_file:?}"
     );
 }
 

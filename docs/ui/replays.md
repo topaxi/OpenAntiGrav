@@ -215,6 +215,12 @@ shot's tick, so it goes through the viewer above and nothing new draws the race
   for a long run) the viewer says OPENING REPLAY. CROSS or a click on PLAY plays the race from tick
   0 (as at any end of a replay), the bar seeks back, CIRCLE or EXIT leaves for **the main menu**
   (a shot is no row of the REPLAYS list).
+- **A replay file (`.oagr`) takes the same two ways in**, found by its `OAGR` magic rather than its
+  name: `--replay-png FILE.oagr` (also spelt `--watch`) or a drop on the main menu or a demo. It
+  plays from tick 0 as WATCH does, and leaving returns to the main menu; the same refusals apply
+  (another title, a header that cannot be rebuilt, modules by name, a file that will not read).
+  The REPLAYS page stays the way to browse the files in `replays/`. Checked in
+  `a_dropped_screenshot_opens_the_viewer_on_its_tick_...` (a `.oagr` cut from the shot's stream).
 - **The way in, on the command line:** `oag-game --replay-png FILE.png [DISC]` starts the game
   and opens the file as soon as the main menu is up (the disc is found as for any run; the flag
   refuses `--race`, `--screenshot`, `--from-png`). `--from-png` stays the headless re-render.

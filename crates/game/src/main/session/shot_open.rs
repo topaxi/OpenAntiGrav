@@ -12,6 +12,7 @@
 
 use log::{debug, info};
 use oag_game::{replay_view, shot_meta};
+use oag_replay::Replay;
 use oag_gameplay::input::Button;
 use oag_ui::frontend::Draw;
 use oag_ui::pointer::Pointer;
@@ -113,9 +114,15 @@ impl Session {
         }
     }
 
-    /// Reads `path` and decides whether the viewer can open it here.
-    fn prepare_shot(&self, path: &std::path::Path) -> Result<Prepared, String> {
+    /// What `path` holds to watch: a replay file (`OAGR`), played from the start, or a
+    /// screenshot's stream with the tick and hash it was cut at.
+    fn read_watchable(&self, path: &std::path::Path) -> Result<(Replay, Option<(u64, u64)>), String> {
         let bytes = std::fs::read(path).map_err(|_| self.project_word(words::NOT_OURS))?;
+        if bytes.starts_with(oag_replay::file::MAGIC) {
+            let replay = Replay::from_bytes(&bytes)
+                .map_err(|why| self.project_word(words::REFUSED).replace("%s", &why.to_string()))?;
+            return Ok((replay, None));
+        }
         let found = shot_meta::read(&bytes).map_err(|_| self.project_word(words::NOT_OURS))?;
         let Some(record) = found.record else {
             let because = found
@@ -130,8 +137,14 @@ impl Session {
                     .replace("%s", &self.project_word(words::NO_REASON)),
             });
         };
-        let (tick, hash) = (record.tick, record.hash);
-        let header = &record.replay.header;
+        let mark = (record.tick, record.hash);
+        Ok((record.replay, Some(mark)))
+    }
+
+    /// Reads `path` and decides whether the viewer can open it here.
+    fn prepare_shot(&self, path: &std::path::Path) -> Result<Prepared, String> {
+        let (replay, shot) = self.read_watchable(path)?;
+        let header = &replay.header;
         let title = self.shell.as_ref().map_or("", |shell| shell.title.name);
         if !header.title.eq_ignore_ascii_case(title) {
             return Err(self
@@ -141,15 +154,16 @@ impl Session {
         if header.setup.is_none() {
             return Err(self.project_word(words::NO_SETUP));
         }
-        let options = self.replay_options(&record.replay)?;
+        let options = self.replay_options(&replay)?;
         oag_raceplay::extensions::preflight_recorded(&options)
             .map_err(|why| self.project_word(words::REFUSED).replace("%s", &why))?;
         Ok(Prepared {
             watching: Watching {
-                replay: Box::new(record.replay),
+                replay: Box::new(replay),
                 path: path.to_path_buf(),
                 setup: None,
-                shot: Some((tick, hash)),
+                shot,
+                dropped: true,
             },
             options,
         })

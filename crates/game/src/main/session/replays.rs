@@ -132,6 +132,9 @@ pub(crate) struct Watching {
     /// The tick and state hash of the screenshot this recording was cut from: the viewer opens
     /// paused on that tick (`session::shot_open`).
     pub(crate) shot: Option<(u64, u64)>,
+    /// Whether the file was dropped on the window or named on the command line rather than
+    /// picked from the REPLAYS list: leaving the viewer returns to the main menu.
+    pub(crate) dropped: bool,
 }
 
 /// The viewer while a recording is being watched.
@@ -210,6 +213,7 @@ pub(crate) fn open_viewer(
         path,
         setup,
         shot,
+        dropped,
     } = watching;
     let setup = setup.context("the race's setup was not kept")?;
     let viewer = Viewer::open(setup, *replay).map_err(|e| {
@@ -241,7 +245,7 @@ pub(crate) fn open_viewer(
         hud: true,
         scrubbing: false,
         shot,
-        from_shot: shot.is_some(),
+        from_shot: shot.is_some() || dropped,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -299,6 +303,7 @@ impl Session {
                 path: path.to_path_buf(),
                 setup: None,
                 shot: None,
+                dropped: false,
             },
         )
     }

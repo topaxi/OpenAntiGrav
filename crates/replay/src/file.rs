@@ -35,7 +35,8 @@ use oag_bytes::Reader;
 /// chunk or a `#[serde(default)]` header field is not a bump.
 pub const FORMAT_VERSION: u16 = 1;
 
-const MAGIC: &[u8; 4] = b"OAGR";
+/// The first four bytes of a replay file.
+pub const MAGIC: &[u8; 4] = b"OAGR";
 
 /// Why a file could not be read.
 #[derive(Debug, thiserror::Error)]
