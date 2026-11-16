@@ -2238,6 +2238,95 @@ so 2048 needs its own paths read off its own executable. The leach strip's textu
 names are **checked, differs** on both titles. See
 [`weapon-lineage.md`](../gameplay/weapon-lineage.md).
 
+## Where the WipEout 2048 mode pairs' error is (2026-11-16, `omega-2048-holistic`)
+
+The five worst 2048-mode grid pairs ([compare-page.md](../tools/compare-page.md), "WipEout 2048 mode") sit at 44 to
+50 whole-frame mean grey. Question asked: is one cause most of that, and can it be fixed across all five? **No.**
+Ours re-rendered from the pairs' own flags (`compare-rerender-ours.rerender` on copies) reproduces the stored scores
+to the hundredth.
+
+**The raw score is the wrong instrument here.** Edge correlation is about 0 on every pair, a per-channel affine fit
+removes 3 to 12 grey and its gains (0.15 to 0.56) are regression to the mean, and pixels much brighter in theirs
+and much brighter in ours carry about equal shares. Under that decorrelation, correct detail a few pixels out of phase
+scores worse: anisotropy 16x raises all five (Queens Mall 50.07 to 50.57, Metro Park 44.30 to 46.10), forcing
+MIP 0 raises all five (Metro Park to 49.17). A wrong-signed result on the raw score is not evidence against a fix.
+
+**Instrument used instead** (`scripts/compare-decompose.py`): each material family's pixels in ours are the pixels
+an `OAG_SKIP_MATERIAL=<family>` render changes by more than 25 grey after the frame gain the adaptive exposure adds
+is divided out; the own hull (`feisar2048`), `crowd`, `flag` and the HUD boxes are left out of every score (the
+livery and the crowd differ boot to boot in the port). Per region: `LF`, mean |blur(ours) - blur(theirs)| at sigma
+12; `bias`, ours minus theirs; `G`, Sobel gradient energy ours over theirs.
+
+| Pair | static LF | road family | road area, LF share, bias, G | sky LF share, bias | scenery LF share, bias |
+| --- | --- | --- | --- | --- | --- |
+| Queens Mall | 29.7 | `road_alphaspec_normal_emissive_panelmap1` | 27.5 %, 44 %, -18.0, 0.61 | 8 %, -50.7 | 47 %, -19.8 |
+| Sol (A class) | 34.0 | the same | 32.5 %, 51 %, -38.5, 0.24 | 19 %, -26.7 | 30 %, -9.4 |
+| Metro Park | 21.3 | `diffuse_normal_specular` (brick) | 29.3 %, 40 %, +18.6, 0.79 | 2 %, -12.8 | 59 %, -17.2 |
+| Empire Climb | 29.9 | `tarmac_*` | 54.5 %, 66 %, -7.5, 0.84 | 11 %, -66.6 | 34 %, -36.3 |
+| Capital Reach | 39.9 | `tarmac_*` | 36.6 %, 34 %, -5.5, 0.67 | 4 %, -32.5 | 62 %, +21.6 |
+
+Ranked, by what each would remove:
+
+1. **The track surface: 34 to 66 % of the static low-frequency error on every pair, but three families.** Over all
+   ten 2048-mode pairs the road is `tarmac_*` on five (Capital Reach, Empire Climb, Subway, Downtown, Arena),
+   `road_alphaspec_normal_emissive_panelmap1` on four (Queens Mall, Sol, Altima, Unity Square), brick on Metro Park.
+   So no one fix reaches all five pairs. Per family:
+   - `road_alphaspec_..._panelmap1` (Sol's road 38.5 dark, `G` 0.24): the original draws its panels **displaced**,
+     recessed with lit walls and bevel highlights, and a sky-blue sheen at grazing angles; ours draws flat panels with
+     outline lines. Forcing MIP 0 lifts Sol's road `G` only to 0.37 and Queens Mall's to 0.78, so the detail is in the
+     family's pixel program (428 instructions, `Cg_PanelDisplacement_1In1Depth`, `SlopeWidth`, `Aspect`; Queens Mall
+     authors `0.2, 4.0, 3.5, 1.8` in its four parameters), not in the texture chain. Unread; the largest single
+     family by error. Its `EmissiveMap` (`track_a_floor_e`, Queens Mall's cyan strips) is the same program.
+   - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
+     (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so
+     the port runs anisotropic filtering where the pairs record ours with `--anisotropy off`. **A comparison-environment
+     row, not a render law**: the port's setting was not read. The dirt layer (`OAG_TARMAC_DIRT=1`) moves no pair.
+2. **The scenery: 30 to 62 %, no single term.** A frame gain fitted to ours (a ceiling for any exposure, light or tone
+   term) removes 13 % of the static `LF` on Queens Mall and 27 % on Sol, and 0 to 1 % on Metro Park, Empire Climb
+   and Capital Reach; on Queens Mall and Sol it lifts road and sky and makes the scenery worse. Static colour ratios
+   (R/G, B/G) differ in sign from pair to pair. Empire Climb's scenery (-36) is the original's sun glare and lens
+   flare round the low sun (`Lighting.Use Lens Flare` 1 and its keys, unread here).
+3. **The sky: darker in ours on all five** (-13 to -67), 2 to 19 % of the static `LF`. `Lighting.Sky brightness`
+   (1.56 to 3.0 on these circuits) is read by nothing here. In the 1.07 eboot its registrar row writes
+   `Sky height offset`, `Sky scale` and `Sky brightness` at `+0x158`, `+0x15c` and `+0x160` of the object
+   `FUN_015eda20` fills (the `LEA RSI` before each key's `LEA RDX` at `0x015edcee` to `0x015edd43`; confidence 75 for
+   the offsets); the consumer was not found (the function has over 50 callers). Scaling the dome by it, linear or
+   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired.
+4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
+   drawing no sprite at all takes Sol from 45.55 to 42.48. Cause read, recipe below. Crowds only reach the pairs that
+   show stands.
+5. **Pose, Capital Reach only**: the Auricom banner sits about 480 px further left in ours at 1920 and the road lines
+   lean the other way: ours' grid slot or heading differs from the original's. Its scenery +21.6 is that, so this pair
+   cannot judge a render change until the pose is matched.
+
+**Closed negatives.** Exposure is not still ramping at the grab: the static bias is the same at ticks 30, 100 and 300
+(Queens Mall -20.8, -20.9, -21.2). A scalar specular fed from `Sun specular intensity` (ours reads HD's `Sun specular
+scale`, absent on every Omega file, so specular is 0) raises Queens Mall to 55.2 and Empire Climb to 53.2: Omega's
+RGB specular is not HD's scalar term and stays unwired. `Lighting.Ship diffuse brightness` (0.25 to 1, registered at
+`+0x164`, key `0x0188d117`) is read by nothing here, but the hull's bias does not follow it (Sol, at 1.0, is the
+brightest hull, +69), so it is not the hull's cause; the hull is confounded by the port's livery anyway.
+
+**The crowd's law** (static, confidence 70). `crowd_sprite_diffuse_normal_alpha_shadow` (Sol 128,452 triangles) and
+`crowd_sprite_diffuse_normal_alpha` author `Shadowed` (`0x36997860`, `~crc32`) `0.12178` and `Ambient`
+(`0x735324ab`) `(0.777, 0.777, 0.777)`. Ten of the family's fifteen pixel programs load `Shadowed`. The sun-lit one
+(`data00.psarc` `Shdr` `0x4224`, 122 instructions) ends, after an alpha test at 0.5:
+
+```text
+rgb = Shadowed * T.rgb * (Ambient + constantAmbientColour + liveLighting0diffuse * sat(N.L))
+out = fogColour + fog * (rgb - fogColour)
+```
+
+(`v_mul_f32 v6, s24, v6` and its two twins put `Shadowed` on the texel at `0x130` to `0x150`; `Ambient` is `s1..s3`,
+`constantAmbientColour` `s4..s6`, the sun `s8..s10`; `0x1c8` to `0x1fc` sum them). Its vertex-light twin `0x5064`
+multiplies the finished sum by `Shadowed` (`0x1ec` to `0x1f4`). Ours draws the family through the generic lit path,
+which reads neither parameter, so the stands come out about eight times too bright under Sol's sun (`0.951 x 8`).
+Which permutation the race selects is not read; `Shadowed` is not a string in the eboot, so no engine code sets it by
+name. **2048:** not checked for this material (no lane fix landed on it).
+
+**2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
+`fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
+`tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's
