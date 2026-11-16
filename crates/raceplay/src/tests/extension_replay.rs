@@ -79,7 +79,10 @@ fn a_modded_race_records_and_names_its_module() {
             .map(|b| format!("{b:02x}"))
             .collect::<String>()
     );
-    assert_eq!((used.abi, used.revision), (oag_ext_abi::ABI, oag_ext_abi::REVISION));
+    assert_eq!(
+        (used.abi, used.revision),
+        (oag_ext_abi::ABI, oag_ext_abi::REVISION)
+    );
     assert_eq!(used.state_bytes, 8);
 
     // The entry survives the file, and the file is verified by a fresh modded race.
@@ -125,10 +128,16 @@ fn the_check_names_what_differs() {
     assert_eq!(check_recorded(&[a.clone()], &[a.clone()]), Ok(()));
 
     let missing = check_recorded(&[a.clone()], &[]).unwrap_err();
-    assert!(missing.contains("test.a") && missing.contains("does not load it"), "{missing}");
+    assert!(
+        missing.contains("test.a") && missing.contains("does not load it"),
+        "{missing}"
+    );
 
     let build = check_recorded(&[a.clone()], &[used("test.a", "b")]).unwrap_err();
-    assert!(build.contains("test.a") && build.contains("another build"), "{build}");
+    assert!(
+        build.contains("test.a") && build.contains("another build"),
+        "{build}"
+    );
 
     let mut version = a.clone();
     version.version = "1.1.0".to_string();
@@ -146,7 +155,10 @@ fn the_check_names_what_differs() {
     assert!(picks.contains("picks"), "{picks}");
 
     let extra = check_recorded(&[], &[a.clone()]).unwrap_err();
-    assert!(extra.contains("test.a") && extra.contains("did not have"), "{extra}");
+    assert!(
+        extra.contains("test.a") && extra.contains("did not have"),
+        "{extra}"
+    );
 
     let b = used("test.b", "c");
     let order = check_recorded(&[a.clone(), b.clone()], &[b, a]).unwrap_err();
@@ -165,5 +177,8 @@ fn a_rebuild_runs_the_recorded_modules_with_the_recorded_picks_and_no_others() {
     };
     assert_eq!(kept.mod_id, "test.keep");
     assert_eq!(kept.options.sim, [2, 0, 1, 0]);
-    assert!(restrict_to(vec![keep], &[]).is_empty(), "a vanilla recording keeps none");
+    assert!(
+        restrict_to(vec![keep], &[]).is_empty(),
+        "a vanilla recording keeps none"
+    );
 }

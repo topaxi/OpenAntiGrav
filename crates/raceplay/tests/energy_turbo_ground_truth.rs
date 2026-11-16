@@ -441,7 +441,12 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let mut modded = race::Race::start(loaded.setup);
     assert!(modded.is_modded());
     modded.start_recording(oag_replay::Header::new(
-        "pulse", TRACK, "single_race", "venom", "default", seed,
+        "pulse",
+        TRACK,
+        "single_race",
+        "venom",
+        "default",
+        seed,
     ));
     assert!(modded.recording(), "a modded race records");
     assert!(modded.give_weapon(0, Weapon::Extension(oag_tables::weapons::ModKind::FIRST)));
@@ -460,9 +465,14 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
         modded.sim.world.ships[0].physics.shield < pool,
         "the module boosted on the shield, so it is in the hash the shot carries"
     );
-    let shot = modded.shot_record(None).expect("a modded race yields a shot record");
+    let shot = modded
+        .shot_record(None)
+        .expect("a modded race yields a shot record");
     assert_eq!(shot.tick, u64::from(SHOT_AT));
-    assert!(modded.take_new_best_ghost().is_none(), "a modded race offers no ghost");
+    assert!(
+        modded.take_new_best_ghost().is_none(),
+        "a modded race offers no ghost"
+    );
     assert!(shot.replay.ghost.is_none());
 
     let header = &shot.replay.header;
@@ -479,11 +489,17 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
             .collect::<String>(),
         "the SHA-256 of the module's bytes"
     );
-    assert_eq!((used.abi, used.revision), (oag_ext_abi::ABI, oag_ext_abi::REVISION));
+    assert_eq!(
+        (used.abi, used.revision),
+        (oag_ext_abi::ABI, oag_ext_abi::REVISION)
+    );
 
     let bytes = shot.to_bytes();
     let read = oag_replay::ShotRecord::from_bytes(&bytes).expect("reads");
-    assert_eq!(read.replay.header.mods, shot.replay.header.mods, "the entry survives the file");
+    assert_eq!(
+        read.replay.header.mods, shot.replay.header.mods,
+        "the entry survives the file"
+    );
 
     let again = race::replay::resimulate(&read, &image, &[], std::slice::from_ref(&source))
         .expect("re-simulates with the module");
@@ -496,7 +512,10 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let none = race::replay::resimulate(&read, &image, &[], &[]).expect_err("refused without it");
     let none = format!("{none:#}");
     println!("without the module: {none}");
-    assert!(none.contains("oag.energy-turbo") && none.contains("does not load it"), "{none}");
+    assert!(
+        none.contains("oag.energy-turbo") && none.contains("does not load it"),
+        "{none}"
+    );
 
     let mut other = source.clone();
     let rebuilt = another_build_of(&wasm);
@@ -504,12 +523,18 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let other = race::replay::resimulate(&read, &image, &[], &[other]).expect_err("another build");
     let other = format!("{other:#}");
     println!("another build: {other}");
-    assert!(other.contains("oag.energy-turbo") && other.contains("another build"), "{other}");
+    assert!(
+        other.contains("oag.energy-turbo") && other.contains("another build"),
+        "{other}"
+    );
 
     // A machine that offers a module the recording did not have runs without it.
     let mut vanilla = shot.clone();
     vanilla.replay.header.mods.clear();
     let ran = race::replay::resimulate(&vanilla, &image, &[], std::slice::from_ref(&source))
         .expect("builds");
-    assert!(!ran.race.is_modded(), "the recording named no module, so none runs");
+    assert!(
+        !ran.race.is_modded(),
+        "the recording named no module, so none runs"
+    );
 }

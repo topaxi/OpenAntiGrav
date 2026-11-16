@@ -59,9 +59,7 @@ impl Facts {
     pub(super) fn arm(&self, race: &mut Race) -> anyhow::Result<()> {
         if let Some(record) = &self.context.restage {
             oag_raceplay::extensions::check_recorded(&record.replay.header.mods, race.mods_used())
-                .map_err(|why| {
-                    anyhow::anyhow!("--from-png cannot make this shot again: {why}")
-                })?;
+                .map_err(|why| anyhow::anyhow!("--from-png cannot make this shot again: {why}"))?;
             if let Err(why) = oag_raceplay::replay::apply_recorded(race, &record.replay.header) {
                 log::warn!("--from-png: {why:#}");
             }

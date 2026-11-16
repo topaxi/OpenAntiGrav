@@ -14,12 +14,13 @@ use super::Source;
 #[cfg(feature = "extensions")]
 pub(super) fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    oag_disc::ps4_pkg::crypto::sha256(bytes)
-        .iter()
-        .fold(String::with_capacity(64), |mut out, byte| {
+    oag_disc::ps4_pkg::crypto::sha256(bytes).iter().fold(
+        String::with_capacity(64),
+        |mut out, byte| {
             let _ = write!(out, "{byte:02x}");
             out
-        })
+        },
+    )
 }
 
 /// `source`'s module as a replay names it, once the load has hashed its bytes and compiled it.
@@ -127,7 +128,12 @@ pub fn check_recorded(recorded: &[ModUse], running: &[ModUse]) -> Result<(), Str
             ));
         }
     }
-    if why.is_empty() && recorded.iter().map(ModUse::label).ne(running.iter().map(ModUse::label)) {
+    if why.is_empty()
+        && recorded
+            .iter()
+            .map(ModUse::label)
+            .ne(running.iter().map(ModUse::label))
+    {
         why.push("the modules run in another order".to_string());
     }
     if why.is_empty() {

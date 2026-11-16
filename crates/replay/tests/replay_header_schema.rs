@@ -204,7 +204,10 @@ fn a_header_naming_its_simulation_modules_is_accepted_by_both_and_survives_a_rou
     assert_eq!(read.header.mods, replay.header.mods);
 
     let bad = text.replace(&"ab".repeat(32), "not-a-hash");
-    assert!(verdicts(&bad).1.is_err(), "a module hash that is not hex is refused by the schema");
+    assert!(
+        verdicts(&bad).1.is_err(),
+        "a module hash that is not hex is refused by the schema"
+    );
 }
 
 #[test]
