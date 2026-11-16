@@ -233,3 +233,5 @@
 0x014e5c70	function	TouchCampaign_CommitEvent	55	campaign-map-pad.md
 # 2026-11-16 engine-glow-re: the engine light is a vertex light (engine-light.md); base address, the body was read on 1.07
 0x016f5a00	function	EngineFlare_SubmitVertexLight	82	engine-light.md
+# 2026-11-16 engine-light-re: the flare update that draws the light's jitter, forced live on 1.07 (engine-light.md)
+0x016eeb10	function	EngineFlare_Update	85	engine-light.md

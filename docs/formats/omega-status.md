@@ -2222,6 +2222,12 @@ point light per craft to a 32-slot table, and each draw binds up to six as
 ([engine-light.md](../ghidra/functions/ps4-omega-eu/engine-light.md)). So HD's law is
 right for the `hdships` craft and wrong for the 2048-era ones, whose `3`/`30` light is
 red and dim, not white.
+**Confirmed live the same day** (native port, four boots): the table holds eight records
+of exactly those colours, the hull's own programs take the light
+(`(ambient + vertexLight + sun) * texture * vertexColour`), and the housing is lit on
+some frames and dark on others because the range is redrawn as `Radius +- 1.0`. The
+glow inside the nozzle is the flare model, not the light. A single captured frame is one
+draw of that flicker (same page, "Live check").
 `front_faces_only` changes nothing visible on either still, because the flame is not
 visible at these two ticks.
 

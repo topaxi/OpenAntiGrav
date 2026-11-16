@@ -345,6 +345,9 @@ wired**: 2048 runs the same producer as Omega, and a native craft's light is
 the receiver is a per-vertex Lambert light with a linear falloff, declared by
 every circuit's materials and the ship materials
 ([engine-light.md](../ghidra/functions/vita-2048-eu-v104/engine-light.md)).
+The hull's own fragment program adds it to the ambient before the texture and
+vertex colour, as Omega's does, and Omega's hull is seen lit and flickering live
+(same page, "The hull's own programs").
 Switch-off bisect at tick 0: with only the light off the frame is pixel-identical
 to the pre-change one; the flare model, sprite, trail and quad are not visible
 for the player at rest.
