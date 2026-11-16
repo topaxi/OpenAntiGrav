@@ -272,10 +272,9 @@ Three official Wipeout demos exist as packages. Two of them race here; checked
      data/extracted/vita/PCSF00110/base/PSP2/data.psarc
    ```
 
-3. Race its one circuit by name:
-   `oag-game data/extracted/vita/PCSF00110 --race --track /data/art/published/environments/tower/track.vex`.
-   A bare `--race` fails, because the default circuit (`altima`) is not in the
-   demo. The front end was not tried.
+3. Race its one circuit: `oag-game data/extracted/vita/PCSF00110 --race`. The
+   default circuit (`altima`) is not in the demo, so a bare `--race` opens the
+   first circuit it does ship, `tower`. The front end was not tried.
 
 ## 4. Start it, and what you should see
 

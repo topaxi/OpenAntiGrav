@@ -1091,3 +1091,33 @@ fn xp_accumulates_round_trips_and_an_old_file_reads_zero() {
     let (clamped, _) = parse("xp = -5\n").expect("parses");
     assert_eq!(clamped.xp(), 0);
 }
+
+#[test]
+fn a_run_that_named_no_circuit_files_under_the_circuit_it_raced_not_the_titles_default() {
+    let tower = r"Data\art\published\environments\tower\track.vex";
+    let altima = r"Data\art\published\environments\altima\track.vex";
+    let raced = Key::raced("Wipeout 2048", None, tower, "time_trial", "venom");
+    assert_eq!(
+        raced,
+        Key::new("Wipeout 2048", Some(tower), "time_trial", "venom")
+    );
+    assert_ne!(
+        raced,
+        Key::new("Wipeout 2048", Some(altima), "time_trial", "venom")
+    );
+}
+
+#[test]
+fn a_run_that_named_a_circuit_files_under_that_one() {
+    let named = r"Data\Environments\01_Vineta_K\track.vex";
+    assert_eq!(
+        Key::raced(
+            "Wipeout Pulse",
+            Some(named),
+            "zone_track.vex",
+            "zone",
+            "venom"
+        ),
+        Key::new("Wipeout Pulse", Some(named), "zone", "venom")
+    );
+}
