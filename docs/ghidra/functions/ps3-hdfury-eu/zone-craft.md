@@ -90,9 +90,32 @@ texture swap (`oag_livery`'s `zone_livery`) are the existing ones.
   - After the change: Qirex shows the Qirex logotype on both pods and the nose, and Auricom shows `auricom` in the same places.
   - No RPCS3 frame of the original was taken.
 
+## Ship Select preview (`zone-preview` lane, 2026-11-16)
+
+Ship Select in a Zone race draws the one Zone hull in the picked team's livery, as the race
+does. The decision "which folder does this team's Zone hull wear" is one function,
+`oag_livery::zone_livery::swap`, over the rows `oag_raceplay::catalogue::Team::zone_liveries`
+builds (the team and each variant of it). The race's hull build (`oag_livery::load`, given
+`load::zone_livery::resolve`'s rows) and the picker (`oag_game::preview::variant::zone_folders`,
+over the front end's own catalogue, so no extra disc read and nothing on the render thread) both
+call it. The texture reader is shared too (`oag_livery::zone_livery::Reads`), so a texture the
+livery folder lacks falls back to the default skin in both. The hull entry is
+`ShipPaths::hull_entry_name` in both (`zone_race_hull_entry` in the picker).
+
+- **Test**, `crates/game/tests/zone_preview_ground_truth.rs`: for all twelve HD teams the preview's
+  entry equals the race's hull entry, the folder is `zoneship_zone` -> the definition's name, and
+  the preview's texels equal those of the race's built hull and differ from the default skin's.
+  Fails on a preview that stops applying the livery.
+- **Frames** (headless, `oag-game --no-audio --menu-page ship-select --size 1280x720`, a profile
+  with `race.mode = "zone"`): Qirex shows the Qirex logotype on the pod, Auricom shows `auricom`;
+  before the change Qirex showed the blank hull with a small default mark (Auricom was not shot before). Time Trial shows the
+  team's own race hull unchanged. The race frame of the same team
+  (`--race --mode zone --team Qirex`) carries the same logotype on both pods and the nose. No
+  original capture was taken.
+
 ## Lineage (2048 and Omega)
 
-- **2048 v1.04: ported.** It uses the same key, `zoneship_zone`, and the same twelve HD-era liveries in `Data\Plugins\teams\Definition.xml`, in both `data.psarc` and the patch's `data2.psarc`. The swap was wired on 2026-10-06. It now has its own test, `vita_2048_zone_hull_wears_the_livery_its_definition_names`: Qirex and AG_Systems swap with nothing missing, and native `feisar2048\1` keeps the default.
+- **2048 v1.04: ported** (the race; the preview has no screen to wire, see below). It uses the same key, `zoneship_zone`, and the same twelve HD-era liveries in `Data\Plugins\teams\Definition.xml`, in both `data.psarc` and the patch's `data2.psarc`. The swap was wired on 2026-10-06. It now has its own test, `vita_2048_zone_hull_wears_the_livery_its_definition_names`: Qirex and AG_Systems swap with nothing missing, and native `feisar2048\1` keeps the default.
 - **Omega: ported, and the key differs.** Omega uses the same mechanism with key `zoneship_team`. It was wired and tested on 2026-10-06 (`omega_zone_hull_wears_the_livery_its_definition_names`).
 - **Common to all three:** the original's `Zoneship_Faisar` literal applies only when a craft has no entry. What a 2048-era craft's entry holds in Zone is unread on every title, so a native 2048 craft keeps the default skin in ours.
 
@@ -102,3 +125,19 @@ texture swap (`oag_livery`'s `zone_livery`) are the existing ones.
 - **Fury `_c1` variants** inherit their base team's livery through `zone_livery::liveries`. No HD variant was exercised in the test.
 - **The table's reader:** see "The table's reader was not found" above.
 - **Plain PSN HD** (`hd-psn-eu`) was not exercised. Its definition and folders were not censused; the swap falls back to the default skin, with a report line, if a folder is missing.
+
+## Lineage of the preview wiring
+
+- **Omega: ported**, `omega_zone_preview_wears_the_livery_the_race_does` (Qirex, Auricom, AG_Systems
+  and Assegai; the picker reads the PS4 scene through `psp2_scene`). Auricom's `zoneship_auricom\Team.gnf`
+  is byte-identical to the default `zoneship_team\Team.gnf` (census over all twelve), so the Auricom preview
+  equals the default skin; that is data, not a gap.
+- **2048: checked, differs.** Two screens could carry the preview. The race-box Ship Select
+  (`FrontEnd::race_box` is `None`; `--menu-page ship-select` refuses) does not exist here. The touch
+  `Select Team` screen does draw a hull (`oag_game::team_hull`, `team_model_origin`), but it lists only
+  the five native 2048 teams' `Ship_LOD.vex` and the front end carries no mode there
+  (`oag_ui::frontend::team`); native teams author no Zone livery, so there is nothing to paint. The same
+  decision is pinned against the race for all twelve HD-era teams
+  (`vita_2048_zone_preview_wears_the_livery_the_race_does`), ready for a screen. The original's menu
+  draws the craft's own hull remapped by the livery key (`vita-2048-eu-v104/zone-craft.md`, 60); ours
+  would draw the shared hull as the race does, as asked.

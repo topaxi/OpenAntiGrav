@@ -793,6 +793,8 @@ pub(super) fn ship_source(
         join,
         hull_file: oag_game::preview::zone_hull_file(title, mode),
         zone_entry: oag_game::preview::zone_race_hull_entry(title, team, mode),
+        zone_livery: details
+            .and_then(|details| oag_game::preview::variant::zone_folders(title, details, mode)),
         race_hull: oag_game::preview::race_hull_entry(title, team, mode),
     }
 }

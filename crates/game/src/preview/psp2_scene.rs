@@ -44,6 +44,7 @@ fn build_named(
         return Ok(None);
     }
     let mut textures = Vec::new();
+    let mut reads = oag_livery::zone_livery::Reads::new(livery);
     let build = if keyed {
         mesh::rcs::psp2::build_billboard
     } else {
@@ -56,7 +57,7 @@ fn build_named(
         {
             textures.push(path.to_string());
         }
-        super::read_texture(archives, path, livery)
+        reads.read(archives, path)
     })?;
     Ok(Some((model, built.describe(), textures)))
 }

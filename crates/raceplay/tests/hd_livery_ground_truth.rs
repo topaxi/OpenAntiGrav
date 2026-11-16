@@ -363,7 +363,11 @@ fn paint_every_livery(
                     own_shield: false,
                     zone_liveries: &[],
                     forced_skins: &[],
-                    player_livery: Some(oag_livery::LiveryFolder { own: &own, worn }),
+                    player_livery: Some(oag_livery::LiveryFolder {
+                        own: &own,
+                        worn,
+                        fall_back: false,
+                    }),
                 },
                 None,
                 None,

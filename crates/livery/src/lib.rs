@@ -63,7 +63,7 @@ pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
 mod wreck;
-mod zone_livery;
+pub mod zone_livery;
 
 pub use shield::cockpit_shield;
 use shield::shell;
@@ -253,6 +253,10 @@ pub struct LiveryFolder<'a> {
     pub own: &'a str,
     /// The folder the picked model is painted from.
     pub worn: &'a str,
+    /// Whether a texture the worn folder lacks is read from the own folder instead: the Zone
+    /// hull's livery does (the own folder holds its default skin), a model's livery does not
+    /// (the own folder's texture is another livery's paint).
+    pub fall_back: bool,
 }
 
 impl LiveryFolder<'_> {
@@ -261,7 +265,11 @@ impl LiveryFolder<'_> {
     /// builds a hull of its own (a front-end preview).
     #[must_use]
     pub fn rewrite(&self, path: &str) -> Option<String> {
-        zone_livery::Swap::new(self.own, self.worn).rewrite(path)
+        let lower = path.to_ascii_lowercase().replace('\\', "/");
+        let from = format!("/{}/", self.own.to_ascii_lowercase());
+        lower
+            .contains(&from)
+            .then(|| lower.replacen(&from, &format!("/{}/", self.worn.to_ascii_lowercase()), 1))
     }
 }
 
@@ -498,11 +506,8 @@ fn one(
             // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
             Some(geometry) => {
                 let zone = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
-                let worn = livery
-                    .filter(|_| ctx.mode != Mode::Zone)
-                    .map(|folder| zone_livery::Swap::new(folder.own, folder.worn));
-                let mut textures =
-                    zone_livery::Reads::new(zone.as_ref().or(worn.as_ref()), zone.is_some());
+                let worn = livery.filter(|_| ctx.mode != Mode::Zone);
+                let mut textures = zone_livery::Reads::new(zone.or(worn));
                 let built = if mesh::rcs::psp2::is_psp2(&geometry) {
                     mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                         textures.read(archives, path)

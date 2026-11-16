@@ -18,9 +18,10 @@ pub(super) struct PreviewRequest {
     /// The skin `.dat` to paint it in, when the settings name one the team
     /// declares.
     pub skin: Option<String>,
-    /// The `(own, worn)` livery folders the selected model paints the hull from
-    /// ([`crate::preview::variant::livery_folders`]).
-    pub livery: Option<(String, String)>,
+    /// The livery folders the selected model paints the hull from
+    /// ([`crate::preview::variant::livery_folders`]), or a Zone race's
+    /// ([`crate::preview::variant::zone_folders`]).
+    pub livery: Option<crate::preview::variant::Folders>,
     /// The race hull a front-end hull's flaps are seated from - see
     /// [`crate::preview::race_hull_entry`].
     pub race_hull: Option<String>,
@@ -117,7 +118,7 @@ pub(super) fn draw_preview(
                 request
                     .livery
                     .as_ref()
-                    .map(|(own, worn)| oag_livery::LiveryFolder { own, worn }),
+                    .map(crate::preview::variant::Folders::folder),
             )?
             .0
         };

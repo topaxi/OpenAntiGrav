@@ -419,7 +419,11 @@ pub(super) fn grid(
             forced_skins: &forced_skins,
             player_livery: player_livery
                 .as_ref()
-                .map(|(own, worn)| oag_livery::LiveryFolder { own, worn }),
+                .map(|(own, worn)| oag_livery::LiveryFolder {
+                    own,
+                    worn,
+                    fall_back: false,
+                }),
         },
         hull_variant,
         skin.as_deref(),

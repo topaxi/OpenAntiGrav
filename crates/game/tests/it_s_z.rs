@@ -54,6 +54,7 @@ mod window_seats_grid_ground_truth;
 mod wreck_ground_truth;
 mod wreck_voice_ground_truth;
 mod zone_airbrake_flaps_ground_truth;
+mod zone_preview_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

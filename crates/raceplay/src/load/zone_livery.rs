@@ -33,32 +33,12 @@ pub(super) fn resolve(
             return Vec::new();
         }
     };
-    liveries(&crate::catalogue::teams(&xml), title.race)
-}
-
-/// [`resolve`]'s half that needs no archive.
-fn liveries(
-    teams: &[crate::catalogue::Team],
-    race: &oag_title::RaceDefaults,
-) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    for team in teams {
-        let Some(livery) = &team.zone_livery else {
-            continue;
-        };
-        out.push((team.id.clone(), livery.clone()));
-        if let Some(table) = race.team_variants_for(&team.id) {
-            for variant in table.variants {
-                out.push((table.join.combine(&team.id, variant.suffix), livery.clone()));
-            }
-        }
-    }
-    out
+    crate::catalogue::zone_liveries(&crate::catalogue::teams(&xml), title.race)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::liveries;
+    use crate::catalogue::zone_liveries as liveries;
 
     #[test]
     fn a_variant_wears_its_base_teams_livery_and_a_team_with_none_is_absent() {

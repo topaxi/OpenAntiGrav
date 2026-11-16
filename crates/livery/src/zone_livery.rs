@@ -1,5 +1,5 @@
 //! The Zone hull's team texture: the one thing a craft's pick changes on it. The path
-//! substitution it makes ([`Swap`], [`Reads`]) also repaints an HD-era model from another livery
+//! substitution it makes ([`swap`], [`Reads`]) also repaints an HD-era model from another livery
 //! folder ([`crate::LiveryFolder`]).
 //!
 //! The ship-model loader builds `hdships\Zone\Ship.vex` for every craft and
@@ -11,44 +11,23 @@
 //! invents a name: a craft that authors none keeps the hull's default skin and
 //! the loader report says so.
 
+use crate::LiveryFolder;
 use oag_title::race::ShipPaths;
 
-/// One craft's substitution: the path component to replace and what to put there.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Swap {
-    key: String,
-    livery: String,
-}
-
-impl Swap {
-    /// Reads what names `key` as a path component from `livery` instead.
-    pub(crate) fn new(key: &str, livery: &str) -> Self {
-        Self {
-            key: key.to_ascii_lowercase(),
-            livery: livery.to_ascii_lowercase(),
-        }
-    }
-
-    /// The archive path a texture request becomes, or `None` when the request
-    /// is not under the key and so is read as asked.
-    pub(crate) fn rewrite(&self, path: &str) -> Option<String> {
-        let lower = path.to_ascii_lowercase().replace('\\', "/");
-        let from = format!("/{}/", self.key);
-        lower
-            .contains(&from)
-            .then(|| lower.replacen(&from, &format!("/{}/", self.livery), 1))
-    }
-}
-
-/// The substitution `team` takes on this Zone hull, or `None` with the reason
-/// in `report`. `liveries` is `(team id, livery name)` read off the definition.
-pub(crate) fn swap(
+/// The livery folder `team` wears on this Zone hull, or `None` with the reason in `report`.
+/// `liveries` is `(team id, livery name)` read off the definition.
+///
+/// The one decision of which skin the Zone hull wears: a race's hull build ([`crate::load`]) and
+/// the front end's ship preview both take it, so the picker shows what the race flies. The folder
+/// falls back to the hull's own default skin where the archive lacks a texture of it
+/// ([`LiveryFolder::fall_back`]).
+pub fn swap<'a>(
     ships: ShipPaths,
     mode: oag_race::Mode,
-    liveries: &[(String, String)],
+    liveries: &'a [(String, String)],
     team: &str,
     report: &mut Vec<String>,
-) -> Option<Swap> {
+) -> Option<LiveryFolder<'a>> {
     if mode != oag_race::Mode::Zone {
         return None;
     }
@@ -63,40 +42,40 @@ pub(crate) fn swap(
         ));
         return None;
     };
-    Some(Swap {
-        key: key.to_ascii_lowercase(),
-        livery: livery.to_ascii_lowercase(),
+    Some(LiveryFolder {
+        own: key,
+        worn: livery,
+        fall_back: true,
     })
 }
 
-/// A hull build's texture reads through one [`Swap`], counted for the report.
-pub(crate) struct Reads<'a> {
-    swap: Option<&'a Swap>,
-    /// Whether a texture the swap names but the archive lacks falls back to the hull's own:
-    /// the Zone hull's default skin does; a model's livery does not, since the own folder's
-    /// texture is another livery's paint.
-    fall_back: bool,
+/// A hull build's texture reads through one [`LiveryFolder`], counted for the report. A race's
+/// hull build and the front end's ship preview read through this one reader.
+#[derive(Debug)]
+pub struct Reads<'a> {
+    folder: Option<LiveryFolder<'a>>,
     swapped: usize,
     missing: Vec<String>,
 }
 
 impl<'a> Reads<'a> {
-    pub(crate) fn new(swap: Option<&'a Swap>, fall_back: bool) -> Self {
+    #[must_use]
+    pub fn new(folder: Option<LiveryFolder<'a>>) -> Self {
         Self {
-            swap,
-            fall_back,
+            folder,
             swapped: 0,
             missing: Vec::new(),
         }
     }
 
-    /// The texture at `path`, read through the swap.
-    pub(crate) fn read(
-        &mut self,
-        archives: &mut oag_assets::Archives,
-        path: &str,
-    ) -> Option<Vec<u8>> {
-        let Some(alt) = self.swap.and_then(|swap| swap.rewrite(path)) else {
+    /// The texture at `path`, read through the folder: from the worn folder where `path` is
+    /// under the own one, and, for a folder that [falls back](LiveryFolder::fall_back), from
+    /// `path` itself where the worn folder lacks it.
+    pub fn read(&mut self, archives: &mut oag_assets::Archives, path: &str) -> Option<Vec<u8>> {
+        let Some(folder) = self.folder else {
+            return archives.read_name(path).ok();
+        };
+        let Some(alt) = folder.rewrite(path) else {
             return archives.read_name(path).ok();
         };
         if let Ok(blob) = archives.read_name(&alt) {
@@ -104,49 +83,47 @@ impl<'a> Reads<'a> {
             return Some(blob);
         }
         self.missing.push(alt);
-        if self.fall_back {
+        if folder.fall_back {
             archives.read_name(path).ok()
         } else {
             None
         }
     }
 
-    /// The report line, when a swap was asked for.
-    pub(crate) fn describe(&self, team: &str) -> Option<String> {
-        let swap = self.swap?;
-        Some(if self.fall_back {
-            describe(team, swap, self.swapped, &self.missing)
+    /// The report line, when a folder was asked for.
+    #[must_use]
+    pub fn describe(&self, team: &str) -> Option<String> {
+        let folder = self.folder?;
+        let (own, worn) = (
+            folder.own.to_ascii_lowercase(),
+            folder.worn.to_ascii_lowercase(),
+        );
+        Some(if folder.fall_back {
+            if self.missing.is_empty() {
+                format!(
+                    "{team}: Zone livery {worn} replaces {own} on {} texture request(s)",
+                    self.swapped
+                )
+            } else {
+                format!(
+                    "{team}: Zone livery {worn} named {}, which the archive does not hold - the \
+                     default {own} skin stays ({} swapped)",
+                    self.missing.join(", "),
+                    self.swapped
+                )
+            }
         } else if self.missing.is_empty() {
             format!(
-                "{team}: livery {} replaces {} on {} texture request(s)",
-                swap.livery, swap.key, self.swapped
+                "{team}: livery {worn} replaces {own} on {} texture request(s)",
+                self.swapped
             )
         } else {
             format!(
-                "{team}: livery {} does not hold {} - those draw untextured ({} swapped)",
-                swap.livery,
+                "{team}: livery {worn} does not hold {} - those draw untextured ({} swapped)",
                 self.missing.join(", "),
                 self.swapped
             )
         })
-    }
-}
-
-/// What a finished hull build did with `swap`, as a report line.
-pub(crate) fn describe(team: &str, swap: &Swap, swapped: usize, missing: &[String]) -> String {
-    if missing.is_empty() {
-        format!(
-            "{team}: Zone livery {} replaces {} on {swapped} texture request(s)",
-            swap.livery, swap.key
-        )
-    } else {
-        format!(
-            "{team}: Zone livery {} named {}, which the archive does not hold - the default \
-             {} skin stays ({swapped} swapped)",
-            swap.livery,
-            missing.join(", "),
-            swap.key
-        )
     }
 }
 
@@ -155,24 +132,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_a_path_under_the_key_is_rewritten() {
-        let swap = Swap {
-            key: "zoneship_team".into(),
-            livery: "zoneship_quirex".into(),
+    fn a_race_and_a_preview_take_the_same_folder_for_a_zone_pick() {
+        let ships = oag_title::race::ShipPaths {
+            dir: r"Data\Ships",
+            hull: "ship",
+            zone: oag_title::ZoneCraft::OwnShipAt {
+                root: r"Data\Ships",
+                ship: "zone",
+                livery_key: "zoneship_zone",
+            },
+            boost: None,
         };
+        let liveries = vec![("Qirex".to_string(), "zoneship_quirex".to_string())];
+        let mut report = Vec::new();
+        let folder = swap(ships, oag_race::Mode::Zone, &liveries, "qirex", &mut report)
+            .expect("Qirex wears a Zone livery");
+        assert!(report.is_empty());
         assert_eq!(
-            swap.rewrite("data/art/published/hdships/zone/zoneship_team/team.gnf")
+            folder
+                .rewrite("data/ships/zone/zoneship_zone/team.gtf")
                 .as_deref(),
-            Some("data/art/published/hdships/zone/zoneship_quirex/team.gnf")
+            Some("data/ships/zone/zoneship_quirex/team.gtf")
+        );
+        assert!(folder.fall_back);
+        assert_eq!(
+            folder
+                .rewrite(r"Data\Ships\Zone\Zoneship_Zone\Team.gtf")
+                .as_deref(),
+            Some("data/ships/zone/zoneship_quirex/team.gtf")
         );
         assert_eq!(
-            swap.rewrite(r"Data\art\published\hdships\Zone\Zoneship_Team\Team.gnf")
-                .as_deref(),
-            Some("data/art/published/hdships/zone/zoneship_quirex/team.gnf")
-        );
-        assert_eq!(
-            swap.rewrite("data/art/published/hdships/zone/zoneship_zone/zone_tp_1024.gnf"),
+            folder.rewrite("data/ships/zone/zoneship_quirex/team.gtf"),
             None
         );
+        assert!(
+            swap(
+                ships,
+                oag_race::Mode::TimeTrial,
+                &liveries,
+                "Qirex",
+                &mut report
+            )
+            .is_none()
+        );
+        assert!(
+            swap(
+                ships,
+                oag_race::Mode::Zone,
+                &liveries,
+                "Auricom",
+                &mut report
+            )
+            .is_none()
+        );
+        assert_eq!(report.len(), 1, "an absent livery says so: {report:?}");
     }
 }

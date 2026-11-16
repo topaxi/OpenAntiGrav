@@ -49,6 +49,10 @@ and `0xe`, remaps `zoneship_zone` to the craft's livery name. So the *menu*
 shows the picked craft's own hull wearing the Zone livery key, while the *race*
 loads the shared hull. Hypothesis, below 70, not renamed.
 
+Our preview side: **checked, differs.** 2048 has no race-box Ship Select, and its touch `Select Team` screen (`oag_game::team_hull`) lists native teams only, with no mode, and those author no Zone livery; so nothing draws;
+the shared livery decision is tested against the race for it
+(`vita_2048_zone_preview_wears_the_livery_the_race_does`).
+
 ## `ship_zone.vex` is not loaded by anything found (65, negative)
 
 The 18 `Data/art/published/Ships/<team>2048/<n>/ship_zone.vex` (+ `.rcsmodel`)
