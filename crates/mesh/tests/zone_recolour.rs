@@ -673,6 +673,77 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
     );
 }
 
+/// **A chunk the original's Zone race keeps on its plain program** (render-block flags
+/// `0x0e00`, `slots::ZONE_PLAIN`) draws its own albedo under the stage's ambient and sun:
+/// `output_scale * albedo * (ambient + sat(N.L) * sun)`, with none of the Zone surface and
+/// no lightmap term (`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`). The same
+/// quad without the bit, in the same frame, is the Zone surface and a different colour.
+#[test]
+fn a_zone_plain_chunk_draws_its_own_albedo_under_the_stage_ambient() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    const ALBEDO: u8 = 200;
+    const AMBIENT: f32 = 0.8;
+    const SUN: f32 = 0.3;
+    const OUTPUT_SCALE: f32 = 0.5;
+    let albedo = texture("pad albedo", [ALBEDO, ALBEDO, ALBEDO, 255]);
+    // A white lightmap the chunk names: an ordinary chunk adds it to the light, a Zone frame
+    // has none, so the plain chunk's pixel must not carry it.
+    let mut plain = model(albedo, 1.0);
+    plain.lightmaps = vec![Some(texture("atlas", [255, 255, 255, 0]))];
+    for vertex in &mut plain.vertices {
+        // Not `EMISSIVE`, which `vertex` sets: a program fed no light would draw the picture.
+        vertex.slots = slots::DEFAULT | slots::SECOND_IS_LIGHTMAP | slots::ZONE_PLAIN;
+    }
+    let mut graded = plain.clone();
+    for vertex in &mut graded.vertices {
+        vertex.slots &= !slots::ZONE_PLAIN;
+    }
+
+    let stage = texture("zone stage", [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255]);
+    let mut scene = Scene::off();
+    scene.light = mesh_render::Light::authored(
+        [0.0, 0.0, 1.0],
+        [SUN; 3],
+        [AMBIENT; 3],
+        [1.0; 3],
+        [1.0; 3],
+        0.0,
+    )
+    .with_output_scale(OUTPUT_SCALE);
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.zone = scene_zone(ZoneSet {
+        effect: ZONE_EFFECT,
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    });
+    let art = scene_art(&stage);
+
+    let linear = (f32::from(ALBEDO) / 255.0).powf(2.2) * (AMBIENT + SUN) * OUTPUT_SCALE;
+    let want = (linear.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8;
+    let pixel = draw(&device, &queue, &plain, &art, scene, None);
+    for channel in &pixel[..3] {
+        assert!(
+            channel.abs_diff(want) <= 2,
+            "a plain chunk reads {pixel:?}, want {want} on every channel: its albedo under \
+             the stage's ambient plus sun, and no lightmap"
+        );
+    }
+
+    let zone_surface = draw(&device, &queue, &graded, &art, scene, None);
+    assert!(
+        zone_surface[2].abs_diff(want) > 20,
+        "the same chunk without the bit must draw the Zone surface, got {zone_surface:?}"
+    );
+}
+
 /// **The stage-transition sphere reaches the frame: a fragment inside it
 /// reads the Inner pair and one outside it the Outer.** One quad, one draw,
 /// two texels read off it on either side of the boundary - the pattern the

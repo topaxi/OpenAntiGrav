@@ -306,3 +306,59 @@ fn the_glow_reaches_the_frame_and_the_clock_moves_it() {
         assert!(moved > 0, "{path} draws the same frame at two clocks");
     }
 }
+
+/// **`slots::ZONE_PLAIN` is per chunk** (`mesh::rcs::surface`): on Moa Therma the draws whose
+/// vertices carry it are those of the pad and sign chunks the render-block flags name, and the
+/// bit is on no road draw, whatever material it shares. Fails if the carrier is dropped.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn moa_therma_marks_the_zone_plain_chunks_and_only_them() {
+    let Some(image) = image() else { return };
+    let Some(model) = build(
+        &image,
+        "DATA02.PSARC",
+        "/data/environments/03_track/track.vex",
+    ) else {
+        return;
+    };
+    let mut flagged = 0usize;
+    let mut unflagged = 0usize;
+    for draw in model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+    {
+        let range = draw.range.start as usize..draw.range.end as usize;
+        let words: Vec<u32> = model.indices[range]
+            .iter()
+            .map(|&i| model.vertices[i as usize].slots & slots::ZONE_PLAIN)
+            .collect();
+        assert!(
+            words.iter().all(|&w| w == words[0]),
+            "a draw is one chunk: its vertices agree on ZONE_PLAIN"
+        );
+        if words[0] != 0 {
+            flagged += 1;
+        } else {
+            unflagged += 1;
+        }
+    }
+    println!("{flagged} draws carry ZONE_PLAIN, {unflagged} do not");
+    assert!(
+        (20..=42).contains(&flagged),
+        "{flagged} draws carry ZONE_PLAIN on Moa Therma, which has 42 flagged chunks (not every chunk is its own draw)"
+    );
+    assert!(unflagged > 1000, "the road and scenery are not zone-plain");
+    for slot in &model.material_slots {
+        assert_eq!(
+            slot & slots::ZONE_PLAIN,
+            0,
+            "the bit is per chunk, never per material"
+        );
+        assert!(
+            slots::material_index(*slot) as usize <= model.emissive.len(),
+            "the index bits stay inside the table"
+        );
+    }
+}
