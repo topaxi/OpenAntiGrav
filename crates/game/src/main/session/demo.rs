@@ -77,7 +77,7 @@ impl Session {
 
     /// Whether the main menu is untouched territory: the title's main page with nothing over it
     /// and nothing parked behind it.
-    fn attract_eligible(&self) -> bool {
+    pub(super) fn attract_eligible(&self) -> bool {
         let Stage::Menu(stage) = &self.stage else {
             return false;
         };
@@ -287,6 +287,11 @@ impl Session {
         if let Some(saved) = self.demo.saved.take() {
             self.race_options = Some(saved);
         }
+    }
+
+    /// The person at the machine took the demo over: back to the main menu, no chain behind.
+    pub(super) fn leave_demo_for_input(&mut self) {
+        self.end_demo(Leave::Input);
     }
 
     /// A demo is over: on to the next, or back to the main menu.

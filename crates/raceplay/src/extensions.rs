@@ -45,7 +45,7 @@ mod track;
 mod view_pass;
 
 pub use channel::Declared;
-pub use identity::{check_recorded, restrict_to};
+pub use identity::{check_recorded, preflight_recorded, restrict_to};
 pub use track::{Track, TrackProps};
 
 /// The most simulation modules one race runs. Chosen.

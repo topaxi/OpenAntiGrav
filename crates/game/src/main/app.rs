@@ -57,6 +57,8 @@ pub(crate) struct App {
     pub(crate) demo: Option<bool>,
     /// `--wallpaper-fps`, when the run is a wallpaper.
     pub(crate) demo_limit: Option<oag_present::perf::FrameLimit>,
+    /// `--replay-png`: the screenshot to open in the viewer once the main menu is up.
+    pub(crate) replay_png: Option<std::path::PathBuf>,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
@@ -533,6 +535,9 @@ impl App {
             watching: None,
             demo: crate::session::DemoState::with_cli(self.demo, self.demo_limit),
             viewer: None,
+            notice: None,
+            shot_cli: self.replay_png.clone(),
+            shot_pending: false,
             return_to_replays: false,
             rumbler: None,
             wall: 0.0,

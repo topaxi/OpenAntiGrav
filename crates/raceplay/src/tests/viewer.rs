@@ -127,6 +127,51 @@ fn playing_a_recording_reproduces_every_tick_and_ends_at_the_last() {
     assert_eq!(viewer.at(), TICKS);
 }
 
+/// Fails if a viewer asked to open on a tick plays from 0, opens before the pass has built that
+/// far, leaves play running, or lands anywhere but the recorded run at that tick.
+#[test]
+fn a_viewer_started_at_a_tick_opens_paused_there() {
+    let (replay, text) = recording(TICKS);
+    let start = 250;
+    let (viewer, mut race) = unbegun(replay);
+    let mut viewer = Box::new((*viewer).starting_at(start));
+    viewer.begin(&mut race).expect("the launch settings");
+    assert_eq!(viewer.state(), State::Opening, "nothing is shown before the start is built");
+    let mut moved = Moved::Still;
+    while moved == Moved::Still {
+        moved = viewer.update(&mut race);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert_eq!(moved, Moved::Seeked);
+    assert_eq!(viewer.at(), start);
+    assert!(!viewer.playing(), "it opens paused");
+    assert_stands_at(&race, &text, start);
+    assert_eq!(viewer.update(&mut race), Moved::Still, "and stays there");
+    assert_eq!(viewer.at(), start);
+}
+
+/// Fails if a recording cut at the start tick does not open on its last tick, or a play from
+/// there does not start it over.
+#[test]
+fn a_viewer_started_at_the_end_is_ended_and_plays_from_the_start() {
+    let (replay, text) = recording(TICKS);
+    let (viewer, mut race) = unbegun(replay);
+    let mut viewer = Box::new((*viewer).starting_at(TICKS));
+    viewer.begin(&mut race).expect("the launch settings");
+    // A play pressed while the pass is still building is not left running.
+    viewer.set_playing(true);
+    while viewer.update(&mut race) == Moved::Still {
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert_eq!(viewer.at(), TICKS);
+    assert_eq!(viewer.state(), State::Ended);
+    assert!(!viewer.playing());
+    assert_stands_at(&race, &text, TICKS);
+    assert_eq!(viewer.toggle(&mut race), Moved::Seeked);
+    assert_eq!(viewer.at(), 0);
+    assert!(viewer.playing());
+}
+
 /// Fails if the 60 drawn ticks before a target are skipped, run on the wrong inputs, or the
 /// keyframe is restored at the wrong tick: the order is out of step on purpose.
 #[test]

@@ -78,6 +78,8 @@ pub struct Viewer {
     /// Sixteenths of a tick owed at the current speed.
     owed: u32,
     started: bool,
+    /// The tick playback opens on, paused, instead of playing from tick 0 (a screenshot's).
+    start: Option<u64>,
 }
 
 impl Viewer {
@@ -97,7 +99,19 @@ impl Viewer {
             speed: 1,
             owed: 0,
             started: false,
+            start: None,
         })
+    }
+
+    /// Opens the viewer paused on `tick` (held inside the recording) instead of playing from
+    /// tick 0: it reports [`State::Opening`] until the opening pass has built that far, then
+    /// seeks there. A recording cut at `tick` opens on its last tick; the first play from there
+    /// starts it over, as at any end.
+    #[must_use]
+    pub fn starting_at(mut self, tick: u64) -> Self {
+        self.start = Some(tick);
+        self.playing = false;
+        self
     }
 
     /// Makes the race on screen the recorded race at tick 0: the launch settings and seats the
@@ -136,6 +150,12 @@ impl Viewer {
         SPEEDS[self.speed]
     }
 
+    /// The tick the viewer was asked to open on, if it was ([`Self::starting_at`]).
+    #[must_use]
+    pub fn start(&self) -> Option<u64> {
+        self.start
+    }
+
     /// The header the recording carries.
     #[must_use]
     pub fn header(&self) -> &oag_replay::Header {
@@ -170,7 +190,7 @@ impl Viewer {
 
     /// Whether the first keyframe is not yet in: the screen holds the grid and says so.
     pub fn opening(&mut self) -> bool {
-        self.timeline.prefix().is_none()
+        self.timeline.prefix().is_none() || (self.start.is_some() && !self.started)
     }
 
     /// Where playback stands.
@@ -178,6 +198,9 @@ impl Viewer {
         let Some(built) = self.timeline.prefix() else {
             return State::Opening;
         };
+        if self.start.is_some() && !self.started {
+            return State::Opening;
+        }
         match self.timeline.pass() {
             Pass::Desynced(_) | Pass::Refused(_) if self.at >= built => {
                 match self.pose_end(built) {
@@ -247,11 +270,21 @@ impl Viewer {
     /// speed it plays.
     pub fn update(&mut self, race: &mut Race) -> Moved {
         if !self.started {
-            if self.timeline.prefix().is_none() {
+            let Some(built) = self.timeline.prefix() else {
+                return Moved::Still;
+            };
+            let wanted = self.start.unwrap_or(0).min(self.ticks());
+            // A start tick waits for the pass to reach it; a pass that ended short of it
+            // opens on the last tick that agrees.
+            if built < wanted && self.timeline.pass() == Pass::Running {
                 return Moved::Still;
             }
             self.started = true;
-            return self.seek(race, 0);
+            // A press of play while the pass was still building must not leave it playing.
+            if self.start.is_some() {
+                self.playing = false;
+            }
+            return self.seek(race, wanted);
         }
         if !self.playing {
             return Moved::Still;

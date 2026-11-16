@@ -657,13 +657,16 @@ impl Session {
     }
 
     /// A file dropped on the window. The chooser takes a disc key or a disc
-    /// image; every other stage leaves it alone.
+    /// image; the main menu and the attract demo take a screenshot of ours
+    /// (`session::shot_open`); every other stage leaves it alone.
     pub(crate) fn file_dropped(&mut self, path: &std::path::Path) {
-        if let Stage::Launcher(stage) = &mut self.stage
-            && stage.picked.is_none()
-        {
-            stage.picked = stage.launcher.dropped(path);
+        if let Stage::Launcher(stage) = &mut self.stage {
+            if stage.picked.is_none() {
+                stage.picked = stage.launcher.dropped(path);
+            }
+            return;
         }
+        self.shot_dropped(path);
     }
 
     /// Ctrl+V while the chooser's disc-key prompt is open: asks it to paste.

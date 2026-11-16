@@ -28,6 +28,30 @@ pub mod strings {
     pub const JOG: &str = "OAG_REPLAY_JOG";
 }
 
+/// A line of text over whatever is on screen, in a band across the middle of `grid`: what a
+/// dropped screenshot that did not open says. The text wraps inside nine tenths of the width.
+#[must_use]
+pub fn notice_draw(grid: (f32, f32), text: &str) -> Vec<Draw> {
+    let height = LINE * 3.0 + 10.0;
+    let top = (grid.1 - height) / 2.0;
+    vec![
+        Draw::Fill {
+            rect: [0.0, top, grid.0, height],
+            color: WARNING,
+        },
+        Draw::Text {
+            x: grid.0 / 2.0,
+            y: top + 5.0,
+            scale: SCALE,
+            color: TEXT,
+            border: None,
+            align: Align::Centre,
+            text: text.to_string(),
+            wrap_width: Some(grid.0 * 0.9),
+        },
+    ]
+}
+
 /// What can be clicked, in the order the chips are drawn, and the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {

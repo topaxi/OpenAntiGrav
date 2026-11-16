@@ -19,6 +19,7 @@
 //! click                            the primary mouse button went down and up
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
+//! drop shot.png                    a file dropped on the window (a screenshot of ours opens in the replay viewer on the main menu or in a demo)
 //! quit                             end the run (reaching the end of the script does too)
 //! ```
 //!
@@ -131,6 +132,8 @@ pub enum Step {
     Ticks(u32),
     /// Write the next frame to this PNG.
     Screenshot(PathBuf),
+    /// A file dropped on the window.
+    Drop(PathBuf),
     /// End the run.
     Quit,
 }
@@ -163,6 +166,7 @@ impl std::fmt::Display for Step {
             Self::Click => f.write_str("click"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
+            Self::Drop(path) => write!(f, "drop {}", path.display()),
             Self::Quit => f.write_str("quit"),
         }
     }
@@ -383,6 +387,10 @@ impl Script {
             "screenshot" => match words.as_slice() {
                 [path] => Step::Screenshot(PathBuf::from(path)),
                 _ => return Err("screenshot takes one path".into()),
+            },
+            "drop" => match words.as_slice() {
+                [path] => Step::Drop(PathBuf::from(path)),
+                _ => return Err("drop takes one path".into()),
             },
             "escape" if words.is_empty() => Step::Escape,
             "key" if words.is_empty() => Step::Key,
