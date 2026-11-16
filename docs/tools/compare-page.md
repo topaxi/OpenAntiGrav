@@ -1025,7 +1025,7 @@ That shows the state load and the reads are deterministic, not that two differen
 **The Classic hull is `VR\Ship.vex`, and ours flies it.** In the Classic league the original draws a differently shaped, differently coloured Feisar than `Data\Ships\Feisar\Ship.vex`: it is `Data\Ships\Feisar\VR\Ship.vex`, which `Ship_LoadModel` builds for every craft when the circuit's `PI_Track` `type` is `Classic` ([ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md), "What selects the VR hull"). Before it was wired, the four Classic frames read an edge correlation of 0.09 to 0.11 on the hull region (best shift +7, -4, 0 and 0 px, noise from two unlike shapes). With `oag_title::RaceDefaults::hull_by_track_type` wired, a fixed hull box (`x 188..300, y 172..272`) reads, per pair, edge correlation 0.29 -> 0.86 (Manor Top), 0.34 -> 0.89 (Mandrashee), 0.29 -> 0.28 and 0.78 at a 4 px shift (Sagarmartha), 0.16 -> 0.63 (Karbonis), and mean absolute difference 46.7 -> 20.4, 38.7 -> 12.5, 39.4 -> 29.4, 39.1 -> 15.2. Sagarmartha's best correlation sits at a 4 px horizontal shift; whether that is the pose or the hull's origin is not measured. The hull-offset gate is still skipped for Classic pairs by `psp-pure-pair.py --hull-differs "<caveat>"` until those pairs are re-made with the new caveat; the eye and fov checks still hold the camera. **Still different:** ours' Classic worlds render darker than the original's (whole-frame mean grey difference 17 to 39 against 9 to 27 on Beta) and the ground shadow's shape is not the original's; lighting and the shadow hull, not the craft model.
 **Pairs taken as a state's clock reads 0.8 to 5.1 s** because PPSSPP's software renderer runs the race slower than real time; `retime` is a load, a wait and a save over the same file (scratch script, not kept).
 
-**Not paired.** The four **Zone** circuits (`Data\Zone\01_Zone`..`04_Zone`): the pair script is Time Trial only (no Zone HUD state, no `g_game_mode` check, the craft flies under its own speed), and Pulse's Zone pair needed its own walk and HUD-state flags.
+**Not paired.** The Zone circuits `Data\Zone\02_Zone`..`04_Zone`; `01_Zone` (Pro Tozo) is paired at zones 8 and 9 by `psp-pure-pair.py --zone` ("Zone pairs: Wipeout Pure" below).
 Pure's twelve **DLC** circuits are not on the disc image and cannot be paired from the USA disc: Delta (Iridia, Anulpha Pass, Koltiwa, Khara Descent, `Environments\BrandedTracks\Puma_*`), Gamma 1 (Staten Park, Exostra Run, Ubermall,
 Sebenco Peak, `06_`, `02_`, `05_`, `11_`) and Omega (JonBurgerman, MarkJames, NeilMcFarland, 123Klan, `18_` to `21_`) declare them in their manifests (read through `oag_source::dlc::pure_packs`); the packs in `data/dlc/` are EU packs, and the original
 checks a pack with a region key from its own executable ([dlc-pack.md](../formats/dlc-pack.md)), so they would need the EU disc and the EU pressing's live addresses (not recovered; `psp-pure-pair.py` reads the USA ones). Not attempted here.
@@ -1341,6 +1341,37 @@ with a gap.** `vita-2048-pair.py --zone-capture SECONDS` (with `--walk`) flies a
 - **Traps found.** A `vita3k-drive.py`/`vita3k-mem.py` display left over from an earlier run presents black frames (the guest runs, every shot is 0 grey): `vita3k-drive.py
   stop` and boot again. A Vita3K left running by an earlier run makes the next `--walk` attach to it ("already running", hull shake not patched): stop it first.
   `oag-game` takes a negative `--camera-pose` or `--pose` only as `--flag=VALUE`; `--camera-pose` refuses `--pose-from`.
+
+## Zone pairs: Wipeout Pure (PSP, 2026-11-17, `zone-pair-pure`)
+
+**Claim: the page carries one Wipeout Pure Zone pair (PPSSPP software renderer against ours, Pro Tozo, zone 8) with a second at zone 9. True, both with a gap.**
+`psp-pure-pair.py --zone ZONE,SCORE` renders ours at tick 0 (`--mode zone`) on the original's body pose and fov with `--hud-state 1,1,0,0,KMH,100,0,ZONE,SCORE,0`
+and `--hud-autopilot` (the timer read from the pickup record); both flags are honoured on Pure. Pair ids `pure-psp-zone-pro-tozo-z8` and `-z9` (`data/reference/compare-page/pure-psp/`).
+
+- **The state.** `psp-pure-zone-state.py`: Main Menu, SINGLE PLAYER, three downs to ZONE (Single Race, Tournament, Time Trial, Zone), Zone Track Selection (Pro Tozo,
+  Mallavol, Coridon 12, Syncopia = `Data\Zone\01_Zone` to `04_Zone`; no class or team step), the race loads about 12 s later and shows SCORE and ZONE. A fresh profile
+  (language, name, tag and "do not save" answered by hand, about 4 min on a cold boot) got there with the dev-unlock byte written (`psp-pure-walk.py`'s). **The craft is flown by the
+  Autopilot pickup**, armed by a debugger write (running byte `+0x154` = 1, timer `+0x15c` = 600 s at the weapons loop's tail `0x0884d0d4`, `autopilot.md`): it passes about one
+  zone every 10 s (zone 4 at 25 s, zone 6 at 45 s, zone 8 at about 60 s). The pickup record is at `0x095bb380` in the boot that made the two pair states and at `0x095bb340` in a
+  later one, so it goes into the state's `.json` sidecar (`autopilot_record`). The HUD prints the timer (553.18 s at zone 8) at the top centre; ours draws it from `--hud-autopilot`.
+  States: `data/saves/pure-psp/zone-pro-tozo-autopilot-zone8.ppst` and `-b.ppst` (zone 9), reusable by the next lane. From the lane's start to the first built pair: 13 min (build 1,
+  cold-boot menu walk 4, Zone race up 1, Autopilot to zone 6 and the first save 1, script edit and ours' probes 3, the pair 1), then the eye fix, the second state and its pair 5 more.
+- **Read by eye, not RAM.** No Pure address for the zone number, score or zone seconds is documented, so the zone (8, 9), score (10450, 11817) and km/h (567, 749) come off the original's
+  HUD; ours' zone seconds are written as 0 (a caveat in each `pair.json`). Pose, fov and the Autopilot timer are read from RAM.
+- **Numbers** (rmse / edge correlation / mean grey, the page's own scores): zone 8 0.325 / 0.06 / 52.7; zone 9 0.390 / 0.10 / 64.1. Pose agreement 0.000 units and 0.000 degrees at the posed tick
+  (ours is posed on the original's body), fov 81.54 and 85.59 degrees fed as read. Repeat: the zone 8 pair was built three times from the same state (the original's frame, ours' frame and every metric
+  bit-identical; two boots of the state, one made it, confidence 55 that a second Zone race gives the same).
+- **What differs, read off both `side.png`.** (1) **The camera**: the original's eye at Zone speed is 7.48 units from the body (right 0.32, up 2.23, back 7.13 at 158 units/s; 0.26 left, 2.27 up, 7.12 back
+  at 208 units/s: one tick-aligned read each, `eye_body_frame` in `pair.json`) against the Close rig's 11.64 (3.0 up, 11.25 back) at rest, so a Zone craft is drawn about 1.6 times larger and the road
+  fills more of the frame; ours keeps its rest rig, so its hull is small and sits higher, and the wall panels and floor pads the original's wider, closer view shows are off-frame in ours. The hull offset
+  (+6, -6) and (+10, -3) px is recorded, not gated. The eye must be read against the body at the tripod's own stop: against the pose read at `Ship_UpdateCraft`'s entry it is one tick (5.2 to 6.9 units) ahead and
+  reads 2.97 and 2.30 units. (2) **Brightness**: ours reads 220 and 194 mean grey against 176 and 143: the original's walls and ceiling carry black bands and a pink-violet bloom at the lights that ours
+  draws pale. (3) The original's hull shows a bright blue engine glow; ours draws none and puts a shadow under the hull. (4) **No per-zone palette on Pure, on either side**: ours' `--zone-stage` is a no-op on
+  Pure (stages 0 and 5 pixel-identical; zone 1 and 8 identical scenery, only the HUD digits differ), and the original's lower-half mean colour moved by 3 to 6 % between zone 1 and zone 8 across six sampled frames
+  at different places on the circuit (confidence 50, a fixed place across zones was not compared). So the brief's "a zone where the palette has changed" was not found to exist on Pure, and the pair tests geometry,
+  camera, HUD and light only.
+- **Not matched, in each pair's caveats**: the zone clock, ours' exhaust and trail history (no ticks), the shield bar (drawn full), the ZONE label (fading in the original).
+- **Pure against the other titles**: not checked here (the Pulse Zone camera and HD's Zone frame were not compared in this lane); the camera spring is a Pure measurement only.
 
 ## Menu pairs: HD/Fury and Omega front-end screens (2026-10-26, `menu-pairs-hd-omega`)
 

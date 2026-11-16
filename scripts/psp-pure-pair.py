@@ -30,6 +30,7 @@ are recorded as numbers, not gated, and the fov gate drops its at-rest speed ter
 """
 
 import argparse
+import json
 import math
 import os
 import struct
@@ -59,8 +60,8 @@ CLOSE_DISTANCE = 11.643
 #: here unmeasured. A resting craft cannot tell: the pose is the same at both stops; the clock differs by one tick.
 PRESENTED_LAG = 1
 #: The player's Autopilot pickup record of a Zone race flown on the Autopilot: its running byte `+0x154` and its timer `+0x15c`
-#: (`docs/ghidra/functions/psp-pure-usa/autopilot.md`). The record sits at the same address in every boot of the state it was made in.
-AUTOPILOT_RECORD = 0x095BB380
+#: (`docs/ghidra/functions/psp-pure-usa/autopilot.md`). Its address belongs to the state (the `autopilot_record` of the state's
+#: `.json` sidecar, `psp-pure-zone-state.py`; `--autopilot-record` overrides); a load restores it.
 #: The HUD's km/h is the body's speed in units a second times this (Pulse's factor, `psp-pulse-pair.py`; checked here against the HUD).
 SPEED_TO_KMH = 3.6
 
@@ -189,11 +190,18 @@ def read_pose(dbg):
     return {"craft": craft, "body": body, "right": rows[0:3], "up": rows[4:7], "fwd": rows[8:11], "pos": pos, "vel": vel}
 
 
-def read_tripod(dbg):
+def read_tripod(dbg, craft=None):
+    """The active tripod at `Camera_CopyTripodToView`. With `craft`, also that craft's body pose read at the same stop (`body`): the
+    tripod is the tick AFTER the pose `read_pose` reads at `Ship_UpdateCraft`'s entry, so a moving craft's eye is measured against this one."""
     g = stop_at(dbg, CAMERA_COPY_TRIPOD)
     tripod = dbg.read_u32(g["a0"] + 0x40)
     m = struct.unpack("<21f", dbg.read(tripod, 84))
-    return {"address": tripod, "right": m[0:3], "up": m[4:7], "fwd": m[8:11], "neg_eye": m[12:15], "fov": m[20]}
+    out = {"address": tripod, "right": m[0:3], "up": m[4:7], "fwd": m[8:11], "neg_eye": m[12:15], "fov": m[20]}
+    if craft:
+        body = dbg.read_u32(craft + BODY_POINTER)
+        rows = struct.unpack("<12f", dbg.read(body, 48))
+        out["body"] = {"right": rows[0:3], "up": rows[4:7], "fwd": rows[8:11], "pos": struct.unpack("<3f", dbg.read(body + 0x30, 12))}
+    return out
 
 
 def read_clock(dbg):
@@ -226,6 +234,8 @@ def main():
     ap.add_argument("--zone", default="", metavar="ZONE,SCORE",
                     help="a Zone frame: the zone number and score the original's HUD shows in the state (read by eye, no RAM address is "
                          "documented). Ours renders at tick 0 in --mode zone with them")
+    ap.add_argument("--autopilot-record", type=lambda v: int(v, 0), default=None,
+                    help="with --zone: the Autopilot pickup record's address (default: the state's sidecar `autopilot_record`)")
     ap.add_argument("--zone-kmh", type=float, default=None, help="with --zone: the km/h the original's HUD shows (default: body speed * 3.6)")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -264,7 +274,7 @@ def main():
               "--serial", SERIAL, "--stop-at", hex(SHIP_UPDATE_CRAFT)])
     dbg = Debugger(args.port)
     pose0 = read_pose(dbg)
-    tripod = read_tripod(dbg)
+    tripod = read_tripod(dbg, pose0["craft"] if zone else None)
     clock_at = None if zone else read_clock(dbg)[1]
     # The clock is read at the state's own first stop, where the frame on screen is the one before it: load again (a load is
     # bit-identical run to run, psp-state.py), read the clock at the address found above and take the picture there.
@@ -277,7 +287,14 @@ def main():
     pose1 = read_pose(dbg)
     clock = 0.0 if zone else dbg.read_f32(clock_at)
     dt = dbg.read_f32(pose1["craft"] + 0x1C8)
-    autopilot = {"running": dbg.read_u8(AUTOPILOT_RECORD + 0x154), "timer_s": dbg.read_f32(AUTOPILOT_RECORD + 0x15C)} if zone else None
+    if zone:
+        sidecar = Path(args.state + ".json")
+        record = args.autopilot_record or (int(json.loads(sidecar.read_text()).get("autopilot_record", "0"), 0) if sidecar.exists() else 0)
+        if not record:
+            sys.exit("--zone needs the Autopilot record's address: --autopilot-record, or `autopilot_record` in %s" % sidecar)
+        autopilot = {"record": hex(record), "running": dbg.read_u8(record + 0x154), "timer_s": dbg.read_f32(record + 0x15C)}
+    else:
+        autopilot = None
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shot = out / "window.png"
@@ -304,10 +321,18 @@ def main():
     dist = math.dist(eye, pose0["pos"])
     eye_text = "eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from the body" % (*eye_body, dist)
     if zone:
-        pair.rec["original"]["eye_body_frame"] = {"right": eye_body[0], "up": eye_body[1], "fwd": eye_body[2], "distance": dist,
-                                                 "close_rest": [0.0, 3.0, -11.25], "close_distance": CLOSE_DISTANCE}
-        pair.caveat("the original's camera at Zone speed is sprung: %s (Close at rest: (0, 3.000, -11.250), %.3f); ours keeps its own "
-                    "Close chase rig, so the two cameras differ by the spring" % (eye_text, CLOSE_DISTANCE))
+        tb = tripod["body"]
+        tick_eye = body_frame([e - p for e, p in zip(eye, tb["pos"])], tb)
+        tick_dist = math.dist(eye, tb["pos"])
+        pair.rec["original"]["eye_body_frame"] = {
+            "at_the_tripods_own_stop": {"right": tick_eye[0], "up": tick_eye[1], "fwd": tick_eye[2], "distance": tick_dist},
+            "against_the_pose_one_tick_earlier": {"right": eye_body[0], "up": eye_body[1], "fwd": eye_body[2], "distance": dist},
+            "body_advance_between_the_two_stops": math.dist(pose0["pos"], tb["pos"]),
+            "close_rest": [0.0, 3.0, -11.25], "close_distance": CLOSE_DISTANCE}
+        pair.caveat("the original's camera at Zone speed is sprung: eye in the body frame (right, up, fwd) = (%.3f, %.3f, %.3f), %.3f from "
+                    "the body, read against the body at the tripod's own stop (against the pose one tick earlier: %s; the body moved %.2f units "
+                    "between the stops); Close at rest is (0, 3.000, -11.250), %.3f. Ours keeps its own Close chase rig, so the two cameras "
+                    "differ by the spring" % (*tick_eye, tick_dist, eye_text.split("= ")[1], math.dist(pose0["pos"], tb["pos"]), CLOSE_DISTANCE))
     else:
         pair.check("the original's camera is the Close chase view (11.643 units from the body, 3.0 up, 11.25 back)",
                    abs(dist - CLOSE_DISTANCE) < 0.1 and abs(eye_body[1] - 3.0) < 0.05 and abs(eye_body[2] + 11.25) < 0.1, eye_text)
@@ -412,7 +437,6 @@ def main():
                    % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
-        import json
         pair.rec["meta"] = json.loads(args.meta)
     pair.finish()
     print("wrote", out / "side.png")
