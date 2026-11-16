@@ -94,11 +94,31 @@ impl Race {
     /// [`BENEATH_LINE`]. Far from the line is the original's distance trigger
     /// ([`Self::far_from_the_sample`]), not this.
     ///
-    /// Advances the dwell counter as a side effect, so it must be called once
-    /// per craft per tick and not conditionally - a caller that skipped it
-    /// while a cooldown ran would let a craft bank dwell it never spent.
+    /// **Only a craft that left its line's corridor to get there counts**: it
+    /// was outside the corridor when it was last on the ground and not beneath
+    /// the line, or at any tick of the flight since, the speed plan's own test
+    /// (`oag_ai::plan::Failure::Beneath`). 2048's and Omega's `arena` run their
+    /// line over a deck the field drops under, inside the corridor, onto a road
+    /// that climbs back to it (`docs/gameplay/ai.md`, "A road under the line
+    /// is a failure").
+    ///
+    /// Advances the dwell counter and the corridor latch as a side effect, so
+    /// it must be called once per craft per tick and not conditionally - a
+    /// caller that skipped it while a cooldown ran would let a craft bank
+    /// dwell it never spent.
     pub(super) fn beneath_too_long(&mut self, slot: usize) -> bool {
-        let beneath = self.beneath_the_line(slot);
+        let under = self.beneath_the_line(slot);
+        if !under {
+            let ship = &self.sim.world.ships[slot];
+            let outside = self
+                .line_of(slot)
+                .outside_the_corridor(ship.driver.index as usize, ship.physics.body.position);
+            // On the road a craft is wide or it is not; in the air it stays
+            // wide if it took off wide, wherever the flight carries it.
+            self.sim.beneath_wide[slot] =
+                outside || (self.sim.beneath_wide[slot] && ship.physics.time_airborne > 0.0);
+        }
+        let beneath = under && self.sim.beneath_wide[slot];
         self.sim.beneath_ticks[slot] = if beneath {
             self.sim.beneath_ticks[slot].saturating_add(1)
         } else {
@@ -403,6 +423,7 @@ impl Race {
         // survived the teleport would fire once more the moment the cooldown ran
         // out.
         self.sim.beneath_ticks[slot] = 0;
+        self.sim.beneath_wide[slot] = false;
         self.sim.stalled_ticks[slot] = 0;
         self.sim.distant_ticks[slot] = 0;
 

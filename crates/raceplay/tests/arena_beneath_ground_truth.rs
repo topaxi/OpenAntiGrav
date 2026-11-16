@@ -4,7 +4,9 @@
 //! as on a road under the circuit (`docs/gameplay/ai.md`, "A road under the
 //! line is a failure").
 //!
-//! A field of seven per class, race to the flag: no `Beneath` respawn.
+//! A field of seven per class, race to the flag: no `Beneath` respawn. And the
+//! rescue that rule exists for still fires: Pulse `05_Track`'s field runs wide
+//! into the pit under its upper road.
 
 use oag_raceplay as race;
 use oag_raceplay::RespawnCause;
@@ -72,7 +74,9 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
                 }
                 laps[slot] = lap;
             }
-            if !ship.standing.finished() {
+            if !ship.standing.finished()
+                && ship.physics.craft_state != oag_physics::CraftState::Eliminated
+            {
                 running += 1;
             }
             if race.respawns_of(slot) != respawns[slot] {
@@ -183,48 +187,6 @@ arena_classes! {
     the_omega_arena_field_is_not_rescued_from_its_own_road_at_phantom => omega, "omega", TRACK_OMEGA, "PHANTOM";
 }
 
-/// Scratch: what the line's floor cast hits at arena samples 4480-4860.
-#[test]
-#[ignore = "a scratch probe: set OAG_SWEEP"]
-fn arena_floor_probe() {
-    use oag_core::math::Vec3;
-    use oag_physics::Raycaster;
-    if std::env::var_os("OAG_SWEEP").is_none() {
-        return;
-    }
-    let Some(source) = vita_2048() else { return };
-    let loaded = race::load(&race::Options {
-        source: source.display().to_string(),
-        class: "VENOM".into(),
-        mode: oag_race::Mode::SingleRace,
-        track: Some(TRACK_2048.into()),
-        ribbon: true,
-        ..race::Options::default()
-    })
-    .unwrap();
-    let race = race::Race::start(loaded.setup);
-    let line = race.racing_line().clone();
-    println!("line len {}", line.len());
-    let frame_of = |i: usize| line.aim(i, 0.0).corridor;
-    for i in (4500..4830).step_by(10) {
-        let Some(sample) = race.ai_sample(i) else { continue };
-        let up = -Vec3::from_array(sample.down).normalize_or_zero();
-        let p = line.point(i);
-        let Some(frame) = frame_of(i) else { continue };
-        let mut row = String::new();
-        for k in [-4, 0, 4] {
-            let off = k as f32 * 2.5;
-            let o = p + frame.lateral * off + up * 40.0;
-            let mut hits = [None; 8];
-            let n = race.collision().raycast_all(oag_physics::Ray::new(o, -up, 100.0), None, false, &mut hits);
-            let mut d: Vec<String> = hits[..n].iter().flatten().map(|h| format!("{:.0}n{:.1}{}", h.distance - 40.0, h.normal.dot(up), match h.surface { oag_physics::Surface::Floor => "", oag_physics::Surface::Wall => "w", _ => "?" })).collect();
-            d.sort();
-            row.push_str(&format!(" {off:+.0}:[{}]", d.join(",")));
-        }
-        println!("{i} L{:.1} R{:.1} {row}", frame.left, frame.right);
-    }
-}
-
 /// Scratch census: every respawn by cause, line index and tick on every
 /// Pulse, 2048 and Omega layout, a field of seven at `OAG_SWEEP_CLASS`, plus
 /// the final race hash. Each `Beneath` rescue also says whether the craft was
@@ -241,7 +203,16 @@ fn beneath_census_all_titles() {
     let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".into());
     let title = std::env::var("OAG_TITLE").unwrap_or_else(|_| "2048".into());
     let names = [
-        "square", "park", "tower", "mall", "bridge", "arena", "subway", "cathedral", "sol", "altima",
+        "square",
+        "park",
+        "tower",
+        "mall",
+        "bridge",
+        "arena",
+        "subway",
+        "cathedral",
+        "sol",
+        "altima",
     ];
     let circuits: Vec<(String, String, String)> = match title.as_str() {
         "pulse" => {
@@ -347,7 +318,8 @@ fn beneath_census_all_titles() {
                             > oag_race::recovery::BENEATH_LINE
                     });
                 let outside = line.aim(index, 0.0).corridor.is_some_and(|frame| {
-                    let offset = (ship.physics.body.position - line.point(index)).dot(frame.lateral);
+                    let offset =
+                        (ship.physics.body.position - line.point(index)).dot(frame.lateral);
                     offset < frame.left || offset > frame.right
                 });
                 if !under {
@@ -382,4 +354,33 @@ fn beneath_census_all_titles() {
             events.join(" ")
         );
     }
+}
+
+/// The rescue still fires where a craft really is under the circuit: Pulse
+/// `05_Track` forward, FLASH, where two of the field leave the corridor and
+/// drop into the pit under the upper road (ring samples 339 and 349).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_pulse_05_track_field_is_still_rescued_from_the_pit_under_its_road() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+    let track = oag_raceplay::catalogue::tracks(&definition)
+        .into_iter()
+        .find(|t| t.id == "05_Track")
+        .expect("05_Track is on the disc")
+        .entry_name();
+    let out = run(&image, &track, "FLASH");
+    println!("pulse 05_Track FLASH: respawns {:?}", out.respawns);
+    assert_eq!(
+        out.beneath_per_lap.iter().sum::<u32>(),
+        2,
+        "05_Track's pit rescues changed: {:?}",
+        out.respawns
+    );
 }

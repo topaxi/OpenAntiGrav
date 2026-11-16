@@ -391,6 +391,19 @@ impl Line {
         (count > 0).then(|| self.corridor[index % count])
     }
 
+    /// Whether `position` is further across the line at `index` than the
+    /// corridor there reaches; never on a line with no corridor. The test a
+    /// rescue for a road under the line asks before it counts a craft as on
+    /// another road (`docs/gameplay/ai.md`, "A road under the line is a
+    /// failure").
+    #[must_use]
+    pub fn outside_the_corridor(&self, index: usize, position: Vec3) -> bool {
+        self.aim(index, 0.0).corridor.is_some_and(|frame| {
+            let offset = (position - self.point(index)).dot(frame.lateral);
+            offset < frame.left || offset > frame.right
+        })
+    }
+
     /// Walks `distance` along the line from `index`.
     ///
     /// Returns the segment it ended on (`at`, `next`), the `fraction` along it,
