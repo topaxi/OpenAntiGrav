@@ -955,6 +955,18 @@ it is left as it is. **2048/Omega: not checkable here.** The probe reads HD's `.
 pad classes and their `.rcsmodel`; neither title's pad objects have been decompiled
 (`docs/formats/omega-status.md`), so whether their pad nodes resolve is unmeasured.
 
+## In a Zone race a pad keeps its plain program (2026-11-16, `zone-pad-re`)
+
+Every pad chunk carries render-block flag bit 9 (speed, 418 chunks) or bit 10
+(weapon, 208), and the original's draw loop gives a chunk with either bit (or
+bit 11) the non-Zone permutation word in a Zone race. A speed pad there runs
+`speedup_material`'s `HalfBrightAmbientSunSpot0SVC0` block (#5): its own
+albedo lit by the Zone stage's ambient alone, plus the `_ne.a * Colour` glow,
+no lightmap, no Zone texture (confidence 90, three RSX frames on Moa Therma).
+See [zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md).
+Not wired. **2048/Omega: checked, differs** (their Zone model `trackZone`
+authors its own textured pad materials; no such flag), on that page.
+
 ## The load report said the speed pads were undrawn; they were not - 2026-10-06
 
 On Talon's Junction (and the three other original circuits, 18, 16, 17 and 15
