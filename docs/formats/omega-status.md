@@ -2337,7 +2337,10 @@ Ranked, by what each would remove:
 scale`, absent on every Omega file, so specular is 0) raises Queens Mall to 55.2 and Empire Climb to 53.2: Omega's
 RGB specular is not HD's scalar term and stays unwired. `Lighting.Ship diffuse brightness` (0.25 to 1, registered at
 `+0x164`, key `0x0188d117`) is read by nothing here, but the hull's bias does not follow it (Sol, at 1.0, is the
-brightest hull, +69), so it is not the hull's cause; the hull is confounded by the port's livery anyway.
+brightest hull, +69), so it is not the hull's cause. **Measured live on the original (2026-11-16, `omega-hull-tone`,
+[hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md))**: the hull does read it, as a separate neutral term worth about 20 %
+of Modesto's housing box at 0.25 (ours lacks it); it is not a scale on the hull, and the 1.8 to 2.4 times excess is in how ours' hull combines its diffuse terms (albedo, normal or the
+bound ambient: open, confidence 55), with an equal sun constant, no specular and no reflection on the box. The stored pair's two craft differ in part set (rear arc, pylons); the housing box is clear of them.
 
 **The crowd's law** (static, confidence 70; wired for the `_shadow` materials, `mesh::rcs::psp2::crowd`).
 `crowd_sprite_diffuse_normal_alpha_shadow` (Sol 128,452 triangles) and `crowd_diffuse_normal_shadow` (Arena 380,285,
