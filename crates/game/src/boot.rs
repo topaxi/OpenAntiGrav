@@ -793,10 +793,12 @@ pub fn load_shell(
     );
     // `--movie` overrides whichever movie the sequence draws first, so the flag
     // stays a preview tool on a title whose own boot screen is silent.
-    let movie_name = options
-        .movie
-        .clone()
-        .or_else(|| default_movie_name.map(str::to_string));
+    let movie_name = options.movie.clone().or_else(|| {
+        playing
+            .first()
+            .and_then(|step| authored_movie(step, &screens, &archives))
+            .or_else(|| default_movie_name.map(str::to_string))
+    });
     // The grid this source authors in, needed before the front end is built so
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` takes the same value.
@@ -1394,7 +1396,7 @@ pub mod worker;
 use fonts::load_font;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{
-    load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
+    authored_movie, load_movie, load_movie_sound, load_second_movie, resolve_movie_region,
     resolve_pure_movie_region, same_planes,
 };
 use oag_ui::language::load::{chosen_language, load_languages, load_strings};

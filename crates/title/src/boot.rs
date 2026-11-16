@@ -41,13 +41,24 @@ pub struct BootStep {
     /// power-on is the picker itself (cold-boot confirmed on both pressings). A
     /// `hash:`-prefixed spec is accepted for a movie whose name is unrecovered.
     pub movie: Option<&'static str>,
+    /// The screen's own `<Movie>` in the front-end XML the source loaded names the
+    /// movie, and [`Self::movie`] is the spelling played only when that XML names
+    /// none or names an entry the source does not hold. Wipeout HD's `Studio Logo`:
+    /// the Fury layer's `skin.xml` names `StudioLiverpool_fury.bik`, the base
+    /// game's `StudioLiverpool.bik` (`docs/formats/hd-frontend.md`, "`DATA00`'s copy
+    /// is the live one").
+    pub movie_from_screen: bool,
 }
 
 impl BootStep {
     /// A step that plays no movie.
     #[must_use]
     pub const fn screen(state: &'static str) -> Self {
-        Self { state, movie: None }
+        Self {
+            state,
+            movie: None,
+            movie_from_screen: false,
+        }
     }
 
     /// A step that plays one.
@@ -56,6 +67,19 @@ impl BootStep {
         Self {
             state,
             movie: Some(movie),
+            movie_from_screen: false,
+        }
+    }
+
+    /// A step that plays the movie its screen's `<Movie>` names in the loaded
+    /// front-end XML, with `movie` played where that XML names none the source
+    /// holds ([`Self::movie_from_screen`]).
+    #[must_use]
+    pub const fn playing_authored(state: &'static str, movie: &'static str) -> Self {
+        Self {
+            state,
+            movie: Some(movie),
+            movie_from_screen: true,
         }
     }
 }
