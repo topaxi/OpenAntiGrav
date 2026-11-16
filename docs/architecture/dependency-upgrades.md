@@ -59,6 +59,7 @@ and `cargo check -p oag-game --features native-video` before relying on them.
 | `hrtf` | 0.9.0 | 0.10.0 | commit log of <https://github.com/mrDIMAS/hrtf> (no changelog; 0.10.0 published 2026-11-08) | `HrtfProcessor::new(sphere, block)` replaces `(sphere, steps, block)`; every block now crossfades the previous direction into the new one (the fix for buzzing under a rapidly changing sampling vector); per-ear tails become one `history`; `new_gain`/`prev_gain`; benchmarks and FFT performance work; rubato 5 (drops `realfft`, `audio-core`) | **applied** (commit `317bcc496`). `binaural.rs` ported; the convolver block is **513 frames** (a power of two plus one, which the crate's docs say plans the fast FFT): 1.29 ms of CPU per second of one voice at 513 against 3.35 ms at 512, 3.04 ms at 256 (the 0.9 build was not timed, so no before/after of the crate itself). `oag-audio`'s 142 tests pass. Gain interpolation and a Deck rerun are in the thread |
 | `resvg` (with `usvg`) | 0.48.1 | 0.49.0 | `CHANGELOG.md` in <https://github.com/linebender/resvg> | `plus-lighter` blend, `feComposite lighter`, text baseline and RTL fixes, filters in rotated groups, marker clipping, clipped layer bounds | **applied** (commit `b4d2f4eb2`), no call-site change. **Not relevant** to the two SVGs we rasterise (`oag-game`'s cursor and the app icon); the 256 px icon rendered unchanged to the eye. `tiny-skia` 0.11 and 0.12 were both in the tree already (winit's `sctk-adwaita` takes 0.11), so no new duplicate |
 | `flate2` | 1.1.9 | 1.1.11 | `CHANGELOG.md` in <https://github.com/rust-lang/flate2-rs> | see its row below; brings `miniz_oxide` 0.9 beside `png`'s 0.8 | **applied** (commit `3749a2733`); the `Cargo.toml` comment on `flate2` names the second copy, which is not the inflater (zlib-rs is) |
+| `wgpu` (with `wgpu-core`, `wgpu-hal`, `wgpu-types`, `naga`, `naga-types`, `wgpu-naga-bridge`, `wgpu-core-deps-*`) | 30.0.1 | 30.0.2 | `CHANGELOG.md` in <https://github.com/gfx-rs/wgpu> (`v30` branch, 30.0.1 to 30.0.2) | Metal: sRGB no longer oversaturated on wide-gamut displays (#10286); a texture id no longer leaks when a surface acquire returns no texture (#10184, our Outdated/Lost/Timeout skip); no use-after-free of a mapped buffer on device loss (#10593, our readbacks); `Send`/`Sync` on `Global` (#9953, compile-time only); naga `glsl-in` build fix and WebGPU `PreMultiplied` report (not relevant: neither used) | **applied** (2026-11-16), lockfile only, no call-site change |
 
 ## Held back, with the reason
 
@@ -76,7 +77,7 @@ and `cargo check -p oag-game --features native-video` before relying on them.
 
 ## Direct dependencies already at their newest release
 
-`wgpu` 30.0.1, `naga` 30.0.1, `wesl` 0.6.0, `cpal` 0.18.2, `gilrs` 0.11.2,
+`wesl` 0.6.0, `cpal` 0.18.2, `gilrs` 0.11.2,
 `symphonia` 0.6.1, `tokio` 1.54.1, `clap` 4.6.7, `serde` 1.0.229,
 `serde_json` 1.0.154, `thiserror` 2.0.21, `anyhow` 1.0.104, `bytemuck` 1.25.2,
 `png` 0.18.1, `gltf` 1.4.1, `rcgen` 0.14.10, `ring` 0.17.14, `arboard` 3.7.0,
