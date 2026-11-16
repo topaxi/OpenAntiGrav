@@ -3,7 +3,7 @@
 Read 2026-11-16, lane `engine-glow-re`, on `/2048/eboot-vita-2048-eu-v104.elf` and on the base
 package's `data.psarc`. The law, the constants' meaning and the cross-title table are on
 [Omega's page](../ps4-omega-eu/engine-light.md); this page holds what was read on 2048 itself.
-Static only. **Checked, applies, not wired.**
+Static only. **Checked, applies, not wired.** The receiving hull programs are at the end of the page.
 
 ## The functions
 
@@ -74,6 +74,42 @@ with `scripts/vita-usse.py disasm`:
 `diffuse * max(0, N . L) * max(0, 1 - d / range)` per vertex. `sa46.z` is read as `1.0`: the same
 register clamps the fog factor with `min` at instruction 33. One program was read; that the
 six-light programs repeat the block per light is taken from the uniform names, not disassembled.
+
+## The hull's own programs: the same family and the same combine (85)
+
+Lane `engine-light-re`, 2026-11-16. `scripts/vita-gxp.py list
+<data.psarc>:Materials/Ships/Diffuse_With_Specular_From_Alpha_N_Vcol` (the material Omega's
+`feisar_c1` hull names, in 2048's own package) lists 26 programs. The vertex programs come by light
+count as Omega's do: 9 parameters with no light, then 11, 13, 17 and 21 for one, two, four and six
+(`#2`, `#4`, `#6`, `#7`, `#8`, and again `#12` to `#25` with the shadow inputs). Program `#4` binds
+`DiffuseVertexLight0diffuse` at resource 38 and `DiffuseVertexLight0position` at 40 and carries the
+block above (`add pa2.xyz, -pa0.xyz, sa40.xyz` at 22, `mul pa2.xyz, pa0.xyz, sa38.xyz` at 36,
+`mad pa0.xy, pa0.xx, -sa40.ww, sa46.zz` at 38).
+
+The fragment program after it, `#5` (`scripts/vita-usse.py disasm`, 32 instructions; uniforms
+`constantAmbientColour` at 0, `liveLighting0specular` 2, `liveLighting0diffuse` 4,
+`liveLighting0direction` 6, `SpecScale` 8, `fogColour` 10):
+
+```text
+18  mul  pa2.xyz, pa0.xyz, pa6.xyz        texture * vertex colour
+20  add  pa2.xyz, pa4.xyz, sa0.xyz        vertex light + constantAmbientColour
+21  mad  pa2, pa8.xxxx, sa4, pa2          + liveLighting0diffuse * N.L
+22  mul  pa4.xyz, pa6.xyz, pa2.xyz        * texture * vertex colour
+28  mad  pa2, pa0, pa2.xxxx, pa4          + specular
+29  add  pa0.xyz, -sa10.xyz, pa2.xyz      fog
+```
+
+`(constantAmbientColour + vertexLight + liveLighting0diffuse * N.L) * texture * vertexColour +
+specular`, the light unscaled: Omega's GCN combine instruction for instruction
+([Omega's page](../ps4-omega-eu/engine-light.md), "The receiving programs on Omega"). Its unlit
+twin `#3` (31 instructions) lacks line 20's add.
+
+**Against Omega: checked, applies.** Same material, same family, same combine, same producer.
+**Not checkable here: the live half.** Omega's hull is seen lit and flickering on the native port;
+2048's own executable was not run in this lane, and its jitter sizes (the writer of `flare+0x248`)
+are still unread: `FUN_812707dc` and `FUN_81271e94` are not it (the second reads `flare+0x248`'s
+fourth component into the flare sprite's size and writes nothing there). Until it is read, 2048's
+flicker is Omega's `0.2` and `1.0` by inheritance.
 
 HD's SPU law at exponent `1.0` is the same expression (`crates/mesh/shaders/spu_light.wesl`), so the
 record and the falloff need no new term; what differs from HD is the colour, the range and the
