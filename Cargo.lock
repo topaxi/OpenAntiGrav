@@ -3740,6 +3740,7 @@ dependencies = [
  "oag-bytes",
  "oag-disc",
  "oag-formats",
+ "oag-hd",
  "oag-pulse",
  "oag-source",
  "oag-testdata",
