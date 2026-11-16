@@ -46,6 +46,7 @@ mod alpha_emissive;
 mod alpha_product;
 mod chevron;
 mod emissive_add;
+mod flat_constant;
 mod glow;
 mod lit_alpha;
 mod normal_map;
@@ -179,6 +180,8 @@ pub struct Report {
     /// [`psp2::material::Material::zone_colour`]. Counted among
     /// [`Self::unresolved_draws`] too, since they have no texture.
     pub zone_colour_submeshes: usize,
+    /// Submeshes of Omega's `emissive` family, drawn unlit in their `EmissiveColour` (`emissive_colour`).
+    pub emissive_colour_submeshes: usize,
     /// Submeshes bound to a node of the model's own table and placed by
     /// it - through the skeleton where one was given, through the model's
     /// bind matrix otherwise. See [`placement`].
@@ -220,6 +223,9 @@ pub struct Report {
     /// `Constant1` times their map's alpha, the map's rgb a normal
     /// (`psp2::alpha_product`).
     pub alpha_product_materials: usize,
+    /// Omega materials with no colour texture whose GCN program multiplies the light by a
+    /// `diffuse` constant, drawn as that constant (`constant_diffuse`).
+    pub constant_diffuse_materials: usize,
     /// Materials of `diffuse_normal_specular_emmissive_alpha` that add `Texture2Alpha^2 * Constant1`
     /// after the light (`psp2::emissive_add`), Vita only.
     pub emissive_add_materials: usize,
@@ -459,6 +465,17 @@ impl Report {
                 self.alpha_product_materials
             )
         };
+        let (e, d) = (
+            self.emissive_colour_submeshes,
+            self.constant_diffuse_materials,
+        );
+        let flat_constants = if e + d == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {e} submesh(es) draw an EmissiveColour unlit, {d} material(s) a constant diffuse"
+            )
+        };
         let uv_keys = if self.uv_keyed_meshes == 0 {
             String::new()
         } else {
@@ -469,7 +486,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -760,6 +777,11 @@ fn build_planned(
             .and_then(|m| decoded.materials.get(m))
             .and_then(|m| m.zone_colour());
         report.zone_colour_submeshes += usize::from(zone.is_some());
+        let emissive = (submesh.material.and_then(|m| decoded.materials.get(m)))
+            .filter(|_| ps4)
+            .and_then(flat_constant::emissive_colour);
+        report.emissive_colour_submeshes += usize::from(emissive.is_some());
+        let zone = zone.or(emissive);
         // HD's `nr_twinblend`: unlit, three coordinate pairs, one glow-table entry.
         let twin_here = twin.of(submesh.material);
         let (colour, lit, role) = match zone {
@@ -1153,18 +1175,24 @@ fn bind_textures(
                     }
                 }
                 (None, None) => {
-                    let Some(colour) = refused_here
+                    let lighting_colour = refused_here
                         .then(|| constant_colour(material, rule.as_ref()?.colour?))
-                        .flatten()
-                    else {
+                        .flatten();
+                    if let Some(colour) = lighting_colour {
+                        report.constant_colour_materials += 1;
+                        report.inherited_lighting_only +=
+                            usize::from(rule.as_ref().is_some_and(|r| r.inherited));
+                        (std::sync::Arc::new(colour), None)
+                    } else if let Some(colour) =
+                        ps4.then(|| flat_constant::diffuse(material)).flatten()
+                    {
+                        report.constant_diffuse_materials += 1;
+                        (std::sync::Arc::new(colour), None)
+                    } else {
                         let why = unbound_without_picture(material, refused_here);
                         log::trace!("psp2 material {index} unbound ({why:?}): {}", material.name);
                         return Err(why);
-                    };
-                    report.constant_colour_materials += 1;
-                    report.inherited_lighting_only +=
-                        usize::from(rule.as_ref().is_some_and(|r| r.inherited));
-                    (std::sync::Arc::new(colour), None)
+                    }
                 }
             };
             let path = path.unwrap_or("constant colour");

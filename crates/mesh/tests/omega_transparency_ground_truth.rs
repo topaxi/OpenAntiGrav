@@ -301,6 +301,51 @@ fn omega_chenghous_start_gantry_adds_its_emissive() {
     );
 }
 
+/// Amphiseum's stands and pad strips drew white times light: `metallic` and
+/// `diffuse_spec_constant` have no colour texture, and their GCN programs end
+/// `light * constant + specular` (`docs/formats/rcsmaterial.md`, "Omega's constant diffuse
+/// families"). The loader binds the constant, encoded; the `emissive` family (919 spectator
+/// figures) is its `EmissiveColour`, unlit. Drop `psp2::flat_constant` and both counts fall to 0.
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_amphiseums_constant_families_draw_their_constants() {
+    let Some(root) = root() else { return };
+    let mut archives: Vec<_> = ARCHIVES
+        .iter()
+        .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
+        .collect();
+    let path = "Data/environments/amphiseum/track.final.rcsmodel";
+    let blob = archives
+        .iter_mut()
+        .find_map(|a| a.read_path(path).ok())
+        .expect("amphiseum's model is in a base archive");
+    let (model, report) = psp2::build("amphiseum", &blob, None, &mut |p| {
+        archives.iter_mut().find_map(|a| a.read_path(p).ok())
+    })
+    .expect("builds");
+    assert_eq!(
+        report.constant_diffuse_materials,
+        29,
+        "{}",
+        report.describe()
+    );
+    assert_eq!(
+        report.emissive_colour_submeshes,
+        919,
+        "{}",
+        report.describe()
+    );
+    let bound = |label: &str| {
+        model
+            .textures
+            .iter()
+            .flatten()
+            .any(|t| t.label == format!("constant diffuse {label}"))
+    };
+    assert!(bound("512f8e65"), "metallic's DiffuseColour");
+    assert!(bound("515e298e"), "diffuse_spec_constant's diffuse");
+}
+
 /// 2048's circuits, the Vita package.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]

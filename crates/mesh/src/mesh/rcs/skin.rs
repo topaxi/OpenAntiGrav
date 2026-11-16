@@ -235,24 +235,39 @@ fn constant_diffuse(
     store: SceneStore,
 ) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
+    let hash = diffuse_hash(family, listed_only)?;
+    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
+    Some(constant_picture(
+        hash,
+        [value[0], value[1], value[2]],
+        store,
+    ))
+}
+
+/// The parameter [`DIFFUSE_PARAMETER`] names for `family`, else [`DIFFUSE`]
+/// unless `listed_only`. Shared with the 2048-lineage builder
+/// (`psp2`), which reads the same parameter off Omega's material record.
+pub(super) fn diffuse_hash(family: &str, listed_only: bool) -> Option<u32> {
     let listed = DIFFUSE_PARAMETER
         .iter()
         .find_map(|&(name, hash)| (name == family).then_some(hash));
-    let hash = if listed_only {
-        listed?
+    if listed_only {
+        listed
     } else {
-        listed.unwrap_or(DIFFUSE)
-    };
-    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
+        Some(listed.unwrap_or(DIFFUSE))
+    }
+}
+
+/// `value`, a raw shader constant, as the one-texel picture the light is
+/// multiplied by: encoded with [`raw_to_texel`] for `store`.
+pub(super) fn constant_picture(hash: u32, value: [f32; 3], store: SceneStore) -> ModelTexture {
     let byte = |c| raw_to_texel(c, store);
-    Some(crate::mesh_render::offer_to_texture_sink(
-        ModelTexture::rgba8(
-            format!("constant diffuse {hash:08x}"),
-            1,
-            1,
-            vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
-            None,
-        ),
+    crate::mesh_render::offer_to_texture_sink(ModelTexture::rgba8(
+        format!("constant diffuse {hash:08x}"),
+        1,
+        1,
+        vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
+        None,
     ))
 }
 
