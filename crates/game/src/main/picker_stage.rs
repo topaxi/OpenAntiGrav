@@ -866,6 +866,27 @@ pub(crate) fn build_preview(
     finish_preview(data, target, pipelines)
 }
 
+/// The livery folders a ship source paints its hull from: the selected variant's where it names
+/// one, else a Zone race's (whose fixed row holds no variant id).
+fn livery_of<'a>(
+    source: &'a PreviewSource,
+    variant: Option<&str>,
+) -> Option<oag_livery::LiveryFolder<'a>> {
+    let PreviewSource::Ship {
+        liveries,
+        zone_livery,
+        ..
+    } = source
+    else {
+        return None;
+    };
+    variant
+        .and_then(|variant| liveries.iter().find(|(id, _)| id == variant))
+        .map(|(_, folders)| folders)
+        .or(zone_livery.as_ref())
+        .map(oag_game::preview::variant::Folders::folder)
+}
+
 /// A preview mesh read and parsed off the disc, not yet on the GPU: everything
 /// [`build_preview`] does that is not the upload, so it can run on a worker.
 pub(crate) struct PreviewData {
@@ -925,21 +946,7 @@ pub(crate) fn read_preview(
             PreviewSource::Ship { race_hull, .. } => race_hull.as_deref(),
             PreviewSource::Track { .. } => None,
         };
-        let livery = match (&source, variant) {
-            (
-                PreviewSource::Ship {
-                    liveries,
-                    zone_livery,
-                    ..
-                },
-                variant,
-            ) => variant
-                .and_then(|variant| liveries.iter().find(|(id, _)| id == variant))
-                .map(|(_, folders)| folders)
-                .or(zone_livery.as_ref())
-                .map(oag_game::preview::variant::Folders::folder),
-            _ => None,
-        };
+        let livery = livery_of(&source, variant);
         oag_game::preview::variant::model_or_default(
             archives,
             entry,
@@ -1033,7 +1040,7 @@ pub(crate) fn finish_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::PreviewSource;
+    use super::{PreviewSource, livery_of};
 
     /// Pulse's name, and no fallthrough to Pure's - Pure's `Team Selection`
     /// draws a `FEData.wad` sprite, not this hull. See [`PreviewSource::entry_name`].
@@ -1080,6 +1087,34 @@ mod tests {
             None,
             "HD's Zone craft is a ship of its own, not a file in the team's directory"
         );
+    }
+
+    /// A Zone race's hull reads through the team's Zone livery, though its row holds no variant
+    /// id; a variant's own livery wins where the row names one.
+    #[test]
+    fn a_zone_source_paints_the_hull_when_the_row_names_no_variant() {
+        use oag_game::preview::variant::Folders;
+        let folders = |own: &str, worn: &str, fall_back| Folders {
+            own: own.into(),
+            worn: worn.into(),
+            fall_back,
+        };
+        let source = PreviewSource::Ship {
+            location: r"Data\Ships\Qirex".to_string(),
+            skins: Vec::new(),
+            join: None,
+            hull_file: None,
+            zone_entry: None,
+            race_hull: None,
+            liveries: vec![("@livery2".into(), folders("livery1", "livery2", false))],
+            zone_livery: Some(folders("zoneship_zone", "zoneship_quirex", true)),
+        };
+        for variant in [None, Some("")] {
+            let folder = livery_of(&source, variant).expect("the Zone livery");
+            assert_eq!((folder.worn, folder.fall_back), ("zoneship_quirex", true));
+        }
+        let folder = livery_of(&source, Some("@livery2")).expect("the variant's own");
+        assert_eq!((folder.worn, folder.fall_back), ("livery2", false));
     }
 
     /// HD names its race hull, not a `ship_FE.vex` that no HD archive carries.

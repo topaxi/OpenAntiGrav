@@ -96,6 +96,29 @@ pub fn zone_folders(
     })
 }
 
+/// The livery folders the picker's selected team paints its preview hull from: a Zone race's
+/// ([`zone_folders`]) where the row is fixed (`fixed_livery`, Zone's one hull), else the selected
+/// variant's ([`livery_folders`]). The `--menu-page` still and the live screen's read take it, so
+/// neither can drop the Zone paint alone.
+#[must_use]
+pub fn picked_folders(
+    title: &oag_title::Title,
+    team: &oag_raceplay::catalogue::Team,
+    mode: oag_race::Mode,
+    fixed_livery: bool,
+    variant: &str,
+) -> Option<Folders> {
+    if fixed_livery {
+        zone_folders(title, team, mode)
+    } else {
+        livery_folders(
+            team,
+            title.race.team_variants_for(&team.id).map(|v| v.join),
+            variant,
+        )
+    }
+}
+
 /// [`super::psp2_scene::model`] for a variant's own entry, falling back to `fallback` (the
 /// team's default hull) when the variant ships no such asset, and saying so
 /// in the log rather than inventing one. Returns the entry name that loaded.
@@ -143,8 +166,46 @@ fn load(
 
 #[cfg(test)]
 mod tests {
-    use super::variant_location;
+    use super::{Folders, picked_folders, variant_location, zone_folders};
     use oag_title::VariantJoin;
+
+    fn qirex() -> oag_raceplay::catalogue::Team {
+        let xml = r#"<Plugin>
+          <PI_Team name="Qirex"><Values type="Race" location="Data\Ships\Qirex"/>
+            <PI_TeamModel name="zone"><Values texturelocation="zoneship_quirex"/></PI_TeamModel></PI_Team>
+        </Plugin>"#;
+        oag_raceplay::catalogue::teams(xml).remove(0)
+    }
+
+    /// The picker's Zone paint: the key the hull's materials name to the definition's livery,
+    /// falling back to the default skin, in Zone alone.
+    #[test]
+    fn a_zone_pick_paints_the_shared_hull_in_the_teams_livery() {
+        let want = Folders {
+            own: "zoneship_zone".into(),
+            worn: "zoneship_quirex".into(),
+            fall_back: true,
+        };
+        for title in [oag_hd::TITLE, oag_2048::TITLE] {
+            let team = qirex();
+            assert_eq!(
+                zone_folders(title, &team, oag_race::Mode::Zone),
+                Some(want.clone()),
+                "{}",
+                title.name
+            );
+            assert_eq!(zone_folders(title, &team, oag_race::Mode::TimeTrial), None);
+            // The picker's fixed row (Zone) takes the Zone paint, whatever variant id it holds.
+            assert_eq!(
+                picked_folders(title, &team, oag_race::Mode::Zone, true, ""),
+                Some(want.clone())
+            );
+            assert_eq!(
+                picked_folders(title, &team, oag_race::Mode::TimeTrial, false, ""),
+                None
+            );
+        }
+    }
 
     #[test]
     fn a_suffix_joins_the_teams_own_directory() {

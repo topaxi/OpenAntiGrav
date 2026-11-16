@@ -108,7 +108,7 @@ livery folder lacks falls back to the default skin in both. The hull entry is
   Fails on a preview that stops applying the livery.
 - **Frames** (headless, `oag-game --no-audio --menu-page ship-select --size 1280x720`, a profile
   with `race.mode = "zone"`): Qirex shows the Qirex logotype on the pod, Auricom shows `auricom`;
-  before the change both showed the blank hull with a small default mark. Time Trial shows the
+  before the change Qirex showed the blank hull with a small default mark (Auricom was not shot before). Time Trial shows the
   team's own race hull unchanged. The race frame of the same team
   (`--race --mode zone --team Qirex`) carries the same logotype on both pods and the nose. No
   original capture was taken.
@@ -132,8 +132,12 @@ livery folder lacks falls back to the default skin in both. The hull entry is
   and Assegai; the picker reads the PS4 scene through `psp2_scene`). Auricom's `zoneship_auricom\Team.gnf`
   is byte-identical to the default `zoneship_team\Team.gnf` (census over all twelve), so the Auricom preview
   equals the default skin; that is data, not a gap.
-- **2048: checked, differs.** Our 2048 front end has no Ship Select (`FrontEnd::race_box` is `None`; the
-  team is the RACE page's TEAM row), so no preview draws. The same decision is pinned against the race
-  for all twelve teams (`vita_2048_zone_preview_wears_the_livery_the_race_does`), ready for a screen. The
-  original's menu does draw a hull there (`vita-2048-eu-v104/zone-craft.md`, 60: the picked craft's own
-  hull remapped by the livery key); ours would draw the shared hull as the race does, as asked.
+- **2048: checked, differs.** Two screens could carry the preview. The race-box Ship Select
+  (`FrontEnd::race_box` is `None`; `--menu-page ship-select` refuses) does not exist here. The touch
+  `Select Team` screen does draw a hull (`oag_game::team_hull`, `team_model_origin`), but it lists only
+  the five native 2048 teams' `Ship_LOD.vex` and the front end carries no mode there
+  (`oag_ui::frontend::team`); native teams author no Zone livery, so there is nothing to paint. The same
+  decision is pinned against the race for all twelve HD-era teams
+  (`vita_2048_zone_preview_wears_the_livery_the_race_does`), ready for a screen. The original's menu
+  draws the craft's own hull remapped by the livery key (`vita-2048-eu-v104/zone-craft.md`, 60); ours
+  would draw the shared hull as the race does, as asked.

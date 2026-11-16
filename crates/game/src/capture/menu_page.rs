@@ -1085,20 +1085,17 @@ pub(super) fn picker_page(
             entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
             fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
+            // The live screen's rule, `session::picker::ship_source`.
             livery: match kind {
-                Kind::Ship if !picker.fixed_livery() => {
-                    teams.get(picker.index()).and_then(|team| {
-                        crate::preview::variant::livery_folders(
-                            team,
-                            title.race.team_variants_for(&team.id).map(|v| v.join),
-                            picker.variant().map_or("", |(id, _)| id.as_str()),
-                        )
-                    })
-                }
-                // The live screen's rule, `session::picker::ship_source`.
-                Kind::Ship => teams
-                    .get(picker.index())
-                    .and_then(|team| crate::preview::variant::zone_folders(title, team, mode)),
+                Kind::Ship => teams.get(picker.index()).and_then(|team| {
+                    crate::preview::variant::picked_folders(
+                        title,
+                        team,
+                        mode,
+                        picker.fixed_livery(),
+                        picker.variant().map_or("", |(id, _)| id.as_str()),
+                    )
+                }),
                 Kind::Track => None,
             },
             race_hull: match kind {
