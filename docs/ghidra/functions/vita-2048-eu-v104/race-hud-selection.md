@@ -176,7 +176,7 @@ base package. `Arcade_HUD_HD.xml` differs from `Arcade_HUD.xml` by one include (
 `MPWeaponIcon0-7` beside the positions list). **`Zone_HUD_HD.xml` matches the HD-campaign Vineta K Zone frames
 `67-zone-grid.png` and `68-zone-5.png` that [2048-hud.md](../../../formats/2048-hud.md) called "positioned by a
 file this composition does not reach"**: its `ScoreFrame` sits at `(480, 20)` with `IG_HUD_SCORE` over `Score`
-(the `SCORE` / `1780` top centre), and its `SpeedClass` group at `(137, 451)` authors `SpeedClass` (`VENOM`),
+(the `SCORE` / `1780` top centre), and its `SpeedClass` group at `(137, 451)` authors `SpeedClass` (`FLASH` at zone 5),
 `Zone Txt` (`ZONE`) and `ZonePlus0` (the `5`) over the `ZoneCounterBG` arc at `(127, 441)` (the bottom-left text).
 The base `Zone_HUD.xml` authors `ZoneNumber` top left, which no frame shows. A native campaign Time Trial frame
 (`43-tt-start-14.png`) matches `SpeedLap_TimeTrial_HUD.xml` (`TARGET`, `XP`, no shield) rather than
@@ -186,7 +186,16 @@ events keep the base `2048_hud\` files and the HD Campaign's TT, Speed Lap, Zone
 `oag_2048::hud::HD_CAMPAIGN` (`AddOn::hud`). `SPTimeTrialRaceManager_Construct` (`0x81183e50`, decompiled again) has one
 literal, `TimeTrial_HUD_HD.xml`, and no branch between modes 5 and 10, so Speed Lap reads it too (80); no code names
 `SpeedLap_HUD_HD.xml`. A campaign Race stays on `2048_hud\Arcade_HUD.xml`, and Tournament (mode 4, `Arcade_HUD_HD.xml`)
-draws the Race file because `HudLayouts` has one `arcade` row. Zone Battle has no `oag_race::Mode`. **Omega: checked,
+draws the Race file because `HudLayouts` has one `arcade` row.
+**Tournament's one extra include draws nothing in a single-player race (checked 2026-11-16, `2048-hud-left`; confidence 75).**
+`HUD_positions_HD.xml` differs from `HUD_positions.xml` by `MPWeaponIcon0`-`7` (34x35 images, one per position row). The
+bind (`FUN_81158d88`, `0x8115ae1a`) stores each at `hud+0x384 + 4i` and clears its visible bit; the only per-frame user
+found for `+0x384` is `FUN_81151f0e` (`0x81151f0e`), which shows an icon only while `DAT_8153fd2f & 1` is set and the
+craft has a held weapon, writing the weapon's `PickupIcon`-style UV cell scaled to 0.4 (0.2 in the `hud+0xa9` case). That
+flag is the same one the bind reads to shift the positions list by 25 or 75 px; its meaning is unread, and whether the SP
+tournament constructor (`0x811853ec`, not decompiled for it) sets it is unknown. A `tournament` row in
+`HudLayouts` would therefore draw the Race frame at best (2048 draws only its `ALWAYS_ON` and state-gated widgets): not wired, no pixel to compare. Open if the flag turns out to be an option:
+what sets `DAT_8153fd2f` bit 0. Zone Battle has no `oag_race::Mode`. **Omega: checked,
 differs**: `SPZoneRaceManager_Construct` (`0x012b4d3f`) loads the bare `Zone_HUD.xml`.
 
 ### Names

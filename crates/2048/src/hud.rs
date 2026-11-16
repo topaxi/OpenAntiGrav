@@ -58,11 +58,12 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// The class name the HD-layout Zone HUD writes into `SpeedClass`, keyed on the zone counter.
 ///
 /// `FUN_811538c2` (`0x811538c2`, v1.04) walks fourteen `{ zoneThreshold, stringId }` records at
-/// `0x8151f434` (v1.00: `0x8150c114`), descending from 75 to 0, takes the first whose threshold
+/// `0x8151f434`, descending from 75 to 0, takes the first whose threshold
 /// the zone counter (`*(*(hud + 0x3c) + 0x20)`, the number `ZoneNumber` prints) has reached, and
 /// writes its string into the `SpeedClass` widget. Thresholds and ids are HD's own table byte for
 /// byte (`docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md`); the names are the
 /// `MSC_*`/`IG_HUD_*` ids of that table, and the frame `68-zone-5.png` reads `FLASH` at zone 5.
+/// Omega's eboot carries the same table (`oag_omega::hud::ART` does not use it yet).
 /// This is not [`crate::race::ZONE_STAGES`], the seventeen-record `*_CLASS` ladder that grades
 /// the circuit. See `docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`.
 ///
