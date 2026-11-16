@@ -225,6 +225,16 @@ fn the_march_reads_the_floor_and_the_reflection_adds_the_sky() {
         matte[2] <= flat[2] + 2,
         "a zero diffuse alpha reflects nothing: {matte:?} against {flat:?}"
     );
+    // The `EmissiveMap` (fourth binding) is added after the light where the second entry's tint
+    // `z` says the material has one.
+    let mut glowing = model(PROGRAM_PANEL_MAP, -0.25, 0.0, 50.0, 255);
+    glowing.wave_maps = vec![texture("emissive", &[[0, 0, 255, 255]])];
+    glowing.emissive[1].tint[2] = 1.0;
+    let glow = at(&glowing);
+    assert!(
+        glow[2] > flat[2] + 24 && glow[0] <= flat[0] + 2,
+        "the emissive picture is added: {glow:?} against {flat:?}"
+    );
     // Without the mode neither happens.
     let plain = at(&model(0.0, 0.25, 1.0, 50.0, 255));
     assert!(

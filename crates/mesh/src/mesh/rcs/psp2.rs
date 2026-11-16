@@ -247,6 +247,7 @@ fn build_planned(
         ..Report::default()
     };
     model.anim_nodes = plan.anim_nodes;
+    report.panel.sky_reflection = model.sky_reflection.is_some();
     // Each material's own scroll, resolved before any vertex is written; the
     // glow layer's emissive texture is decoded here too, so a layer exists
     // only where its picture does.
