@@ -239,6 +239,55 @@ fn the_march_reads_the_floor_and_the_reflection_adds_the_sky() {
     );
 }
 
+/// A PS4 lightmapped material's slot word carries no alpha lane, so `texel.a` is the diffuse
+/// map's red. The sheen and the sun lobe are gated by the diffuse **alpha** (`0xe144`
+/// `@0xde0-0xde4`, `docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, "Live"): a
+/// texel with a bright red and no alpha reflects nothing, and one with no red and a full alpha
+/// reflects the sky.
+#[test]
+fn the_sheen_is_gated_by_the_diffuse_alpha_not_its_red() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("panel-map gate", &adapter)),
+    )
+    .expect("requesting the device");
+    let (width, height) = oag_mesh::mesh::sky_paraboloid::SIZE;
+    let grey = vec![160u8; (width * height * 4) as usize];
+    let sky = mesh_render::upload_sky_probe(&device, &queue, &grey);
+    let at = |diffuse: [u8; 4], amount: f32| {
+        let mut m = model(PROGRAM_PANEL_MAP, -0.25, amount, 50.0, 255);
+        m.textures = vec![texture("diffuse", &[diffuse; 4])];
+        for v in &mut m.vertices {
+            v.slots = ENTRY;
+        }
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.light.direction = [0.0, 0.0, 1.0];
+        scene.light.sun = [0.6, 0.6, 0.6];
+        scene.fog.camera = [100.0, 0.0, 100.5];
+        draw(&device, &queue, &m, scene, Some(&sky))
+    };
+    // A faint red with a full alpha: the sheen follows the alpha. A bright red with no alpha:
+    // it does not follow the red. Blue carries the sheen; the red lane stays below the
+    // diffuse's own blue so the albedo is the same in both.
+    let faint_base = at([40, 0, 128, 255], 0.0);
+    let faint = at([40, 0, 128, 255], 1.0);
+    let bright_base = at([255, 0, 128, 0], 0.0);
+    let bright = at([255, 0, 128, 0], 1.0);
+    assert!(
+        faint[2] > faint_base[2] + 12,
+        "a full diffuse alpha reflects the sky: {faint:?} against {faint_base:?}"
+    );
+    assert!(
+        bright[2] <= bright_base[2] + 2,
+        "a bright red with no diffuse alpha reflects nothing: {bright:?} against {bright_base:?}"
+    );
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [
