@@ -46,8 +46,13 @@ as "the sun" was this colour alone; the sun the executable builds is
 `oag_raceplay`'s `envsettings_light` multiplies the colour by the scalar on a PS4
 source only (`oag_tables::envsettings::OMEGA_SUN_DIFFUSE_INTENSITY`).
 `omega_lightmap_ground_truth` asserts Tech De Ra's `light.sun` equals colour times
-2.528. The specular pair is left unwired for the shape reason `envsettings.md`
-gives (an RGB specular colour against a scalar scale).
+2.528. The specular pair, wired 2026-11-16 (`panelmap-sun`): `envsettings_light` also multiplies
+`Lighting.Sun specular colour` by `Lighting.Sun specular intensity` (`OMEGA_SUN_SPECULAR_COLOUR`,
+`OMEGA_SUN_SPECULAR_INTENSITY`, default 1.0) on a PS4 source into `mesh_render::Light::sun_specular`
+(the product `013c2a7a`-`013c2a83` builds), carried through `ZoneGrade::light`. Its one consumer is the
+panel-map road's sun lobe (`panel-displacement.md`); the hull and track programs read the scalar
+`specular scale`, which no Omega file authors. `omega_lightmap_ground_truth` asserts Tech De Ra's
+`light.sun_specular` equals colour times intensity.
 
 Confidence 80: both consumers are read at the instruction level, the destination
 of the product is not followed to the shader constant, and the picture was judged

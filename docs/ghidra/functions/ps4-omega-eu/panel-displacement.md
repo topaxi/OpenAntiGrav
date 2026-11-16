@@ -280,7 +280,12 @@ K) and `Diffuse_Normal_Specular_panelmap2` (Sol 2).
 - The panel map's and the cube's sampler states (filter, addressing, anisotropy).
 - A live read of `g_reflective_blur_coeffs` on the native port (with the image mapped at
   `0x800000000` the runtime address is the patch address plus `0x7ff000000`; expect `(1.72285, 2, 0, 1)`), which would lift it to 94.
-- The cube's orientation on a second circuit with a visible sun.
+- The cube's orientation on a second circuit with a visible sun. **Sol checked a second way**
+  (`panelmap-sun`): in the map as built (the `(R.x, R.y, -R.z)` composition), the brightest texel lies at
+  `(-0.18, 0.43, -0.89)`, 0.15 rad from Sol's authored sun `(-0.105, 0.574, -0.812)`; the map reads 233
+  at the sun's direction against a mean of 117 and 118 at its z mirror, so the flip puts the glare where
+  the sun is. Altima, Queens Mall, Unity Square, Metro Park and Empire Climb's brightest texels do not
+  sit at their suns (no usable glare in those cubes), so they decide nothing.
 - `N2`'s doubled bitangent, checked against a frame: it changes the fresnel only where the
   normal map's green lane is far from 0.5.
 
@@ -319,9 +324,14 @@ What is chosen, not measured, or left out:
 - **The fresnel takes the mapped normal**, not the doubled-bitangent `N2` (open above).
 - **The lip blend is left out** (inert, above), and the lighting is the generic Omega nova path:
   the `0.75 + 0.25 ...` shadow-light factor is not drawn.
-- **The sun lobe draws zero**: its term is in the shader and reads `Light::sun_specular`
-  (`Lighting.Sun specular colour * intensity`, keys present on Sol and Queens Mall), but the race
-  loader does not fill it yet.
+- **The sun lobe's colour is wired** (2026-11-16, `panelmap-sun`): `envsettings_light` fills
+  `Light::sun_specular` with `Lighting.Sun specular colour * Lighting.Sun specular intensity` on a PS4
+  source (Sol `(6.096, 3.263, 1.6) * 1`, Queens Mall `(3, 2.148, 1.459) * 3`), carried through the
+  zone grade. At the pairs' poses it draws almost nothing (Sol 339 pixels, largest step 7 grey;
+  Queens Mall 527, 1): the lobe is `sat(R.L)^p` with `p = 100 (1 - 0.75 * 0.3)` on Sol, narrow, and
+  neither original frame shows a road highlight. A x100 probe moves 85,305 pixels on Sol (largest
+  step 168), so the colour does reach the shader; the direction convention is the diffuse term's
+  (`dot(n, direction)`), so `R.L` aims at the sun.
 
 Measured on the compare pairs at 16x anisotropy, scored on the region masks of the before
 render (`compare-decompose.py`'s law; the after build's own `sky` skip also removes the road's
@@ -343,6 +353,26 @@ road's gradient ratio comes from the sheen, not from the march; with the lookup'
 scores `LF` 16.0, `bias` +10.0, `G` 0.76, near better and right-hand mid worse, so the orientation
 is not settled by this pair and the page's flip stands. Queens Mall's cyan lines in the pair sit on
 the edge of a deep trench, not on the panel-map road: which material draws them is open.
+
+Sol's near-road overshoot, probed (`panelmap-sun`, one shader change each, the near patch is a
+250x140 px box at (250, 780) of the 1920x1080 frame, mean colour in % of full scale; original
+(48.1, 34.5, 35.6), ours (50.5, 41.4, 44.7)). Re-rendered on main the road scores `LF` 16.9, `bias`
++13.7, `G` 0.74 (the lane above recorded 18.0, +16.1, 0.75):
+
+| Probe | Near patch | Sol road `LF` / `bias` / `G` | Queens Mall road `LF` / `bias` / `G` |
+| --- | --- | --- | --- |
+| no sheen | (41.1, 23.5, 23.6) | 31.8 / -31.6 / 0.36 (own masks) | 29.1 / -15.7 / 0.68 |
+| cube `z` unflipped | (46.1, 35.4, 37.2) | 14.7 / +8.2 / 0.71 | 19.7 / -3.4 / 0.73 |
+| fresnel from the geometric normal | (50.6, 41.6, 45.0) | 17.4 / +14.8 / 0.63 | 14.4 / +9.3 / 0.87 |
+| sheen read one blur level blurrier | (49.4, 40.2, 43.5) | 16.8 / +13.4 / 0.66 | 13.4 / +8.8 / 0.78 |
+
+The fresnel's normal and the cube's blur level do not move the near patch, so neither `N2` nor the
+mip choice is the overshoot. The unflipped cube lands the patch (the original's sheen, taken as the
+patch less the no-sheen patch, is (7, 11, 12) against ours (9.4, 18, 21): ours about 1.7 times too
+bright and bluer) but costs Queens Mall's road `LF` 14.6 to 19.7 and contradicts the sun check
+under "Open"; the sun's glare sits where the sun is only with the flip. **The cause is not found**:
+what is left is the sheen's magnitude and colour (a missing weight on the sheen term, or the base
+the sheen is added to), not one of the three suspects.
 
 Tests: `crates/texture/tests/omega_gnf_ground_truth.rs` (the two decoders against the disc),
 `crates/mesh/tests/omega_panel_map_ground_truth.rs` (Sol's build: every panel vertex carries the

@@ -754,6 +754,9 @@ impl ZoneGrade {
             base.specular_scale,
         );
         let graded = graded.with_output_scale(base.output_scale);
+        // `authored` clears Omega's sun lobe colour too; a stage tints the diffuse sun only.
+        let [r, g, b, _] = base.sun_specular;
+        let graded = graded.with_sun_specular([r, g, b]);
         // **`authored` clears Omega's prelit flag and bias**, so a graded
         // Omega rig would silently go back to HD's combination. Omega ships no
         // Zone palette today (`zone_palette: None`), so nothing reaches this

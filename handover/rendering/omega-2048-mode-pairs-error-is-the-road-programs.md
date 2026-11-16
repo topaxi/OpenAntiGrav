@@ -30,17 +30,15 @@ a correct detail fix can raise it).
    "Implemented where", has the numbers). March, sky-cube sheen and emissive draw; road at 16x: Sol `LF` 32.7 to
    18.0, `bias` -32.4 to +16.1, `G` 0.35 to 0.75; Queens Mall 30.7 to 14.5, -16.9 to +8.5, 0.71 to 0.85; Altima and
    Unity Square within 1.1 grey and 0.03 `G`. Left:
-   - **b. The sun lobe's colour.** The shader term is in (`shade.wesl`, mode 15) and reads
-     `mesh_render::Light::sun_specular` through `Light::with_sun_specular`; the race loader does not fill it. Wire:
-     in `crates/raceplay/src/load/environment/light.rs`, after the nova block, on `ps4` only,
-     `light.with_sun_specular(env.vec3("Lighting.Sun specular colour") * env.scalar("Lighting.Sun specular
-     intensity").unwrap_or(1.0))` (add the two key constants to `oag_tables::envsettings`), and carry it through
-     `zone_grade.rs`'s `light()` rebuild. Sol `(6.096, 3.263, 1.6) * 1`, Queens Mall `(3, 2.148, 1.459) * 3`.
-     Measure Sol's near-road highlight after; it was not wired because the lane was kept out of `crates/raceplay`.
-   - **Sol's near road overshoots** grey-blue (near patch (45, 32, 34) % original, (48, 40, 43) % ours) and the road
-     `bias` went past zero to +16.1. Suspects, in order: the cube's orientation (the unflipped probe scored `bias`
-     +10.0, near better, mid worse: not settled on one pair; check on a second circuit with a visible sun, the page's
-     open item), the fresnel's `N2`, the cube read at mip `2 + k` into a 512x256 map.
+   - ~~**b. The sun lobe's colour.**~~ **Wired** (`panelmap-sun`, 2026-11-16): `envsettings_light` fills
+     `Light::sun_specular`, carried through the zone grade; the lobe is live (a x100 probe moves 85,305 Sol pixels)
+     but draws almost nothing at the pairs' poses (Sol 339 pixels, largest step 7 grey), so no road number moves.
+   - **Sol's near road overshoots** grey-blue (near patch (48, 35, 36) % original, (50, 41, 45) % ours) and the road
+     `bias` is +13.7 on main. **Ruled out** by probe (`panel-displacement.md`, "Measured"): the fresnel's normal and
+     the cube's blur level move the patch by under 2 %; the cube's orientation is settled for Sol (the glare sits at
+     the authored sun only with the flip) and unflipping it costs Queens Mall's road `LF` 14.6 to 19.7. Ours' sheen is
+     about 1.7 times the original's and bluer: next, find a missing weight on the sheen (the program's lightmap or
+     shadow terms) or what the sheen is added to; read the program's sky-add instructions again.
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
      on a pose that looks down at the road.

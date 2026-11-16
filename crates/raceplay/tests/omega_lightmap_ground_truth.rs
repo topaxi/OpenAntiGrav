@@ -18,7 +18,8 @@
 
 use oag_raceplay as race;
 use oag_tables::envsettings::{
-    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
+    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, OMEGA_SUN_SPECULAR_COLOUR,
+    OMEGA_SUN_SPECULAR_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
 };
 
 fn source() -> Option<String> {
@@ -138,6 +139,20 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     assert!(intensity > 1.5, "a factor that is not the identity");
     for (i, c) in colour.iter().enumerate() {
         assert_eq!(light.sun[i], c * intensity, "channel {i}");
+    }
+    // The panel-map road's sun lobe is the authored specular colour times its intensity;
+    // dropping the loader call leaves the zero a rig is built with.
+    let specular = env
+        .vec3(OMEGA_SUN_SPECULAR_COLOUR)
+        .expect("and a specular colour");
+    let specular_intensity = env.scalar(OMEGA_SUN_SPECULAR_INTENSITY).unwrap_or(1.0);
+    assert!(specular.iter().any(|c| *c > 0.0), "a lobe that is not off");
+    for (i, c) in specular.iter().enumerate() {
+        assert_eq!(
+            light.sun_specular[i],
+            c * specular_intensity,
+            "specular channel {i}"
+        );
     }
     assert_eq!(light.nova, 1.0, "the Omega rig is flagged");
     assert_eq!(light.prelit_scale, [2.5; 3]);
