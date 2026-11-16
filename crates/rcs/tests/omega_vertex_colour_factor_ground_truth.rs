@@ -119,8 +119,8 @@ fn the_hull_materials_multiply_the_vertex_colour_and_the_effects_do_not() {
     }
     let mut seen = BTreeSet::new();
     let (mut factor, mut effects) = (BTreeSet::new(), BTreeSet::new());
-    for index in 0..archives.len() {
-        let paths: Vec<String> = archives[index]
+    for archive in &mut archives {
+        let paths: Vec<String> = archive
             .paths()
             .iter()
             .filter(|p| {
@@ -133,7 +133,7 @@ fn the_hull_materials_multiply_the_vertex_colour_and_the_effects_do_not() {
             if !seen.insert(path.to_ascii_lowercase()) {
                 continue;
             }
-            let blob = archives[index].read_path(&path).expect("reads");
+            let blob = archive.read_path(&path).expect("reads");
             let found = input_is_factor(&blob, "VertexColour1");
             if found.fetching == 0 {
                 continue;
