@@ -148,5 +148,8 @@ fn a_javascript_tick_with_every_slot_cursed_and_puffing_fits_the_hosts_fuel_budg
         "JavaScript fuel: every slot cursed and puffing {} of {FUEL_PER_TICK}",
         worst.fuel_used
     );
-    assert!(worst.fuel_used < FUEL_PER_TICK, "the worst tick faults out of fuel");
+    assert!(
+        worst.fuel_used < FUEL_PER_TICK,
+        "the worst tick faults out of fuel"
+    );
 }
