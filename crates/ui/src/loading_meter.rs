@@ -72,10 +72,8 @@ impl Meter {
             0.0
         };
         let angle = a0 + k as f32 * CORNER;
-        [
-            centre[0] + radius * angle.sin(),
-            centre[1] + radius * angle.cos(),
-        ]
+        let (sin, cos) = oag_core::math::sin_cos(angle);
+        [centre[0] + radius * sin, centre[1] + radius * cos]
     }
 
     /// The row at `fraction` of the load and breathing step `counter`, in `color`.
