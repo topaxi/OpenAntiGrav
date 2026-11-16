@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-16
-summary: "Disc tests repeating one walk, load or sim: PSP2 model walks 90-130 CPU-s (needs maintainer yes); magstrip, omega_held_loops, split_hud next"
+summary: "Disc tests repeating one setup: groups 1-4 merged (test-merge); music_resume, omega_event_xp, ps2_source, now_playing, psarc open"
 size: S (30)
 difficulty: medium (30)
 ---
@@ -39,125 +39,14 @@ merging. Estimates carry confidence 30 on the rubric.
 
 ## Ranked groups
 
-### 1. The PSP2 model walks (needs the maintainer's yes, redundancy thread item 1): `psp2_rcsmodel_ground_truth.rs` (6 tests) and `psp2_rcsmodel_material_ground_truth.rs` (4 tests)
+### Done (test-merge, 2026-11-16), measured in `docs/architecture/workspace-layout.md` ("What the `test-merge` pass measured")
 
-- **Setup:** each test walks every `.rcsmodel` of the three 2048 packages
-  (`PACKAGES`, both files) and decodes each with `psp2::parse`. The first file's
-  `survey(check)` (line 65) already takes a check closure, so its tests are
-  written as one walk each. The second file's `every_model(check)` (line 42)
-  is the same walk, copied.
-- **Log (per test, all about 15-16 s):** `every_shipped_model_decodes`,
-  `every_submesh_closes_on_its_own_counts`, `positions_decode...`,
-  `normals_decode...`, `tangents_are_orthogonal...` (the first file), and
-  `texcoords_decode...`, `every_material_resolves...`,
-  `every_submesh_names_a_material...` (the second). About 128 s summed (about 81 s and 47 s).
-  `a_circuit_is_world_space_and_a_craft_is_not` (line 247) walks the same set
-  and was not in the log.
-- **Saving:** one walk per file instead of one per test. About 8-9 extra walks
-  at 15 s each. Estimate **90-130 CPU-s** (reading: a walk is most of each
-  test's time, because the checks are arithmetic on the decoded values).
-- **Recipe:**
-  1. Nextest runs each `#[test]` in its own process, so a walk is saved only
-     when one test calls `survey` once for all its claims. A `mod` shared by
-     two test functions does not help. Put the second file's checks into
-     `psp2_rcsmodel_ground_truth.rs` (one `PACKAGES`, one `survey`) and delete
-     the copy in the material file.
-  2. Make one `#[test]` per file that calls `survey` once with a closure that
-     runs every claim, or one `#[test]` for both files. Each claim keeps its
-     own `assert!` text. The count of walks falls from 10 to 1 or 2; a
-     per-claim test would keep the walks and so would not save anything.
-  3. Keep the census numbers (`Survey`) asserted in the one walk, as now.
-- **Tail:** a merged walk is one 15 s pass plus the checks. Under the 43 s
-  slowest test in the log.
-- **Risk:** the simulation is not touched. Decode output is read, not changed.
-  The risk is an assertion that depended on the test's own walk order (it
-  asserts counts that do not depend on order, so check each one). Check that
-  `a_circuit_is_world_space_and_a_craft_is_not` needs only the positions of
-  the models it reads.
+- **1. PSP2 model walks** (maintainer yes 2026-11-16): ten tests to three, 94 to 13 s user CPU.
+- **2. `magstrip_wire_hd`**: the `is_none()` guard fixed in it and in `magstrip_wire_2048` (1.8 s each); `every_craft` folded into the hum flight; the three rumblers share one flight. Six tests to four, 24.7 to 16.8 s summed. Open: the 2048 file's tests share nothing (3 to 5 s each); the wall test and the autopilot flight stay separate on purpose (the autopilot changes the simulation).
+- **3. `omega_held_loops`**: five tests to one, 14.6 to 3.0 s.
+- **4. `split_hud`**: the six HD two-view tests to one over three loads, 15.5 to 6.9 s. Open: the two four-player tests (0.4 s each) still load separately.
 
-### 2. `magstrip_wire_hd_ground_truth.rs` (6 tests, 70 s summed)
-
-Read the code this time. Four facts:
-
-- **A double load in one test.** `every_craft_visits_a_strip...` (line 120)
-  starts with `if load().is_none() { return; }` (line 121). That loads the full
-  HD race just to skip. Then `fly(false, None)` (line 124) calls `load()` again
-  (line 68). `magstrip_wire_2048_ground_truth.rs` line 135 has the same guard
-  over a 2048 load, with `fly` loading again. A `rg` for any loader called as a
-  `.is_none()` guard finds only these two (the `trackstartup` `image()` hits are
-  path probes, not loads). **Fix:** probe the image path
-  (`oag_testdata::image(...)`) instead. One-line change in each file, saving one
-  race load per test.
-- **`every_craft` could fold into the hum test's `render(false)` flight.** The
-  hum test's `render` closure (near line 178) calls `fly(drop_edges, Some(&mut audio))`,
-  with `drop_edges` false and then true. `fly` builds `log.starts`/`stops` from
-  `race.pending_cues()` before any drain, on both the audio and no-audio paths
-  (lines 75-84). `race_tick_keeping` (`crates/game/src/sound.rs`, line 188) drops
-  cues only from the audio input (`keep`), and `note_song` writes the readout,
-  not the sim. So the `Log` should match. **Not confirmed**: the redundancy
-  thread's step, one run that prints both logs and compares them, is still the
-  proof. If they match, fold the strip-visit asserts into the hum test's
-  `render(false)` log and delete `every_craft`. Saves one load and one
-  2,400-tick flight, about **11 s** (its time in the log).
-- **The hum test also loads the race a third time** (line 153, `load()` only to
-  read the voices). Fold that voice check into the `render` closure's first
-  race if `fly` can hand it back, or accept it as one load.
-- **The rumble runs share one simulation.** `rumble_run` (line 252) calls
-  `race.tick` every tick, whatever the token. `paused_from` only passes a flag
-  to `Rumbler::tick` (line 288), so the sim keeps running. `Rumbler::tick` takes
-  `race: &Race` (`crates/game/src/rumble.rs`, line 224), so it cannot write to
-  the race. The `none` run (line 328), the `ps3 paused` run (line 333) and the
-  pad run (line 303) can share one 2,400-tick race with one `Rumbler` each. The
-  autopilot run (line 353) sets `autopilot_timer` before its loop, so it changes
-  the sim and stays separate. Estimate **15-25 CPU-s** (reading: two flights
-  and two loads saved).
-- **The wall test** (`flown_into_the_wall`, line 370) loads the same HD race
-  without the magstrip assert. Its race can join the shared one only if its
-  stick input is off for the others. Not checked; leave it.
-- **Risk:** a `Rumbler` that feeds back through something the race reads (not
-  found, but the `Rumbler` holds a `Pad` and a `Library` only). Compare the pad
-  logs before and after on the same seed. No arithmetic change in the sim.
-
-### 3. `omega_held_loops_ground_truth.rs` (5 tests, 72 s summed)
-
-- **Setup:** `omega()` (line 29) loads the Omega single race off
-  `data/extracted/ps4`, starts it, opens audio, runs 60 race ticks, 300 frozen
-  audio steps and 30 more to settle the pool. Each of the five tests pays it
-  before `holds()` (line 86) runs 900 + 60 + 1 audio steps. Per test the log
-  reads about 14.2-14.9 s.
-- **Saving:** four of the five setups. Estimate **25-35 CPU-s** (reading:
-  the setup is most of each test; the holds are a few hundred steps).
-- **Recipe:** one `#[test]` that calls `omega()` once and runs the five cases in
-  order. Re-read `idle` before each `open`. Keep each case's `name` in its
-  messages. The `close` closures already reset their field.
-- **Tail:** about 14 s + 5 x 2 s, under 43 s.
-- **Risk:** the cases share one race and one `Audio`. A leftover (the leach beam
-  not cleared, a voice still sounding) would fail a later case for an earlier
-  case's reason. Keep the per-case `idle` re-read. No sim change.
-
-### 4. `split_hud_ground_truth.rs` (13 tests, 63 s summed)
-
-- **`split_race(4)`** (line 33) is called by `every_view_draws_its_own_slots...`
-  (line 101) and `a_later_views_reticle_follows_its_own_slots_lock` (line 177).
-  Same four-player race, one load each. **Fold** the two: the draw checks, then
-  the reticle check on the same `race`. Saves one load.
-- **`hd_loaded(2)`** (line 200) is loaded in six tests: `hd_draws_its_own_authored_split_layouts`
-  (line 219, with `hd_loaded(1)`), `hd_draws_a_reticle_in_its_authored_split_view`
-  (line 422) and `..._vertical_split_view` (line 431), both through
-  `hd_reticle_in_split_view` (line 436), `hd_authors_the_bar_both_places...`
-  (line 934) and `hd_a_two_h_two_v_race_draws_each_window...` (line 959).
-  `hd_draws_its_own_vert_layouts...` (line 304) loads `hd_loaded(2)` and
-  `hd_loaded(3)`. Per two-view HD load, one shared load serves the
-  horizontal-cut reticle, the bar, and the two-by-two checks. The vertical
-  reticle needs its own cut on the same load (its `cut` argument), so it can
-  join the shared test too.
-- **Saving:** five HD two-view loads, one four-player load. Estimate
-  **12-18 CPU-s** (reading: six calls become one load, five saved).
-- **Tail:** the merged HD test runs several check functions on one load. Its
-  time is the load plus those draws; measure it against 43 s.
-- **Risk:** the reticle check mutates the race's lock state. It must run last
-  on its `Loaded`, or start a new `Race` from a clone of `setup`. Check whether
-  `Setup` clones before merging.
+The estimates above this section's first draft were 3 to 5 times too high for groups 2 and 3 (they read the log at load 19): a load is 1.8 s of CPU, and that, not the holds, was the cost. Re-measure the open groups below alone before merging them.
 
 ### 5. `music_resume_ground_truth.rs` (12 tests, 57 s summed): a smaller saving than first thought
 
@@ -273,9 +162,8 @@ Read the code this time. Four facts:
 
 ## Next Steps
 
-1. Group 1: measure one `survey` walk on `psp2_rcsmodel_ground_truth` alone
-   (`time` the test, 2048 disc present). This sets the real saving. 15 minutes.
-2. Group 2, the one-line guard: change `if load().is_none()` at
-   `magstrip_wire_hd_ground_truth.rs:121` to a probe of the image. 5 minutes.
-3. Group 6: read `an_omega_event_launch_carries_omegas_award_table` against its
-   merge partner. Already read here: go straight to the merge. 30 minutes.
+1. Group 6: read `an_omega_event_launch_carries_omegas_award_table` against its
+   merge partner and measure both alone first (the group 3 estimate was 5 times
+   high). 30 minutes.
+2. Groups 5, 7 and 8 are 3 to 10 s each by reading; measure alone and merge only
+   what is over 3 s. An hour for the three.

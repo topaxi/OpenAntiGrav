@@ -76,6 +76,15 @@ fn sounding(audio: &oag_sound::Audio) -> usize {
     audio.output().with_mixer(|mixer| mixer.active_voices())
 }
 
+/// The race, its audio and the idle pool count [`omega`] settled, shared by
+/// every case: each ends with the pool back at idle, which the next one checks
+/// before it opens anything.
+struct Grid {
+    race: race::Race,
+    audio: oag_sound::Audio,
+    idle: usize,
+}
+
 /// Opens a held cue with `open`, holds it for [`HOLD_TICKS`] and releases it
 /// with `close`, then opens it again and releases it while it still sounds.
 ///
@@ -84,30 +93,35 @@ fn sounding(audio: &oag_sound::Audio) -> usize {
 /// container looping forever), measured, so dropping either law moves it. `0`
 /// for an event that authors no loop: it played once and was not started again.
 fn holds(
+    grid: &mut Grid,
     name: &str,
     loops: usize,
     open: impl Fn(&mut race::Race),
     close: impl Fn(&mut race::Race),
 ) {
-    let Some((mut race, mut audio, idle)) = omega() else {
-        return;
-    };
-    open(&mut race);
-    step(&mut audio, &mut race);
-    let started = sounding(&audio);
+    let Grid { race, audio, idle } = grid;
+    let idle = *idle;
+    assert_eq!(
+        sounding(audio),
+        idle,
+        "{name}: the pool was not idle when the case began (an earlier case left a voice)"
+    );
+    open(race);
+    step(audio, race);
+    let started = sounding(audio);
     assert!(
         started > idle,
         "{name}: held, and no voice opened ({idle} idle)"
     );
     for tick in 0..HOLD_TICKS {
-        step(&mut audio, &mut race);
+        step(audio, race);
         assert!(
-            sounding(&audio) <= started,
+            sounding(audio) <= started,
             "{name}: re-triggered at tick {tick} ({} > {started})",
-            sounding(&audio)
+            sounding(audio)
         );
     }
-    let held = sounding(&audio);
+    let held = sounding(audio);
     println!("{name}: {started} voices at the start, {held} after {HOLD_TICKS} ticks, {idle} idle");
     assert_eq!(
         held - idle,
@@ -116,35 +130,30 @@ fn holds(
     );
     // The original stops the held post with no fade (`StopPlayingID(id, 0,
     // linear)`): gone the tick it is released.
-    close(&mut race);
-    oag_game::sound::race_tick(&mut audio, &mut race);
-    assert_eq!(
-        sounding(&audio),
-        idle,
-        "{name}: released and still sounding"
-    );
+    close(race);
+    oag_game::sound::race_tick(audio, race);
+    assert_eq!(sounding(audio), idle, "{name}: released and still sounding");
     // Again, released a second in: what still sounds is cut, one-shots included.
-    open(&mut race);
+    open(race);
     for _ in 0..60 {
-        step(&mut audio, &mut race);
+        step(audio, race);
     }
     assert!(
-        sounding(&audio) > idle,
+        sounding(audio) > idle,
         "{name}: held a second time, and no voice opened"
     );
-    close(&mut race);
-    oag_game::sound::race_tick(&mut audio, &mut race);
+    close(race);
+    oag_game::sound::race_tick(audio, race);
     assert_eq!(
-        sounding(&audio),
+        sounding(audio),
         idle,
         "{name}: released while sounding, and still sounding"
     );
 }
 
-#[test]
-#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
-fn the_shield_holds_its_loops_until_it_drops() {
+fn the_shield_holds_its_loops_until_it_drops(grid: &mut Grid) {
     holds(
+        grid,
         "_SHIELD_PC",
         5,
         |race| race.sim.world.ships[0].physics.shield_pickup_timer = 1_000.0,
@@ -152,10 +161,9 @@ fn the_shield_holds_its_loops_until_it_drops() {
     );
 }
 
-#[test]
-#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
-fn the_autopilot_holds_its_loops_until_it_expires() {
+fn the_autopilot_holds_its_loops_until_it_expires(grid: &mut Grid) {
     holds(
+        grid,
         "_AUTOPILOT_PC",
         5,
         |race| race.sim.world.ships[0].autopilot_timer = 1_000.0,
@@ -163,10 +171,9 @@ fn the_autopilot_holds_its_loops_until_it_expires() {
     );
 }
 
-#[test]
-#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
-fn the_magstrip_holds_its_hum_until_the_craft_leaves_it() {
+fn the_magstrip_holds_its_hum_until_the_craft_leaves_it(grid: &mut Grid) {
     holds(
+        grid,
         "_magstrip01",
         5,
         |race| race.raise_cue(Cue::Magstrip),
@@ -174,10 +181,9 @@ fn the_magstrip_holds_its_hum_until_the_craft_leaves_it() {
     );
 }
 
-#[test]
-#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
-fn a_shuriken_holds_its_travel_loop_while_it_flies() {
+fn a_shuriken_holds_its_travel_loop_while_it_flies(grid: &mut Grid) {
     holds(
+        grid,
         "_SHURIKENTRAVEL",
         3,
         |race| {
@@ -196,10 +202,9 @@ fn a_shuriken_holds_its_travel_loop_while_it_flies() {
     );
 }
 
-#[test]
-#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
-fn the_leach_attach_plays_once_while_the_beam_holds() {
+fn the_leach_attach_plays_once_while_the_beam_holds(grid: &mut Grid) {
     holds(
+        grid,
         "_NGP_LEACHATTACH",
         0,
         |race| {
@@ -223,4 +228,18 @@ fn the_leach_attach_plays_once_while_the_beam_holds() {
         },
         |race| race.sim.world.leach_beams[0] = None,
     );
+}
+
+#[test]
+#[ignore = "needs the decrypted Omega packages in data/extracted/ps4/"]
+fn every_held_cue_holds_its_loops_until_it_is_released() {
+    let Some((race, audio, idle)) = omega() else {
+        return;
+    };
+    let mut grid = Grid { race, audio, idle };
+    the_shield_holds_its_loops_until_it_drops(&mut grid);
+    the_autopilot_holds_its_loops_until_it_expires(&mut grid);
+    the_magstrip_holds_its_hum_until_the_craft_leaves_it(&mut grid);
+    a_shuriken_holds_its_travel_loop_while_it_flies(&mut grid);
+    the_leach_attach_plays_once_while_the_beam_holds(&mut grid);
 }
