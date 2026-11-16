@@ -432,9 +432,9 @@ leaving: entering takes `Race::snapshot_sim()` and sets the recording aside
 (`Race::pause_recording`), leaving restores both. `Keeper` keeps a keyframe a second from the race's
 first tick (a few microseconds a second) and starts the second `Race` it seeks with only when a
 rewind first asks. With no recording (a race that records nothing) a seek stops at the whole
-keyframe at or before the tick and a motion blur is not offered. Every race records now (the REPLAYS
-page's `[replay] record`, on by default), so a Single Race rewinds and blurs; with the setting off, or in a
-modded race, the keyframe rule applies.
+keyframe at or before the tick and a motion blur is not offered. Every race records now, a modded one included (the REPLAYS
+page's `[replay] record`, on by default), so a Single Race rewinds and blurs; with the setting off
+the keyframe rule applies.
 
 **What this rests on, the maintainer's two conditions** (kept by ADR-0088, which records this departure from decision 5). Photo mode never offers a take-over: it shows the
 past and cannot play from it (a take-over is the replay viewer's, decision 9), and the race resumes exactly
@@ -482,8 +482,8 @@ tick 100, so the first 100 ticks agreed. The first keyframe is now cut just befo
 (`Keeper::recut_first`; `docs/architecture/replay-timeline.md`), and
 `photo_mode_ground_truth::a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without` checks it for
 the autopilot and the throttle with no mod mounted. **The stage-6 rewind hash test now runs with no mod mounted
-too**: with this repository's mods the race records nothing and a landing falls on whole keyframes, so only the
-keyframes were checked. ~~`--give` tops the pickup up outside the tick, so a rewind does not see it~~ (fixed): the
+too**: it was added when a modded race recorded nothing, so a landing fell on whole keyframes and only the
+keyframes were checked; a modded race records now. ~~`--give` tops the pickup up outside the tick, so a rewind does not see it~~ (fixed): the
 session's top-up wrote the slot directly, so nothing in the recording said it had happened; a pre-roll
 that replayed a second shot found the slot empty and the hash diverged (tick 376 on a Pulse Single Race
 with the rocket fired at about tick 300 and again 30 ticks later). It goes through `Race::give_weapon`

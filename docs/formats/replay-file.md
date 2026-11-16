@@ -52,7 +52,8 @@ table keeps its keys open (ADR-0087 decision 8).
 | `[finish]` | how the player's craft finished, when the race ended with a result: `place`, `ticks` (written with `ticks`) |
 | `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must), `skill_level`, the rung a campaign cell raced at (`0` Easy to `2` Hard), which picks every craft's shield slot (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot"; absent: the rung `difficulty` stands for, `oag_ai::Difficulty::level`), and `campaign_skill`, a campaign cell's resolved skill scale (a float), written only for a campaign race, whichever driver flies it. It tunes the field (`oag_ai::Difficulty::tune_at_scale`) and the finished player's thrust, both simulation state, so `Race::apply_launch` repeats it before the first tick (`Race::apply_campaign_skill`); it is its own key because a campaign cell is tuned whichever driver flies it, and a 2048 event's driver skill tunes nothing. **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
 | `[setup]` | the resolved launch request (`oag_replay::header::Setup`): mode, class, track, team, hull variant, skin, opponent teams, opponents, people, views, lap/weapon/Eliminator overrides, add-on campaign, Zone model. Written by `Race::start_recording` from the request the race was loaded with, so no caller can forget it |
-| `[ghost]` | the lap a file's ghost is |
+| `[[mods]]` | the simulation modules the race ran, in the order they ran (`oag_replay::header::ModUse`): `id`, `version`, `module` (path in the mod), `sha256` (of the module's bytes), `abi`, `revision`, `state_bytes`, `picks` (the player's `sim` picks by row). Absent for a vanilla race. A rebuild runs exactly these and `apply_recorded` refuses a missing module, another build, another layout or other picks by name ([wasm-extensions](../architecture/wasm-extensions/determinism-and-state.md#replays)) |
+| `[ghost]` | the lap a file's ghost is; never present in a modded race's file |
 | `[fork]` | read, never yet written (stage 7): `tick`, `offered_at`, `seats`, `parent_build`, `parent_hash` |
 
 ## Rebuilding a race from a header
@@ -84,8 +85,7 @@ and split-screen beyond the one setup [the timeline's page](../architecture/repl
 proves (two people, Pulse); multi-window
 races (`seat_picks`); Race Remix (`craft_source`); DLC and
 foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture aids (`pose`,
-`field`, `hud`); network races (a client records nothing) and modded races (`start_recording`
-returns early). None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
+`field`, `hud`); network races (a client records nothing). A modded race records, and its `[[mods]]` names the modules. None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
 VERIFIED and tries it: Zone, Eliminator and Head to Head with one person each reproduced 752
 ticks on Pulse through WATCH.
 

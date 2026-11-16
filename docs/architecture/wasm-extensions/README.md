@@ -32,7 +32,7 @@ compiled and a race offered a module names it as left out in its load report.
 | Command | `scale-thrust{slot, factor}` | No `ticks` field and no host timer: the guest re-sends it each tick it wants it. `factor` finite and in `[0, 2]` (`MAX_THRUST_FACTOR`); anything else, a slot with no craft, or two for one slot is a fault, never a clamp. Below 1.0 **multiplied** into `Ship::pending_thrust_scale`, so a Leach Beam drain armed the tick before is kept |
 | Kind | `[extension.rules]` in `oag-mod.toml` | A rules module, because section 2.1 lets a rules module touch any slot and a craft module only slots flying its hull: a curse on every craft would otherwise be one craft row per team. Section 1.1 names a rules module from a mode file; `modes/*.toml` does not exist yet, so until it does a mod's rules module runs in every race the mod is on for, on its titles, **unless its guest declines the race** ([`oag_wants_race`](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6), asked once at race load: Slipstream runs only in a Single Race or a Tournament leg with weapons on), **except the original campaigns** (section 1.2) **and network races** (the host's race runs vanilla until phase 3; the lobby's fingerprint leaves the repository's examples out) |
 | State | `RaceSim::extensions` | Each module's blob (the length its `oag_state_len` exports, or the manifest's `state_bytes`, at most 1,024), its fault tick, and the pending wall-contact bits, cloned with a snapshot and hashed last in `RaceSim::state_hash`; a race with no module hashes nothing there |
-| No replay | `Race::start_recording` | A modded race records none (section 4.4, phase 2's rule) |
+| Replay | `Race::start_recording`, `oag_replay::header::ModUse` | A modded race **records its inputs** and its header's `mods` list names each module: mod id, version, module path, SHA-256 of the module's bytes, ABI major and layout revision, state bytes and the `sim` picks. A rebuild (`Options::recorded_mods`, set by `apply_replay`) runs exactly those modules with the recorded picks, and `apply_recorded` refuses a module that is missing, another build, another layout or picks, or an extra one, by name (`extensions/identity.rs`). A modded race sets no ghost and offers none to save. Not built: the tune bytes (nothing reads a `setup.tune` yet), the lobby fingerprint's SHA-256, the cross-engine conformance test (section 4.4, 4.2) |
 | Overlay | `oag_present::perf::mods` | The `Dev` overlay's `mods` block: per module fuel last tick, peak, share of the budget, linear memory (`Cost::memory_bytes`: `Memory::data_size` read after the tick, before the pooled instance is dropped, so growth and a trapped call count; shown as the last call's size and the peak since load, against the `memory_pages` cap, with the manifest `state_bytes`; reporting only, no reservation and no new limit), call wall time, and the fault tick; a per-tick output timed in `oag-raceplay`, never hashed |
 
 Proof: `oag_raceplay`'s `tests::extensions` (a vanilla race's 600 tick hashes fold
@@ -615,10 +615,11 @@ page builds on them rather than re-deriving them.
 - **Two phases, then a third.** Phase 1 runs modules only where nothing reaches a
   race's state (HUD widgets, and the frontend world's mod screens, section 2.3). Phase 2 opens the simulation hook; a mod that touches
   the simulation declares `simulation = true` and marks the session **MODDED**: no
-  multiplayer, no ghosts or replays recorded or played back, records in a separate
-  modded table, MODDED on the HUD and the MODS page. Phase 3 lifts that once module
-  hashes travel in the replay header and the lobby and the cross-engine conformance
-  test holds.
+  multiplayer, no ghosts, records in a separate modded table, MODDED on the HUD and the
+  MODS page. Replays: [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)
+  records a modded race's input stream (a screenshot of it must be made again), the
+  header's `mods` list carrying the module hashes (section 4.4). Phase 3 lifts the rest once the lobby carries the hashes
+  and the cross-engine conformance test holds.
 - **Engine choice**: wasmtime with Cranelift on Linux, Windows, macOS and Android;
   wasmtime's Pulley interpreter on iOS (no JIT); the browser's own `WebAssembly` on
   the web build. Three engines must give bit-identical results: a deterministic
@@ -1299,9 +1300,10 @@ the whole session shares (a host-chosen setting) is folded into
 ([network play](determinism-and-state.md#network-play)); a **per-seat** tune (each
 player's own craft) cannot be, since folding it would refuse every join where two
 players differ. Per-seat tunes are the server receiving each seat's bytes with the
-seat at race start, which touches the wire and is open question 13. Until phase 3,
-a session whose sim module reads a tune is MODDED anyway: no replay, no ghost, no
-multiplayer.
+seat at race start, which touches the wire and is open question 13. A tune
+is not built (the ABI has no `setup.tune` yet), so no header carries one; until it is, a
+mod's sim module reads nothing a replay cannot reproduce from the `mods` entry and the
+inputs. A session whose sim module reads a tune stays MODDED: no ghost, no multiplayer.
 
 **Where it runs.** The screen model is `oag-ui-screens`'s, in the existing shape
 (`Input` and `Pointer` in, `Outcome` and `Draw` out), over a small injected trait
@@ -1359,7 +1361,7 @@ load (an import outside `oag`) or faults at the command check.
 | **No input devices; only the `InputSnapshot` the tick already received, for person-flown slots** | The snapshot is the one thing a replay and a network peer carry (ADR-0055, [ADR-0070](../adr/0070-the-network-transport-is-webtransport.md) decision 4). Reading a pad directly would be an un-replayed input |
 | **No reading or writing another module's blob, commands or published keys** | One instance and one blob per module; composition between mods is open question 8 and must not happen by accident |
 | **No persistence from the sim or HUD world, and none of a guest's own files.** The one exception is the frontend world's saved blob, at most 4 KiB per mod and title, a host-written table beside the records (section 2.3) | Modern saves: no slots, no files a player manages; a mod must not leave state on disk the MODS page does not know about. The blob is the host's, listed and clearable on the MODS page. The sim guest sees it only as `setup.tune` at `race-start` and never writes it |
-| **No change to an original title's faithful modes unless the player opts into the mod** | The MODS page's ENABLED switch is the opt-in (ADR-0078). With a sim module on, the session is MODDED (phase 2): records go to the modded table, ghosts and replays are off, the HUD says so. The original campaigns never load an extension (settled) |
+| **No change to an original title's faithful modes unless the player opts into the mod** | The MODS page's ENABLED switch is the opt-in (ADR-0078). With a sim module on, the session is MODDED (phase 2): records go to the modded table, ghosts are off, the HUD says so; the input stream is still recorded and names the module. The original campaigns never load an extension (settled) |
 | **No projectile of the mod's own in v1** | `World::projectiles` is a fixed-size pool of plain `Copy` data (`crates/gameplay/src/world.rs:378`); the Quake, Leach Beam and Repulser each have their own single-slot pool. A guest-defined projectile would change the snapshot's size and every golden hash. A custom weapon is a timed self-effect first (section 7.5); a projectile pool for mods, with a visual from the mod's files, is open question 4 |
 | **No menu rows beyond ADR-0066's closed vocabulary, no settings, no new disc pages, no behaviour in a disc's own menus.** The one allowance is a mod's own screen in the frontend world: one extra action, `open-mod-screen`, and a page the mod owns (section 2.3, [ADR-0080](../adr/0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md), which supersedes ADR-0066 decision 4 for wasm screens only) | A mod still cannot invent front-end behaviour on the disc's pages; its screen is a page of its own that cannot start a race, change a setting or reach a file. The sim, craft, track, rules and weapon kinds still attach to a race, not to the menus |
 | **No AI advantage.** A craft module runs for every slot flying its hull, the AI's included; `controller` is readable so a rules mod can handicap, but nothing in `oag-extras` ever favours the AI | The AI obeys the player's physics (maintainer's rule). A third-party mod that does otherwise is the player's choice and is MODDED |
@@ -1432,15 +1434,19 @@ with wasmtime's own switches left on as a second line
   the whole process, or an mmap or commit failure), and a native stack overflow (the
   open risk in [determinism-and-state.md](determinism-and-state.md)). Two machines
   running the same modded race can therefore fault the same module at different ticks,
-  or one of them not at all. That is harmless today: network races force vanilla
+  or one of them not at all. Network races force vanilla
   (`mod_extensions::attach` is told `vanilla` for them, which leaves `find_extensions`
-  `None`: `game/src/main/session/load.rs:505-508`, `game/src/main_body.rs:534-536`) and a
-  MODDED race records no replay, so no
-  two machines ever compare a modded race's hash. The day either changes (a modded
-  network race, a modded replay), the race would need the failure moved out of the
-  hash: a host-local failure must not fault the module (retry, or end the race for that
-  machine alone), and the stack-depth counter in determinism-and-state.md must exist so
-  a deep guest traps at a fixed depth on every engine.
+  `None`: `game/src/main/session/load.rs:505-508`, `game/src/main_body.rs:534-536`), so
+  no two machines compare a modded race's hash live. **A modded replay is the case that
+  now does, and the failure has not been moved out of the hash**: a recording whose
+  module hit a host-local fault (a pool or mmap failure, a deep guest) disagrees on a
+  machine that did not, and `Verifier` reports it at the next stored hash (`Desync`),
+  never silently. A replay across engines (Cranelift, Pulley, the browser) is unproven
+  until the conformance test exists. Before a modded network race exists the failure
+  still has to leave the hash: a host-local failure must not fault the module (retry, or
+  end the race for that machine alone), and the stack-depth counter in
+  determinism-and-state.md must exist so a deep guest traps at a fixed depth on every
+  engine.
 
 ### 4.3 Versioning
 
@@ -1455,8 +1461,11 @@ with wasmtime's own switches left on as a second line
   it knows and ignores an event it does not); a change to an existing field's
   meaning or position is major 2, a second layout the host writes beside the first
   for a release.
-- The replay header's `mods` entry carries the mod's blob layout version, so a
-  replay refuses a mod build whose blob layout changed.
+- The replay header's `mods` entry carries the module's SHA-256 and the layout it ran
+  under (ABI major, layout revision, state bytes), so a replay refuses a mod build whose
+  blob layout changed, and any other build of the module. The SHA-256 subsumes a separate
+  "blob layout version": the layout is in the module's code, and no manifest field names
+  one. Built (`oag_replay::header::ModUse`).
 
 ### 4.4 Trust
 
@@ -1476,12 +1485,18 @@ with wasmtime's own switches left on as a second line
   ([determinism-and-state.md](determinism-and-state.md#network-play)). Mod code
   arriving through a lobby is never auto-run (decision 6): the joiner must have the
   mod installed.
-- **Replays**: `oag_replay::Header` (`crates/replay/src/header.rs`) has no mod field
-  today and `build` is informational, never compared. Proposed: a dedicated `mods`
-  list (id, version, module SHA-256, blob layout version), not the opaque `options`
-  map, editing format v1 in place. Playback refuses a replay whose modules are not
-  present with those hashes, by name; the stored state hashes still decide validity
-  (ADR-0055). In phase 2 a modded session records no replay at all
+- **Replays** (built, [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)): `oag_replay::Header::mods`
+  (`crates/replay/src/header.rs`), a dedicated list, not the opaque `options` map, editing
+  format v1 in place: per module the id, version, module path, SHA-256, ABI major and
+  layout revision, state bytes and `sim` picks. `Race::start_recording` fills it from the
+  modules the load compiled (hashed in `extensions::prepare`, where the bytes are read).
+  A rebuild runs the listed modules with the listed picks and no others, and
+  `oag_raceplay::replay::apply_recorded` refuses a missing module, another build (hash
+  or version), another layout, other picks or an extra module, naming each; the stored
+  state hashes still decide validity (ADR-0055). **Not covered by the hash of the module
+  alone**: manifest tables the race reads (pickup odds, memory pages), which the `version`
+  stands for. **Deferred**: the tune bytes (no `setup.tune` is built), the lobby
+  fingerprint's SHA-256, the REPLAYS list's playback needs the mods the file names
   ([determinism-and-state.md](determinism-and-state.md#replays)).
 - **Records**: a modded session's results go to the separate modded table (phase 2),
   keyed with the fingerprint; the networking page already says a modified-sim run
@@ -1627,8 +1642,8 @@ above 1.0 are the engine change.
    straights from the next tick; the speed bar, which reads `speed_kmh` from the
    body's velocity (`crates/raceplay/src/telemetry.rs:137`), shows it with no HUD
    change. `publish{"feisar.pads", n}` lets a HUD module (7.6) show the counter.
-7. **Replay and records**: phase 2, none recorded; MODDED on the results. Phase 3: the
-   module's hash in the header and the lobby.
+7. **Replay and records**: the input stream is recorded and the header names the module
+   and its hash; no ghost; MODDED on the results. Phase 3: the module's hash in the lobby.
 
 ### 7.2 A spring jump on a custom track
 
@@ -1864,10 +1879,10 @@ not move ([hooks.md](hooks.md#what-has-to-be-built-in-order)):
    velocity write for `impulse` (7.2); a gravity direction (7.3); a custom `Weapon`
    arm and `give-pickup` (7.5); authored spawn points; the `Controller` trait for a
    pilot controller (the pilot-controller thread).
-7. **Phase 3**: module hashes in the replay header's `mods` list and the lobby
-   fingerprint, playback and join refusing a mismatch by name, the conformance test
-   across Cranelift, Pulley and the browser, `oag-server` running sim modules;
-   MODDED stops meaning "no replay, no multiplayer" and starts meaning "with these
+7. **Phase 3**: module hashes in the lobby fingerprint, join refusing a mismatch by
+   name, the conformance test across Cranelift, Pulley and the browser, `oag-server`
+   running sim modules (the replay header's `mods` list and playback's refusal by name
+   are built); MODDED stops meaning "no multiplayer" and starts meaning "with these
    modules". The tune bytes join the replay header's `mods` entry, and a
    session-shared tune joins the lobby fingerprint (section 2.3; a per-seat tune is
    open question 13).

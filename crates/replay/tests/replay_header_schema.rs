@@ -183,6 +183,34 @@ fn a_header_with_nothing_optional_is_accepted_by_both() {
 }
 
 #[test]
+fn a_header_naming_its_simulation_modules_is_accepted_by_both_and_survives_a_round_trip() {
+    let mut replay = populated();
+    replay.header.mods = vec![oag_replay::header::ModUse {
+        id: "oag.energy-turbo".into(),
+        version: "1.0.0".into(),
+        module: "ext/energy_turbo.wasm".into(),
+        sha256: "ab".repeat(32),
+        abi: 1,
+        revision: 6,
+        state_bytes: 96,
+        picks: vec![0, 1, 0, 0],
+    }];
+    let text = head(&replay.to_bytes());
+    assert!(text.contains("[[mods]]"), "{text}");
+    let (loader, schema) = verdicts(&text);
+    assert!(loader.expect("the loader reads it"));
+    schema.unwrap_or_else(|e| panic!("{e:#?}\n{text}"));
+    let read = Replay::from_bytes(&replay.to_bytes()).expect("reads");
+    assert_eq!(read.header.mods, replay.header.mods);
+
+    let bad = text.replace(&"ab".repeat(32), "not-a-hash");
+    assert!(
+        verdicts(&bad).1.is_err(),
+        "a module hash that is not hex is refused by the schema"
+    );
+}
+
+#[test]
 fn a_header_of_another_kind_is_refused_by_both() {
     let text = head(&populated().to_bytes()).replace("/v1/replay-header.tosd", "/v1/pilot.tosd");
     let (loader, schema) = verdicts(&text);

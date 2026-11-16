@@ -206,22 +206,25 @@ them would be wrong.
 inputs plus a state hash at an interval, our own format, verified by re-simulating.
 A mod's code is part of what re-simulates, so a replay must name it:
 
-- **Today the header has no mod field** (`oag_replay::Header`,
-  `crates/replay/src/header.rs:20`); `options` is an opaque string map for the
-  composition root and `build` is informational, never compared.
-- **Proposal (agreed with the README): a dedicated `mods` list in the header**:
-  each simulation module's mod id, version, the SHA-256 of its bytes, and its blob
-  layout version; not the opaque `options` map (`header.rs:58`), which `oag-replay`
-  never interprets. Playback refuses a replay whose modules are not present with
-  those exact hashes, by name; the stored state hashes still decide validity.
-  Nothing is released, so this edits format v1 in place rather than adding a v2.
+- **The header has a dedicated `mods` list** (`oag_replay::header::ModUse`, built
+  2026-11-16): each simulation module's mod id, version, module path, the SHA-256 of its
+  bytes, the ABI major and layout revision it ran under, its state bytes and the player's
+  `sim` picks (hashed, so a rebuild is handed the recorded ones); not the opaque `options`
+  map, which `oag-replay` never interprets. There is no separate "blob layout version": the
+  SHA-256 subsumes it. A rebuild runs exactly the listed modules
+  (`Options::recorded_mods`), and playback refuses a replay whose modules are not present
+  with those exact hashes, by name (`apply_recorded`); the stored state hashes still decide
+  validity. A vanilla race's header has no `mods` table, so its file is unchanged. Nothing is
+  released, so this edited format v1 in place rather than adding a v2.
 - **A tune travels in the header.** A replay re-simulates, so a hash of the tune is
   not enough: the `mods` entry also carries the tune bytes (at most 4 KiB per mod),
   and playback feeds them to `race-start` in place of the local save. Without
   them a machine with another tune, or none, could not reproduce the run.
-- **The phases decided on 2026-10-12** come first: in phase 2 a session with a
-  simulation mod is **modded** and records no replays or ghosts at all; the header
-  field is phase 3, once the conformance test below holds.
+- **[ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) supersedes phase 2's "no replay"**: a modded
+  race records its input stream (a screenshot of it must be made again), and sets no ghost
+  and offers none to save. The conformance test below is still owed: a replay across
+  engines is unproven, and a host-local fault (README 4.2) desyncs a replay that
+  another machine does not fault, reported by hash.
 
 ## Network play
 

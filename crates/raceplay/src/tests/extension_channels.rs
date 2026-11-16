@@ -118,6 +118,7 @@ mod with_modules {
         .unwrap();
         Source {
             mod_id: id.to_string(),
+            version: "1.0.0".to_string(),
             module: "test.wasm".to_string(),
             titles: Vec::new(),
             api: 1,

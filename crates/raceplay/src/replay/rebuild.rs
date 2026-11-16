@@ -62,6 +62,7 @@ impl Options {
         self.difficulty = launch.difficulty;
         self.skill_level = launch.skill_level;
         self.seed = Some(header.seed);
+        self.recorded_mods = Some(header.mods.clone());
         Ok(())
     }
 
@@ -125,6 +126,9 @@ pub fn start_recorded(setup: Setup, header: &Header) -> Result<Race> {
 ///
 /// A launch setting this build does not know.
 pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
+    crate::extensions::check_recorded(&header.mods, race.mods_used()).map_err(|why| {
+        anyhow::anyhow!("the replay's simulation modules are not this race's: {why}")
+    })?;
     let launch = Launch::from_table(&header.options)?;
     race.apply_launch(&launch);
     for &slot in &header.slots {

@@ -38,6 +38,7 @@ fn copies_the_matrix() -> race::extensions::Source {
     .unwrap();
     race::extensions::Source {
         mod_id: "test.aiming".to_string(),
+        version: "1.0.0".to_string(),
         module: "aiming.wasm".to_string(),
         titles: Vec::new(),
         api: 1,

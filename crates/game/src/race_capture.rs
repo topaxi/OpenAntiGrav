@@ -552,7 +552,7 @@ pub fn capture(
         net.join(&mut race, title.name)?;
     }
     options.ghost.arm(&mut race)?;
-    shot_facts.arm(&mut race);
+    shot_facts.arm(&mut race)?;
     if options.net.is_none() && options.intro_ticks > 0 && race.begin_intro() {
         crate::sound::prepare_intro_voice(audio, &options.music_discs, &race);
         for _ in 0..options.intro_ticks {

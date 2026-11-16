@@ -255,7 +255,7 @@ fn a_shot_survives_its_png_and_resimulates(
 
     let source = source(title).expect("source present");
     let source = source.display().to_string();
-    let again = race::replay::resimulate(&read, &source, &[]).expect("re-simulates");
+    let again = race::replay::resimulate(&read, &source, &[], &[]).expect("re-simulates");
     println!(
         "{title}: shot at tick {} chunk {} bytes, hash {:#018x} found {:#018x}",
         read.tick,
@@ -279,7 +279,7 @@ fn a_shot_survives_its_png_and_resimulates(
     let stick = &mut moved.replay.inputs[0][index].stick_x;
     *stick = if *stick > 0.0 { -1.0 } else { 1.0 };
     assert!(
-        !race::replay::resimulate(&moved, &source, &[])
+        !race::replay::resimulate(&moved, &source, &[], &[])
             .expect("runs")
             .matches(),
         "{title}: a changed input before the shot is a mismatch"

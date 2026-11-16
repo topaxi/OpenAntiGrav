@@ -65,6 +65,7 @@ fn wall_penalty() -> Option<race::extensions::Source> {
         .expect("the committed module is in the mod");
     Some(race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: rules.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,

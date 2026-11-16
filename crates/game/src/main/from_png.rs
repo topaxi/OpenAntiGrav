@@ -37,6 +37,14 @@ pub(crate) fn info(path: &Path) -> Result<()> {
         ),
         None => println!("\n# oaGs: none (this shot carries no input stream)"),
     }
+    if let Some(record) = &found.record {
+        for used in &record.replay.header.mods {
+            println!(
+                "# simulation module: {} {} ({}), sha256 {}, picks {:?}",
+                used.id, used.version, used.module, used.sha256, used.picks
+            );
+        }
+    }
     Ok(())
 }
 

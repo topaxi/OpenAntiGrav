@@ -67,6 +67,7 @@ pub(crate) fn source_of(dir: &str) -> Option<race::extensions::Source> {
         .collect();
     Some(race::extensions::Source {
         mod_id: module.manifest.id.clone(),
+        version: module.manifest.version.to_string(),
         module: rules.module,
         titles: module.manifest.titles.clone(),
         api: extension.api,

@@ -293,6 +293,16 @@ impl Session {
         // fields another hull there. Whether the packs are the recording's is the tick-zero
         // hash's to say.
         options.dlc = dlc;
+        // The mods that are on, for the load to pick the recording's own modules from
+        // (`Options::recorded_mods`): a recording that ran a module is refused by name when
+        // this machine lacks it or has another build.
+        #[cfg(feature = "extensions")]
+        oag_game::mod_extensions::attach(
+            &mut options,
+            &self.settings.mods,
+            &self.settings.mod_settings,
+            false,
+        );
         if let Some(parked) = self.suspended_race.take() {
             crate::race_build::drop_off_thread(parked);
         }

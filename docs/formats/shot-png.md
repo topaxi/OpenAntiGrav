@@ -52,9 +52,10 @@ because a shot is rarely on a stored one. About 0.6 KB for 400 ticks (the thrott
 for 1,237 ticks of a pad flown by the AI driver (`bytes/tick` 6.8 in `replay_ground_truth`).
 
 A shot made while photo mode was **rewound** carries the stream to the tick the race on screen
-stood at (the rewind holds the run), and the hash of that state; a shot of a race that records no
-input stream (a simulation mod runs in it: ADR-0087 decision 7) writes the text alone and says why
-in `no_stream_because`.
+stood at (the rewind holds the run), and the hash of that state; a shot of a race that was not recorded
+writes the text alone and says why in `no_stream_because`. A modded race records: the text's
+`[[mods]]` carries each module's id, version and SHA-256 and the stream's header names the same
+(`oag_replay::header::ModUse`).
 
 ## Reading it back
 
@@ -63,13 +64,15 @@ in `no_stream_because`.
 (`Options::apply_replay`), drives the recorded inputs to the tick in place of a held button, prints
 `from-png: state hash at tick N: MATCH` or `MISMATCH` with both hashes, and draws the frame from the
 camera the text names at the file's size. **The disc must be the title's, with the same DLC and
-mods** (a simulation mod makes a race unrecordable, and DLC packs change the race and are not in
-the text: `resimulate` takes their directories, the CLI mounts the settings'). The re-render draws
+mods**: DLC packs change the race and are not in the text (`resimulate` takes their directories, the
+CLI mounts the settings'), and a simulation mod is named in the header with its SHA-256, so the
+rebuild runs exactly the listed modules and **refuses by name**, before a tick, a module this
+machine lacks or has another build of. The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the
 mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so
-the race is MODDED, records no input and the shot carries the text alone with `no_stream_because`
-(ADR-0087 decision 7); the evidence below pins `OAG_MODS` to an empty directory. A shot from Race End
+the race is MODDED; it records its input and the shot carries the stream and the module hashes.
+A shot of an unmodded race, remade in a checkout that has those mods, runs none of them. A shot from Race End
 Photo is past the end of the recorded input (the recording stops at the finish) and has no stream
 either; its text says so.
 
@@ -85,7 +88,27 @@ either; its text says so.
   Both read back and re-simulate to their hashes.
 - CLI: `--race --screenshot` on Pulse (700 ticks, throttle held) and HD (900 ticks), then
   `--from-png`: `MATCH` on both, and the re-rendered pixels equal the original's (only the text
-  chunk differs, for the flags).
+  chunk differs, for the flags). Both were made with `OAG_MODS` pointed at an empty directory.
+- **A modded race** ([ADR-0091](../architecture/adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)):
+  `crates/raceplay/tests/energy_turbo_ground_truth.rs`,
+  `a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it`: a Pulse Single Race
+  with `oag.energy-turbo` (the pickup given by a recorded event, fire held, the shield spent) shot
+  at tick 600 re-simulates with the same module to the shot's hash, is refused naming
+  `oag.energy-turbo` with no module, and naming it again for a build whose bytes differ by one
+  custom section (same behaviour, other SHA-256); a recording that names no module runs none even
+  where one is on offer. Without a disc, `raceplay/src/tests/extension_replay.rs` checks the
+  header, the file round trip, a fresh modded race's `Verifier` run, every refusal reason and
+  that no ghost is set. CLI on Pulse EU with the default examples on (`--race --mode single_race
+  --class venom --give extension --hold cross --ticks 700 --size 640x360 --screenshot`): `--png-info`
+  lists two `[[mods]]` with their SHA-256 and `# oaGs: 700 ticks ... state hash
+  0x535974fd76a078bb at tick 700`; `--from-png` prints `state hash at tick 700: MATCH`, and the
+  pixels equal the original's. With `OAG_MODS` set to an empty directory it exits 1 with
+  `--from-png cannot make this shot again: the recording ran oag.energy-turbo
+  (ext/energy_turbo.wasm) 1.0.0 and this machine does not load it`. Before the refusal was an error
+  the same run drew a frame and printed `the rebuilt race differs before tick 0 (0x37cee5275358245f,
+  the shot began at 0x4a450830be533ae8)` and `MISMATCH`: the modules' state is in the hash
+  (`RaceSim::state_hash` calls `Extensions::hash_into`: blob, picks, fault tick, pending events).
+  An unmodded shot (made with `OAG_MODS` empty) remade where the examples are found: `MATCH`.
 
 ## Checked against the other lineage
 

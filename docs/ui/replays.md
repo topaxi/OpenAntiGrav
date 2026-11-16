@@ -10,8 +10,10 @@ second a build reproduces, plays the file's `POSE` chunk; see "What stops it" be
 
 A race the session hands over is recorded from its first tick (`RaceStage::arm_auto_replay`, called
 once the session has finished writing to the race: seats, windows, the AI choice) unless the
-setting `[replay] record = false` (default on, `settings.tosd`), the race is a network race, or
-a simulation mod runs in it (`Race::start_recording` returns early). It is written to
+setting `[replay] record = false` (default on, `settings.tosd`) or the race is a network race. A
+race with a simulation mod is recorded too: the header's `mods` list names each module, its SHA-256
+and its picks, and no ghost is offered from it
+([determinism-and-state.md](../architecture/wasm-extensions/determinism-and-state.md#replays)). It is written to
 `<data dir>/oag/replays/auto/oag-<title>-<unix seconds>-<n>.oagr` **when the stage is dropped**,
 which every way out of a race goes through (the finish, QUIT RACE, RESTART, leaving the game), and
 at WATCH REPLAY. A race under 300 ticks (five seconds) is not kept. **A race a test, a trace, a

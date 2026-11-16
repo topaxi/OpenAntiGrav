@@ -32,6 +32,7 @@ use std::sync::Arc;
 mod admit;
 pub use admit::{admit, sources_for_race};
 mod channel;
+mod identity;
 #[cfg(feature = "extensions")]
 mod on;
 mod route;
@@ -44,6 +45,7 @@ mod track;
 mod view_pass;
 
 pub use channel::Declared;
+pub use identity::{check_recorded, restrict_to};
 pub use track::{Track, TrackProps};
 
 /// The most simulation modules one race runs. Chosen.
@@ -115,6 +117,8 @@ impl Scope {
 pub struct Source {
     /// The mod's id; modules run in the order these sort.
     pub mod_id: String,
+    /// The mod's `[mod] version`, which a replay records beside the module's hash.
+    pub version: String,
     /// The module's path in the mod, for the load report.
     pub module: String,
     /// `[mod] titles`, lowercased and hyphenated: the module runs only on these; empty
@@ -182,6 +186,20 @@ pub struct Picks {
 }
 
 impl Picks {
+    /// These picks with every `sim` row set to the recorded one in `sim` (a row past its end
+    /// keeps its own): what a rebuild hands a module in place of this machine's settings. A
+    /// `view` row stays this machine's.
+    #[must_use]
+    pub fn with_sim_picks(mut self, sim: &[u8]) -> Self {
+        for (row, &pick) in sim.iter().enumerate().take(OPTIONS) {
+            if self.view_rows >> row & 1 == 0 {
+                self.sim[row] = pick;
+                self.view[row] = pick;
+            }
+        }
+        self
+    }
+
     /// Every row a `sim` row, read the same by both calls.
     #[must_use]
     pub fn all_sim(picks: [u8; OPTIONS]) -> Self {
@@ -322,6 +340,8 @@ pub struct Prepared {
     /// Whether a track module is among them: the load then builds the host title's
     /// rain for it ([`Self::has_track_module`]).
     track_module: bool,
+    /// Each module as a replay names it, in module order.
+    uses: Vec<oag_replay::header::ModUse>,
     /// The track as the modules read it.
     #[cfg(feature = "extensions")]
     region: track::Region,
@@ -436,6 +456,7 @@ pub fn prepare(
         let mut odds = Vec::new();
         let mut pickup_mods = 0;
         let mut track_module = false;
+        let mut uses = Vec::new();
         for source in sorted {
             let label = format!("mod {}: {}", source.mod_id, source.module);
             if modules.len() == MAX_SIM_MODS {
@@ -472,9 +493,12 @@ pub fn prepare(
             match (source.read)()
                 .map_err(|e| format!("cannot be read: {e}"))
                 .and_then(|wasm| {
-                    oag_modhost::Module::compile(&wasm, limits).map_err(|e| e.to_string())
+                    let sha256 = identity::sha256_hex(&wasm);
+                    oag_modhost::Module::compile(&wasm, limits)
+                        .map(|module| (module, sha256))
+                        .map_err(|e| e.to_string())
                 }) {
-                Ok(module) => {
+                Ok((module, sha256)) => {
                     log::debug!(
                         "{label}: runs on the {} engine",
                         oag_modhost::engine_name().unwrap_or("unbuilt")
@@ -482,7 +506,7 @@ pub fn prepare(
                     push(
                         report,
                         format!(
-                            "{label}: {} loaded, {} state bytes, {} fuel a tick; the race is MODDED and records no replay",
+                            "{label}: {} loaded, {} state bytes, {} fuel a tick; the race is MODDED and its replay names the module",
                             match source.scope {
                                 Scope::Rules => "simulation module",
                                 Scope::Track(_) => "track module",
@@ -496,6 +520,7 @@ pub fn prepare(
                         odds.push((modules.len(), source.pickup_odds.clone(), title.to_string()));
                     }
                     pickup_mods += usize::from(source.look_for(title).is_some());
+                    uses.push(identity::used(source, sha256, module.limits().state_bytes));
                     modules.push((source.mod_id.clone(), module));
                     strings.push((source.strings)(language));
                     pickups.push(source.look_for(title));
@@ -510,6 +535,7 @@ pub fn prepare(
         Prepared {
             modules,
             track_module,
+            uses,
             region,
             strings,
             pickups,
@@ -805,6 +831,8 @@ impl Drops {
 pub struct Extensions {
     #[cfg(feature = "extensions")]
     on: on::On,
+    /// Each module as a replay names it, in module order.
+    uses: Vec<oag_replay::header::ModUse>,
     /// The track's triggers that send a channel.
     beacons: channel::Beacons,
     /// When each channel last fired (`channel`).
@@ -824,6 +852,7 @@ impl Extensions {
         #[cfg(not(feature = "extensions"))]
         {
             Self {
+                uses: prepared.uses,
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }
@@ -843,10 +872,17 @@ impl Extensions {
                 .with_title(prepared.title)
                 .with_options(&prepared.options)
                 .with_names(prepared.names),
+                uses: prepared.uses,
                 beacons: prepared.beacons,
                 fired: Vec::new(),
             }
         }
+    }
+
+    /// The modules as a replay names them, in module order.
+    #[must_use]
+    pub fn uses(&self) -> &[oag_replay::header::ModUse] {
+        &self.uses
     }
 
     /// Whether any module runs in this race: the race is MODDED.
@@ -1419,9 +1455,16 @@ impl crate::Race {
         Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
     }
 
-    /// Whether a simulation module runs in this race (MODDED: no replay, README 4.4).
+    /// Whether a simulation module runs in this race (MODDED: no ghost, no lap record; the
+    /// input recording is kept and names the modules, README 4.4).
     #[must_use]
     pub fn is_modded(&self) -> bool {
         self.sim.extensions.any()
+    }
+
+    /// The simulation modules this race runs, as a replay names them.
+    #[must_use]
+    pub fn mods_used(&self) -> &[oag_replay::header::ModUse] {
+        self.sim.extensions.uses()
     }
 }

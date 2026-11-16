@@ -33,6 +33,7 @@ pub fn sources_with<'a>(
             };
             let source = |module: &String, scope: Scope| Source {
                 mod_id: m.manifest.id.clone(),
+                version: m.manifest.version.to_string(),
                 module: module.clone(),
                 titles: m.manifest.titles.clone(),
                 api: extension.api,
