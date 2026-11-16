@@ -743,7 +743,7 @@ pub enum ZoneCraft {
         boost: &'static str,
     },
     /// Zone has a ship directory of its own and the player's team choice does not
-    /// reach the hull. Pure and HD.
+    /// reach the hull. Pure.
     ///
     /// The model stems inside are the ordinary ones, so only the directory changes
     /// (one string where [`Self::ModelsInTeam`] carries two).
@@ -763,16 +763,18 @@ pub enum ZoneCraft {
     /// Zone ship" note"). Confidence 90: a direct observation of the shipped game,
     /// not corroborated against a decompiled selector.
     PlayerShip,
-    /// Zone has one hull of its own **outside the ship tree the player's team is
-    /// in**: the directory is `root\ship`, whatever team the player picked and
-    /// whichever roster it belongs to. 2048 v1.04 and Omega.
+    /// Zone has one hull of its own at `root\ship`, whatever team the player
+    /// picked and whichever roster it belongs to, and the pick chooses the
+    /// livery on it. HD/Fury, 2048 v1.04 and Omega.
     ///
     /// Distinct from [`Self::OwnShip`], which composes under the player's own
     /// team directory and cannot reach another tree: 2048's native craft live
-    /// under `Ships\<team>2048\<n>`, the Zone hull under `hdships\Zone`.
+    /// under `Ships\<team>2048\<n>`, the Zone hull under `hdships\Zone`. On
+    /// HD `root` is the player's own tree (`Data\Ships`, `ship` is `zone`); what makes
+    /// it this shape is the livery key (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
     ///
-    /// **Source: decompiled, one source tree read in two builds**, so one call
-    /// site. Both ship-model loaders switch on the game mode and for mode 6 format
+    /// **Source: decompiled, one source tree read in three builds**, so one call
+    /// site. The ship-model loaders switch on the game mode and for mode 6 format
     /// `Data\art\published\hdships\Zone` and `...\Zone\Ship.vex` without looking at
     /// the craft (`docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`). The
     /// player's pick selects a livery on that hull, not a hull.
@@ -782,10 +784,10 @@ pub enum ZoneCraft {
         /// The Zone hull's directory name inside `root`.
         ship: &'static str,
         /// The path component the hull's team texture sits under, which the loader
-        /// replaces with the craft's livery name: `zoneship_zone` on 2048 v1.04,
-        /// `zoneship_team` on Omega. Measured off the hull's own texture requests
-        /// (`.../zoneship_team/team.gnf`); the substitution is confidence 75,
-        /// `zone-craft.md`.
+        /// replaces with the craft's livery name: `zoneship_zone` on HD/Fury and
+        /// 2048 v1.04, `zoneship_team` on Omega. Measured off the hull's own texture
+        /// requests (`.../zoneship_team/team.gnf`); the substitution is confidence
+        /// 75 on 2048 and Omega, 80 on HD (`zone-craft.md` per title).
         livery_key: &'static str,
     },
 }

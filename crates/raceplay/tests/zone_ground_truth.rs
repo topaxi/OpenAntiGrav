@@ -739,12 +739,10 @@ fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
 ///
 /// The companion of the circuit sweeps above, and it splits the corpus the same
 /// way: Pulse keeps the Zone hull inside the player's own team, Pure and HD give
-/// Zone a ship directory of its own. Two shapes, three titles, no hole - which
-/// is what licensed [`oag_title::ZoneCraft`] to be a type rather than a
-/// constant, on the same terms as [`ZoneCircuit`]. 2048 and Omega are a third
-/// shape, [`oag_title::ZoneCraft::OwnShipAt`], covered by
-/// `zone_craft_ground_truth` since their sources are extracted packages and not
-/// disc images.
+/// Zone a ship directory of its own (HD's as [`oag_title::ZoneCraft::OwnShipAt`],
+/// because its hull also takes the craft's livery). 2048 and Omega share HD's
+/// shape and are covered by `zone_craft_ground_truth`, since their sources are
+/// extracted packages and not disc images.
 ///
 /// Each title is asserted on both halves of its own shape, because either alone
 /// would pass on a build that had quietly fallen back to the other:
@@ -797,7 +795,7 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
                 "{name}: this title keeps the zone hull in the player's own team, \
                  so {zoning} should still name {team}"
             ),
-            oag_title::ZoneCraft::OwnShip(ship) => {
+            oag_title::ZoneCraft::OwnShip(ship) | oag_title::ZoneCraft::OwnShipAt { ship, .. } => {
                 assert!(
                     !zoning.contains(team),
                     "{name}: this title has a zone ship of its own, so the player's \
@@ -805,11 +803,8 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
                 );
                 assert!(zoning.contains(ship), "{name}: {zoning} should name {ship}");
             }
-            oag_title::ZoneCraft::PlayerShip | oag_title::ZoneCraft::OwnShipAt { .. } => {
-                unreachable!(
-                    "{name}: none of the three titles this sweep covers is 2048 or Omega; \
-                 theirs are in zone_craft_ground_truth"
-                )
+            oag_title::ZoneCraft::PlayerShip => {
+                unreachable!("{name}: no title this sweep covers flies the player's own ship")
             }
         }
         println!("{name}: race {racing} / zone {zoning}");

@@ -52,3 +52,7 @@ read, so this port shows the default and says so. Confidence stays 75.
 Resolved 2026-10-06: the craft list carries `modellocation` and
 `handlingstatslocation` per craft, so a 2048-era craft was a roster gap
 (`GuestRoster.handling_dir`), see `docs/formats/omega-status.md`.
+
+## HD/Fury
+
+Checked 2026-11-16: HD's loader has the same mechanism under 2048's key `zoneship_zone` ([`ps3-hdfury-eu/zone-craft.md`](../ps3-hdfury-eu/zone-craft.md), confidence 80). The key differs here (`zoneship_team`); the mechanism is the same.

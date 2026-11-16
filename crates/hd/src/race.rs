@@ -41,7 +41,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `oag_title::ZoneCircuit::Separate`'s - a play-based lead says ordinary
     // HD/Fury circuits belong in the Zone picker too, not just these four.
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, true),
-    zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
+    // The Zone hull wears the picked team's livery: the ship loader's mode-6 case
+    // queues `zoneship_zone` -> the craft's `zone` model `texturelocation` as a
+    // texture path substitution (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
+    zone_craft: oag_title::ZoneCraft::OwnShipAt {
+        root: oag_title::race::SHIP_DIR,
+        ship: ZONE_SHIP,
+        livery_key: "zoneship_zone",
+    },
     // Not measured: HD's `Team Selection` was not read in Zone, so Pulse's rule.
     zone_team_step: oag_title::ZoneTeamStep::Offered,
     // **Not a claim HD has no boost plume** - HD ships `EF_Boost`, a subtree
@@ -552,10 +559,9 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 ///
 /// `/data/ships/zone/ship.vex` resolves and decodes - 29 meshes, 29,678
 /// triangles through its `.rcsmodel` sibling, probed 2026-08-19. Confidence
-/// **94** for the name; **nothing about which mode selects it has been read in
-/// this executable**, so the identification rests on the directory's name, its
-/// classless handling file and its company in `MODE_SHIPS`, exactly as Pure's
-/// does.
+/// **94** for the name. Game mode 6 (Zone) names `Data\Ships\Zone\Ship.vex` in
+/// `Ship_ReloadModelForSkin` (`0x000dbdc8`) without reading the craft
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`).
 ///
 /// Spelled without a leading slash and capitalised the way Pulse spells a team,
 /// because it goes through `oag_pulse::race::ships::entry_name` like every other

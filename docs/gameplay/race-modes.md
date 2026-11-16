@@ -239,7 +239,7 @@ made *one* decision that shows up twice:
 | --- | --- | --- |
 | Pulse | the race circuit's directory, `zone_`-prefixed | the player's team, `Zone.vex` |
 | Pure | `Data\Zone\NN_Zone\track.vex` | `Data\Ships\Zone_01\Ship.vex` |
-| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex` |
+| HD / Fury | `/data/environments/zone_N/track.vex` | `/data/ships/zone/ship.vex`, in the picked team's `zoneship_<x>` livery |
 | 2048 | the race circuit itself, unchanged | the player's own ship, unchanged |
 
 Pulse hangs Zone off the entities a race already has; Pure and HD give Zone
@@ -248,6 +248,12 @@ Pulse's is the only one with a recovered *selector* behind it (`case 6`,
 confidence 84); the other two are name resolution at 94, and neither title's
 executable has been read. HD's was already half-recovered before anything wanted
 it - `zone` is one of the four `oag_hd::names::MODE_SHIPS` read off the manifest.
+
+**HD's team does reach the paint.** The hull is shared, but HD's ship loader
+queues `zoneship_zone` -> the team's `zone` model `texturelocation` as a texture
+path substitution, so the Zone craft carries the picked team's branding, as on
+2048 and Omega. Confidence 80, from `Ship_ReloadModelForSkin`'s mode-6 case:
+[ps3-hdfury-eu/zone-craft.md](../ghidra/functions/ps3-hdfury-eu/zone-craft.md).
 
 **2048 is a fourth shape on both axes at once, not a variant of the other
 three, and its source is play rather than the disc.** `oag_2048::race` used to
