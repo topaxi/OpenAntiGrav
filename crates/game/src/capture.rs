@@ -30,7 +30,7 @@ use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
 use menu_page::{is_split_ship, menu_page, picker_kind, picker_page, picker_stills};
 use offscreen::{offscreen, touch_preview};
-pub use offscreen::{read_back, write_png};
+pub use offscreen::{read_back, write_png, write_png_with};
 use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
 /// What to capture.
@@ -466,6 +466,7 @@ pub fn run(
         return crate::race_capture::capture(
             loaded,
             &crate::race_capture::CaptureOptions {
+                shot: crate::shot_meta::Context::default(),
                 gpu: None,
                 aspect: options.settings.display.aspect,
                 path: options.path.clone(),

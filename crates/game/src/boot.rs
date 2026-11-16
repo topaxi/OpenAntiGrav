@@ -199,6 +199,8 @@ pub struct Shell {
     pub title: &'static oag_title::Title,
     /// Which console this source is for - see `crate::settings::profile_key`.
     pub platform: oag_disc::Platform,
+    /// The disc's serial, which names the pressing; `None` where the source carries none.
+    pub serial: Option<String>,
     /// The front-end XML. Cloned for the media worker, moved into
     /// [`Frontend::booting`] by [`assemble`].
     pub screens: Screens,
@@ -886,6 +888,7 @@ pub fn load_shell(
         Shell {
             title,
             platform: archives.layout.platform,
+            serial: archives.layout.serial.clone(),
             screens,
             map_screens,
             entries: preferred_language.and_then(|language| language.entries.clone()),
@@ -1070,6 +1073,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     let Shell {
         title,
         platform,
+        serial: _,
         screens,
         map_screens: _,
         entries,

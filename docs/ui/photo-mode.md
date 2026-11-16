@@ -367,6 +367,16 @@ Where the pass is not run: the glow Pulse and Pure add **over the HUD** (their c
 GL is not built or run here (the WebGPU and Vulkan backends are). `cargo check -p oag-raceplay --target
 wasm32-unknown-unknown` builds with the pass.
 
+## What a saved shot carries
+
+A shot's PNG says what it is of: an `iTXt` text chunk (keyword `oag`: title and serial, race, the
+camera of the lens on screen with the free lens's eye, the render settings, adapter and driver, mods,
+build and the flags that draw it again) and the private chunk `oaGs` (the person's input stream to the
+tick, the seed and the state hash there). A rewound shot carries the stream to the tick on screen.
+`oag-game --png-info FILE` prints the text; `--from-png FILE` re-simulates, checks the hash and draws
+the frame. Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for
+rendering bug reports: take the shot in photo mode and attach the file.
+
 ## Accumulated shots and rewind
 
 Motion blur (track and ship), accumulated depth of field and a rewind, on the titles whose originals

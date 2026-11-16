@@ -186,7 +186,7 @@ fn frame(
         .and_then(|count| count.parse().ok())
         .unwrap_or_else(|| panic!("{name}: no frame statistics in the log:\n{log}"));
     (
-        std::fs::read(&out).expect("reading the screenshot"),
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot")),
         triangles,
     )
 }

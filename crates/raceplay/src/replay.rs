@@ -41,6 +41,7 @@ mod launch;
 mod rebuild;
 #[cfg(feature = "view")]
 mod recording;
+mod shot;
 
 pub use events::ApplyError;
 pub use launch::{Launch, OriginalAi, UnknownOption};
@@ -49,3 +50,4 @@ pub use rebuild::{apply_recorded, load_recorded, rebuild, start_recorded};
 pub(crate) use recording::ReplayState;
 #[cfg(feature = "view")]
 pub use recording::{Ghost, GhostCapture, Paused};
+pub use shot::{Resimulated, resimulate};

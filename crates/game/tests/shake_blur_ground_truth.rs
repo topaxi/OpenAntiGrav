@@ -58,7 +58,7 @@ fn capture(image: &Path, scratch: &Path, name: &str, blur: &str, forced: Forced<
     }
     let status = command.status().expect("running oag-game");
     assert!(status.success(), "oag-game {name}");
-    std::fs::read(&out).expect("reading the screenshot")
+    oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
 /// The captures' directory, removed when the test ends, failing or not.

@@ -52,7 +52,7 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
     }
     let status = command.status().expect("running oag-game");
     assert!(status.success(), "oag-game --texture-detail {detail:?}");
-    std::fs::read(&out).expect("reading the screenshot")
+    oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
 fn scratch() -> PathBuf {

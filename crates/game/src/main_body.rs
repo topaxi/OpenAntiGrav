@@ -39,6 +39,8 @@ mod frontend_stage;
 #[cfg(target_os = "linux")]
 #[path = "main/wallpaper.rs"]
 mod wallpaper;
+#[path = "main/from_png.rs"]
+mod from_png;
 #[path = "main/gpu.rs"]
 mod gpu;
 #[path = "main/headless.rs"]
@@ -250,7 +252,7 @@ fn new_event_loop() -> Result<EventLoop<()>> {
     Ok(EventLoop::new()?)
 }
 
-fn run(cli: Cli) -> Result<()> {
+fn run(mut cli: Cli) -> Result<()> {
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no
@@ -272,6 +274,14 @@ fn run(cli: Cli) -> Result<()> {
         println!("wrote {}x{} {}", width, height, path.display());
         return Ok(());
     }
+
+    if let Some(path) = &cli.shot.png_info {
+        return from_png::info(path);
+    }
+    let restage = match cli.shot.from_png.clone() {
+        Some(path) => Some(from_png::prepare(&mut cli, &path)?),
+        None => None,
+    };
 
     // Loaded (and, on first run or a missing key, written back complete) before
     // anything else: a bad value in the file should fail immediately, not eight
@@ -559,7 +569,7 @@ fn run(cli: Cli) -> Result<()> {
         options.mode = oag_race::Mode::SingleRace;
         options.track = track.map(race::catalogue::Track::entry_name);
         options.team = team.map(|team| team.value.clone());
-        return run_race(cli, options, settings, anisotropy, audio, music_discs, None);
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute::default());
     }
 
     // `--connect` is a race too: the server's.
@@ -606,11 +616,14 @@ fn run(cli: Cli) -> Result<()> {
             oag_game::mod_extensions::attach(&mut options, &settings.mods, &settings.mod_settings, vanilla);
         }
         oag_game::texture_pack::attach(&mut options, &settings.mods);
+        if let Some(record) = &restage {
+            options.apply_replay(&record.replay.header)?;
+        }
         let options = match &net {
             Some(net) => net.race_options(options)?,
             None => options,
         };
-        return run_race(cli, options, settings, anisotropy, audio, music_discs, net);
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute { net, restage });
     }
 
     // Every leg with no window loads the whole boot here and now, blocking, and

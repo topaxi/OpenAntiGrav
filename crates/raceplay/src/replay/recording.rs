@@ -219,6 +219,24 @@ impl Race {
         Some(replay)
     }
 
+    /// What a screenshot of this race, as it stands, carries (`oag_replay::shot`): the run to this
+    /// tick and the state hash here. `run` is the recording to cut when the race is not the one
+    /// making it (photo mode's rewind sets the live recording aside and moves the race on screen
+    /// through its past); `None` takes this race's own. `None` back when there is no recording:
+    /// a race nobody armed, or a modded one.
+    ///
+    /// Reads the state hash and never writes anything the tick reads.
+    #[must_use]
+    pub fn shot_record(&self, run: Option<&Replay>) -> Option<oag_replay::ShotRecord> {
+        let replay = match run {
+            Some(run) => run.clone(),
+            None => self.recorded()?,
+        };
+        let tick = self.sim.world.tick;
+        (replay.ticks() >= tick)
+            .then(|| oag_replay::ShotRecord::new(replay, tick, self.sim.state_hash()))
+    }
+
     /// The player's craft as a pose: its position, and its orientation with
     /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
     /// folds them.

@@ -102,6 +102,22 @@ pub fn write_png(path: &std::path::Path, width: u32, height: u32, pixels: &[u8])
     Ok(())
 }
 
+/// [`write_png`] with a screenshot's description and input stream in the file
+/// (`crate::shot_meta`).
+pub fn write_png_with(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+    meta: &crate::shot_meta::Meta,
+    record: Option<&oag_replay::ShotRecord>,
+) -> Result<()> {
+    let png = crate::shot_meta::encode(width, height, pixels, meta, record);
+    std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
+    println!("wrote {} ({width}x{height})", path.display());
+    Ok(())
+}
+
 /// The TOUCH CONTROLS page's preview over the finished frame, when that is
 /// the page being captured; the window draws it in its overlay pass.
 pub(super) fn touch_preview(

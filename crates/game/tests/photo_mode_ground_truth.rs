@@ -1267,3 +1267,82 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
         "the stored hashes differ"
     );
 }
+
+/// A photo saved in photo mode carries the race it was taken of (`oag_game::shot_meta`): the text
+/// chunk names the title, the race and the camera, and the `oaGs` chunk holds the throttle the
+/// person held, so a race rebuilt from the file alone and driven to the photo's tick arrives at
+/// the hash the photo was taken at - for the photo taken where the race paused and for one taken
+/// after a rewind into its past. The throttle is held (no autopilot), so the stream is the
+/// pilot's.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_photo_carries_its_race_and_resimulates_to_the_hash_it_was_taken_at() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-meta-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    let to_the_race = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
+    let run = drive_unmodded(
+        &image,
+        "meta",
+        &format!(
+            "{to_the_race} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 20; press cross; ticks 3; screenshot SHOTS/a.png; \
+             press start; \
+             hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
+             hold left 90; ticks 5; hold right 20; ticks 5; press cross; ticks 3; screenshot SHOTS/b.png; \
+             escape; until photo=none within 50"
+        ),
+        &shots,
+        &[],
+    );
+    assert!(run.status.success(), "{}", run.stderr);
+    let photos = the_photos(&run);
+    assert_eq!(photos.len(), 2, "{photos:?}");
+    let source = image.display().to_string();
+    let mut ticks = Vec::new();
+    for photo in &photos {
+        let bytes = std::fs::read(photo).expect("the photo");
+        let found = oag_game::shot_meta::read(&bytes).expect("our chunks read");
+        let meta = found.meta.expect("the text chunk");
+        let record = found.record.expect("the input stream");
+        assert_eq!(meta.title.name, "Wipeout Pulse");
+        assert!(meta.camera.is_some() && meta.craft.is_some() && meta.gpu.is_some());
+        assert_eq!(meta.shot.tick, record.tick);
+        assert_eq!(meta.shot.state_hash, oag_game::shot_meta::hex(record.hash));
+        assert!(meta.shot.stream && meta.shot.width >= 1280, "{meta:?}");
+        let text = found.text.expect("the text");
+        for private in ["/home", "XDG", "pulse-psp-eu.chd"] {
+            assert!(!text.contains(private), "{private} in {text}");
+        }
+        let held = record.replay.inputs[0]
+            .iter()
+            .filter(|snapshot| snapshot.buttons.masks()[0] != 0)
+            .count();
+        println!("{} ticks, {held} with a button held", record.tick);
+        assert!(
+            record.tick < 200 || held > 50,
+            "the throttle the person held is in the stream"
+        );
+        let again = oag_raceplay::replay::resimulate(
+            &record,
+            &source,
+            &[Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc")],
+        )
+        .expect("re-simulates");
+        println!(
+            "{}: tick {} hash {:#018x} found {:#018x}",
+            photo.display(),
+            record.tick,
+            record.hash,
+            again.found
+        );
+        assert!(again.matches(), "{}: {:?}", photo.display(), again.desync);
+        ticks.push(record.tick);
+    }
+    assert!(
+        ticks[1] < ticks[0],
+        "the second photo was taken after a rewind: {ticks:?}"
+    );
+}

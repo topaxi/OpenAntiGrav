@@ -35,6 +35,8 @@ pub(super) struct Job {
     sum: Vec<u16>,
     size: (u32, u32),
     path: std::path::PathBuf,
+    /// The description and stream of the tick the shot is taken at.
+    pending: Option<super::photo_meta::Pending>,
     started: web_time::Instant,
 }
 
@@ -232,14 +234,18 @@ impl super::Session {
         Some((job.shot.next(), job.shot.plan().frames()))
     }
 
-    /// Begins the shot the mode asks for, written to `path` when it is done. `false` when it is
-    /// the one frame on screen, which the caller then saves as it always did.
-    pub(super) fn start_photo_job(&mut self, path: &std::path::Path) -> bool {
+    /// Begins the shot the mode asks for, written to `path` when it is done. `Err` hands `pending`
+    /// back when it is the one frame on screen, which the caller then saves as it always did.
+    pub(super) fn start_photo_job(
+        &mut self,
+        path: &std::path::Path,
+        pending: Option<super::photo_meta::Pending>,
+    ) -> Result<(), Option<super::photo_meta::Pending>> {
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
-            return false;
+            return Err(pending);
         };
         let Some(photo) = stage.race.photo() else {
-            return false;
+            return Err(pending);
         };
         if photo.effects().blur().is_some()
             && open.rewind.is_none()
@@ -250,10 +256,10 @@ impl super::Session {
         let resimulates = open.rewind.as_ref().is_some_and(Rewind::resimulates);
         let tick = stage.race.sim.world.tick;
         let Some(photo) = stage.race.photo() else {
-            return false;
+            return Err(pending);
         };
         let Some(plan) = Plan::new(photo, tick, resimulates) else {
-            return false;
+            return Err(pending);
         };
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",
@@ -272,9 +278,10 @@ impl super::Session {
             sum: Vec::new(),
             size: (0, 0),
             path: path.to_path_buf(),
+            pending,
             started: web_time::Instant::now(),
         });
-        true
+        Ok(())
     }
 
     /// Before a frame is drawn: stands the race at the shot's next frame and returns how far
@@ -346,6 +353,7 @@ impl super::Session {
             sum,
             size,
             path,
+            pending,
             started,
         } = job;
         let frames = u32::from(finished) * shot.plan().frames();
@@ -365,7 +373,11 @@ impl super::Session {
             .iter()
             .map(|&total| ((u32::from(total) + half) / frames) as u8)
             .collect();
-        match oag_game::capture::write_png(&path, size.0, size.1, &pixels) {
+        let written = match pending {
+            Some(pending) => pending.write(&path, size.0, size.1, &pixels),
+            None => oag_game::capture::write_png(&path, size.0, size.1, &pixels),
+        };
+        match written {
             Ok(()) => {
                 debug!(
                     "photo mode: saved {} ({frames} frames in {:?})",

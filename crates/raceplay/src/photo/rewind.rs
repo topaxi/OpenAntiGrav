@@ -80,6 +80,13 @@ impl Rewind {
         self.at
     }
 
+    /// The recording the race on screen is moved through: the run to the live tick, `None` for
+    /// a race that records nothing.
+    #[must_use]
+    pub fn recording(&self) -> Option<&Replay> {
+        self.replay.as_deref()
+    }
+
     /// Whether any tick can be reached, not only a keyframe's: the race has a recording.
     #[must_use]
     pub fn resimulates(&self) -> bool {

@@ -344,7 +344,10 @@ impl Driver {
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
         }
-        oag_game::capture::write_png(path, width, height, &pixels)
+        match self.session.shot_pending("drive script") {
+            Some(pending) => pending.write(path, width, height, &pixels),
+            None => oag_game::capture::write_png(path, width, height, &pixels),
+        }
     }
 }
 
