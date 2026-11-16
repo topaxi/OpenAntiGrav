@@ -24,6 +24,7 @@ mod omega_animation_ground_truth;
 mod omega_declaration_ground_truth;
 mod omega_material_param_ground_truth;
 mod omega_nodes_ground_truth;
+mod omega_vertex_colour_factor_ground_truth;
 mod points2_ground_truth;
 mod psp2_animation_ground_truth;
 mod psp2_engine_trail_ground_truth;

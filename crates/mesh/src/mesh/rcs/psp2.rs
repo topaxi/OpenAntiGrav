@@ -49,6 +49,7 @@ mod crowd;
 mod emissive_add;
 mod flat_constant;
 mod glow;
+mod hull_colour;
 mod lit_alpha;
 mod normal_map;
 mod panel_map;
@@ -65,6 +66,7 @@ mod twin_blend;
 mod uv_keys;
 
 pub use chevron::PLASMA_COMBINE;
+pub use hull_colour::Census as HullColourCensus;
 pub use normal_map::Census as NormalMapCensus;
 pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 
@@ -291,6 +293,8 @@ fn build_planned(
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // Omega's hull programs multiply `VertexColour1` into the light (`psp2::hull_colour`).
+    let hull_colour = hull_colour::plan(&decoded, ps4, &mut *textures, &mut report.hull_colour);
     // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
     let mut tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
     // Omega's panel-map roads march a panel map and reflect the sky cube (`psp2::panel_map`).
@@ -431,6 +435,24 @@ fn build_planned(
             role
         };
         report.nova_vertex_submeshes += usize::from(nova_vertex && !place.hidden);
+        let hull_factor = hull_colour.of(submesh.material)
+            && lit > 0.5
+            && twin_here.is_none()
+            && !submesh.colours.is_empty()
+            && submesh.lightmap_texcoords.is_empty()
+            && tarmac.of(submesh.material).is_none()
+            && !glass.is_ice(submesh.material);
+        if hull_factor && !place.hidden {
+            let name = submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .map_or("", |m| m.name.as_str());
+            *report
+                .hull_colour
+                .submeshes
+                .entry(name.to_string())
+                .or_default() += 1;
+        }
         let to_world = Mat4::from_cols_array(&place.to_world);
         let at_zero = Mat4::from_cols_array(&place.world_at_zero);
         // Normals through the bake's inverse transpose: 166 skeleton nodes
@@ -522,6 +544,7 @@ fn build_planned(
                 _ => (texcoord2, colour),
             };
             let (colour, sun_mask) = match submesh.colours.get(i) {
+                Some(&bytes) if hull_factor => hull_colour::vertex(bytes),
                 Some(&[r, g, b, a]) if nova_vertex => (
                     [
                         f32::from(r) / 255.0,

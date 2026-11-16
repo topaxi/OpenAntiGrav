@@ -43,6 +43,8 @@ pub struct Report {
     pub decoded_tangents: usize,
     /// What the PS4 normal-map binding found - see `normal_map`. All zero on a Vita model.
     pub normal_maps: NormalMapCensus,
+    /// Materials that multiply `VertexColour1` into the light (`psp2::hull_colour`).
+    pub hull_colour: HullColourCensus,
     /// How many materials this model's own table names, whether or not this
     /// build could bind one to a draw - see [`psp2::material`]. `0` for a
     /// model with no readable table, which is not the same state as a model
@@ -431,9 +433,10 @@ impl Report {
             )
         };
         let panel = self.panel.describe();
+        let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
