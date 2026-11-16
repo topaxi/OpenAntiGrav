@@ -71,6 +71,8 @@ mod moving_normal_inverse_transpose;
 mod msaa_load_keeps_view;
 mod msaa_resolve_viewport;
 mod node_anim_pipeline;
+mod omega_crowd_lit_path;
+mod omega_crowd_shadowed_ground_truth;
 mod omega_normal_map_ground_truth;
 mod omega_nova_prelit;
 mod omega_panel_map_ground_truth;

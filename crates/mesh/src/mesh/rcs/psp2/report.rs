@@ -174,6 +174,11 @@ pub struct Report {
     /// Of that family, materials left to the generic reading: a submesh without both pairs, or a
     /// picture that would not decode.
     pub tarmac_unread: usize,
+    /// Omega's `crowd_sprite_diffuse_normal_alpha[_shadow]` materials lit by their `Shadowed` and
+    /// `Ambient` (`psp2::crowd`).
+    pub crowd_materials: usize,
+    /// Of those, materials left to the generic reading: the glow table was full.
+    pub crowd_unread: usize,
     /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
     /// after the light (`psp2::alpha_emissive`).
     pub alpha_emissive_materials: usize,
@@ -354,6 +359,14 @@ impl Report {
                 self.tarmac_materials, self.tarmac_unread
             )
         };
+        let crowd = if self.crowd_materials + self.crowd_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} crowd material(s) lit by Shadowed * (Ambient + light) ({} left to the generic reading)",
+                self.crowd_materials, self.crowd_unread
+            )
+        };
         let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {
             String::new()
         } else {
@@ -420,7 +433,7 @@ impl Report {
         let panel = self.panel.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
