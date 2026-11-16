@@ -1127,8 +1127,8 @@ lights off by it.
 
 **Wired.** `Race::hd_craft_engine_lights` is the engine light without the circuit's switch, bound into the craft's scene block
 (`ship_scene`, `oag_raceplay::scene::frame`); `Race::hd_engine_lights` (the track's) keeps the switch. Test:
-`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. HD only: `engine_lights` exist only where a title's `Flare`
-sets `engine_light`.
+`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. The switch is HD's alone: `engine_lights` exist where a title's `Flare`
+sets `engine_light` (HD, 2048, Omega), and only HD's circuits author the key.
 
 **Before and after** (1920x1080 pairs, `data/reference/compare-page/hd/<circuit>`, ours re-rendered with the pair's own flags on
 main and on this change; box `927,785 13x20`, the left bay wall above the shield band; mean RGB):

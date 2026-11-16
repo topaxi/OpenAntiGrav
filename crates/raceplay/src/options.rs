@@ -783,8 +783,8 @@ pub struct Setup {
     /// and where its head draws while it charges. `None` for a hull that authors
     /// none or a version whose class id is unread.
     pub muzzles: Vec<Option<Vec3>>,
-    /// Wipeout HD's engine light per slot - `EngineLightData.xml` and the
-    /// flare locator's Z axis - or `None` on every other title and on a
+    /// The engine light per slot (HD, 2048, Omega) - `EngineLightData.xml` and the
+    /// flare locator's Z axis - or `None` on a title with no engine light law and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
     /// carries the locator's position. See [`crate::engine_light`].
     #[cfg(feature = "view")]

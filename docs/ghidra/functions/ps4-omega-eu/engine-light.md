@@ -176,22 +176,28 @@ or under `0.01` submits nothing. Not wired: the six-light cap (ours sums every l
 transition tint, the 21 other producers. Omega's own fragment combine of the light was not read, so
 the receivers' shader is HD's `SVC1` combine **inherited**.
 
-Boxes, ours against the original on the stored pairs, MAE 0-255 per box (before -> after; boxes and
-caveats in the lane report, the craft poses differ by a few pixels and our hulls are paler than the
-original's before any light, so MAE moves with brightness more than with hue):
+Boxes, ours against the original on the stored pairs. **MAE** is the mean absolute difference of the
+8-bit R, G and B values over the box's pixels (0-255). Ours is the pair's `ours.flags` re-run on the
+branch's `oag-game` (`--screenshot`, into a scratch directory; the shared reference is not written),
+before and after the wiring. Rectangles are `x0,y0 - x1,y1` in the pair's own pixels (1920x1080 Omega,
+960x544 2048); craft poses differ by a few pixels between the two sides and our hulls are paler than
+the original's before any light, so MAE moves with brightness more than with hue. The Amphiseum
+floor box sits beside the craft (right of it), not behind it: the original's flame fills the floor
+under the nozzle there.
 
-| Pair (craft) | Housing | Floor behind | What the crop shows |
-| --- | --- | --- | --- |
-| `omega/the-amphiseum` (Feisar_c1, Fury) | 72.0 -> 77.3 | 53.4 -> 53.5 | the original's orange rim on the housing, vents and fins now appears on ours; housing R/B 0.86 -> 0.97 against the original's 1.04 |
-| `omega/modesto-heights` (Feisar_c1, Fury) | 41.9 -> 50.5 | 71.6 -> 72.8 | warm rim appears; stronger than the original's, whose housing is near-black (R/B 0.84, ours 0.90 -> 1.12) |
-| `omega/queens-mall-2048` (Feisar2048\3) | 88.3 -> 88.7 | 25.4 -> 24.6 | the dim red light barely moves the housing (R/B 1.15 -> 1.17 against 1.81); the floor red rises 162 -> 167 against 179 |
-| `2048-vita/moa-therma` (Feisar, `hdships`) | 39.3 -> 48.5 | 19.7 -> 20.7 | blue glow on the nozzle housing and engine pipes as the original has, but stronger and wider (B/R 1.02 -> 1.61 against 1.16) |
-| `hd/the-amphiseum` | - | - | pixel-identical to before (`magick compare -metric AE` 0) |
+| Pair (craft) | Housing box | MAE | Floor box | MAE | What the crop shows |
+| --- | --- | --- | --- | --- | --- |
+| `omega/the-amphiseum` (Feisar_c1, Fury) | 880,690 - 1020,810 | 72.0 -> 77.3 | 1140,630 - 1240,760 | 53.4 -> 53.5 | the original's orange rim on the housing, vents and fins now appears on ours; housing R/B 0.86 -> 0.97 against the original's 1.04 |
+| `omega/modesto-heights` (Feisar_c1, Fury) | 890,690 - 1010,800 | 41.9 -> 50.5 | 1030,940 - 1140,1020 | 71.6 -> 72.8 | warm rim appears; stronger than the original's, whose housing is near-black (R/B 0.84, ours 0.90 -> 1.12) |
+| `omega/queens-mall-2048` (Feisar2048\3) | 920,800 - 1000,880 | 88.3 -> 88.7 | 1140,650 - 1260,800 | 25.4 -> 24.6 | the dim red light barely moves the housing (R/B 1.15 -> 1.17 against 1.81); the floor red rises 162 -> 167 against 179 |
+| `2048-vita/moa-therma` (Feisar, `hdships`) | 440,385 - 510,440 | 39.3 -> 48.5 | 460,450 - 560,500 | 19.7 -> 20.7 | blue glow on the nozzle housing and engine pipes as the original has, but stronger and wider (B/R 1.02 -> 1.61 against 1.16) |
+| `hd/the-amphiseum` | - | - | - | - | pixel-identical to before (`magick compare -metric AE` 0) |
 
-So the colour and place are right and the strength is not yet proven: three of four housing boxes
-read worse in MAE because ours is brighter than the original's there. Not tuned. Open: the original
-draws a craft with up to six of the table's lights chosen by bounds overlap (ours sums every light),
-Omega's and 2048's fragment combine, and a frame's own wander (the range is `Radius` +- 1, so one
+So the colour and place are right and the strength is not yet proven: all four housing boxes
+read worse in MAE because ours is brighter than the original's there. Not tuned. The six-light
+cap (ours sums every light) is not expected to explain it: an HD-era light reaches at most 3 units, so a
+hull draw on a grid overlaps few records (not counted); it can matter for the 2048 era's range 30.
+Open: Omega's and 2048's fragment combine, and a frame's own wander (the range is `Radius` +- 1, so one
 original frame may be anywhere from no light to twice the authored one). The wander flickers on
 ours: four consecutive ticks of the Amphiseum housing box differ by a mean 3.5 to 6.1 (0-255) with
 the box mean at 129 to 133, a few percent. The stored pairs hold one frame of the original, so

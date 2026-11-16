@@ -239,13 +239,13 @@ pub(super) fn record(
 impl Race {
     /// Redraws one craft's jitter for this tick - the original's
     /// `EngineFlare_Update` rewrite of `flare+0x250`. Called from the exhaust
-    /// tick, HD only.
+    /// tick, on a title with an engine light law.
     pub(super) fn advance_engine_light_jitter(&mut self, slot: usize) {
         self.view.engine_light_jitter[slot] = Jitter::draw(&mut self.view.engine_light_rng[slot]);
     }
 
     /// This frame's engine lights as the **track** takes them: one per active
-    /// craft with an authored engine light, or empty off HD, on a circuit that
+    /// craft with an authored engine light, or empty on a title with none, on a circuit that
     /// switches the SPU vertex lights off (`Setup::spu_vertex_lights`), and for
     /// every craft without one. The hull takes them whatever the circuit says:
     /// [`Self::hd_craft_engine_lights`].

@@ -41,12 +41,13 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
 "Wired". HD is pixel-identical on `hd/the-amphiseum`.
 
 - **Strength against the original is not closed.** The hue is right (Amphiseum's orange rim on housing, vents
-  and fins; Moa Therma's blue), but three of four housing boxes read worse in MAE because ours is brighter:
+  and fins; Moa Therma's blue), but all four housing boxes read worse in MAE because ours is brighter:
   Modesto Heights' original housing is near-black where ours rims orange, Moa Therma's blue is stronger and
-  wider. Candidates, none tested: the original binds at most six lights per draw by bounds overlap (ours sums
-  every light); the Omega/2048 fragment combine of the vertex light is unread (ours is HD's `SVC1` add before
-  the albedo); one original frame's wander may sit anywhere in `Radius` +- 1; our hull's ambient is paler
-  than the original's before any light.
+  wider. Candidates, none tested: the Omega/2048 fragment combine of the vertex light is unread (ours is HD's
+  `SVC1` add before the albedo); one original frame's wander may sit anywhere in `Radius` +- 1; our hull's ambient
+  is paler than the original's before any light; the original binds at most six lights per draw by bounds overlap
+  (ours sums every light), which is not expected to matter for HD-era lights (range at most 3) but can for the
+  2048 era's range 30.
 - **Queens Mall's floor pool is barely visible** (floor red 162 -> 167 against the original's 179): the
   original's own pool is not a clear disc either on the stored frame; a boosted craft would show it.
 - **Wander flicker not checkable.** Ours flickers by a mean 3.5 to 6.1 (0-255) in the housing box between
@@ -60,11 +61,10 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
 
 ## Next Steps
 
-1. Read the six-light pick's effect: render the Amphiseum and Modesto pairs with the table capped at six in
-   table order by bounds overlap (`FUN_0165b890`) against the sum, and see whether the housing moves toward the
-   original.
-2. Read Omega's or 2048's fragment program for the vertex light's use (`DiffuseVertexLight0diffuse`,
+1. Read Omega's or 2048's fragment program for the vertex light's use (`DiffuseVertexLight0diffuse`,
    `scripts/vita-gxp.py`, `scripts/vita-usse.py`): is it added before the albedo as on HD, or scaled?
-3. Live check on the rebuilt native port: the recipe on the Omega page, one run; confirms the wander and the
+2. Live check on the rebuilt native port: the recipe on the Omega page, one run; confirms the wander and the
    base per craft.
+3. Render the Amphiseum and Modesto pairs with the table capped at six in table order by bounds overlap
+   (`FUN_0165b890`) against the sum, mainly for the 2048 era's range 30.
 4. Wire the transition tint once its arming input is read.

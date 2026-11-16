@@ -270,7 +270,7 @@ pub struct RaceView {
     /// land, at which point the locator moves with the model rather than with the
     /// race.
     pub(super) nozzles: Vec<Option<Vec3>>,
-    /// Wipeout HD's engine light per slot - see [`Setup::engine_lights`] and
+    /// The engine light per slot (HD, 2048, Omega) - see [`Setup::engine_lights`] and
     /// `race::engine_light`. Render-side, out of the hash.
     pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.

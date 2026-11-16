@@ -149,3 +149,50 @@ fn the_circuits_switch_does_not_reach_the_hull() {
         "off HD there is none"
     );
 }
+
+/// A craft over a mag strip on a gated circuit takes the strip's colour; leaving the strip
+/// returns the skin's. Reading `mag_floor_fx[slot].on` is the wiring: a craft that never
+/// reads it keeps its skin colour on the strip and fails this. Radius 2 keeps Omega's wander
+/// of one unit off the range floor.
+#[test]
+fn a_craft_over_a_mag_strip_takes_the_strips_colour() {
+    use oag_livery::engine_light::EngineLight;
+    use oag_tables::enginelight::EngineLightData;
+    let oag_title::flare::Flare::PerTeam(authored) = oag_omega::TITLE.flare else {
+        panic!("Omega authors a per-team flare");
+    };
+    let mut race = hd_race();
+    race.view.engine_lights = vec![Some(EngineLight {
+        law: *authored.engine_light.expect("Omega's engine light"),
+        era_2048: false,
+        strip_circuit: true,
+        data: EngineLightData {
+            distance: 0.0,
+            radius: 2.0,
+        },
+        axis: Vec3::Z,
+    })];
+    race.view.nozzles = vec![Some(Vec3::ZERO)];
+    let rgb = |race: &Race| {
+        let lights = race.hd_craft_engine_lights();
+        let light = lights.first().expect("the player's craft has a light");
+        [light.colour[0], light.colour[1], light.colour[2]]
+    };
+    assert_eq!(
+        rgb(&race),
+        [4.0, 10.0, 40.0],
+        "off the strip: the classic skin"
+    );
+    race.view.mag_floor_fx[0].on = true;
+    assert_eq!(
+        rgb(&race),
+        [1.5, 0.1, 3.0],
+        "over the strip: the strip's colour"
+    );
+    race.view.mag_floor_fx[0].on = false;
+    assert_eq!(
+        rgb(&race),
+        [4.0, 10.0, 40.0],
+        "leaving it restores the skin's"
+    );
+}

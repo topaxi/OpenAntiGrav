@@ -174,8 +174,8 @@ impl Race {
     }
 
     /// Every SPU vertex light the **track** takes this frame: the engines',
-    /// then the weapons'. Empty off HD and on a circuit that switches the
-    /// lights off.
+    /// then the weapons'. Empty where no authored trail is drawn and on a circuit that
+    /// switches the lights off.
     #[must_use]
     pub fn hd_spu_lights(&self) -> Vec<SpuLight> {
         self.spu_lights_with(self.hd_engine_lights())

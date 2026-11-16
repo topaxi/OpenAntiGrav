@@ -17,8 +17,8 @@
 
 /// Whether this circuit's `.envsettings` leaves the SPU vertex lights on.
 ///
-/// `true` on every title but Wipeout HD (the mechanism is HD's alone and the
-/// light list is empty elsewhere anyway), on an HD circuit with no
+/// `true` on every title but Wipeout HD (the switch is a PS3 `.envsettings` key;
+/// Omega's and 2048's circuits are not read for it), on an HD circuit with no
 /// `.envsettings`, and on one that does not author the key; `false` only on
 /// an authored `0`.
 pub(super) fn spu_vertex_lights_enabled(
