@@ -94,6 +94,16 @@ it), `0x1b` a pointer to an **extended-user-data table** (a kind-0 record there 
 ends at the first record of kind `0x0f`, the start of a fixed tail. Confidence 85: every `2x - 1` sample over all
 nine archives places (0 unplaced, asserted per archive in `gcn_ground_truth`).
 
+**A vertex input is a factor on the light when its parameter is only ever multiplied** (`oag_rcs::gcn::input_is_factor`). A
+file lists each vertex program directly before the pixel program it feeds. `Program::exported_input` finds the `exp paramN`
+whose three lanes are the registers a named input was fetched into; `Program::attribute_is_only_a_factor` follows
+`attrN.xyz` through the pixel program until each register is written again and accepts only `mul`, `mac`, `mad` and `fma`
+first-two-source reads; the file counts only if one of those pixel programs also reads `liveLighting0diffuse`
+(`Program::names_constant`), so the colour multiplies a light. It separates Omega's hull programs, which multiply `VertexColour1` into `albedo * light`, from the
+shields, trails and flames that fetch and export it the same way and read it as an alpha or a tint
+([hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md), "Wired"). Confidence 70. 2048 (Vita): checked, not
+checkable here - the GXP operands are unread, so only the declaration carries over.
+
 **A normal map is a texture sampled and then decoded `v_mad_f32 d, 2.0, x, -1.0`.** `Program::signed_textures` follows each
 `image_sample`'s destination to such an instruction and names the API slot of its T#; `signed_samplers` runs it over a
 material file (the reflection's resource name without its `Texture` suffix is the sampler name an instance hashes) and

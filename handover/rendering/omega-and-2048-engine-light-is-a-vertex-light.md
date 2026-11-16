@@ -2,7 +2,7 @@
 status: measure
 titles: [omega, 2048]
 updated: 2026-11-16
-summary: "Engine light and hull SH ambient wired; ready to wire: hull vertex colour; open: warm-pixel acceptance, N scale, housing sun term, reflection"
+summary: "Engine light, hull SH ambient and vertex colour wired; open: warm-pixel acceptance, N scale, housing sun term, reflection, Omega specular"
 size: S (30)
 difficulty: easy (60)
 ---
@@ -57,8 +57,8 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
   ambient is an SH probe from `track.shprobes` times `Ship diffuse brightness` (read live, 92); ours now draws it (wired
   2026-11-16), which removed the blue cast. The brightness is ours' sun term, three times the original's on the dark panels, cause not
   yet read. The original also adds a cube reflection ours lacks. Next Steps 3 has the recipe and the owed read.
-  **2026-11-16, `hull-albedo-re`: the factor both terms share is the vertex colour** (ours draws it white on PS4); ready
-  to wire, Next Steps 3. It brings the hull as a whole within 9 % and leaves the housing box `1.2` to `1.5` times.
+  **2026-11-16, `hull-albedo-re`: the factor both terms share is the vertex colour** (ours drew it white on PS4); wired by
+  `hull-vcol-wire`, Next Steps 3. It brings the hull as a whole within 9 % and leaves the housing box `1.2` to `1.5` times.
 - **One term ours has and the original lacks: ours normalises `N`.** The original's vertex program
   uses the world matrix times the vertex normal as is. If the Omega or 2048 hull's world matrix
   carries a scale (HD's is 0.75), the original's light is that much weaker. The scale on Omega was
@@ -81,7 +81,7 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
    curve at `Radius + w`: 1.0 gives 3,275 warm pixels, 1.5 gives 9,245, 2.0 gives 13,182 (summed
    excess 106,450, 355,657 and 550,931). Ours' count should follow the curve; its excess is expected
    to run high by the hull's own over-brightness until the hull tone is fixed.
-3. **Hull tone. The two reads are made (2026-11-16, `hull-tone-re`); one part is ready to wire, one read is owed.**
+3. **Hull tone. The two reads are made (2026-11-16, `hull-tone-re`); the ambient and the vertex colour are wired, one read is owed.**
    Evidence, program and numbers: `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`, "The bound constants".
    - **Wired (2026-11-16, `hull-sh-ambient`): the ambient.** `oag_vex::shprobes` reads `track.shprobes`;
      `oag_raceplay::sh_probes` blends the nearest lane's two records per craft into a row of a scene-group uniform table
@@ -102,24 +102,26 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
      ambient:** ours' ambient is still `1.4` to `2.1` times the original's (alone) and `1.9` to `2.7` times by the increment,
      the same order as the sun term, so the albedo (texel times vertex colour) or the lit normal may carry the whole
      excess: redo Read 2 with those numbers (`hull-tone.md`, "Wired").
-   - **Ready to wire (2026-11-16, `hull-albedo-re`): the vertex colour.** Both race hull programs multiply
-     `VertexColour1.rgb` (baked occlusion, raw UNORM grey, means `0.13` to `0.61` on Feisar's submeshes) into
-     `albedo * light`; ours' PS4 decoder draws it white. That is the factor the ambient and the sun share (confidence 90
-     the law, 80 the cause). Recipe, tests and numbers: `hull-tone.md`, "The vertex colour", "Recipe": in
-     `mesh/rcs/psp2.rs` emit `colour = rgb / 255` and `sun_mask = factor_sun_mask(1.0)` for a PS4 hull submesh whose program
-     takes the input; no shader change (`shade.wesl`'s `colour_factor` arm is the product). Measured with a scratch build:
-     housing `(0.097, 0.102, 0.075)` to `(0.068, 0.074, 0.054)`, hull body `(820,560)-(1100,860)` `(0.087, 0.112, 0.097)` to
-     `(0.069, 0.092, 0.082)` against the original's `(0.064, 0.085, 0.079)`, ambient share `(0.010, 0.014, 0.018)` against
-     `(0.010, 0.011, 0.012)`, floor unmoved. **It does not reach the housing acceptance** (`1.54, 1.45, 1.20` times): what
-     is left there is the housing's own sun term (`(0.056, 0.056, 0.031)` against about `(0.025, 0.022, 0.009)`), equal over
-     the hull as a whole, so where the sun falls on the rear panels. The owed read above stands for that box alone, with a
-     dozen frames a state (three are swamped by the craft's sway). `carbonfibre`'s program is unread; 2048 declares the same
-     input and its fragment use is unread.
+   - **Wired (2026-11-16, `hull-vcol-wire`): the vertex colour.** Both race hull programs multiply `VertexColour1.rgb` (baked
+     occlusion, raw UNORM grey) into `albedo * light`. `oag_rcs::gcn::input_is_factor` reads it off each material's own
+     programs (the vertex program exports the fetched registers unchanged, the pixel program after it multiplies the
+     parameter and takes `liveLighting0diffuse`); `psp2::hull_colour` emits `rgb / 255` and the factor marker for those
+     PS4 submeshes, no shader change. Engine light off, `omega/modesto-heights` tick 100: housing `(0.097, 0.102, 0.075)` to
+     `(0.068, 0.074, 0.054)`, hull body `(0.087, 0.112, 0.097)` to `(0.069, 0.092, 0.082)` (original `(0.064, 0.082, 0.078)`),
+     floor unmoved; Amphiseum and Moa Therma hull bodies fall too (and end below the original, so the housing sun term and
+     the reflection are now the visible gap there); HD and 2048 pixel-identical. `carbonfibre` takes the factor (read).
+     Numbers, census (24 materials take it, 32 that fetch it do not) and the `carbonfibre` read: `hull-tone.md`, "Wired
+     (lane `hull-vcol-wire`)". **Still open on it:** `shade.wesl`'s `colour_factor` arm multiplies the specular by the colour
+     (HD's law), Omega's pixel program leaves it unmultiplied; the Omega 2048-era families (`2048_ship_*`, about 1,540 submeshes
+     across Omega's ship models) were admitted by the same reading and read on `omega/sol-2048` and `queens-mall-2048`
+     (a mild darkening, plausible), the rest of the admitted families not rendered; 2048 declares the same input and
+     its fragment use stays unread (GXP). The acceptance below is not reached by it (housing `1.5, 1.3, 1.1` times with the
+     engine light off); what is left is the housing's own sun term (the owed read above) and the reflection.
    - **Also missing in ours:** the hull's reflection term, about `(0.013, 0.016, 0.017)` of the original's box; wire it
      after the sun term, or the box moves the wrong way.
    **Acceptance (unchanged, not reachable by the ambient alone):** `omega/modesto-heights`, tick 100, engine light off,
    housing box `(890, 690)-(1010, 800)`: linear mean within 15 % of `(0.045, 0.051, 0.044)` (ours today
-   `(0.101, 0.097, 0.105)`), the track panels unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
+   `(0.068, 0.074, 0.054)`), the track panels unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
    Ours' per-term shares need a hull-only knob (a scale on `hull_ambient` and on the hull's `sun_diffuse`, gated on the
    draw naming a probe row): scaling the rig, or the shared lit sum, moves the adaptive exposure and the whole scene, which
    is what confounded the earlier knockouts (a single race builds no Zone grade).

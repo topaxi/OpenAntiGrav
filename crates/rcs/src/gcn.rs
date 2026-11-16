@@ -44,11 +44,13 @@
 //! [`Error`] in [`Program::reflection`], not a refused program. The layout and
 //! its census are on `docs/formats/gcn.md`; the instruction set is [`isa`].
 
+mod factor;
 pub mod isa;
 mod lightning;
 mod opcodes;
 mod sample;
 
+pub use factor::{Factor, input_is_factor};
 pub use lightning::{LightningRates, lightning_rates};
 pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
 
