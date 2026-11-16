@@ -498,8 +498,7 @@ pub fn capture(
     } else {
         crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
-    // After the people are seated: the driver is chosen by how many humans race, and the
-    // original's is single-human. Chosen before the split, a two-view capture flew it.
+    // After the people are seated: the driver depends on how many humans race (the original's: one).
     if options.net.is_none() {
         let (_, original) = crate::ai_choice::apply_noting(
             &mut race,

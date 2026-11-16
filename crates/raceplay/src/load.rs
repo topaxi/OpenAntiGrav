@@ -1115,20 +1115,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
             #[cfg(feature = "view")]
-            request: Some({
-                // The circuit the load settled on when none was named, so a rebuild from the
-                // header does not depend on the default being the same one. A Zone race's
-                // entry is the zone variant of the circuit named, and a foreign track has no
-                // archive entry.
-                let mut request = options.replay_setup();
-                if request.track.is_none()
-                    && options.mode != Mode::Zone
-                    && !track.starts_with("foreign:")
-                {
-                    request.track = Some(track.clone());
-                }
-                request
-            }),
+            request: Some(options.replay_setup_on(&track)),
             #[cfg(feature = "view")]
             campaign_event: false,
             seed: options.seed.unwrap_or(SEED),
