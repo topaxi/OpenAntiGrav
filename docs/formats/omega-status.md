@@ -2360,14 +2360,20 @@ instructions) has the same instruction shape: `Shadowed` loaded at `0xc8` and mu
 instruction by instruction, so it carries the sprite's confidence, not more). Which permutation the race selects is not
 read; `Shadowed` is not a string in the eboot, so no engine code sets it by name.
 
-**What the wiring moved** (crowd-region bias, ours minus theirs in grey, over the pixels the crowd owns in the
-pre-change render, undilated and without the HUD boxes; HEAD of `panelmap-wire` before, the lane's branch after):
-Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6, Subway +63.9 unchanged (it ships no `_shadow` sprite), Arena +62.2
-to +15.1 (0.03 % of the frame, too small to judge). On Sol the `_shadow` sprites' own pixels (3,376, 7 % of the crowd)
-go +160.0 to +57.6.
+**What the wiring moved** (crowd-region bias, ours minus theirs in grey). Reproduce: on the build before the change run
+`uv run --with numpy --with pillow --with scipy python3 scripts/compare-decompose.py --pair data/reference/compare-page/omega/<pair>
+--work <dir> --binary <oag-game> --road road_alphaspec --crowd-mask <dir>/<pair>.npy` (it writes the mask: the pixels the
+`crowd` skip render changes by more than 25 grey, undilated), then again on the new build with the same `--crowd-mask`
+(the file is loaded, so both builds are scored on the same pixels; a darker crowd would otherwise shrink its own mask).
+Before the wiring (the `panelmap-wire` tip, 16x anisotropy) to after: Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6,
+Subway +63.9 unchanged (it ships no `_shadow` sprite), Arena +62.2 to +15.1 (0.03 % of the frame, too small to judge).
+The per-material Sol numbers are the same score over the pixels one material's own skip render changes
+(`OAG_SKIP_MATERIAL=<file name>`; a one-off script, `--needle` cannot give them because `dynamic` removes the crowd
+from it), the `_shadow` mask taken from a debug build that drew that sprite flat magenta, which also showed those draws
+reach the branch: the `_shadow` sprites' 3,376 pixels go +160.0 to +57.6, the plain sprite's 46,650 go +121.5 to +116.6.
 
 **The plain sprite is the rest, and it is not this law.** `crowd_sprite_diffuse_normal_alpha` (Sol: 12 submeshes,
-780 triangles, 46,650 of the crowd's pixels) and `crowd_diffuse_normal` author no parameter, and their programs
+780 triangles) and `crowd_diffuse_normal` author no parameter, and their programs
 (`0x41a4`, 112 instructions) declare no `Shadowed` or `Ambient`: `T * (constantAmbientColour + sun * sat(N.L))`, which
 is what ours' generic path computes. Still ours draws them white (bias +121.5 to +116.6 with the wiring), so the
 cause is in their inputs, not in a missing factor. **A diagnostic, not shipped**: giving the plain sprite the `_shadow`

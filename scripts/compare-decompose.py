@@ -11,7 +11,7 @@ render with `OAG_SKIP_MATERIAL=<needle>`; the pixels that change by more than 25
 frame gain the adaptive exposure adds when a surface goes, are what that needle owns in ours.
 
 Regions: `dynamic` (own hull, crowd, flags, dilated 6 px, plus the HUD boxes) is left out of every score, since
-the livery and crowd vary boot to boot; `road` is the road family's pixels, `sky` the sky's, `scenery` the rest.
+the livery and crowd vary boot to boot; `crowd` alone is scored undilated, and `--crowd-mask` pins its pixels across builds; `road` is the road family's pixels, `sky` the sky's, `scenery` the rest.
 Per region it prints the area, `LF` (mean |blur12(ours) - blur12(theirs)| in grey, the low-frequency error a light,
 tone or emissive cause would close), `bias` (mean ours - theirs) and `G` (Sobel gradient energy ours / theirs,
 the detail axis: filtering, MIP choice, a missing detail layer). The raw mean grey is printed beside it, because
@@ -90,6 +90,9 @@ def main():
     ap.add_argument("--road", required=True, help="OAG_SKIP_MATERIAL needle of the road family")
     ap.add_argument("--hull", default="feisar2048")
     ap.add_argument("--needle", action="append", default=[])
+    ap.add_argument("--crowd-mask", type=Path, default=None,
+                    help="npy of the crowd's pixels: loaded when it exists, else written from this run's `crowd` skip render, "
+                         "so a later run (another build) is scored on the same pixels")
     ap.add_argument("--tag", default=None, help="score one more render under this tag, with --env set")
     ap.add_argument("--env", action="append", default=[], help="K=V for the --tag render")
     args = ap.parse_args()
@@ -111,6 +114,14 @@ def main():
     regions = {"road": masks[args.road] & ~dynamic, "sky": masks["sky"] & ~dynamic}
     regions["scenery"] = ~dynamic & ~regions["road"] & ~regions["sky"]
     regions["static"] = ~dynamic
+    # The crowd as the skip render shows it, undilated (`dynamic` above already removes it from every other region); the
+    # mask is fixed across builds because a darker crowd falls under the 25-grey threshold and shrinks it.
+    crowd = masks["crowd"]
+    if args.crowd_mask is not None and args.crowd_mask.exists():
+        crowd = np.load(args.crowd_mask)
+    elif args.crowd_mask is not None:
+        np.save(args.crowd_mask, crowd)
+    regions["crowd"] = crowd & ~hud_boxes(h, w)
     for needle in args.needle:
         regions[needle] = masks[needle] & ~dynamic
     renders = [("base", base_png)]

@@ -138,6 +138,7 @@ fn circuit(name: &str, path: &str, expect_road_vertices: usize) {
         archives.iter_mut().find_map(|a| a.read_path(p).ok())
     })
     .expect("builds");
+    super::omega_crowd_shadowed_check::check(name, &decoded, &model, &report);
     assert!(report.tarmac_materials > 0, "{name}: {}", report.describe());
     assert_eq!(report.tarmac_unread, 0, "{name}: {}", report.describe());
     let found = roads(&model, &decoded);
