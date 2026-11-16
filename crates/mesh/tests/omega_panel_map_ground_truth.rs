@@ -69,6 +69,17 @@ fn sols_panel_map_road_marches_and_its_sky_is_the_reflection_map() {
         &mut archives,
         "Data/environments2048/sol/track.final.rcsmodel",
     );
+    let decoded = oag_rcs::rcsmodel::psp2::parse(
+        &archives
+            .iter_mut()
+            .find_map(|a| {
+                a.read_path("Data/environments2048/sol/track.final.rcsmodel")
+                    .ok()
+            })
+            .expect("the model"),
+    )
+    .expect("parses");
+    super::omega_crowd_shadowed_check::check("sol", &decoded, &model, &report);
     assert!(report.panel.materials > 0, "{}", report.describe());
     assert_eq!(report.panel.unread, 0, "{}", report.describe());
     let mut carried = 0usize;

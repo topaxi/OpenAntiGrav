@@ -119,6 +119,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The row of the emissive table this vertex names, read once for every test below.
     let row_scale = emissive_scale((in.slots >> 24u) & 63u);
     let row_tint = emissive_tint((in.slots >> 24u) & 63u);
+    // **Omega's `_shadow` crowds** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
+    // is `Ambient + constantAmbientColour + sun * sat(N.L)` and the lit picture is times `Shadowed`.
+    let crowd_lit = row_scale.z > 15.5 && row_scale.z < 16.5;
     let n = normalize(in.normal);
     // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
     // diffuse, normal and emissive are sampled at the coordinate the march into the panel map
@@ -476,6 +479,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if zone_plain && !emissive {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
+        }
+        // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
+        if crowd_lit {
+            authored = row_tint.rgb + scene.light.ambient + sun_diffuse;
+            sun_light = sun_diffuse;
         }
     }
 
@@ -1289,7 +1297,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             glow_is_billboard,
         );
         let program_specular = select(specular, vec3<f32>(0.0), glow_is_billboard) * pane_clear;
-        let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
+        let program_multiplier = select(
+            select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass),
+            vec3<f32>(row_scale.w),
+            crowd_lit,
+        );
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light * pane_cover + program_specular) * program_multiplier
                 + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection

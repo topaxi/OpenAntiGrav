@@ -45,6 +45,7 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 mod alpha_emissive;
 mod alpha_product;
 mod chevron;
+mod crowd;
 mod emissive_add;
 mod flat_constant;
 mod glow;
@@ -302,6 +303,8 @@ fn build_planned(
         textures,
         &mut report,
     );
+    // Omega's crowd sprites carry `Shadowed` and `Ambient` in the lit sum (`psp2::crowd`).
+    let crowd = crowd::plan(&decoded, ps4, &mut glow.emissive, &mut report);
     // Anulpha Pass's chevrons add their emissive mask and wave after the light.
     let chevron = chevron::plan(
         &decoded,
@@ -557,6 +560,7 @@ fn build_planned(
                     role
                 }) | emissive_add.role(submesh.material)
                     | tarmac.role(submesh.material)
+                    | crowd.role(submesh.material)
                     | chevron.role(submesh.material)
                     | glass.role(submesh.material),
                 xform: place.xform,
