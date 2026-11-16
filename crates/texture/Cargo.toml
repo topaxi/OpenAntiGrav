@@ -28,6 +28,7 @@ ruzstd.workspace = true
 oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
+oag-hd.workspace = true
 oag-pulse.workspace = true
 oag-vex.workspace = true
 oag-source.workspace = true
