@@ -315,7 +315,7 @@ pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
 pub const BOOT_CHAIN: &[oag_title::BootStep] = &[
     oag_title::BootStep::screen(states::LANGUAGE_SELECTION),
     oag_title::BootStep::screen(states::PRE_FMV_CONNECT),
-    oag_title::BootStep::playing(states::STUDIO_LOGO, names::STUDIO_LOGO_MOVIE),
+    oag_title::BootStep::playing_authored(states::STUDIO_LOGO, names::STUDIO_LOGO_MOVIE),
     oag_title::BootStep::screen(states::EPILEPSY_WARNING),
     oag_title::BootStep::screen(states::FIRST_PLAY),
     oag_title::BootStep::screen(states::SAVE_WARNING),
@@ -699,17 +699,18 @@ pub mod names {
     /// `crates/game/tests/hd_movie_ground_truth.rs` are what replaced that. See
     /// [`bik.md`].
     ///
-    /// What is **not** settled by decoding it is which reel plays - that is
-    /// still the question of which `skin.xml` the runtime loads, above.
+    /// It plays where the loaded `skin.xml` names no reel the source holds: the
+    /// `Studio Logo` step takes its screen's own widget
+    /// ([`oag_title::BootStep::playing_authored`]), so a Fury disc plays
+    /// [`STUDIO_LOGO_MOVIE_FURY`].
     ///
     /// [`bik.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/bik.md
     pub const STUDIO_LOGO_MOVIE: &str = "Data/FE/Images/StudioLiverpool.bik";
 
-    /// The other family's spelling, and the only one of the two that is in
-    /// `DATA00`.
-    ///
-    /// Which of the six `skin.xml` copies the runtime loads decides which of
-    /// these plays. That question needs the executable.
+    /// Fury's own reel (red tint, a short distortion), named only by `DATA00`'s
+    /// `skin.xml`, the copy the runtime loads, and held only in `DATA00`
+    /// (`docs/formats/hd-frontend.md`, "`DATA00`'s copy is the live one"). Read off
+    /// that widget at boot, not from this constant.
     pub const STUDIO_LOGO_MOVIE_FURY: &str = "Data/FE/Images/StudioLiverpool_fury.bik";
 
     /// The menu backdrop, which on HD is **a real-time `.vex` scene** rather

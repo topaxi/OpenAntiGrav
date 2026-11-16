@@ -85,6 +85,22 @@ pub(super) fn resolve_pure_movie_region(
     )
 }
 
+/// The movie `step`'s own screen names in the loaded front-end XML, when the step
+/// plays what its screen authors ([`oag_title::BootStep::movie_from_screen`]) and the
+/// source holds that entry; `None` leaves the step's own spelling to play.
+pub(super) fn authored_movie(
+    step: &oag_title::BootStep,
+    screens: &oag_ui::screen::Screens,
+    archives: &oag_assets::Archives,
+) -> Option<String> {
+    if !step.movie_from_screen {
+        return None;
+    }
+    let widget = screens.by_name(step.state)?.movies.first()?;
+    let name = widget.entry_name(oag_ui::screen::DEFAULT_REGION);
+    archives.locate(&name).is_some().then_some(name)
+}
+
 /// How an archive entry was asked for.
 ///
 /// A WAD directory stores only the hash of each name, and three of the disc's

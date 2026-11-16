@@ -845,6 +845,19 @@ It does not follow that every `DATA00` entry wins every lookup - that is a claim
 about the archive layer's own resolution rule, and only `Skin.xml` was traced.
 What is established is the load order and this one file.
 
+**Wired 2026-11-16: the boot plays the reel the loaded `skin.xml` names.** HD's
+`Studio Logo` step is `BootStep::playing_authored`: the movie is the screen's own
+`<Movie>` widget in the front end the source served, and the chain's
+`StudioLiverpool.bik` plays only where that widget names no entry the source
+holds. A Fury disc therefore plays `StudioLiverpool_fury.bik` (558 frames, the
+red-tinted cut with a short distortion, maintainer's report of the original),
+which it used to replace with the plain reel; plain PSN HD, whose skin names the
+plain reel, is unchanged by construction (not run here: no plain HD base image).
+`hd_boot_ground_truth::the_logo_step_plays_the_reel_the_live_skin_names` pins it.
+**Omega: checked, differs**: `data09`'s `skin.xml` names the plain reel and no
+Omega archive holds either `.bik` (`docs/formats/omega-status.md`, line on
+`StudioLiverpool.bik`), so its step stays `BootStep::playing`.
+
 ## The declared menu tree
 
 The top level is `mainmenu_definition.xml`'s `<Redirect>`, read verbatim:
