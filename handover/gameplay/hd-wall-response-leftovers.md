@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd, 2048]
-updated: 2026-10-20
-summary: "HD floor contacts unmeasured; 2048 holds the body-local point rate; RPCS3 Zone friction hit; wall pose-walk test"
+updated: 2026-11-16
+summary: "Our craft stay on walls far longer than HD's, so .GRIND is held back; floor contacts, pair resolver, Zone friction open"
 ---
 
 # HD's wall response: what the port left open
@@ -16,6 +16,16 @@ the point rate. Evidence and the sweep:
 
 ## Open
 
+- **Our craft stay on a wall far longer than the original's, so HD's grind sound is held back.**
+  2026-11-16 (`hd-impact`): over 60 s of the same stick-swinging run ours raised 471 `.GRIND`
+  starts against the original's 10 in 150 s on RPCS3 (an order of magnitude only; the capture's
+  stick amplitude was not recorded). The original restarts `.GRIND` every other frame too, so the
+  retrigger rule is not the cause: ours has 110 wall-contact episodes of up to 90 ticks plus
+  single-start chatter 4 to 6 ticks apart. `.GRIND`/`.GRINDSHIELD` are off through
+  `ImpulseLaw::grind_played = false` in `oag_hd::HD_IMPULSE_LAW`; `.COLLISIONS` plays
+  (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "Grind held back"). The sweep that
+  counts them is `crates/raceplay/tests/zz_contact_sweep.rs` (`OAG_SWEEP=1`). Turn the grind back
+  on once a wall hit leaves the wall as the original's does, and re-count.
 - **2048 holds the body-local point rate.** On, `vita_2048_original_ai_ground_truth::
   the_field_finishes_tower` times out on lap 3 at 300 s (off: 292.3 s). The noise method
   puts it within the bar (off `1 0 1 1 0 0 0 0 0`, on `1 0 1 0 1 0 0 0 0`), but the test

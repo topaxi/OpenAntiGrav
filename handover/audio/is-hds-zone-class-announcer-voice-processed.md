@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-06
-summary: "Is HD's Zone class announcer voice processed at runtime? Compare the MR_* WAV objectively or read the speech path"
+updated: 2026-11-16
+summary: "Maintainer: ours matches the original's distortion by ear, kept; if it returns, compare the MR_* WAV objectively"
 ---
 
 # Is HD's Zone speed-class announcer voice processed at runtime?
@@ -34,6 +34,11 @@ So there are two cases, and only the second needs work:
 2. HD applies it at runtime. Then the port is missing it.
 
 ## Open
+
+- **Maintainer verdict by ear (2026-11-16):** with the Zone class step now playing speech_zone's
+  `MR_*` timeline (two voices, the same tick), ours sounds distorted the way the original does,
+  so it is kept as is. The objective measurement below was declined for now; it is the way to
+  settle the question if it comes back.
 
 1. Settle which case it is without anyone listening:
    - **Disc side:** dump `MR_VEN` and a plain milestone cue (`zone_5`) from the
