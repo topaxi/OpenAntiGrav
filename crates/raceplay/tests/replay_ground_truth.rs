@@ -165,21 +165,33 @@ fn header(title: &str, seed: u64) -> Header {
     Header::new(title, "default", "time_trial", "venom", "default", seed)
 }
 
-/// Drives a recorded run of [`TICKS`] and hands back the race and its
-/// recording.
-fn record(title: &str) -> Option<(race::Race, Replay)> {
+/// The tick a screenshot is taken at during the run: past the countdown, and off the stored hash
+/// grid (every 60th tick), so the shot's own hash is the only record of its state.
+const SHOT_AT: u64 = 1_237;
+
+/// Drives a recorded run of [`TICKS`] and hands back the race, its recording and the screenshot
+/// record taken of it at [`SHOT_AT`].
+fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
     let setup = setup(title)?;
     let seed = setup.seed;
     let mut race = race::Race::start(setup);
     race.start_recording(header(title, seed));
     let mut pad = Pad::new(title);
-    for _ in 0..TICKS {
+    let mut shot = None;
+    for tick in 0..TICKS {
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
         race.drain_cues();
+        if tick + 1 == SHOT_AT {
+            shot = race.shot_record(None);
+        }
     }
     let replay = race.recorded().expect("recording");
-    Some((race, replay))
+    Some((
+        race,
+        replay,
+        shot.expect("a recording yields a shot record"),
+    ))
 }
 
 /// Re-drives `replay` on a race **rebuilt from its header alone** (the title's source is the
@@ -200,11 +212,86 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
     })
 }
 
+/// A screenshot of the race at [`SHOT_AT`] carries what makes its frame again: the record goes
+/// into a PNG as its `oaGs` chunk, comes back byte for byte, and re-driven on a race rebuilt from
+/// the record alone it arrives at the same state hash. Changing the stored hash or one input
+/// before the shot is a mismatch, so the check can fail.
+fn a_shot_survives_its_png_and_resimulates(
+    title: &str,
+    replay: &Replay,
+    shot: &oag_replay::ShotRecord,
+) {
+    use oag_texture::png;
+    assert_eq!(shot.tick, SHOT_AT, "{title}");
+    assert_eq!(shot.replay.ticks(), SHOT_AT, "{title}: cut at the shot");
+    assert_eq!(
+        shot.replay.inputs[0][..],
+        replay.inputs[0][..usize::try_from(SHOT_AT).expect("fits")],
+        "{title}: the stream is the run's, to the shot"
+    );
+    let chunk = shot.to_bytes();
+    let file = png::encode_rgba_with(
+        1,
+        1,
+        &[0; 4],
+        &[
+            (png::ITXT, png::itxt("oag", "title = \"x\"\n")),
+            (oag_replay::shot::CHUNK, chunk.clone()),
+        ],
+    );
+    let found = png::chunks(&file).expect("a whole PNG");
+    let data = found
+        .iter()
+        .find(|(kind, _)| *kind == oag_replay::shot::CHUNK)
+        .expect("the chunk is in the file")
+        .1;
+    assert_eq!(
+        data,
+        &chunk[..],
+        "{title}: the chunk round-trips byte for byte"
+    );
+    let read = oag_replay::ShotRecord::from_bytes(data).expect("reads");
+    assert_eq!(&read, shot, "{title}");
+
+    let source = source(title).expect("source present");
+    let source = source.display().to_string();
+    let again = race::replay::resimulate(&read, &source).expect("re-simulates");
+    println!(
+        "{title}: shot at tick {} chunk {} bytes, hash {:#018x} found {:#018x}",
+        read.tick,
+        chunk.len(),
+        again.expected,
+        again.found
+    );
+    assert!(again.matches(), "{title}: {:?}", again.desync);
+    assert_eq!(again.race.sim.world.tick, SHOT_AT, "{title}");
+
+    let mut wrong = read.clone();
+    wrong.hash ^= 1;
+    assert!(
+        !race::replay::resimulate(&wrong, &source)
+            .expect("runs")
+            .matches(),
+        "{title}: a different stored hash is a mismatch"
+    );
+    let mut moved = read;
+    let index = usize::try_from(oag_race::state::COUNTDOWN_TICKS + 40).expect("fits");
+    let stick = &mut moved.replay.inputs[0][index].stick_x;
+    *stick = if *stick > 0.0 { -1.0 } else { 1.0 };
+    assert!(
+        !race::replay::resimulate(&moved, &source)
+            .expect("runs")
+            .matches(),
+        "{title}: a changed input before the shot is a mismatch"
+    );
+}
+
 /// Every property, on one recording of `title`.
 fn properties(title: &str) {
-    let Some((race, replay)) = record(title) else {
+    let Some((race, replay, shot)) = record(title) else {
         return;
     };
+    a_shot_survives_its_png_and_resimulates(title, &replay, &shot);
     if let Some(tampered) = TAMPERED.iter().find(|t| **t == title) {
         tamper(tampered, replay.clone());
     }
