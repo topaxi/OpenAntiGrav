@@ -69,6 +69,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pcsx2_pine import Pine, PineError, STATUS_NAMES  # noqa: E402
+import pad_seat  # noqa: E402
 import xvfb_display  # noqa: E402
 
 #: `OAG_PCSX2_DISPLAY` / `OAG_PCSX2_DATA` give a drive member its own display and
@@ -369,6 +370,7 @@ def start_emulator(image, binary="pcsx2-qt", extra=()):
     env["DISPLAY"] = DISPLAY
     env["QT_QPA_PLATFORM"] = "xcb"
     env.pop("WAYLAND_DISPLAY", None)
+    env.update(pad_seat.sdl_blind_env())  # driven by X key events: sees no pad, so no other seat's presses reach it
     command = [binary, "-datapath", DATA_PATH, "-batch", "-nogui", "-fastboot",
                "-earlyconsolelog", "-logfile", LOG_FILE]
     command.extend(extra)

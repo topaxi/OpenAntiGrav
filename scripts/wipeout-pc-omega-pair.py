@@ -24,7 +24,9 @@ countdown board's red 3) and ours' render; its helpers are imported from that sc
   window full screen: without it the frame carries the port's title bar and a border (a 1920x1080 frame, but not the game's).
 * **A fresh save every boot** (`GOW3_USER_DIR` under the instance directory, deleted first), so Track Select opens on Vineta K and
   Ship Select on its first craft; the GPU caches stay in one persistent `GOW3_GPU_USER_DIR`, so a boot is not a cold shader build.
-* The pad is system-wide (`scripts/uinput-pads.py`): the driver refuses to start when an Xbox-360-shaped pad it did not make exists.
+* The pad is system-wide (`scripts/uinput-pads.py`). With `OAG_PAD_SEAT=N` (`scripts/pad_seat.py`) it carries the seat's USB ids, the
+  port is started with `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` naming them, and the driver refuses to start only when that seat's
+  pad already exists. Without a seat the pad is the original Xbox-360 one and the driver refuses when one exists.
 * **WipEout 2048 mode** (`--game-mode 2048`: RACEBOX, GAME MODE one Right; `--class-steps N` Rights on SPEED CLASS, C, B, A, A+).
   Ship Select opens on the yellow Feisar2048, so there are no Downs. The race load ends in an intro that loops a fly-over of the
   circuit under a START RACE prompt: the first tap of cross starts a craft presentation, which returns to the fly-over, and a second tap
@@ -54,6 +56,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+import pad_seat  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("shadps4_omega_pair", HERE / "shadps4-omega-pair.py")
 sp = importlib.util.module_from_spec(_spec)
@@ -85,18 +88,10 @@ HUD2048_TIMER_MAX = 0.15
 START_TAP_EVERY = 2.5
 #: Give up on the HUD after this many seconds of tapping.
 START_TAP_LIMIT = 70
-#: The Xbox-360-shaped pad `uinput-pads.py` makes; a second one on the machine is somebody else's.
-PAD_NAME = "Microsoft X-Box 360 pad"
 
 
 def log(msg):
     print("[omega-port-pair] " + msg, file=sys.stderr, flush=True)
-
-
-def foreign_pads():
-    """Names of virtual pads already on the machine: another run's pad would answer to the same presses."""
-    text = Path("/proc/bus/input/devices").read_text(errors="replace")
-    return [l for l in text.splitlines() if l.startswith("N:") and "X-Box 360" in l]
 
 
 def port_commit(port):
@@ -112,7 +107,8 @@ class Rig:
         self.port = Path(port).resolve()
         self.dir.mkdir(parents=True, exist_ok=True)
         # a short path: the sway IPC socket lives here and a unix socket path is limited to 107 bytes
-        self.runtime = Path("/tmp/oag-omega-port-%s" % lane[:24])
+        self.seat = pad_seat.seat()
+        self.runtime = Path("/tmp/oag-omega-port-%s%s" % (lane[:24], pad_seat.tag(self.seat)))
         self.pids = {}
         self.env = {**os.environ, "XDG_RUNTIME_DIR": str(self.runtime), "WAYLAND_DISPLAY": "wayland-1"}
         self.hold = None
@@ -164,7 +160,7 @@ class Rig:
         env.update(SDL_VIDEODRIVER="wayland", SDL_AUDIODRIVER="dummy", SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS="1", HOME=str(h),
                    XDG_DATA_HOME=str(h / ".local/share"), XDG_CONFIG_HOME=str(h / ".config"), XDG_CACHE_HOME=str(h / ".cache"),
                    GOW3_GAME_DIR=str(self.game), GOW3_DATA_DIR=str(self.dir / "data"), GOW3_USER_DIR=str(user),
-                   GOW3_GPU_USER_DIR=str(gpu), GOW3_TIMEOUT="0")
+                   GOW3_GPU_USER_DIR=str(gpu), GOW3_TIMEOUT="0", **pad_seat.sdl_env(self.seat))
         self.spawn("port", ["timeout", "1500", sys.executable, self.port / "run.py"], env=env,
                    stdout=open(self.dir / "port.log", "w"), stderr=subprocess.STDOUT)
 
@@ -374,9 +370,7 @@ def main():
         sys.exit("XDG_CONFIG_HOME must be a directory under data/scratch/<lane>/: oag-game persists settings there")
     if args.game_mode == "2048" and not (args.hud_labels_ref and args.hud_timer_ref):
         sys.exit("2048 mode needs --hud-labels-ref and --hud-timer-ref (the HUD detector's references)")
-    others = foreign_pads()
-    if others:
-        sys.exit("refusing to start: a virtual pad already exists (%s); the pad is system-wide, so it would answer to this run's presses" % others)
+    pad_seat.require_free(pad_seat.seat())
     pair = ce.Pair(args.platform, args.out)
     plat = pair.plat
     out = args.out.resolve()

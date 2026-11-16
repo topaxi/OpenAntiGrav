@@ -95,6 +95,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pad_seat  # noqa: E402
+
 #: `OAG_VITA3K_CACHE` moves every file this tool writes (config, pid file,
 #: frames, pipeline marker) to a directory of its own, so two members' Vita3K
 #: instances never share a pid file; `OAG_VITA3K_CONFIG` names the config
@@ -319,6 +322,7 @@ def launch_vita3k(title_id, display_num):
     env["DISPLAY"] = ":%d" % display_num
     env["SDL_VIDEODRIVER"] = "x11"
     env["SDL_VIDEO_DRIVER"] = "x11"
+    env.update(pad_seat.sdl_blind_env())  # driven by xdotool: sees no pad, so no other seat's presses reach it
     CACHE.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
         ["vita3k", "-c", str(config), "-w", "-r", title_id],

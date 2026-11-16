@@ -13,8 +13,9 @@
 Run it under `scripts/emu-run.py --child-status <log-dir>/status.json -- ...` (member-rules.md, "Waiting on an emulator capture").
 
 The original runs on shadPS4 0.20 inside a headless `sway` on the render node (Xvfb cannot present, docs/networking/online-lobby.md
-part 3), with its own `HOME`, a muted SDL audio driver and one uinput pad (`scripts/uinput-pads.py`) that no other instance owns
-unless another member runs pads on the same host: the pad is system-wide, so a second member's pads would also drive this game.
+part 3), with its own `HOME`, a muted SDL audio driver and one uinput pad (`scripts/uinput-pads.py`). The pad is system-wide: run
+with `OAG_PAD_SEAT=N` (`scripts/pad_seat.py`) and the pad carries the seat's ids and shadPS4 is told to see that seat's pads
+only, so a second agent's pads on the same host neither drive this game nor are driven by it.
 
 Two shadPS4 settings carry the picture (2026-10-22): `readback_linear_images_enabled = true` with `readbacks_mode = 1` makes the
 race scene draw (with them off the 3D world is black and only the HUD and the lens flare draw); `copy_gpu_buffers = true` crashes
@@ -44,6 +45,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+import pad_seat  # noqa: E402
 
 #: The shadPS4 config keys the capture sets; everything else is the emulator's default (docs/tools/compare-page.md).
 GPU_CONFIG = {
@@ -117,7 +119,8 @@ class Rig:
         self.dir = Path(scratch).resolve()
         self.game = Path(game).resolve()
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.runtime = Path("/tmp/oag-omega-%s" % self.dir.parent.name[:24])
+        self.seat = pad_seat.seat()
+        self.runtime = Path("/tmp/oag-omega-%s%s" % (self.dir.parent.name[:24], pad_seat.tag(self.seat)))
         self.pids = {}
         self.home = self.dir / "home"
         self.env = {**os.environ, "XDG_RUNTIME_DIR": str(self.runtime), "WAYLAND_DISPLAY": "wayland-1"}
@@ -165,11 +168,12 @@ class Rig:
         env = {k: v for k, v in self.env.items() if k != "DISPLAY"}
         env.update(SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS="1", SDL_VIDEODRIVER="wayland", SDL_AUDIODRIVER="dummy", HOME=h,
                    XDG_DATA_HOME=h + "/.local/share", XDG_CONFIG_HOME=h + "/.config", XDG_CACHE_HOME=h + "/.cache",
-                   PATH="%s:%s" % (self.dir / "bin", os.environ["PATH"]))
+                   PATH="%s:%s" % (self.dir / "bin", os.environ["PATH"]), **pad_seat.sdl_env(self.seat))
         self.spawn("shadps4", ["timeout", "1500", "shadps4", "-g", self.game / "eboot.bin"], env=env,
                    stdout=open(self.dir / "shadps4.log", "w"), stderr=subprocess.STDOUT)
 
     def start_pad(self):
+        pad_seat.require_free(self.seat)
         fifo = self.dir / "pad.cmd"
         if fifo.exists():
             fifo.unlink()

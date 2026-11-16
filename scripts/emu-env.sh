@@ -35,6 +35,8 @@ for cfg in "$dst/config.yml" "$dst"/custom_configs/config_*.yml; do
   [ -f "$cfg" ] && sed -i 's/Write Color Buffers: false/Write Color Buffers: true/' "$cfg"
 done
 pad="OAG Pad $lane"
+# A pad seat (scripts/pad_seat.py) names the pad for the seat instead of the lane.
+[ -n "${OAG_PAD_SEAT:-}" ] && pad="OAG seat $OAG_PAD_SEAT pad rpcs3"
 mkdir -p "$dst/input_configs/global"
 printf 'Player 1 Input:\n  Handler: Evdev\n  Device: %s\n' "$pad" > "$dst/input_configs/global/oag.yml"
 cat > "$W/env.sh" <<ENV
