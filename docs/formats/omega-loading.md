@@ -6,7 +6,7 @@ clip.** Drawn by `oag_game::loading::Screen` from `oag_omega::loading::LOADING` 
 
 ## What the disc and the executable say
 
-Read off the base `eboot.bin` in Ghidra (`FUN_01708fe0`, the loading screen's constructor, and `FUN_017062e0`,
+Read off the base `eboot.bin` in Ghidra (`FUN_01708fe0`, the loading screen's starter, which runs the constructor `0x01704280`, and `FUN_017062e0`,
 `LoadingScreenThread`'s body, a state machine on `object+4`) and off the patch `eboot.bin`'s string pool (the
 same run, same order). State 8 is the race load, state 5 a different screen (see "Not wired").
 
@@ -44,8 +44,9 @@ it (the corner is an L, so a flipped sheet fails).
 - **State 5** of `LoadingScreenThread`: a backdrop, a `FE_LOADINGDOT` caption and a `%d%%` readout in a `Blue2048`
   box (`White2048` text). It is what the strings `White2048`/`Blue2048` before `FE_LOADINGDOT` belong to; it is not
   Omega's race load. On 2048 the same screen (its kind 4) **is** the race load, started by every race start
-  ([2048-loading.md](2048-loading.md)); what raises Omega's is unread (its constructor's other callers pass 7 and, at
-  `0x01252b86`, a value not read).
+  ([2048-loading.md](2048-loading.md)); on Omega **no call site starts it** (the starter's six callers pass 8, 7, 8, 7,
+  9 and 0, the one at `0x01252b86` 7; the 1.07 build's five pass 10, 9, 10, 9 and 0), so it is dormant code and stays
+  unwired ([ps4-omega-eu/loading-screen-start.md](../ghidra/functions/ps4-omega-eu/loading-screen-start.md)).
 - The three `LoadingScreens/LoadingScreen_{racer,motion,wipeout}_controls.gnf` (states 0, 1, 9, 10: full-screen stills
   with a fade) and `loading_screen_demo_bar.gnf`.
 - The tournament variant (`+0x598 == 1`: `ER_TOUR_STAN`, `FE_TOUR_TRACKS`, a track list).

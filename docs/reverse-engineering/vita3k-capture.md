@@ -397,6 +397,30 @@ Set up and driven as far as the front end; **taps do not register until the firm
 - **`DATA.BIN`** (`ux0/user/00/savedata/PCSF00007/-AUTO-/`) has no readable strings (`strings -a` prints noise), so
   `CameraP1` is not readable off the save; the options screen is (above).
 
+## The race load, with the screen's own fields (2026-11-16, `vita-race-load-re`)
+
+`scripts/vita-2048-race-load.py --profile <private profile> --out <dir> --node X Y` walks to an event card, taps Play,
+and from then on reads the loading screen's object out of the guest (`/proc/<pid>/mem`, every few milliseconds) while
+grabbing a frame four times a second; `samples.json` holds both. What it settled is on
+[race-load.md](../ghidra/functions/vita-2048-eu-v104/race-load.md). For the next capture:
+
+- **The private profile was built from an installed Vita3K in a minute**: a `pref-path` directory with every top-level
+  entry and every `ux0` entry symlinked to the installed tree, except `ux0/user` (copied, 3 MiB) and
+  `ux0/temp/apps.dat` (copied); the installed `config.yml` copied twice with `pref-path` and the quiet keys changed; the
+  shader cache copied into the private `HOME`.
+- **Play starts the load at once.** The "mode description card" of the walk table above (step 7) and of
+  `vita-2048-pair.py --walk` is the loading screen itself, after its card has turned to the mode page: the second
+  `(882, 480)` tap lands on a load already running. One Play tap is enough.
+- **A load's length is the machine's**: 14 s from the tap on a quiet machine, 53 s at a load average of 40, both
+  sitting at 98 % for the difference. A readout stuck at 56 or 57 % is different: the load never reached its first
+  milestone.
+- **This save's map** (Events 1 to 3 passed): Queens Mall is the node at `(295, 60)`; an unlock banner covers
+  x 88 to 408, y 80 to 132.
+- Two of five boots hung on "Sony Computer Entertainment presents" (the hang above), both at a load average of 40. The
+  script kills its Vita3K by pid on any exit, so a retry is the same command.
+- The headless display is `weston` plus `Xwayland`, not `Xvfb`; stop the pair by the pids in
+  `<profile>/vc/pipeline.json` afterwards (the script leaves the display up for the next run).
+
 ## What a frame is, legally
 
 A screenshot of the running game is game content, so no frame is committed.

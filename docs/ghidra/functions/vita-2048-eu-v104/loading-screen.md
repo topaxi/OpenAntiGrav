@@ -4,7 +4,8 @@ Functions in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image ba
 is applied from [names.tsv](names.tsv). The screen is HD's `LoadingScreen` class carried over
 ([ps3-hdfury-eu/loading-screen.md](../ps3-hdfury-eu/loading-screen.md) is the reading it is compared against); the
 format-side page is [2048-loading.md](../../../formats/2048-loading.md). **Not implemented**: a race load starts kind 4
-(below), which is unbuilt, and kind 7 is started by no call site. `oag_2048::TITLE.loading` stays `None`.
+(below, and in full in [race-load.md](race-load.md)), which is unbuilt, and kind 7 is started by no call site.
+`oag_2048::TITLE.loading` stays `None`.
 
 ## The object and its kinds
 
@@ -119,17 +120,16 @@ What a Vita player sees on a race load. Read, **not built** (the Omega page's "s
   `loading_screen_demo_bar.gxt` and one of three team logos at random, `data/FE/NewImages/Team_Logos/{AG_Systems2048,
   Feisar2048, Qirex2048}.gxt`, `rand() % 3`, from the pointer table at `0x815248ac`). All nine pictures ship
   (`loading_ground_truth::every_picture_the_race_load_names_is_in_the_package`).
-- **Not read, and why this build does not draw it:** vtable slot `+0x60` of the mode (what separates the card
-  from the still), `FUN_8105021c` and `FUN_81056e90` (the other two backdrops), `FUN_8105d4a8` (the meter at (790, 475)),
-  the card's `mode` argument (`CampaignEventCard_DrawPanel(slide, event)`'s second argument is the *event*, and the
-  load has no event card state of its own), and which of our `oag_race::Mode`s are on the HD lineage.
+- **Read and measured since (2026-11-16): [race-load.md](race-load.md).** Slot `+0x60` is non-zero for the attract
+  mode alone, so every launched race draws a card; `FUN_8105021c` is `CampaignEventCard_DrawCellPanel` (the HD and
+  Fury cells), `FUN_81056e90` the online events' card, `FUN_8105d4a8` `FrontEnd_DrawLoadingMeter`; the card's `mode`
+  argument is the event (the mode object is the event); and the card shows a game tip, then a mode page.
 - A percentage box: `Blue2048` (`0xff19295d`) and `White2048` (`0xffe1e4eb`) of `Skin.xml`, a 70 by 70 fill at (16,16),
   a bar fill (86,82) 338 by 4, `FE_LOADINGDOT` at (105,30) in the `default` face, `%d%%` of `+0x88 * 0.006024096 * 100`
   (1/166) at (51,38) at scale 0.6, and `FUN_8105d4a8(+0x88 / 166, 790, 475, Blue2048)` at the bottom right.
-- **The ceiling reads 57 %.** `94.62 / 166 = 0.57`, so the readout stops at 57 % until the loader raises the target
-  (`FUN_812845b8`), which is the 56 % the Vita3K boots sat at when a load stalled
-  ([vita3k-capture.md](../../../reverse-engineering/vita3k-capture.md), "Metro Park's Time Trial never finishes
-  loading"). Corroboration, not proof (confidence 65).
+- **57 % is only the first ceiling.** `94.62 / 166 = 0.57` is what `LoadingScreen_Start` stores; the loader raises it
+  to 75, 95 and 98 % through `LoadingScreen_SetCeiling` (`0x81284550`, not `FUN_812845b8`, which sets the rate) and the
+  bar itself (86, 82) never grows. The law, with a live run's numbers, is in [race-load.md](race-load.md).
 
 ## Names
 

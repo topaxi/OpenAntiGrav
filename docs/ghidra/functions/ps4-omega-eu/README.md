@@ -57,6 +57,8 @@ unnamed rather than forced.
 
 ## Pages
 
+- [loading-screen-start.md](loading-screen-start.md) - the loading screen's starter and every kind a call
+  site passes: the race load is 8 (10 on 1.07), `0x01252b86` passes 7, and state 5 has no caller.
 - [engine-light.md](engine-light.md) - `EngineLightData.xml` feeds one vertex light per craft:
   its colour by era, Fury skin and mag strip, the 32-slot table, six lights a draw.
 - [hull-tone.md](hull-tone.md) - the unlit hull's 1.6x: live knockouts of the lighting object on the port;

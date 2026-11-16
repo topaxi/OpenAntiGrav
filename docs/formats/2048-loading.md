@@ -1,39 +1,52 @@
 # Wipeout 2048's loading screen
 
 **2048 ships HD's loading-screen class, and the retail executable starts a different kind of it for a race load.**
-Confidence 80 (a call-site census and a decompile, no running original: the machine has no Vita3K profile). The
-evidence is [vita-2048-eu-v104/loading-screen.md](../ghidra/functions/vita-2048-eu-v104/loading-screen.md).
-`oag_2048::TITLE.loading` is `None`, on purpose: the screen a Vita player sees is not built, and the one that is
-authored in full is never started.
+Confidence 90: a call-site census and a decompile, and since 2026-11-16 three captures of a campaign race load on
+Vita3K with the screen's own fields read out of the guest's memory. The evidence is
+[vita-2048-eu-v104/loading-screen.md](../ghidra/functions/vita-2048-eu-v104/loading-screen.md) (the class and the
+census) and [vita-2048-eu-v104/race-load.md](../ghidra/functions/vita-2048-eu-v104/race-load.md) (what the race load
+draws and its meter's law). `oag_2048::TITLE.loading` is `None`, on purpose: the screen a Vita player sees is fully
+read and not yet built, and the one that is authored in full is never started.
 
 ## Two screens in one class
 
 | kind | what it is | reached |
 | ---: | --- | --- |
-| **4** | the race load: the mode's event card (or a controls still), a `Blue2048`/`White2048` percentage box, `FE_LOADINGDOT` and a `%d%%` readout | by every race start (`FUN_8115f09a`, `FUN_811494fa`) |
+| **4** | the race load: the launched event's own card over the blurred front end (a still for the attract demo alone), a `Blue2048`/`White2048` percentage box, `FE_LOADINGDOT`, a `%d%%` readout and a seven-triangle meter | by every race start (`FUN_8115f09a`, `FUN_811494fa`) |
 | **7** | HD's screen: caption naming the circuit, one of five illustrated features, a dotted progression bar | **by no call site** of the v1.04 executable |
 
 Every call of the starter `LoadingScreen_Start` (`0x812845ce`) was censused: eight calls, with `0` (presents), `4` (race
 start, three sites), `6` (boot and shutdown, three sites) and `8` (the epilepsy still). The argument is a literal at each.
 
-**Why nothing is wired.** Kind 7 was wired in this lane (the layout is HD's operand for operand, minus the mode icon,
-the ten illustrations and six marks resolve, a white ground) and taken out again: it is a screen no 2048 player has
-seen, and a stand-in for the one they have. The evidence page keeps its operands. Kind 4 needs, and a lane that builds it
-should start from:
+**Why nothing is wired.** Kind 7 was wired once (the layout is HD's operand for operand, minus the mode icon, the ten
+illustrations and six marks resolve, a white ground) and taken out again: it is a screen no 2048 player has seen, and a
+stand-in for the one they have. The evidence page keeps its operands.
 
-1. The event card as a backdrop. The card's painter (`CampaignEventCard_DrawPanel`, `0x81055a16`, read in
-   `campaign-event-card.md`) is `oag_ui::frontend::Frontend::draw_event_card`, which lives in the front end's state and needs
-   the launched event's `EventCard`; `loading::Screen` has the front end's sprite sheet and none of that state, so the launch
-   must hand the event over.
-2. The mode test that picks the card or the still (vtable slot `+0x60`, unread) and which of our modes are on the HD
-   lineage; the controls still sits at (-32, 144), 1024 by 256.
-3. The percentage box: `Blue2048` (`0xff19295d`) and `White2048` (`0xffe1e4eb`), a 70 by 70 fill at (16, 16), a 338 by 4
-   bar at (86, 82), `FE_LOADINGDOT` at (105, 30), `%d%%` at (51, 38) at scale 0.6, a meter at (790, 475). Its fraction
-   is the bar's `+0x88 / 166`, ceiling `94.62 / 166` = 57 % until the loader raises the target (`FUN_812845b8`), which is the
-   56 % a stalled Vita3K load sat at ([vita3k-capture.md](../reverse-engineering/vita3k-capture.md)).
-4. A frame of the original. **None exists**: this machine has no Vita3K profile (no `~/.config/Vita3K`). The recipe is
-   `scripts/vita-2048-pair.py --walk` (`docs/tools/compare-page.md`, "2048 (Vita) pairs"): its walk waits "out the load on the loading bar" until a
-   dark frame, so grab frames every second between the mode card's tap and that frame.
+## The race load, as measured
+
+Queens Mall (`2048 - Event 2`), three runs, 2026-11-16; every operand, address and the live numbers are on
+[race-load.md](../ghidra/functions/vita-2048-eu-v104/race-load.md).
+
+1. **The backdrop is the front end's own event card**, drawn by the same painter with the same page state, over the
+   front end's blurred campaign map. Nothing is handed over in the original: the launched event is the current game
+   mode, and the painter takes it. Only the attract demo's mode object answers the test that picks a still instead
+   (vtable slot `+0x60`: `1` for `ATTRACT`, `0` for the base and the six other mode classes).
+2. **A game tip replaces the track photo** for the first seconds (when the profile's `TutorialsActive` is `ON`): a
+   398 by 334 panel at (16, 92) with a `?` mark, `TUT_TIP_HEADER`, a picture, a title and a body from a 37-row table in
+   the executable; the row is picked by the event (its class, its weapon pads) and the profile's first loads.
+3. **Then the card turns to a mode page and slides to the middle.** Once the race manager exists the card gains a
+   page describing the mode (`Tut_Event_Race_1` and its siblings under the mode's name and icon), turns to it, drops
+   the tip and the photo, and moves 202 px left in thirteen draws (x 420 to 218).
+4. **The percentage box**: a 70 by 70 `Blue2048` fill at (16, 16) with `%d%%` in `White2048` at scale 0.6 centred on
+   (51, 38), `FE_LOADINGDOT` at (105, 30), a 338 by 4 rule at (86, 82) that does not grow, and seven triangles at the
+   bottom right (centres x 895 down to 715, y 475) that pulse and fill in from the left with the fraction.
+5. **The meter's law**: shown columns of 166, `+rate` each draw at 30 draws a second, clamped to a ceiling. It starts
+   at ceiling 57 % and rate 0.115; the loader raises the ceiling to 75, 95 and 98 %, each time multiplying the rate by
+   `(old gap + new gap) / new gap`; the race manager then freezes the rate; the end of the load sets 100 %. Live: about
+   10 % after three seconds, then 12.7 % a second to 98 %, a hold, 100 % for an instant.
+
+The frames are not in the repository (they are the original's pixels). `scripts/vita-2048-race-load.py` reproduces
+them with the memory samples in about a minute on a private Vita3K profile.
 
 ## What ships (asserted)
 
@@ -55,14 +68,16 @@ ground that makes a base picture's overhang invisible is white. The kind draws t
 
 ## Against Omega and HD
 
-- **Omega: checked, differs, and the check confirms Omega's wiring.** Omega's constructor `FUN_01708fe0` is called with
-  `EDI = 8` by `ModeManager_ConstructByMode` (`0x0124fe44`) and `FUN_01277470` (`0x01277752`) and with `7` by `Game_Main`
-  (`0x0163e71d`): the race start of Omega **is** the HD feature screen (its state 8), so `omega-loading.md`'s reading, which
-  had been taken from the thread body alone, holds. 2048's race start is its kind 4, which is Omega's unwired
-  "state 5" in shape (backdrop, `FE_LOADINGDOT`, a `%d%%` readout in a `Blue2048` box), so state 5 is **a different screen
-  on Omega** (not its race load) and the same screen on 2048. Omega's state 5 was not wired here.
+- **Omega: checked, differs.** Omega's `LoadingScreen_Start` (`0x01708fe0`, which this page used to call the
+  constructor) is called with 8 by `ModeManager_ConstructByMode` (`0x0124fe49`) and `0x01277470` (`0x01277757`), with 7
+  by `Game_Main` and at `0x01252b86`, and with 9 and 0 by `Game_Main`: the race start of Omega **is** the HD feature
+  screen (its state 8), and its "state 5" (this kind 4 in shape) is **started by no call site**, in the base and the
+  1.07 build alike ([ps4-omega-eu/loading-screen-start.md](../ghidra/functions/ps4-omega-eu/loading-screen-start.md)).
+  Omega also ships none of the tip art. So nothing of the race load above applies to Omega; state 5 stays unwired
+  there for good reason.
 - **HD: ported.** Nothing changes in HD's loader.
 
 ## Looking at it
 
-Nothing to look at: `oag-game data/extracted/vita/PCSF00007 --loading-screen ...` draws this build's generic counts screen.
+Nothing of ours to look at yet: `oag-game data/extracted/vita/PCSF00007 --loading-screen ...` draws this build's generic
+counts screen. The original's is one command away (`scripts/vita-2048-race-load.py`).

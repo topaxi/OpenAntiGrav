@@ -238,3 +238,5 @@
 # 2026-11-16 panelmap-re: the panel-map road's blur constants and reflection cube (panel-displacement.md); base addresses by byte search, bodies read on 1.07
 0x0202f080	data	g_reflective_blur_coeffs	88	panel-displacement.md
 0x01f8f688	data	g_cube_reflection_tex	85	panel-displacement.md
+# 2026-11-16 vita-race-load-re: the loading screen starter and the census of its kinds (loading-screen-start.md)
+0x01708fe0	function	LoadingScreen_Start	88	loading-screen-start.md
