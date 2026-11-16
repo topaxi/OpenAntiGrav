@@ -383,6 +383,8 @@ fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
         mode: oag_race::Mode::SingleRace,
         difficulty: oag_ai::Difficulty::Ace,
         track: Some(track.to_string()),
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));

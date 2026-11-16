@@ -34,6 +34,8 @@ fn loaded(event: &str) -> Option<oag_raceplay::Loaded> {
     let options = oag_raceplay::Options {
         source: source.display().to_string(),
         seed: Some(1),
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..oag_raceplay::Options::default()
     };
     Some(oag_raceplay::load_event(&options, event).expect("the event loads"))
@@ -462,6 +464,8 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
             class: class.to_string(),
             no_driver_for_class: !oag_ai::coverage::project_driver_covers(class),
             seed: Some(1),
+            // The race is flown for its simulation, which no track art feeds.
+            ribbon: true,
             ..oag_raceplay::Options::default()
         };
         let loaded = oag_raceplay::load(&options).expect("loads");

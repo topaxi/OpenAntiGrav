@@ -35,6 +35,8 @@ fn loaded(track: &str, class: &str) -> Option<oag_raceplay::Loaded> {
             mode: oag_race::Mode::SingleRace,
             track: Some(track.to_string()),
             seed: Some(1),
+            // The race is flown for its simulation, which no track art feeds.
+            ribbon: true,
             ..oag_raceplay::Options::default()
         })
         .unwrap_or_else(|e| panic!("loading {track}: {e:#}")),

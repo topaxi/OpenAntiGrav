@@ -43,6 +43,8 @@ fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
         weapons_override: Some(false),
         track: Some(track.to_string()),
         seed,
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..race::Options::default()
     })
     .expect("loading the race");
