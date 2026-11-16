@@ -56,7 +56,7 @@ the numbers below is measured unless it says so.
   Size XL (30), difficulty hard (40): the event-loop and window API changed.
   Wait for the stable release; reopen as an `oag-game` and `oag-view` migration
   lane then.
-- **wasmtime 51** is `51.0.0-rc.1`; ours is the exact pin `=50.0.1` on purpose
+- **wasmtime 51** is `51.0.0-rc.1`; ours is the exact pin `=50.0.2` on purpose
   (determinism: fuel, NaN canonicalisation, ABI word). Its `cranelift-codegen`
   decides whether `sha2` 0.10 (hence `generic-array` 0.14.7 and
   `crypto-common` 0.1, a second copy beside aes 0.9's `crypto-common` 0.2)
