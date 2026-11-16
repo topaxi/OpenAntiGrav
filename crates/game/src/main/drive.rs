@@ -452,7 +452,7 @@ fn resolved(session: &Session) -> Option<Resolved> {
         mode: options.mode.name().to_string(),
         target: race
             .filter(|_| options.mode == oag_race::Mode::Eliminator)
-            .map(oag_raceplay::Race::eliminator_target),
+            .map(|race| race.eliminator_target()),
     })
 }
 

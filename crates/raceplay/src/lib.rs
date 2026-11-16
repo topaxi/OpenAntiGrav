@@ -774,7 +774,7 @@ pub struct Race {
     /// in one place instead of interleaved with the world above. Nothing in
     /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
-    view: RaceView,
+    view: Box<RaceView>,
     /// The recording of this race, if one was asked for, and the ghost it
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
     /// [`replay`].

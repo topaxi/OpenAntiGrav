@@ -295,11 +295,10 @@ Looked at frame by frame at 1280x720 on Pulse PSP EU `16_Track` (High and Low), 
 9. **The sounds were not touched**: the three synthesised placeholders still start and stop on
    the entrance and the exit, with no rise into the tunnel.
 10. `check-size` names `crates/game/src/race_capture.rs` at 1501 lines, with and without this
-    change. The `race-build` stack overflow that two commit messages of 2026-11-10 call red on
-    the branch is not a defect of it: a disc-backed test that spawns the game overflows that
-    thread under `--cargo-profile quick` (opt-level 0) and passes under the ground-truth
-    profile (`drive_ground_truth::a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature`
-    and `pause_menu_ground_truth::a_speed_lap_pauses_into_the_speed_lap_screen`, both checked).
+    change. ~~The `race-build` stack overflow under `--cargo-profile quick`~~ is fixed: `build_race_stage`'s
+    frame went from 1.5 MiB to 0.36 MiB (`RaceStage` holds the scene, race and overlays by `Box`), and
+    both disc tests (`drive_ground_truth::a_race_box_race_runs_the_simulation_mods_only_with_the_extensions_feature`,
+    `pause_menu_ground_truth::a_speed_lap_pauses_into_the_speed_lap_screen`) pass under quick.
 
 ## SVG icons (lane svg-assets, 2026-11-04)
 

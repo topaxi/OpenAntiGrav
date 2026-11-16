@@ -53,18 +53,8 @@ fn recording(ticks: u64) -> (Replay, Vec<String>) {
 
 /// A viewer over the fixture and a race not yet handed to it.
 fn unbegun(replay: Replay) -> (Box<Viewer>, Box<Race>) {
-    // `Viewer::open` rebuilds the recorded race and `Race::start` builds another; a debug
-    // build copies several `Race` values through those frames, about 2 MiB together, so they
-    // run on a larger stack (as in `timeline.rs`).
-    std::thread::Builder::new()
-        .stack_size(16 << 20)
-        .spawn(move || {
-            let viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
-            (viewer, Box::new(Race::start(fixture())))
-        })
-        .expect("spawns")
-        .join()
-        .expect("the viewer and the race open")
+    let viewer = Box::new(Viewer::open(fixture(), replay).expect("the race it records"));
+    (viewer, Box::new(Race::start(fixture())))
 }
 
 /// A viewer over the fixture and the race it draws, handed over as the session hands it.
@@ -214,17 +204,6 @@ fn clocks(ticks: u64) -> Vec<(u64, u64)> {
 /// clock of the view side from another moment.
 #[test]
 fn the_hud_clocks_after_a_seek_are_the_live_races_at_that_tick() {
-    // Several `Race` values live on this frame at once and a debug build copies them, so the
-    // default 2 MiB test stack is passed or missed by a few KB (as in `timeline.rs`).
-    std::thread::Builder::new()
-        .stack_size(16 << 20)
-        .spawn(the_hud_clocks_after_a_seek_body)
-        .expect("spawns")
-        .join()
-        .expect("the body passes");
-}
-
-fn the_hud_clocks_after_a_seek_body() {
     let (replay, _) = recording(TICKS);
     let live = clocks(TICKS);
     assert!(

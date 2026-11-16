@@ -23,23 +23,23 @@ mod medal_message;
 
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {
-    pub(crate) scene: race::Scene,
-    pub(crate) race: race::Race,
+    pub(crate) scene: Box<race::Scene>,
+    pub(crate) race: Box<race::Race>,
     /// The race's keyframes since its first tick, for photo mode's rewind; `None` where photo
     /// mode is not offered (`oag_game::photo::SAVES`).
-    pub(crate) keeper: Option<race::timeline::Keeper>,
+    pub(crate) keeper: Option<Box<race::timeline::Keeper>>,
     /// The HUD, or `None` when the disc's layout could not be read.
-    pub(crate) hud: Option<oag_game::hud_overlay::Overlay>,
+    pub(crate) hud: Option<Box<oag_game::hud_overlay::Overlay>>,
     /// The results table, drawn once the race has one.
     ///
     /// Not an `Option`, unlike the HUD: that one needs a layout off the disc and
     /// there may be none, where this needs only a font and
     /// `oag_ui::font::Atlas::build` always answers with the built-in 5x7 set.
-    pub(crate) scoreboard: oag_game::scoreboard::Overlay,
+    pub(crate) scoreboard: Box<oag_game::scoreboard::Overlay>,
     /// The start-line countdown's own `<Mode3D>` model, or `None` when this
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `oag_game::hud_countdown`.
-    pub(crate) countdown: Option<oag_game::hud_countdown::Countdown>,
+    pub(crate) countdown: Option<Box<oag_game::hud_countdown::Countdown>>,
     /// The countdown art's own clock in seconds while a resume counts down (and
     /// `GO` lingers after it), set by the session each frame; `None` otherwise.
     /// The art is drawn on this clock through the same model the start uses, and
@@ -51,9 +51,9 @@ pub(crate) struct RaceStage {
     pub(crate) resume_go: String,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
-    pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
+    pub(crate) track_panel: Option<Box<oag_game::track_panel::Overlay>>,
     /// The screen an attract demo draws over its race, when the title authors one and it read.
-    pub(crate) demo_overlay: Option<oag_game::demo_overlay::Overlay>,
+    pub(crate) demo_overlay: Option<Box<oag_game::demo_overlay::Overlay>>,
     /// Which circuit/mode/class row [`oag_game::records`] persists this
     /// race's outcome under - resolved once, at load, from
     /// [`oag_raceplay::Loaded::title`] and the [`oag_raceplay::Options`]

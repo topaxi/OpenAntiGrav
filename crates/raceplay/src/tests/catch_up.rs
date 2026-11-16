@@ -49,8 +49,7 @@ fn window_input(at: usize, fires: bool) -> PlayerInputs {
     inputs
 }
 
-/// The server's state at the start of the window, and the client at the same point. Boxed:
-/// a `Race` is large enough that two of them on a debug test thread's stack overflow it.
+/// The server's state at the start of the window, and the client at the same point.
 fn agreed() -> (Box<Race>, Box<Race>) {
     let (mut server, mut client) = (Box::new(armed_pair()), Box::new(armed_pair()));
     for _ in 0..AGREED {

@@ -158,22 +158,14 @@ fn check(source: &Path, name: &str, which: usize) {
     let offer = oag_net::extract::offer(&source).expect("offers");
     let (planned, ticks, to_the_finish) = races(&offer).swap_remove(which);
     let params = planned.params;
-    // One after the other, each on a thread with room for the race: a title's loaded race
-    // is gigabytes resident, and six titles run at once.
     // The races `extract` loaded to prove the extraction are the ones flown: a race is loaded
     // once from each side, not once to check and again to fly.
     assert_eq!(pairs.len(), 1, "{name}: the race loaded from both sides");
     let pair = pairs.remove(0);
-    let fly = |race: Box<oag_raceplay::Race>| {
-        let params = params.clone();
-        std::thread::Builder::new()
-            .stack_size(64 << 20)
-            .spawn(move || hashes(race, &params, ticks, to_the_finish))
-            .expect("spawns")
-            .join()
-            .expect("the race flies")
-    };
-    let (from_source, from_extraction) = (fly(pair.source), fly(pair.extraction));
+    let (from_source, from_extraction) = (
+        hashes(pair.source, &params, ticks, to_the_finish),
+        hashes(pair.extraction, &params, ticks, to_the_finish),
+    );
     let missed = oag_assets::record::take_misses();
     assert!(
         missed.is_empty(),
