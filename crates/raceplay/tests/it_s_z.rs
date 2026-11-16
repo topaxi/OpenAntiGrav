@@ -22,6 +22,7 @@ mod sfx_repeating_ground_truth;
 mod sfx_timeline_ground_truth;
 mod sfx_xfade_2048_ground_truth;
 mod sfx_xfade_ground_truth;
+mod sh_probes_ground_truth;
 mod shadow_ground_truth;
 mod shadow_stability_ground_truth;
 mod shield_difficulty_ground_truth;

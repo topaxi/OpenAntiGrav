@@ -598,12 +598,43 @@ mod bloom;
 mod exposure;
 mod light;
 mod probes;
+mod sh_probes;
 pub use bloom::hd_bloom_params;
 pub(super) use bloom::{envsettings_bloom, scene_store};
 use exposure::envsettings_exposure;
 pub use light::authored_light;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
 pub(super) use probes::read_probes;
+pub(super) use sh_probes::read_sh_probes;
+
+/// Writes the circuit's fog colour into the track vertices that carry `fc01_dummy`'s placeholder
+/// pixel, and says how many.
+#[cfg(feature = "view")]
+pub(super) fn fill_flat_fog(
+    track_model: &mut mesh::Model,
+    authored_fog: Option<mesh_render::Fog>,
+    output_scale: f32,
+    report: &mut Vec<String>,
+) {
+    let flat = authored_fog.map_or([0.0; 3], |fog| fog.colour.map(|c| c * output_scale));
+    let mut filled = 0usize;
+    for v in &mut track_model.vertices {
+        if v.colour == mesh::rcs::psp2::FOG_FLAT {
+            v.colour = [flat[0], flat[1], flat[2], 1.0];
+            filled += 1;
+        }
+    }
+    if filled > 0 {
+        report.push(format!(
+            "fc01_dummy: {filled} vertices drawn as fogColour {flat:?} ({})",
+            if authored_fog.is_some() {
+                "the circuit's authored fog colour, fixed at load and not moved by the Zone grade; which value the engine binds is chosen, not measured"
+            } else {
+                "the circuit authors no fog, so black"
+            }
+        ));
+    }
+}
 
 /// Everything the four environment readers found, in one value.
 ///

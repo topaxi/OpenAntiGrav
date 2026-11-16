@@ -574,12 +574,25 @@ impl super::super::Scene {
                 // craft, one array layer per grid slot, where the circuit ships any. Blended
                 // only for a hull this view draws ([`Self::hull_seen`]): each view of a split
                 // writes what it draws, ahead of its own submission.
-                let env_layer = self.env_probes.as_ref().map(|probes| {
-                    if self.hull_seen(race, slot, frustum) {
-                        probes.write(queue, slot, race.ship_probe_position(slot));
-                    }
-                    slot
-                });
+                let env_layer = self
+                    .env_probes
+                    .as_ref()
+                    .map(|probes| {
+                        if self.hull_seen(race, slot, frustum) {
+                            probes.write(queue, slot, race.ship_probe_position(slot));
+                        }
+                        slot
+                    })
+                    .or_else(|| {
+                        // Omega's hull ambient is a spherical-harmonic probe in its own table,
+                        // named by the same layer field.
+                        self.sh_ambient.as_ref().map(|sh| {
+                            if self.hull_seen(race, slot, frustum) {
+                                sh.write(queue, slot, race.ship_probe_position(slot));
+                            }
+                            slot
+                        })
+                    });
                 drawable.write_hull(
                     queue,
                     view_projection,

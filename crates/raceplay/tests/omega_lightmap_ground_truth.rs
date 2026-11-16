@@ -30,11 +30,9 @@ fn source() -> Option<String> {
     Some(path.display().to_string())
 }
 
-/// Every circuit's own file, through the reader the race uses so the patch's copy wins,
-/// carries the five bright-pass scalars and four blend factors (a census of 38 files;
-/// `tonemap.md`, "The bloom chain"). The Bloom keys differ by circuit, and one circuit's
-/// threshold sits above the curve's `1.0`, so its frame term never fires.
-fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives) {
+/// The 38 circuit `.envsettings` names the censuses below walk: Omega's 14 HD-lineage
+/// circuits, the 12 with a reversed twin, the two extra Zone files and the ten 2048-lineage ones.
+fn every_circuit_envsettings() -> Vec<String> {
     const HD_LINEAGE: [&str; 14] = [
         "01_vineta_k",
         "02_metropia",
@@ -79,6 +77,15 @@ fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives
             .map(|c| format!(r"Data\environments2048\{c}\track.envsettings")),
     );
     assert_eq!(names.len(), 38);
+    names
+}
+
+/// Every circuit's own file, through the reader the race uses so the patch's copy wins,
+/// carries the five bright-pass scalars and four blend factors (a census of 38 files;
+/// `tonemap.md`, "The bloom chain"). The Bloom keys differ by circuit, and one circuit's
+/// threshold sits above the curve's `1.0`, so its frame term never fires.
+fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives) {
+    let names = every_circuit_envsettings();
     let mut thresholds = Vec::new();
     for name in &names {
         let bytes = archives
@@ -96,6 +103,49 @@ fn every_circuit_authors_a_whole_bloom_block(archives: &mut oag_assets::Archives
     assert!(thresholds.contains(&0.784), "Vineta K's own number");
 }
 
+/// Every circuit that is not a Zone ships a `track.shprobes` beside its settings (34 of the 38:
+/// 12 forward, 12 reversed, the ten 2048-lineage), each closing the layout exactly with at least
+/// one triple, and authors `Ship diffuse brightness` and its `(shadow)` twin, which agree. The Zone
+/// circuits ship neither a probe file nor the twin, so their hulls keep the constant ambient.
+fn every_circuit_ships_the_hull_ambient_inputs(archives: &mut oag_assets::Archives) {
+    use oag_tables::envsettings::{OMEGA_SHIP_DIFFUSE_BRIGHTNESS, OMEGA_SHIP_DIFFUSE_SHADOW};
+    let (mut with, mut without) = (0, 0);
+    for name in every_circuit_envsettings() {
+        let sh = name.replace(".envsettings", ".shprobes");
+        let text = String::from_utf8(archives.read_name(&name).expect("reads")).expect("text");
+        let env = EnvSettings::parse(&text).expect("parses");
+        let k = env.scalar(OMEGA_SHIP_DIFFUSE_BRIGHTNESS);
+        assert!(k.is_some_and(|k| k > 0.0), "{name}: {k:?}");
+        let Ok(bytes) = archives.read_name(&sh) else {
+            assert!(name.contains("zone_"), "{sh}: only a Zone ships none");
+            assert_eq!(env.scalar(OMEGA_SHIP_DIFFUSE_SHADOW), None, "{name}");
+            without += 1;
+            continue;
+        };
+        with += 1;
+        let probes =
+            oag_vex::shprobes::ShProbes::parse(&bytes).unwrap_or_else(|e| panic!("{sh}: {e}"));
+        assert!(probes.len() >= 3, "{sh}");
+        assert_eq!(
+            bytes.len(),
+            8 + probes.len() * 120,
+            "{sh}: the layout closes exactly"
+        );
+        assert_eq!(env.scalar(OMEGA_SHIP_DIFFUSE_SHADOW), k, "{name}");
+        for i in (0..probes.len()).step_by(97) {
+            assert!(
+                probes.position(i).iter().all(|c| c.is_finite()),
+                "{sh}: {i}"
+            );
+            assert!(
+                probes.coefficients(i).iter().all(|c| c.is_finite()),
+                "{sh}: {i}"
+            );
+        }
+    }
+    assert_eq!((with, without), (34, 4));
+}
+
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
 fn tech_de_ras_authored_triple_reaches_the_rig() {
@@ -109,6 +159,7 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     .expect("text");
     let env = EnvSettings::parse(&text).expect("parses");
     every_circuit_authors_a_whole_bloom_block(&mut archives);
+    every_circuit_ships_the_hull_ambient_inputs(&mut archives);
     assert_eq!(
         env.vec3(NOVA_PRELIT),
         Some([2.5, 0.2, 2.0]),

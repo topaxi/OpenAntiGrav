@@ -62,6 +62,21 @@ pub const ENV_PROBE_LAYERS: u32 = OCCLUSION_LAYERS * 2;
 /// The environment-probe array's texel size: the reflection map's, `128x64`.
 pub const ENV_PROBE_SIZE: (u32, u32) = (128, 64);
 
+/// The per-craft spherical-harmonic ambient table: [`SH_PROBE_ROWS`] rows of [`SH_PROBE_ROW`]
+/// `vec4`s, raw `f32`s. A row is a craft's nine rgb coefficients (a `vec4` each, alpha unused),
+/// then `(K, Ks, 1, 0)` - `Ship diffuse brightness`, its `(shadow)` twin, and the flag that the row
+/// holds a probe (a zeroed row leaves the hull on its other ambient).
+///
+/// **A uniform buffer, not a texture**: the scene group already binds 16 sampled textures, the
+/// WebGPU default limit (`material_layout`'s test), and a buffer does not count against it.
+pub const SH_PROBE_ROW: usize = 10;
+
+/// One row per craft, like the sun-occlusion array's layers.
+pub const SH_PROBE_ROWS: usize = OCCLUSION_LAYERS as usize;
+
+/// The table's size in bytes.
+pub const SH_PROBE_BYTES: u64 = (SH_PROBE_ROW * SH_PROBE_ROWS * 16) as u64;
+
 /// The self-shadow maps' texel format: real depth, for the same reason
 /// [`SHADOW_DEPTH_FORMAT`] is - a comparison needs it, and eight bits
 /// over a 140-unit-deep box would be half a unit per step.
@@ -84,7 +99,7 @@ pub const SELF_SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32
 /// (`super::ShadowMaps::behind_glass`), read through the coverage map's
 /// clamped filtering sampler, which is the original's own sampler state for it
 /// (clamp to edge, linear, `0x60030303`/`0x02022000` on Vineta K's capture).
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 9] {
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 10] {
     [
         wgpu::BindGroupLayoutEntry {
             binding: 6,
@@ -168,6 +183,16 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 9] {
             },
             count: None,
         },
+        wgpu::BindGroupLayoutEntry {
+            binding: 18,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: std::num::NonZeroU64::new(SH_PROBE_BYTES),
+            },
+            count: None,
+        },
     ]
 }
 
@@ -246,6 +271,8 @@ pub(super) struct Resources {
     pub env_probe_view: wgpu::TextureView,
     /// The circuit's sky reflection map, or a black placeholder.
     pub sky_probe_view: wgpu::TextureView,
+    /// The per-craft spherical-harmonic ambient table, or a zeroed placeholder.
+    pub sh_probe_buffer: wgpu::Buffer,
 }
 
 /// The view and sampler to bind, given the caller's map or none.
@@ -273,6 +300,7 @@ pub(super) fn resources(
         behind_glass,
         env_probes,
         sky_probe,
+        sh_probes,
     } = maps;
     let sampler = oag_gpu::texture::clamp_linear_sampler(device, "shadow map");
     let view = match map {
@@ -425,6 +453,16 @@ pub(super) fn resources(
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         }
     };
+    // Zeroed, so no row is flagged: no hull names a row without a table bound.
+    let sh_probe_buffer = match sh_probes {
+        Some(buffer) => buffer.clone(),
+        None => device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("spherical-harmonic probe placeholder"),
+            size: SH_PROBE_BYTES,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }),
+    };
     Resources {
         view,
         sampler,
@@ -435,5 +473,6 @@ pub(super) fn resources(
         behind_glass_view,
         env_probe_view,
         sky_probe_view,
+        sh_probe_buffer,
     }
 }

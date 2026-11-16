@@ -268,9 +268,60 @@ box is `shadow * SH * albedo` and `(1 - shadow) * SH * albedo`): their ratio is 
 factor is `N.L`: dump ours' `n . dir` for that panel and compare with the original's sun share over its ambient share times
 `kmix * SH / sun`.
 
+### Wired (2026-11-16, lane `hull-sh-ambient`)
+
+The ambient is wired for Omega's race hulls (every craft on the grid, opponents too; wrecks keep the constant ambient).
+`oag_vex::shprobes` reads the file (little-endian, `SHPB`, count a multiple of 3, 120-byte records); the census of every
+shipped circuit is `omega_lightmap_ground_truth` (34 files: 12 forward, 12 reversed, the ten 2048-lineage; the four Zone
+circuits ship none, and none authors a `(shadow)` twin there). `Lighting.Ship diffuse brightness` is authored by all 38
+circuit files (0.2 Vineta K, Sol 2; 0.25 Modesto, Metropia, Moa Therma, Chenghou, Talons; 0.35 Tech De Ra; 0.4 Anulpha;
+0.5 Ubermall, Sebenco, Amphiseum; 1.0 on the 2048-lineage Altima, Sol, Square and the Zones, 0.25 to 0.6 on its other circuits), and its `(shadow)` twin equals it
+wherever present, so the pair is `(K, K)` today. `oag_raceplay::sh_probes` blends per craft (nearest of the three lanes in
+the nearer triple, along-track weight by projection, clamped, the way HD's `locate` does it) into a ten-`vec4` row of a
+scene-group uniform table (`mesh_render::SH_PROBE_*`, binding 18; a buffer, not a texture, because the scene group already
+binds the 16 sampled textures WebGPU guarantees); `shade.wesl`'s `sh_hull_ambient` evaluates the law of the program section
+with `shadow` = ours' hull sun occlusion. A circuit with no file, or no `K`, keeps the constant ambient and says so in the
+load report. HD, 2048, Pulse and Pure bind no table and draw pixel-identically (`hd/the-amphiseum`, `2048-vita/anulpha-pass`:
+no pixel differs from main).
+
+| Pair (ours, engine light off, tick 100) | Housing box `(890,690)-(1010,800)` before | after | Original (stored frame, light on) |
+| --- | --- | --- | --- |
+| Modesto Heights | `(0.101, 0.097, 0.105)` | `(0.097, 0.102, 0.075)` | `(0.045, 0.051, 0.044)` (light off, live) |
+| The Amphiseum | `(0.265, 0.281, 0.338)` | `(0.124, 0.180, 0.191)` | not comparable (another livery) |
+| Moa Therma | `(0.115, 0.122, 0.125)` | `(0.021, 0.027, 0.025)` | not comparable (light on, another pose) |
+
+The brief predicted `(0.095, 0.093, 0.065)` for Modesto: the red is within 0.002, the green `+0.009` and the blue `+0.010`
+(the shares were good to 25 %). **The blue cast is gone and the hue is the original's**: the spine box `(930,600)-(990,680)`
+is `(0.153, 0.157, 0.113)` (blue `0.72` of green) against the original's `(0.071, 0.072, 0.051)` (`0.71`), from `(0.161, 0.153,
+0.156)` (`1.02`) before. The floor box `(1140,650)-(1260,800)` moved by `0.0003, 0.0008, 0.0034` (the adaptive exposure), the
+track pixels are untouched, and every difference in the frame is on the eight craft. **The axes of the basis are not
+discriminated by the box**: the coefficients vary only some 10 to 20 % across directions around a 1.0 to 1.4 DC term, so a swap
+of `y` and `z` moves the housing by under the read's noise; the order is the static read's (88). The brightness is unchanged
+and still the open sun-term read above; the next paragraph says what the wiring did to its share.
+
+**The ambient share, by the page's own method** (engine light off; the hull's sun term zeroed only on draws that name a row,
+so the track keeps its sun: the floor box moves `0.114 -> 0.106` red and by under 2 % in green and blue):
+
+| Housing `(890,690)-(1010,800)` | Constant ambient (before) | SH ambient (after) | Original |
+| --- | --- | --- | --- |
+| ambient alone (hull sun off) | `(0.016, 0.015, 0.052)` (reproduces the stored decomposition) | `(0.014, 0.020, 0.026)` | `(0.010, 0.011, 0.012)` |
+| increment on the whole frame (shipped minus ambient off) | `(0.023, 0.021, 0.063)` | `(0.019, 0.026, 0.032)` | `(0.010, 0.011, 0.012)` (`K = Ks = 0` against shipped) |
+| sun only (ambient off) | `(0.078, 0.076, 0.043)` | same | `(0.025, 0.022, 0.008)` |
+
+So the claim's second half is **half true**: the blue cast halves (`0.052 -> 0.026` alone) and the red falls 12 to 18 %, but the
+green rises (`+35 %`) and ours' ambient is still `1.4, 1.8, 2.1` times the original's alone and `1.9, 2.3, 2.7` times by the
+increment, not the `(0.010, 0.011, 0.012)` the recipe expected. The spine reads the same way (`(0.0335, 0.0301, 0.0861)`
+before, `(0.0265, 0.0349, 0.0439)` after as an increment, against the original's `(0.023, 0.026, 0.023)`). **That is the same
+order as the sun term's `2.7` to `3.5` times, and both are on the dark body panels**: with the original's own ambient law in
+ours, a common factor on those panels (the albedo: texel times vertex colour, or the lit normal) is at least as likely as a
+sun-only cause. The earlier "albedo is about equal" (Read 2 above) compared the *constant* ambient's share with a predicted
+`0.25 * SH`, which this read replaces; it should be redone with these numbers (confidence 55: the basis' axes are unverified
+and move the ambient by 10 to 20 %, and the `K = Ks = 0` states drift 25 %).
+
 ### Cross-title
 
-- **2048: checked, applies in part, not wired.** The Vita 1.04 executable registers `Lighting.Ship diffuse brightness`
+- **2048: checked, differs on the file, not wired.** (Wired on Omega above, including its ten 2048-lineage circuits, which ship
+  `track.shprobes`.) The Vita 1.04 executable registers `Lighting.Ship diffuse brightness`
   (`0x815088e4`, in `Environment_RegisterLightingSchema`, `0x81017b80`) and names `probeOffsetAndDiffuse` (`0x815094e0`), so
   the weight exists there. It has no `shCoeffs` name and no `(shadow)` key, and its probe file is `track.probes` (`0x81422ba8`,
   1,112-byte records), not `.shprobes`: what `K` scales on the Vita is unread. Next address: the references to `0x815094e0`

@@ -2,7 +2,7 @@
 status: measure
 titles: [omega, 2048]
 updated: 2026-11-16
-summary: "Engine light wired; open: warm-pixel acceptance, N scale, hull SH-probe ambient (ready to wire), hull sun term 3x (one read owed)"
+summary: "Engine light and hull SH ambient wired; open: warm-pixel acceptance, N scale, hull sun term 3x (one read owed), reflection"
 size: S (30)
 difficulty: easy (60)
 ---
@@ -53,9 +53,9 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
   the original's own frames span the whole range (warm-pixel count 142 to 16,232 over 60 frames, 447
   with the light off; the stored frame counts 115).
 - **Ours' unlit hull is `2.2, 1.9, 2.4` times the original's on the Modesto housing box, and the reads are in
-  (2026-11-16, `omega-hull-tone`, `hull-tone-re`; `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`).** The original's hull
-  ambient is an SH probe from `track.shprobes` times `Ship diffuse brightness` (read live, 92), where ours keeps the constant
-  ambient: that is the blue cast. The brightness is ours' sun term, three times the original's on the dark panels, cause not
+  (2026-11-16, `omega-hull-tone`, `hull-tone-re`, `hull-sh-ambient`; `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`).** The original's hull
+  ambient is an SH probe from `track.shprobes` times `Ship diffuse brightness` (read live, 92); ours now draws it (wired
+  2026-11-16), which removed the blue cast. The brightness is ours' sun term, three times the original's on the dark panels, cause not
   yet read. The original also adds a cube reflection ours lacks. Next Steps 3 has the recipe and the owed read.
 - **One term ours has and the original lacks: ours normalises `N`.** The original's vertex program
   uses the world matrix times the vertex normal as is. If the Omega or 2048 hull's world matrix
@@ -81,30 +81,33 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
    to run high by the hull's own over-brightness until the hull tone is fixed.
 3. **Hull tone. The two reads are made (2026-11-16, `hull-tone-re`); one part is ready to wire, one read is owed.**
    Evidence, program and numbers: `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`, "The bound constants".
-   - **Ready to wire (hull draw only): the ambient.** The original's race hull binds no constant ambient. Its ambient is
-     `(Ks + (K - Ks) * shadow) * max(0.01, SH9(n))`: `K` = `Lighting.Ship diffuse brightness`, `Ks` = its `(shadow)` twin
-     (both `0.25` on Modesto), `shadow` the hull's own sun shadow term, `n` the normalised lit normal, and the nine rgb
-     coefficients come from the circuit's `track.shprobes` (`SHPB`, `u32` count, 120-byte records of a position and 27 floats
-     used raw; the basis is on the page). Per craft: the records of the nearest lane in the two triples around the craft,
-     blended along the track (seen live to 5 decimals; the lateral blend is unread, so take the nearest lane). Where: a reader
-     for `.shprobes` beside `oag_vex::probes`, the blend where `oag_raceplay::env_probes` blends HD's, nine vectors on the
-     hull's uniform, and `shade.wesl`'s `hull_ambient` (the line that reads `env_probe_tex` for HD) taking the SH sum when the
-     draw names one. `Light::authored` and the track are not touched. Test: the blend at Modesto's grid slot 8 equals
-     `record 1388 + 0.076 * (record 1391 - record 1388)` within `1e-4`, and `K` scales the hull's ambient share linearly.
-   - **Expected from it:** ours' housing ambient share `(0.016, 0.015, 0.052)` falls to about `(0.010, 0.011, 0.012)`, the
-     box to about `(0.095, 0.093, 0.065)`. It removes the blue cast, not the brightness.
+   - **Wired (2026-11-16, `hull-sh-ambient`): the ambient.** `oag_vex::shprobes` reads `track.shprobes`;
+     `oag_raceplay::sh_probes` blends the nearest lane's two records per craft into a row of a scene-group uniform table
+     (`mesh_render::SH_PROBE_*`, binding 18); `shade.wesl`'s `sh_hull_ambient` evaluates
+     `(Ks + (K - Ks) * shadow) * max(0.01, SH9(n))` with ours' hull sun occlusion as `shadow`. Evidence, numbers and the
+     census: `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`, "Wired". The housing box on Modesto went from
+     `(0.101, 0.097, 0.105)` to `(0.097, 0.102, 0.075)` (predicted `(0.095, 0.093, 0.065)`); the spine's hue is the original's
+     (blue `0.72` of green against `0.71`); the ambient share is `(0.014, 0.020, 0.026)` against the original's
+     `(0.010, 0.011, 0.012)`. Ours' player lands on the same lane as the original's live block but 3 units further
+     along (weight 0.85 between records 1394 and 1397, not 0.076 between 1388 and 1391): the grid slot is ours', not this
+     lane's.
+   - **Expected from it:** the blue cast goes, the brightness does not.
    - **Owed read: ours' sun term is `2.7` to `3.5` times the original's on the dark body panels** (housing, spine), and equal
      on the fin tops. It is the whole red and green excess. Albedo (about equal by the ambient shares), the normal's length
      (the pixel program normalises) and a missing shadow pass (ours' is live, `8 %` of the box) are ruled out. Left: the
      original's shadow term against ours' on those panels, the normal map's `N.L` (is the hull's `_n` picture bound on
-     Omega?), the second hull program's texel. The page's "Next read, for the sun term" is the recipe.
+     Omega?), the second hull program's texel. The page's "Next read, for the sun term" is the recipe. **New with the wired
+     ambient:** ours' ambient is still `1.4` to `2.1` times the original's (alone) and `1.9` to `2.7` times by the increment,
+     the same order as the sun term, so the albedo (texel times vertex colour) or the lit normal may carry the whole
+     excess: redo Read 2 with those numbers (`hull-tone.md`, "Wired").
    - **Also missing in ours:** the hull's reflection term, about `(0.013, 0.016, 0.017)` of the original's box; wire it
      after the sun term, or the box moves the wrong way.
    **Acceptance (unchanged, not reachable by the ambient alone):** `omega/modesto-heights`, tick 100, engine light off,
    housing box `(890, 690)-(1010, 800)`: linear mean within 15 % of `(0.045, 0.051, 0.044)` (ours today
    `(0.101, 0.097, 0.105)`), the track panels unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
-   Ours' per-term shares need a hull-only knob (a scale on `hull_ambient` and on the hull's `sun_diffuse`): scaling the rig
-   moves the adaptive exposure, which is what confounded the earlier knockouts (a single race builds no Zone grade).
+   Ours' per-term shares need a hull-only knob (a scale on `hull_ambient` and on the hull's `sun_diffuse`, gated on the
+   draw naming a probe row): scaling the rig, or the shared lit sum, moves the adaptive exposure and the whole scene, which
+   is what confounded the earlier knockouts (a single race builds no Zone grade).
 4. Boxes for the merge: Queens Mall floor `(1140, 650)-(1260, 800)` must rise about `+3.6` red
    (the original, light on against off; the held branch gives `+4.8`, which passes). Modesto,
    Amphiseum and Moa Therma housing boxes are **not** judged against the stored frame; re-grab the

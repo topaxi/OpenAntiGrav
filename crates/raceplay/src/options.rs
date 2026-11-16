@@ -1185,12 +1185,12 @@ pub struct Loaded {
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
     /// which is all of them but Wipeout HD.
     pub light: mesh_render::Light,
-    /// The circuit's baked environment probes (`track.probes`, Wipeout HD), which a hull's
-    /// ambient is blended from - see [`crate::env_probes`]. `None` where the circuit ships
-    /// none, which is every title but HD, and where the file did not read (the load
-    /// report says which).
+    /// The circuit's baked probes, which a hull's ambient is blended from: HD's `track.probes`
+    /// or Omega's `track.shprobes` - see [`crate::env_probes::Baked`]. Empty where the circuit
+    /// ships none (every other title, Omega's Zone circuits), and where a file did not read
+    /// (the load report says which).
     #[cfg(feature = "view")]
-    pub probes: Option<oag_vex::probes::Probes>,
+    pub probes: crate::env_probes::Baked,
     /// The circuit's authored distance fog, out of its `.envsettings`.
     ///
     /// Wipeout HD's, and `None` everywhere else: Pulse fogs through the

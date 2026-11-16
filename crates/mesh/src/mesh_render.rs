@@ -71,7 +71,8 @@ pub use pipeline_cache::{Kept as KeptBuildCache, Scope as BuildCacheScope};
 mod shadow_map;
 pub use shadow_map::{
     COVERAGE_FORMAT, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, OCCLUSION_FORMAT,
-    OCCLUSION_LAYERS, SELF_SHADOW_FORMAT, SHADOW_DEPTH_FORMAT, SKY_PROBE_FORMAT, upload_sky_probe,
+    OCCLUSION_LAYERS, SELF_SHADOW_FORMAT, SH_PROBE_BYTES, SH_PROBE_ROW, SH_PROBE_ROWS,
+    SHADOW_DEPTH_FORMAT, SKY_PROBE_FORMAT, upload_sky_probe,
 };
 pub(crate) mod texture;
 #[cfg_attr(target_arch = "wasm32", path = "mesh_render/texture_sink/web.rs")]
