@@ -15,8 +15,8 @@ use crate::stage::Stage;
 /// A shot's description and stream, held until its pixels are read back.
 #[derive(Debug)]
 pub(crate) struct Pending {
-    pub(crate) meta: Meta,
-    pub(crate) record: Option<ShotRecord>,
+    pub(crate) meta: Box<Meta>,
+    pub(crate) record: Option<Box<ShotRecord>>,
 }
 
 impl Pending {
@@ -38,7 +38,7 @@ impl Pending {
                 (width, height),
             );
         }
-        oag_game::capture::write_png_with(path, width, height, pixels, &self.meta, self.record.as_ref())
+        oag_game::capture::write_png_with(path, width, height, pixels, &self.meta, self.record.as_deref())
     }
 }
 
@@ -143,6 +143,9 @@ impl Session {
                 flags: Vec::new(),
             },
         };
-        Some(Pending { meta, record })
+        Some(Pending {
+            meta: Box::new(meta),
+            record: record.map(Box::new),
+        })
     }
 }

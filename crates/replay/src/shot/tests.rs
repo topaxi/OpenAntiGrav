@@ -10,8 +10,10 @@ fn run(ticks: u32) -> Replay {
         7,
     );
     for tick in 0..ticks {
-        let mut snapshot = InputSnapshot::default();
-        snapshot.stick_x = (tick as f32 * 0.37).sin();
+        let mut snapshot = InputSnapshot {
+            stick_x: (tick as f32 * 0.37).sin(),
+            ..InputSnapshot::default()
+        };
         if tick % 5 < 3 {
             snapshot.buttons.begin_frame(Button::Cross.bit());
         }

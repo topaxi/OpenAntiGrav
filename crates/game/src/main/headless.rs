@@ -581,6 +581,13 @@ fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::Pose
     }
 }
 
+/// How a `--race` run was reached beyond its options: a server's race, or a shot to remake.
+#[derive(Default)]
+pub(crate) struct RaceRoute {
+    pub(crate) net: Option<oag_game::net_play::NetPlay>,
+    pub(crate) restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+}
+
 /// Loads a track and a ship and either captures one frame or opens a window.
 ///
 /// **The settings apply here too**, even though this route never opens a menu
@@ -596,9 +603,9 @@ pub(crate) fn run_race(
     anisotropy: Anisotropy,
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
-    net: Option<oag_game::net_play::NetPlay>,
-    restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+    route: RaceRoute,
 ) -> Result<()> {
+    let RaceRoute { net, restage } = route;
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new

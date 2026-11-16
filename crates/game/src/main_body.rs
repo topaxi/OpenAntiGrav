@@ -569,7 +569,7 @@ fn run(mut cli: Cli) -> Result<()> {
         options.mode = oag_race::Mode::SingleRace;
         options.track = track.map(race::catalogue::Track::entry_name);
         options.team = team.map(|team| team.value.clone());
-        return run_race(cli, options, settings, anisotropy, audio, music_discs, None, None);
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute::default());
     }
 
     // `--connect` is a race too: the server's.
@@ -623,7 +623,7 @@ fn run(mut cli: Cli) -> Result<()> {
             Some(net) => net.race_options(options)?,
             None => options,
         };
-        return run_race(cli, options, settings, anisotropy, audio, music_discs, net, restage);
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, headless::RaceRoute { net, restage });
     }
 
     // Every leg with no window loads the whole boot here and now, blocking, and

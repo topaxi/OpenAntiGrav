@@ -254,11 +254,9 @@ pub fn flags(
     if let Some(camera) = camera {
         flags.extend([
             "--camera-pose".to_string(),
-            format!(
-                "{},{}",
-                triple(camera.eye),
-                format!("{},{}", triple(camera.forward), triple(camera.up))
-            ),
+            [camera.eye, camera.forward, camera.up]
+                .map(triple)
+                .join(","),
         ]);
         if let Some(fov) = camera.fov_deg {
             flags.extend(["--camera-fov".to_string(), fov.to_string()]);
