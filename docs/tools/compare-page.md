@@ -1328,8 +1328,10 @@ with a lens glow, a silver hull, and the Zone ladder with `FLASH` and `SUB-RAPIE
 towers, a dark brown hull, a `PERFECT ZONE` caption and no ladder captions. RMSE 0.340, edge correlation 0.01, mean grey 74.3: the HD-style Zone grade ours
 wired in `19f18c1b6` is not the original's zone 5 look on this circuit. *Capital Reach:* the expected gap. The original draws 2048's flat Zone look (a red and green
 road, magenta and violet skyline, cyan and yellow window panels); ours draws the ordinary daytime circuit with no grade (held back) and only the word `ZONE`.
-RMSE 0.427, edge correlation -0.01, mean grey 69.2. Ours' camera also sits nearer the wall than the original's. **2048 and Omega cross-check:** checked, differs
-(the Vita 2048 Zone pairs are separate; this page does not compare them).
+RMSE 0.427, edge correlation -0.01, mean grey 69.2. Ours' camera also sits nearer the wall than the original's. **2048 and Omega cross-check: checked, differs in part.** The `zone-dlc-vineta-k-z5` pair of 2048's own Vineta K DLC (Vita3K, zone 5, FLASH
+stage) shares the yellow-green walls and lane lines and the stage name with Omega's Vineta K at zone 5, but its road is grey (Omega's dark green) and its sky violet
+(Omega's orange); the two frames are at different places on the circuit, so the sky is a view-direction difference as much as a grade one and the road colour is the
+reading that stands (one frame each, confidence 40). The racer-row offsets are Omega's patch eboot only; 2048 is a separate executable (not checkable from this lane).
 
 ## Menu pairs: HD/Fury and Omega front-end screens (2026-10-26, `menu-pairs-hd-omega`)
 
