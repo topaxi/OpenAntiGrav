@@ -521,6 +521,25 @@ those maps are micro-tiled BC1 too.
 2048 against Omega: **checked, differs.** 2048's Vita textures are `.gxt`, not `.gnf`; its
 terrain grass is a `.gxt` that already decodes (no `decode_refused` on a 2048 circuit).
 
+## Two shapes the decoder does not read yet (2026-11-16)
+
+Both were taken apart in scratch for the panel-map road
+([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), which holds the
+evidence); neither is in `oag_texture::gnf`.
+
+- **One 16-bit float channel**: surface format `0x02`, channel type `7`, `TileMode(13)`
+  (`Track_A_Floor_panel_df.gnf`, `Track_A_Floor_RunOff_panel_df.gnf`). 8x8-texel micro tiles
+  row-major, texels inside a tile in the same `x0 y0 x1 y1 x2 y2` order the BC7 blocks use, two
+  bytes each. Confidence 92: of the 720 bit orders it alone yields a smooth field, whose gradient
+  is then exactly one unit per texture height.
+- **A cube array with a chain**: texture type `0xB` in word 3 bits 31:28, slices 0 to 23, 11
+  levels (`skyCube.gnf`, 1024x1024 BC7). Level-major; every level stores 32 slices (the count
+  rounded up to a power of two), each `max(8, w/4)^2` blocks, so
+  `offset(level, slice) = sum over k < level of 32 * size(k) + slice * size(level)`; slice
+  `6 * cube + face`. Confidence 92: the sizes sum to the file's 44,892,160 data bytes exactly and
+  the 24 slices decode to four progressively blurred sets of six faces. `block_levels` refuses the
+  file today (`ChainLayout`), which is the right answer until this layout is implemented.
+
 ## Implemented where
 
 `oag_texture::gnf`, since 2026-09-16; `Texture::decode` and the BC7 block

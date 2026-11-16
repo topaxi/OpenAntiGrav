@@ -148,6 +148,12 @@ unnamed rather than forced.
   light is built, at two consumers. Authored 0.3 to 20 over Omega's circuits;
   2048's files carry none.
 
+- [panel-displacement.md](panel-displacement.md) - the panel-map road
+  (`road_alphaspec_normal_emissive_panelmap1`): a pixel-space sphere trace into
+  an `R16F` signed distance field, then nova lighting, a sun lobe and a fresnel
+  reflection of the circuit's baked `skyCube.gnf` cube array
+  (`g_cube_reflection_tex`, `g_reflective_blur_coeffs`). Read, not wired.
+
 - [refraction-pass.md](refraction-pass.md) - `TrackPass_FilterSubmesh`
   (`0x01605760`): the main view's pass leaves out a track mesh named
   `wohdmeshrefract` (flag `0x20`), as 2048 does. It is wired: 212 meshes on

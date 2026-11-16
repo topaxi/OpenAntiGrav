@@ -1527,7 +1527,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   (79 sampler entries over Omega's circuit models, all of Altima's road) lists
   `track_a_floor_panel_df` ahead of its `DiffuseMap`; that file is a 1024x256
   single-channel `R16F` panel map, which `ModelTexture::from_gnf_form` does not
-  decode, so every road draw was unresolved and drew the lit colour alone. **It
+  decode (a signed distance field, decoded on
+  [panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)), so every road draw was unresolved and drew the lit colour alone. **It
   was not a normal map** (the lead from `hd-finish-line-purple`): the road is not
   in the `track_albedo` census at all, and the census counts did not move.
   `Material::diffuse_texture` now takes the sampler named `DiffuseTexture`,
@@ -1664,6 +1665,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   draws no such lines; which code path would draw this family's `EmissiveMap` (the
   `glow.rs` sampler list names `EmissiveMap`, so the family may be admitted and drawn
   without the displacement) was not read. Not isolated (no run draws the family's emissive alone).
+  **The program was read on 2026-11-16**
+  ([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)): the emissive
+  map is sampled at the ray-marched coordinate and added unscaled, so the lines are that layer
+  seen through the displacement (confidence 85 for the program; the picture not rendered).
 - **Omega's diffuse sun is its colour times `Lighting.Sun diffuse intensity`**
   ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md),
   2026-10-19, confidence 80): authored 0.3 to 20, ignored until then. The
@@ -2282,8 +2287,20 @@ Ranked, by what each would remove:
      recessed with lit walls and bevel highlights, and a sky-blue sheen at grazing angles; ours draws flat panels with
      outline lines. Forcing MIP 0 lifts Sol's road `G` only to 0.37 and Queens Mall's to 0.78, so the detail is in the
      family's pixel program (428 instructions, `Cg_PanelDisplacement_1In1Depth`, `SlopeWidth`, `Aspect`; Queens Mall
-     authors `0.2, 4.0, 3.5, 1.8` in its four parameters), not in the texture chain. Unread; the largest single
+     authors `0.2, 4.0, 3.5, 1.8` in its four parameters), not in the texture chain. The largest single
      family by error. Its `EmissiveMap` (`track_a_floor_e`, Queens Mall's cyan strips) is the same program.
+     **Read 2026-11-16 (`panelmap-re`,
+     [panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md); law 85 to 88, no live run):**
+     no vertex moves. The pixel program sphere-traces the view ray (10 samples) into a signed distance field, the
+     `R16F` panel map (`Depth` 3.5 and `SlopeWidth` 1.8 in hundredths of a texture height, `Aspect` the map's
+     width over height), and samples diffuse, normal and emissive at the shifted coordinate; the recessed parts
+     are the field's positive chevron strips, 14 % of the road. The four values above are `Blurrines`, `Aspect`,
+     `Depth`, `SlopeWidth`. The sheen is a fresnel reflection
+     `ReflectivityAmount * albedo.a * (ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower)` of a
+     baked, pre-blurred cube array the engine loads beside every circuit (`skyCube.gnf`, four blur levels, layout
+     decoded), plus a sun specular lobe under the same alpha; Sol authors a weight of 0.3 face-on and 2.35 at
+     `N.V` 0.2, which is its 38.5 grey. Ours draws none of the three (march, cube, lobe). **2048: checked,
+     differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
    - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
      (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so
      the port runs anisotropic filtering where the pairs record ours with `--anisotropy off`. **A comparison-environment
