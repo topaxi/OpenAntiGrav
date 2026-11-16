@@ -237,7 +237,11 @@ fn constant_diffuse(
     let family = super::emissive::family(material);
     let hash = diffuse_hash(family, listed_only)?;
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
-    Some(constant_picture(hash, [value[0], value[1], value[2]], store))
+    Some(constant_picture(
+        hash,
+        [value[0], value[1], value[2]],
+        store,
+    ))
 }
 
 /// The parameter [`DIFFUSE_PARAMETER`] names for `family`, else [`DIFFUSE`]

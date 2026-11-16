@@ -46,6 +46,7 @@ mod alpha_emissive;
 mod alpha_product;
 mod chevron;
 mod emissive_add;
+mod flat_constant;
 mod glow;
 mod lit_alpha;
 mod normal_map;
@@ -314,14 +315,6 @@ impl Report {
                 self.static_hologram_materials, self.static_hologram_unread
             )
         };
-        let emissive_colours = if self.emissive_colour_submeshes == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} submesh(es) draw their EmissiveColour unlit, as the PS4 `emissive` program does",
-                self.emissive_colour_submeshes
-            )
-        };
         let zone_colours = if self.zone_colour_submeshes == 0 {
             String::new()
         } else {
@@ -472,14 +465,12 @@ impl Report {
                 self.alpha_product_materials
             )
         };
-        let constant_diffuse = if self.constant_diffuse_materials == 0 {
-            String::new()
-        } else {
-            format!(
-                "; {} material(s) draw the constant their program multiplies the light by",
-                self.constant_diffuse_materials
-            )
-        };
+        let flat_constants = (self.emissive_colour_submeshes + self.constant_diffuse_materials > 0)
+            .then(|| {
+                let (e, d) = (self.emissive_colour_submeshes, self.constant_diffuse_materials);
+                format!("; {e} submesh(es) draw an EmissiveColour unlit, {d} material(s) a constant diffuse")
+            })
+            .unwrap_or_default();
         let uv_keys = if self.uv_keyed_meshes == 0 {
             String::new()
         } else {
@@ -490,7 +481,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{emissive_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{constant_diffuse}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -781,14 +772,9 @@ fn build_planned(
             .and_then(|m| decoded.materials.get(m))
             .and_then(|m| m.zone_colour());
         report.zone_colour_submeshes += usize::from(zone.is_some());
-        let emissive = ps4
-            .then(|| {
-                submesh
-                    .material
-                    .and_then(|m| decoded.materials.get(m))
-                    .and_then(emissive_colour)
-            })
-            .flatten();
+        let emissive = (submesh.material.and_then(|m| decoded.materials.get(m)))
+            .filter(|_| ps4)
+            .and_then(flat_constant::emissive_colour);
         report.emissive_colour_submeshes += usize::from(emissive.is_some());
         let zone = zone.or(emissive);
         // HD's `nr_twinblend`: unlit, three coordinate pairs, one glow-table entry.
@@ -1192,7 +1178,8 @@ fn bind_textures(
                         report.inherited_lighting_only +=
                             usize::from(rule.as_ref().is_some_and(|r| r.inherited));
                         (std::sync::Arc::new(colour), None)
-                    } else if let Some(colour) = ps4.then(|| constant_diffuse(material)).flatten()
+                    } else if let Some(colour) =
+                        ps4.then(|| flat_constant::diffuse(material)).flatten()
                     {
                         report.constant_diffuse_materials += 1;
                         (std::sync::Arc::new(colour), None)
@@ -1478,45 +1465,6 @@ fn constant_colour(material: &psp2::material::Material, colour: u32) -> Option<M
             vec![channel(0), channel(1), channel(2), 255],
             None,
         ),
-    ))
-}
-
-/// Omega's families whose GCN pixel programs sample no colour texture and end
-/// `light * diffuse + specular` with the material's own constant (`metallic`'s
-/// `DiffuseColour`, `diffuse_spec_constant`'s `diffuse`), read with `gcn_dump` on
-/// Amphiseum's two (`docs/formats/rcsmaterial.md`, "Omega's constant diffuse
-/// families"). The constants themselves are [`super::skin`]'s table, the same
-/// parameters HD's microcode reads. Other rows of that table are HD's and stay
-/// unwired here until their GCN programs are read.
-const CONSTANT_DIFFUSE_FAMILIES: [&str; 2] = ["metallic", "diffuse_spec_constant"];
-
-/// `EmissiveColour` of a PS4 `emissive` material: its pixel program samples nothing
-/// and takes no light, mixing the constant with the fog (`gcn_dump`, Amphiseum's
-/// `emissive.rcsmaterial`: constant buffer `EmissiveColour, fogColour,
-/// fadeResCoeffs`, no sampler, the vertex's one texcoord never interpolated).
-fn emissive_colour(material: &psp2::material::Material) -> Option<[f32; 3]> {
-    if lighting_only::family(material) != "emissive" {
-        return None;
-    }
-    let v = material.param(oag_rcs::rcsmaterial::name_hash("EmissiveColour"))?;
-    Some([*v.first()?, *v.get(1)?, *v.get(2)?])
-}
-
-/// The one-texel picture of `material`'s constant diffuse, encoded for Omega's
-/// scene (its `.gnf` texels decode with the sRGB curve, so a program-computed
-/// colour is bound as the curve's inverse, as `skin::constant_picture` does for HD).
-fn constant_diffuse(material: &psp2::material::Material) -> Option<ModelTexture> {
-    let family = lighting_only::family(material);
-    if !CONSTANT_DIFFUSE_FAMILIES.contains(&family.as_str()) {
-        return None;
-    }
-    let hash = super::skin::diffuse_hash(&family, false)?;
-    let value = material.param(hash)?;
-    let channel = |i: usize| value.get(i).copied();
-    Some(super::skin::constant_picture(
-        hash,
-        [channel(0)?, channel(1)?, channel(2)?],
-        oag_gpu::formats::SceneStore::SrgbTexels,
     ))
 }
 
