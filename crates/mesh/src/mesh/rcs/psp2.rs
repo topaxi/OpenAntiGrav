@@ -50,11 +50,13 @@ mod flat_constant;
 mod glow;
 mod lit_alpha;
 mod normal_map;
+mod panel_map;
 pub mod placement;
 pub mod refraction;
 pub mod refraction_only;
 mod report;
 mod shield_lightning;
+mod sky_reflection;
 mod static_hologram;
 mod tarmac;
 mod transparency;
@@ -235,6 +237,7 @@ fn build_planned(
     let ps4 = psp2::is_ps4(model_blob);
 
     let mut model = Model::none(label);
+    model.sky_reflection = sky_reflection::load(label, ps4, &mut *textures);
     let mut report = Report {
         unpaired: decoded.unpaired_pointers,
         materials: decoded.materials.len(),
@@ -287,7 +290,17 @@ fn build_planned(
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     // Omega's `tarmac_markings_*` roads lay a dirt splat and a decal atlas over the diffuse.
-    let tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    let mut tarmac = tarmac::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
+    // Omega's panel-map roads march a panel map and reflect the sky cube (`psp2::panel_map`).
+    let sky = (ps4, &normals);
+    panel_map::plan(
+        &decoded,
+        sky,
+        &mut tarmac,
+        &mut glow.emissive,
+        textures,
+        &mut report,
+    );
     // Anulpha Pass's chevrons add their emissive mask and wave after the light.
     let chevron = chevron::plan(
         &decoded,
@@ -806,13 +819,13 @@ fn bind_textures(
                 debug_assert_eq!(model.fifth_maps.len(), at);
                 model.fifth_maps.push(
                     layers
-                        .map(|l| l.markings.clone())
+                        .and_then(|l| l.fifth.clone())
                         .or_else(|| pulse.map(|p| p.emask.clone())),
                 );
                 debug_assert_eq!(model.sixth_maps.len(), at);
                 model.sixth_maps.push(
                     layers
-                        .map(|l| l.dirt.clone())
+                        .and_then(|l| l.sixth.clone())
                         .or_else(|| pulse.map(|p| p.wave.clone())),
                 );
             }

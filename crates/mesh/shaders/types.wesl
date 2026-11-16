@@ -128,6 +128,8 @@ struct Light {
     hull_ambient: vec4<f32>,
     hull_direction: array<vec4<f32>, 4>,
     hull_diffuse: array<vec4<f32>, 4>,
+    // Omega's `liveLighting0specular` (`mesh_render::Light::sun_specular`); zero elsewhere.
+    sun_specular: vec4<f32>,
 };
 
 // One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.

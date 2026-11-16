@@ -193,6 +193,8 @@ pub struct Report {
     pub refraction_unread: usize,
     /// Meshes whose `.vex` node authors UV keys (`psp2::uv_keys`), a billboard build only.
     pub uv_keyed_meshes: usize,
+    /// Omega's panel-map roads and the sky reflection map (`psp2::panel_map`).
+    pub panel: super::panel_map::Census,
 }
 
 impl Report {
@@ -415,9 +417,10 @@ impl Report {
                 self.uv_keyed_meshes
             )
         };
+        let panel = self.panel.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

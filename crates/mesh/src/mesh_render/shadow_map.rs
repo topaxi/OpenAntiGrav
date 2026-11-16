@@ -171,22 +171,61 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 9] {
     ]
 }
 
-/// Uploads the circuit's sky reflection map ([`crate::mesh::sky_paraboloid::build`]'s bytes) and returns
-/// the view to hand [`super::ShadowMaps::sky_probe`]. The view keeps the texture alive.
+/// Uploads the circuit's sky reflection map ([`crate::mesh::sky_paraboloid::build`]'s bytes, or a
+/// [`crate::mesh::sky_paraboloid::from_cubes`] chain whose level count its length gives) and
+/// returns the view to hand [`super::ShadowMaps::sky_probe`]. The view keeps the texture alive.
 #[must_use]
 pub fn upload_sky_probe(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     rgba: &[u8],
 ) -> wgpu::TextureView {
-    let texture = oag_gpu::texture::upload_2d(
-        device,
-        queue,
-        "sky probe",
-        SKY_PROBE_FORMAT,
-        crate::mesh::sky_paraboloid::SIZE,
-        rgba,
-    );
+    use crate::mesh::sky_paraboloid::{SIZE, chain_bytes};
+    let levels = (1..=4).find(|&n| chain_bytes(n) == rgba.len()).unwrap_or(1);
+    if levels == 1 {
+        let texture =
+            oag_gpu::texture::upload_2d(device, queue, "sky probe", SKY_PROBE_FORMAT, SIZE, rgba);
+        return texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("sky probe"),
+        size: wgpu::Extent3d {
+            width: SIZE.0,
+            height: SIZE.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: levels,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: SKY_PROBE_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let mut at = 0;
+    for level in 0..levels {
+        let (w, h) = (SIZE.0 >> level, SIZE.1 >> level);
+        let len = (w * h * 4) as usize;
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: level,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba[at..at + len],
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * w),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+        at += len;
+    }
     texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 

@@ -105,6 +105,7 @@ fn model(slots: u32, emissive: Vec<Emissive>, normal: [f32; 3]) -> Model {
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

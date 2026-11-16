@@ -115,6 +115,7 @@ fn moving_quad(xform: u32) -> Model {
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         node_vertex_ranges: Vec::new(),
         lod_groups: Default::default(),

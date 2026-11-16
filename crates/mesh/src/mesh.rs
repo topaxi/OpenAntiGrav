@@ -229,6 +229,11 @@ pub struct Model {
     /// (`oag_title::Looks::batch_back_face_cull`); the loader sets this where it
     /// does. `false` leaves a model two-sided except under HD's material rule.
     pub per_batch_cull: bool,
+    /// The circuit's sky as a reflection map, a [`sky_paraboloid`] mip chain, where the sky's
+    /// loader found one beside it: Omega's `skyCube.gnf`, which the circuit loader opens next to
+    /// `skycube.rcsmodel` (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, "The CPU
+    /// side"). `None` on every other model; HD's sky map comes from its cube faces instead.
+    pub sky_reflection: Option<std::sync::Arc<Vec<u8>>>,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.
     ///
@@ -358,6 +363,7 @@ impl Model {
             material_lod_bias: 0.0,
             material_state: Vec::new(),
             per_batch_cull: false,
+            sky_reflection: None,
             alpha_test_ref: None,
             centre,
             radius,
@@ -393,7 +399,7 @@ pub use keyed::{KeyTrack, Keyed, Start, slerp};
 mod emissive;
 pub use emissive::{
     ALPHA_EMISSIVE_SPECULAR_MAP, Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON,
-    PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_ICE_GLASS,
+    PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_ICE_GLASS, PROGRAM_PANEL_MAP,
     PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_SHIELD_LIGHTNING, PROGRAM_SHINE_MASK, PROGRAM_SNOW,
     PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND, PROGRAM_UV_OVERLAY,
     REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
@@ -1063,6 +1069,7 @@ fn build_class(
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: None,
         centre,
         radius,
