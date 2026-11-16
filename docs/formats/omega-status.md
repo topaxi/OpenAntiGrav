@@ -2324,8 +2324,10 @@ Ranked, by what each would remove:
    the offsets); the consumer was not found (the function has over 50 callers). Scaling the dome by it, linear or
    gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired.
 4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
-   drawing no sprite at all takes Sol from 45.55 to 42.48. Cause read, recipe below. Crowds only reach the pairs that
-   show stands.
+   drawing no sprite at all takes Sol from 45.55 to 42.48. **Half read** (2026-11-16, `omega-crowd-shadowed`): the
+   `_shadow` materials are lit by their `Shadowed` and `Ambient` (below) and moved; the plain
+   `crowd_sprite_diffuse_normal_alpha`, which draws most of Sol's crowd pixels (46,650 under its own skip needle against the `_shadow` sprites' 3,376), declares neither and still draws white.
+   Crowds only reach the pairs that show stands.
 5. **Pose, Capital Reach only**: the Auricom banner sits about 480 px further left in ours at 1920 and the road lines
    lean the other way: ours' grid slot or heading differs from the original's. Its scenery +21.6 is that, so this pair
    cannot judge a render change until the pose is matched.
@@ -2337,10 +2339,13 @@ RGB specular is not HD's scalar term and stays unwired. `Lighting.Ship diffuse b
 `+0x164`, key `0x0188d117`) is read by nothing here, but the hull's bias does not follow it (Sol, at 1.0, is the
 brightest hull, +69), so it is not the hull's cause; the hull is confounded by the port's livery anyway.
 
-**The crowd's law** (static, confidence 70). `crowd_sprite_diffuse_normal_alpha_shadow` (Sol 128,452 triangles) and
-`crowd_sprite_diffuse_normal_alpha` author `Shadowed` (`0x36997860`, `~crc32`) `0.12178` and `Ambient`
-(`0x735324ab`) `(0.777, 0.777, 0.777)`. Ten of the family's fifteen pixel programs load `Shadowed`. The sun-lit one
-(`data00.psarc` `Shdr` `0x4224`, 122 instructions) ends, after an alpha test at 0.5:
+**The crowd's law** (static, confidence 70; wired for the `_shadow` materials, `mesh::rcs::psp2::crowd`).
+`crowd_sprite_diffuse_normal_alpha_shadow` (Sol 128,452 triangles) and `crowd_diffuse_normal_shadow` (Arena 380,285,
+Altima 32,857) author `Shadowed` (`0x36997860`, `~crc32`) and `Ambient` (`0x735324ab`), per circuit: the sprite's Sol
+values are `0.12178` and `(0.777, 0.777, 0.777)`, Queens Mall's `Shadowed` is `0.497`, Arena's
+`crowd_diffuse_normal_shadow` is `0.4` with a coloured `Ambient` `(0.138, 0.071, 0.247)`. Ten of the sprite's fifteen
+pixel programs load `Shadowed`. The sun-lit one (`data00.psarc` `Shdr` `0x4224`, 122 instructions) ends, after an alpha
+test at 0.5:
 
 ```text
 rgb = Shadowed * T.rgb * (Ambient + constantAmbientColour + liveLighting0diffuse * sat(N.L))
@@ -2349,10 +2354,33 @@ out = fogColour + fog * (rgb - fogColour)
 
 (`v_mul_f32 v6, s24, v6` and its two twins put `Shadowed` on the texel at `0x130` to `0x150`; `Ambient` is `s1..s3`,
 `constantAmbientColour` `s4..s6`, the sun `s8..s10`; `0x1c8` to `0x1fc` sum them). Its vertex-light twin `0x5064`
-multiplies the finished sum by `Shadowed` (`0x1ec` to `0x1f4`). Ours draws the family through the generic lit path,
-which reads neither parameter, so the stands come out about eight times too bright under Sol's sun (`0.951 x 8`).
-Which permutation the race selects is not read; `Shadowed` is not a string in the eboot, so no engine code sets it by
-name. **2048:** not checked for this material (no lane fix landed on it).
+multiplies the finished sum by `Shadowed` (`0x1ec` to `0x1f4`). `crowd_diffuse_normal_shadow`'s `0x3c84` (113
+instructions) has the same instruction shape: `Shadowed` loaded at `0xc8` and multiplied onto the three texel channels at
+`0x118` to `0x130`, `Ambient` `s1..s3`, `constantAmbientColour` `s4..s6`, the sun `s7..s9` (read as a shape, not
+instruction by instruction, so it carries the sprite's confidence, not more). Which permutation the race selects is not
+read; `Shadowed` is not a string in the eboot, so no engine code sets it by name.
+
+**What the wiring moved** (crowd-region bias, ours minus theirs in grey, over the pixels the crowd owns in the
+pre-change render, undilated and without the HUD boxes; HEAD of `panelmap-wire` before, the lane's branch after):
+Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6, Subway +63.9 unchanged (it ships no `_shadow` sprite), Arena +62.2
+to +15.1 (0.03 % of the frame, too small to judge). On Sol the `_shadow` sprites' own pixels (3,376, 7 % of the crowd)
+go +160.0 to +57.6.
+
+**The plain sprite is the rest, and it is not this law.** `crowd_sprite_diffuse_normal_alpha` (Sol: 12 submeshes,
+780 triangles, 46,650 of the crowd's pixels) and `crowd_diffuse_normal` author no parameter, and their programs
+(`0x41a4`, 112 instructions) declare no `Shadowed` or `Ambient`: `T * (constantAmbientColour + sun * sat(N.L))`, which
+is what ours' generic path computes. Still ours draws them white (bias +121.5 to +116.6 with the wiring), so the
+cause is in their inputs, not in a missing factor. **A diagnostic, not shipped**: giving the plain sprite the `_shadow`
+sprite's constants (`0.12178`, `0.777`) moves the whole-crowd bias to Sol +39.7, Queens Mall +6.4, Subway -13.2 and
+draws the dense rows coloured, as in the original. That is a stand-in until the plain's own constants (the
+`constantAmbientColour` and `liveLighting0diffuse` the original binds for these draws, or the normal-map `N.L`) are
+read.
+
+**2048 (Vita) crowd: checked, differs.** Vita's circuits (`data/art/published/environments/<circuit>/track.rcsmodel`,
+Sol, Queens Mall, Altima, Arena read with `psp2_material_dump`) draw their crowds through `fc06_lambert_alpha` and
+`fc08_effects_crowd` (technique names `CrowdGenShader_crowd_avatars_22x4SG`), not a `crowd_sprite_*` or `crowd_*` material,
+and none of those materials authors `Shadowed` or `Ambient` (the only parameters are `0x18a719bf`, `0xf139ff6d`,
+`0x906b67ba`, the crowd-bustle values). The law has no Vita counterpart to read.
 
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no

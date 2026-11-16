@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-16
-summary: "2048-mode pairs: road programs lead; crowd Shadowed law ready to wire; panelmap1 road wired (march, sheen, emissive), lobe colour left"
+summary: "2048-mode pairs: road programs lead; crowd _shadow wired, plain crowd sprites still white (cause open); panelmap1 road wired (march, sheen, emissive), lobe colour left"
 difficulty: medium (40)
 ---
 
@@ -15,19 +15,16 @@ a correct detail fix can raise it).
 
 ## Open
 
-1. **Crowd sprites draw white: ready to wire** (law read, confidence 70). `crowd_sprite_diffuse_normal_alpha` and
-   `_shadow` author `Shadowed` `0.12178` (`0x36997860`) and `Ambient` `0.777` (`0x735324ab`); the sun-lit program
-   is `Shadowed * T * (Ambient + constantAmbientColour + sun * sat(N.L))`. Recipe:
-   - a new module beside `crates/mesh/src/mesh/rcs/psp2/` (`psp2.rs` is at the 1,500-line ceiling) admitting
-     materials whose PS4 programs declare `Shadowed` and `Ambient` (`oag_rcs::gcn` reflection), Omega only;
-   - the factor: ours' `colour_factor` path (`in.colour.rgb * (ambient + sun)`) is gated to hulls
-     (`receives_shadow != 2`), so a vertex-colour `Shadowed` does nothing on track draws (tried); look first for
-     an existing per-draw lit-output scale (`Light::output_scale`, `lit_output_halved`) rather than a new shader flag;
-   - `Ambient` is an added term inside the bracket; name it open if not drawn;
-   - acceptance: the crowd-region bias (Sol +112, Queens Mall +57, Subway +68, Arena +64) moves toward 0, read by eye
-     on Sol's stands; a test that fails when the factor is dropped.
-   - 2048: check whether its crowd materials author `Shadowed` (the Vita model path used by
-     `psp2_material_dump` was not found in this lane).
+1. **The plain crowd sprites still draw white** (the `_shadow` materials are wired, branch `omega-crowd-shadowed`:
+   `mesh::rcs::psp2::crowd`, glow-table program 16; Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6, Arena +62 to +15,
+   method and the `_shadow` sprites' own +160 to +58 in `omega-status.md`, "The crowd's law"). `crowd_sprite_diffuse_normal_alpha`
+   and `crowd_diffuse_normal` author no `Shadowed` and their programs declare none, yet they are most of the crowd's
+   pixels (Sol 46,650) and the original draws them dark and coloured. Giving the plain sprite the `_shadow` constants
+   (a stand-in, not shipped) takes Sol to +39.7, Queens Mall to +6.4, Subway to -13.2, so the missing term is of that
+   size. Find it: the `constantAmbientColour` and `liveLighting0diffuse` the original binds for these draws (a per-draw
+   or per-material light set, the `Lighting.*` keys), or the normal-map `N.L` of a sprite whose tangent frame is built
+   in the vertex program (`0x3bc4`). `Ambient` (the term inside the bracket) is drawn for the `_shadow` materials.
+   2048: **checked, differs** (Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`, no `Shadowed`).
 2. **`road_alphaspec_normal_emissive_panelmap1` (and `_mask`): wired except the lobe's colour** (2026-11-16,
    `panelmap-wire`; [panel-displacement.md](../../docs/ghidra/functions/ps4-omega-eu/panel-displacement.md),
    "Implemented where", has the numbers). March, sky-cube sheen and emissive draw; road at 16x: Sol `LF` 32.7 to
@@ -68,6 +65,6 @@ a correct detail fix can raise it).
 
 ## Next Steps
 
-1. Wire item 1 (an afternoon if `output_scale` can carry it per draw; a day if it needs a slot bit).
+1. Item 1: read what lights the plain crowd sprite (half a day, RE: one `Shdr` is read, the inputs are not).
 2. Item 2's lobe colour (15 minutes in `raceplay/src/load/environment/light.rs`, then a Sol measurement), then
    Sol's near-road overshoot (an afternoon: a second sunny circuit's pair to settle the cube orientation).
