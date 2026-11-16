@@ -1065,6 +1065,10 @@ pub struct Loaded {
     /// The track's title rather than `craft_title`: a render profile is about
     /// how expensive the *scene* is, and the circuit is the scene.
     pub title: &'static oag_title::Title,
+    /// The archive entry of the circuit the race was built on: what `Options::track` named, or
+    /// the title's default, or the first circuit the source ships when the default is not in
+    /// it. A Zone race carries the zone variant. `foreign:<id>` for a foreign track.
+    pub circuit: String,
     /// Which console the track's own source is for, carried out of [`load`]
     /// the same way `title` is and for the same reason: `--race` has no
     /// other way to know it, and `crate::settings::profile_key` needs both
@@ -1331,6 +1335,10 @@ pub struct Loaded {
 pub struct Loaded {
     pub setup: Setup,
     pub title: &'static oag_title::Title,
+    /// The archive entry of the circuit the race was built on: what `Options::track` named, or
+    /// the title's default, or the first circuit the source ships when the default is not in
+    /// it. A Zone race carries the zone variant. `foreign:<id>` for a foreign track.
+    pub circuit: String,
     pub platform: oag_disc::Platform,
     pub report: Vec<String>,
 }

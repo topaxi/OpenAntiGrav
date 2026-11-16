@@ -682,9 +682,10 @@ pub(crate) fn run_race(
         // fallback order matters - read here only to look a row up, never to
         // write one back. See `oag_game::race_capture::CaptureOptions::previous_best`'s own doc
         // for why this capture never calls `oag_game::records::save`.
-        let key = oag_game::records::Key::new(
+        let key = oag_game::records::Key::raced(
             loaded.title.name,
-            options.track.as_deref().or(Some(loaded.title.race.track)),
+            options.track.as_deref(),
+            &loaded.circuit,
             loaded.setup.mode.name(),
             &loaded.setup.class,
         );

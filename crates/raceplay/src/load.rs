@@ -1097,6 +1097,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         started: None,
         title,
+        circuit: track.clone(),
         platform: archives.layout.platform,
         setup: Setup {
             mode: options.mode,

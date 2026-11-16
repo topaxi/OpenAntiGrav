@@ -455,12 +455,10 @@ pub fn run(
         // Read-only, off whatever `<config dir>/oag/records.toml` already holds - see
         // `crate::race_capture::CaptureOptions::previous_best`'s own doc for why.
         let previous_best = crate::records::load()
-            .get(&crate::records::Key::new(
+            .get(&crate::records::Key::raced(
                 loaded.title.name,
-                race_options
-                    .track
-                    .as_deref()
-                    .or(Some(loaded.title.race.track)),
+                race_options.track.as_deref(),
+                &loaded.circuit,
                 loaded.setup.mode.name(),
                 &loaded.setup.class,
             ))

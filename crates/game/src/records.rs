@@ -149,16 +149,10 @@ pub struct Key {
     /// drive.
     ///
     /// **Never left as the caller's own "nothing was named" value.**
-    /// `race::Options::track` is `None` on the ordinary `--race` invocation
-    /// with no `--track` flag, because `race::load` resolves its own
-    /// default track *internally* and never hands the resolved name back -
-    /// confirmed live, the first version of this fallback wrote every such
-    /// race under one shared `"(no circuit)"` bucket regardless of which
-    /// circuit was actually driven. `Stage::build_race_stage` now falls back
-    /// to `title.race.track` (`oag_title::race::RaceDefaults::track`) first,
-    /// itself the disc's own stated default and the same value `race::load`
-    /// falls back to - so `"(no circuit)"` is reached only when a source
-    /// offers no circuit at all. See [`Key::new`].
+    /// A run with no `--track` files under the circuit `race::load` resolved
+    /// ([`oag_raceplay::Loaded::circuit`]), through [`Key::raced`], so
+    /// `"(no circuit)"` is reached only when a source offers no circuit at all.
+    /// See [`Key::new`].
     pub track: String,
     /// [`oag_race::Mode::name`] - already lower-cased with underscores, so
     /// this is carried through unchanged.
@@ -171,9 +165,7 @@ pub struct Key {
 /// Named for [`Key::track`]'s last-resort fallback: a race whose source
 /// offered no circuit at all still has to record *something* rather than
 /// fail the capture. See `Session::handle_menu`'s own "this source offers no
-/// circuit at all" warning, which is the only place this can be reached
-/// from now that `Stage::build_race_stage` falls back to `title.race.track`
-/// first - see [`Key::track`]'s own doc.
+/// circuit at all" warning.
 const NO_CIRCUIT: &str = "(no circuit)";
 
 impl Key {
@@ -187,6 +179,20 @@ impl Key {
             mode: mode.trim().to_ascii_lowercase(),
             class: class.trim().to_ascii_lowercase(),
         }
+    }
+
+    /// The key of a race that was asked for `requested` (`None` when the run named no circuit)
+    /// and built on `circuit` ([`oag_raceplay::Loaded::circuit`]). A run that named none files
+    /// under the circuit it raced, which is the title's default only when the source ships it.
+    #[must_use]
+    pub fn raced(
+        title: &str,
+        requested: Option<&str>,
+        circuit: &str,
+        mode: &str,
+        class: &str,
+    ) -> Self {
+        Self::new(title, requested.or(Some(circuit)), mode, class)
     }
 }
 

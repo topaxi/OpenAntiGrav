@@ -509,36 +509,22 @@ impl Stage {
             ghost_static,
             ripples,
             started,
+            circuit,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
         // is `Copy` and would survive that move, but `class` would not.
         //
-        // **`track_entry.or(Some(title.race.track))`, not `track_entry`
-        // alone.** `race::Options::track` is `None` on the ordinary `--race`
-        // invocation with no `--track` flag - confirmed live: a real
-        // `--race --mode time_trial --autopilot` run with no `--track`
-        // wrote `track = "(no circuit)"` before this fallback existed,
-        // because `race::load` resolves its own default *internally* and
-        // never hands the resolved name back to the caller. `title.race`
-        // (`&'static oag_title::race::RaceDefaults`) is the same fallback
-        // `race::load` itself falls back to - `RaceDefaults::track`'s own
-        // doc calls it "archive entry of the `.vex` a race loads when the
-        // caller names none" - so this reads the disc's own stated default
-        // rather than re-deriving or inventing one. Not exact for a Zone
-        // race, whose own further remap (`ZoneCircuit::variant_of`) lives in
-        // `race::load` and is not replicated here - the record still lands
-        // on a real, disc-authored circuit id rather than [`NO_CIRCUIT`],
-        // just not always the exact zone variant `race::load` actually drew.
-        // A foreign track is its own circuit: filed under the disc's default
-        // it would take that circuit's best lap and ghost.
+        // A run that named no circuit files under the one `race::load` resolved
+        // (`Loaded::circuit`): the title's default, or the first circuit the
+        // source ships when the default is not in it. A foreign track is its own
+        // circuit: filed under the disc's default it would take that circuit's
+        // best lap and ghost.
         let foreign_key = setup.foreign.as_ref().map(|id| format!("foreign:{id}"));
-        let result_key = oag_game::records::Key::new(
+        let result_key = oag_game::records::Key::raced(
             title.name,
-            foreign_key
-                .as_deref()
-                .or(track_entry)
-                .or(Some(title.race.track)),
+            foreign_key.as_deref().or(track_entry),
+            &circuit,
             setup.mode.name(),
             &setup.class,
         );
