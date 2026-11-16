@@ -113,14 +113,15 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
      Numbers, census (24 materials take it, 32 that fetch it do not) and the `carbonfibre` read: `hull-tone.md`, "Wired
      (lane `hull-vcol-wire`)". **Still open on it:** `shade.wesl`'s `colour_factor` arm multiplies the specular by the colour
      (HD's law), Omega's pixel program leaves it unmultiplied; the Omega 2048-era families (`2048_ship_*`, about 1,540 submeshes
-     across Omega's ship models) were admitted by the same reading and not rendered; 2048 declares the same input and
+     across Omega's ship models) were admitted by the same reading and read on `omega/sol-2048` and `queens-mall-2048`
+     (a mild darkening, plausible), the rest of the admitted families not rendered; 2048 declares the same input and
      its fragment use stays unread (GXP). The acceptance below is not reached by it (housing `1.5, 1.3, 1.1` times with the
      engine light off); what is left is the housing's own sun term (the owed read above) and the reflection.
    - **Also missing in ours:** the hull's reflection term, about `(0.013, 0.016, 0.017)` of the original's box; wire it
      after the sun term, or the box moves the wrong way.
    **Acceptance (unchanged, not reachable by the ambient alone):** `omega/modesto-heights`, tick 100, engine light off,
    housing box `(890, 690)-(1010, 800)`: linear mean within 15 % of `(0.045, 0.051, 0.044)` (ours today
-   `(0.101, 0.097, 0.105)`), the track panels unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
+   `(0.068, 0.074, 0.054)`), the track panels unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
    Ours' per-term shares need a hull-only knob (a scale on `hull_ambient` and on the hull's `sun_diffuse`, gated on the
    draw naming a probe row): scaling the rig, or the shared lit sum, moves the adaptive exposure and the whole scene, which
    is what confounded the earlier knockouts (a single race builds no Zone grade).

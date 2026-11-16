@@ -435,7 +435,8 @@ What did not work, so nobody repeats it:
    `skin::light_inputs::colour_factor` decides off its microcode, not off the file name), emit `colour = rgb / 255` raw and
    `sun_mask = factor_sun_mask(1.0)`.
 2. No shader change: `shade.wesl`'s `colour_factor` arm (`in.colour.rgb * (hull_ambient + sun_diffuse + in.spu_light)`) is
-   the original's product, and it leaves the specular unmultiplied as the original does. The scratch build used exactly this.
+   the original's product. It also multiplies the specular by the colour (HD's law), which the original's Omega program does not
+   (the specular is added after the product): see "Wired (lane `hull-vcol-wire`)", "Open". The scratch build used exactly this.
 3. Tests that fail if it is dropped: a ground truth that Feisar `c1`'s Omega hull emits a non-white colour with the factor
    marker on its `diffuse_vcol` vertices, and the box test on `omega/modesto-heights` tick 100: housing below
    `(0.075, 0.080, 0.060)` (it is `(0.097, 0.102, 0.075)` without), hull body within 15 % of `(0.064, 0.085, 0.079)`.
@@ -511,9 +512,14 @@ build, `max |difference| = 0` over every pixel. Neither title reaches `psp2::hul
 **Open.** `shade.wesl`'s `colour_factor` arm also multiplies the specular by the colour (HD's law); the Omega pixel program
 adds the specular after the product and leaves it unmultiplied (`@790`-`@798`, above). It is not changed here (no shader
 edit in this lane); the share is small at the dark panels but it is a difference. The housing's sun term (the owed read) and
-the reflection stand as in "Recipe" 5. The admitted families beyond Feisar's three (`2048_ship_*`, `debris`,
-`fighter_version`, `ship_main_livery`, the `detonator_*` ones) were not rendered: they take the colour by the same program
-reading and nothing else.
+the reflection stand as in "Recipe" 5. The 2048-era craft on Omega (`Feisar2048\3`, the
+`omega/sol-2048` and `omega/queens-mall-2048` pairs) were rendered and read (hull box `(800,520)-(1120,860)`, main to now,
+original): Sol `(0.136, 0.077, 0.066)` to `(0.112, 0.064, 0.057)` (`(0.139, 0.062, 0.051)`), Queens Mall `(0.540, 0.328, 0.121)`
+to `(0.481, 0.281, 0.091)` (`(0.487, 0.328, 0.105)`); a mild darkening, the paint and decals intact, nothing black or blown
+(crops `hull_crop_*-2048`). The other admitted families (`debris`, `fighter_version`, `ship_main_livery`, the `detonator_*` ones,
+`nitro_perspex_new`) take the colour by the same program reading and were not rendered. The one non-ship model that reaches the
+plan is an advert billboard (`Data/billboards/HD_Adverts/Feisar/feisaratg_landscape.rcsmodel`: one submesh each of
+`vertexcolourandtexture` and `vertexcolourandtexturealpha`); no circuit model does.
 
 ### Cross-title
 
