@@ -103,6 +103,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     borrows_zoom_ring: false,
     game_options: oag_title::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: Some(ZONE_FALLBACK),
     // `None`: no Zone sky swap has been looked for on this title. HD/Fury's is
     // a named file its loader picks by a mode gate; nothing equivalent has been
     // read here.
@@ -472,16 +473,70 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
     fallback_palette: Some(oag_title::ZonePalette::TitleWide {
         entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFury.effectSettings",
-        zone_circuits: &[
-            "data/art/published/DLC1/environments/zone_1/track.vex",
-            "data/art/published/DLC1/environments/zone_2/track.vex",
-            "data/art/published/DLC1/environments/zone_3/track.vex",
-            "data/art/published/DLC1/environments/zone_4/track.vex",
-        ],
+        zone_circuits: HD_ZONE_CIRCUITS,
         zone_circuit_entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFuryDLC3.effectSettings",
     }),
     stage_textures: None,
     camera_scale: 0.7,
+};
+
+/// HD's four Zone circuits as the DLC packs ship them, the ones `Environment_Load` matches by
+/// the `Zone_1`..`Zone_4` substring and gives the `DLC3` table
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`).
+const HD_ZONE_CIRCUITS: &[&str] = &[
+    "data/art/published/DLC1/environments/zone_1/track.vex",
+    "data/art/published/DLC1/environments/zone_2/track.vex",
+    "data/art/published/DLC1/environments/zone_3/track.vex",
+    "data/art/published/DLC1/environments/zone_4/track.vex",
+];
+
+/// What a Zone race takes on HD's ported circuits, which ship no `ZoneMode2048.effectSettings`:
+/// HD/Fury's title-wide table out of the v1.04 patch (`data2.psarc`), the `DLC3` revision on the
+/// four `zone_N`, and HD's two fifteen-entry texture sets as `.gxt`
+/// (`data/Tex/zoneMode<n>.gxt`, `zoneModeTrack<n>.gxt`). The circuits' materials declare HD's
+/// Zone variant (`zoneColourTint`, `zoneEffectInner`, `zoneTexInner`: 9,392 programs under
+/// `DLC1/environments`, none outside it), so it is HD's surface law on them.
+pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
+    palette: oag_title::ZonePalette::TitleWide {
+        entry: "data/ZoneEnvironmentHDFury/ZoneModeHDFury.effectSettings",
+        zone_circuits: HD_ZONE_CIRCUITS,
+        zone_circuit_entry: "data/ZoneEnvironmentHDFury/ZoneModeHDFuryDLC3.effectSettings",
+    },
+    stage_textures: &oag_title::ZoneStageTextures {
+        general: "data/Tex/zoneMode",
+        track: "data/Tex/zoneModeTrack",
+        extension: ".gxt",
+        stages: 15,
+    },
+    stages: FALLBACK_ZONE_STAGES,
+    own_model_under: None,
+};
+
+/// The ladder that steps HD's fifteen-stage table on HD's ported circuits: HD's own
+/// fourteen-record zone-number table (`stage = 14 - i`), the thresholds the Zone HUD's class
+/// name walks at `0x8151f434` byte for byte ([`crate::hud::ZONE_SPEED_CLASSES`]).
+///
+/// **Inherited from HD, with one frame behind it.** The seventeen-record [`ZONE_STAGES`]
+/// would hold zone 5 on stage 2 (`Venom`, green); the original's frame on Vineta K at zone 5
+/// (`68-zone-5.png`) draws stage 4's `Flash` colours (yellow-green scene, purple rims). Which
+/// function writes the stage on these circuits is not read.
+pub const FALLBACK_ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
+    records: &[
+        (75, "IG_HUD_SUPSON"),
+        (60, "IG_HUD_MACH1"),
+        (50, "IG_HUD_SUBSON"),
+        (42, "IG_HUD_SUPZEN"),
+        (35, "MSC_ZEN"),
+        (27, "MSC_SPPHANTOM"),
+        (20, "Phantom"),
+        (16, "MSC_SPHANTOM"),
+        (12, "Rapier"),
+        (7, "MSC_SRAPIER"),
+        (5, "Flash"),
+        (3, "MSC_SFLASH"),
+        (2, "Venom"),
+        (0, "MSC_SVENOM"),
+    ],
 };
 
 pub const DEFAULT_TRACK: &str = r"Data\art\published\environments\altima\track.vex";

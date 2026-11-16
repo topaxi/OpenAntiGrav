@@ -296,6 +296,38 @@ impl ModelTexture {
         })
     }
 
+    /// Decodes one `.gxt` blob, or `None` for one that will not parse or names a format this
+    /// build cannot decode.
+    ///
+    /// **A `.gxt` that will not decode draws nothing rather than something** - the same rule
+    /// [`Self::from_gtf`] applies to a Wipeout HD `.gtf`.
+    #[must_use]
+    pub fn from_gxt(label: &str, blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gxt::Gxt::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        Some(Self::rgba8(
+            label.to_string(),
+            u32::from(texture.width),
+            u32::from(texture.height),
+            rgba.into_iter().flatten().collect(),
+            None,
+        ))
+    }
+
+    /// Decodes one `.gtf`, `.gxt` or `.gnf` blob by the extension of `label`, or `None` for any
+    /// other extension or a blob that will not decode.
+    #[must_use]
+    pub fn from_container(label: &str, blob: &[u8]) -> Option<Self> {
+        use oag_texture::decode::Container;
+        match Container::of_name(label)? {
+            Container::Gtf => Self::from_gtf(label, blob),
+            Container::Gxt => Self::from_gxt(label, blob),
+            Container::Gnf => Self::from_gnf(label, blob),
+            Container::Mip | Container::Pct => None,
+        }
+    }
+
     /// Decodes one `.gnf` blob, or says `None` for one this build cannot.
     ///
     /// **A BC7 or BC1 chain the file authors keeps its blocks**, the way

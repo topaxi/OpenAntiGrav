@@ -117,6 +117,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     borrows_zoom_ring: true,
     game_options: oag_title::race::GameOptions::NONE,
     zone_stage_textures: None,
+    zone_fallback: None,
     // `None` for the same reason as Pulse's.
     zone_sky: None,
     detonator: None,
