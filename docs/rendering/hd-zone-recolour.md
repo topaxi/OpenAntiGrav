@@ -207,3 +207,37 @@ Track multiplier through, per the struck Open item above): both frames came
 back byte-identical to the ones this table already names, which is the
 finding, not a broken repro - see that item for the saturation reading and
 what would tell the two apart.
+
+## Chunks a Zone race does not recolour (2026-11-16, `zone-pad-re`)
+
+**Not every chunk takes the Zone surface.** Every draw consumer of the
+executable drops the `ZoneMode` bit of the material permutation word for a
+chunk whose render-block flags have any of bits 9, 10 or 11
+(`Mesh::render_flags & 0x0e00`), so that chunk runs its material's plain lit
+program with its own albedo (confidence 90: the instruction at `0x00401760`
+and its six siblings, and three RSX frames of a Zone race on Moa Therma in
+which the speed pads and the bit-11 signs are the only plain draws). The bits
+are the speed pads (418 chunks), the weapon pads (208) and 315 authored
+signs, billboards and screens.
+
+What such a chunk shows is its own picture under the Zone stage's rig, with no
+lightmap term (a Zone frame switches the lightmap and baked-vertex sources off
+for every draw):
+
+```text
+light  = stage Constant Ambient Colour + saturate(N.L) * stage Sun colour
+colour = albedo * light + the material's own glow and specular
+fog    = the stage's Track fog on a track-flagged chunk, else its Fog (or Alt Fog on bit 5)
+out    = 0.5 * fogged colour
+```
+
+At Sub Venom (`Constant Ambient Colour` 1.5, `Sun colour` 0, `Track Fog
+density` 0) a speed pad is `0.75 * albedo + 0.5 * ne.a * Colour`: the
+light-grey plate with a dark outline and cyan tiles the original shows.
+Evidence, the per-material census and the 2048/Omega check:
+[zone-plain-chunks.md](../ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md).
+
+**Not wired.** This port still sends flagged chunks through the Zone surface
+(the pad draws as road, with a white bar), and its stand-in for the start
+gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
+same flag, unchecked.

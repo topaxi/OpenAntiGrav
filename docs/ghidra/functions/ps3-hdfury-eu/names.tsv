@@ -996,3 +996,4 @@
 0x000d8bd0	function	Ship_UpdateCollisionCues	90	collision-cues.md
 0x000d8910	function	Ship_RecordContactImpulse	78	collision-cues.md
 0x000e6fd8	function	Ship_SpawnContactFx	80	ship-collision-fx.md
+0x00400a00	function	Scene_DrawOpaqueChunkBucket	78	zone-plain-chunks.md
