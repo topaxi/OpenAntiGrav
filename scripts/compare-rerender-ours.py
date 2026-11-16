@@ -261,6 +261,12 @@ def rewrite_manifests(d):
     `menus*.toml` rows at their old numbers)."""
     for toml in sorted(d.glob("*.toml")):
         dirs = [str((toml.parent / e["original"]).parent) for e in tomllib.loads(toml.read_text()).get("entry", [])]
+        hand_made = [p for p in dirs if not (Path(p) / "pair.json").is_file()]
+        if hand_made:
+            # A pair with no pair.json has no recorded flags to re-render or metrics to write; rebuilding the
+            # manifest from pair.json files would drop it, so the hand-written manifest stays as it is.
+            print("kept %s as written: %d pair(s) without pair.json" % (toml.name, len(hand_made)))
+            continue
         if dirs:
             ce.manifest(toml, dirs)
 
