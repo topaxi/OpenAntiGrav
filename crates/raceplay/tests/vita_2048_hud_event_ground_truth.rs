@@ -212,7 +212,10 @@ fn the_zone_line_names_the_class_in_the_players_language(loaded: &oag_raceplay::
         (75, "SUPERSONIC"),
     ] {
         let text = drawn(zone);
-        assert!(text.iter().any(|line| line == name), "zone {zone}: {text:?}");
+        assert!(
+            text.iter().any(|line| line == name),
+            "zone {zone}: {text:?}"
+        );
         assert!(
             !text
                 .iter()
