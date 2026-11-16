@@ -338,8 +338,13 @@ literals with `.gnf`; `oag_omega::TITLE` carries the same axes. See
 `EngineLightData.xml` on HD's law (`flare::Authored::engine_light`) washed the
 whole circuit blue-white: all 20 native craft author `Distance 3` /
 `Radius 30` against HD's 0.7-2.0, on a hull of the same length (13.8 units
-against 13.8, so not a units mismatch). The SPU is the PS3's and its Vita
-consumer is unread, so the light is not drawn and the load report says so.
+against 13.8, so not a units mismatch). The light is not drawn and the load
+report says so. **Its Vita consumer is read (2026-11-16, confidence 82), not
+wired**: 2048 runs the same producer as Omega, and a native craft's light is
+`(3.0, 0.5, 0.1)`, not HD's `(4, 10, 40)`, which is what washed the circuit;
+the receiver is a per-vertex Lambert light with a linear falloff, declared by
+every circuit's materials and the ship materials
+([engine-light.md](../ghidra/functions/vita-2048-eu-v104/engine-light.md)).
 Switch-off bisect at tick 0: with only the light off the frame is pixel-identical
 to the pre-change one; the flare model, sprite, trail and quad are not visible
 for the player at rest.
