@@ -421,8 +421,8 @@ impl Texture {
 
 impl Texture {
     /// The texels of a one-channel half-float surface (`Format16`, `Float`, `Thin_1DThin`, one
-    /// level), row-major, as IEEE half bits. `docs/formats/gnf.md`, "Two shapes the decoder does
-    /// not read yet": 8x8-texel micro tiles row-major, texels inside a tile in the BC7 blocks'
+    /// level), row-major, as IEEE half bits. `docs/formats/gnf.md`, "A half-float channel and a
+    /// cube array": 8x8-texel micro tiles row-major, texels inside a tile in the BC7 blocks'
     /// `x0 y0 x1 y1 x2 y2` order, two bytes each.
     ///
     /// # Errors
@@ -436,7 +436,7 @@ impl Texture {
     /// Cube `cube`'s six faces (`+X, -X, +Y, -Y, +Z, -Z`) at mip `level` of a BC7 cube array,
     /// each `max(1, width >> level)` square RGBA8. The layout is level-major, every level storing
     /// its slice count rounded up to a power of two, slice `6 * cube + face`
-    /// (`docs/formats/gnf.md`, "Two shapes the decoder does not read yet").
+    /// (`docs/formats/gnf.md`, "A half-float channel and a cube array").
     ///
     /// # Errors
     ///
