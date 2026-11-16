@@ -12,9 +12,10 @@ Climb, Subway and Metro Park.
 program of the 1.07 patch's file (`data08.psarc`) unless said otherwise. The CPU side is read
 in the 1.07 patch executable (Ghidra program `/omega/eboot-ps4-omega-eu-v107.bin`), with the
 base address found by byte search of the base `eboot.bin`
-([patch-v107-addresses.md](patch-v107-addresses.md)); the base program was not open. **No live
-run**: nothing here was watched on the native port or an emulator, so no score passes 94 and
-decompile-only claims stop at 84 unless shipped data closes an invariant.
+([patch-v107-addresses.md](patch-v107-addresses.md)); the base program was not open. The page
+was written with **no live run**, so its scores stopped at 88 unless shipped data closed an
+invariant; since 2026-11-16 the reflection's terms are **knocked out live on the native port**
+("Live", below), and the scores that run carries say so.
 
 **In one paragraph.** There is no vertex displacement. The pixel program marches the view ray
 into a signed distance field (`Cg_PanelDisplacement_1In1panel_map`, an `R16F` texture) to find
@@ -133,10 +134,11 @@ The unlit program `0x2fe4` runs the same march and lip blend and ends
 | Normal map `2x - 1`, `T`/`B`/`N` basis, no `w` use in the pixel program | `@0xa34-0xaac` | **88** | Matches [gcn.md](../../../formats/gcn.md)'s tangent reading. |
 | Nova prelit, `LM.a` sun mask, shadow-light factor `0.75 + 0.25 ...` | `@0xbd0-0xc20`, `@0xc90-0xe3c` | **88** | The law [lightmap-prelit.md](lightmap-prelit.md) read on another family; here the `0.75`/`0.25` form is present. |
 | Specular lobe: `R.L`, exponent `SpecPower * (1 - 0.75 * min(1, beta))`, the 4 degree over 10 degree normalisation | `@0xbec-0xc08`, `@0xcfc-0xd30`, `@0xe04` | **85** | `0.25` comes from `v_cvt_off_f32_i4 v35, 4` (`@0xb54`), read as `4/16`. |
-| Fresnel `Min + Scale * (1 - N2.V)^Power` | `@0xb18-0xb58`, `@0xc5c`, `@0xe20-0xe24` | **88** | Same shape as `FrontEndConstantFranelBlend` ([omega-status.md](../../../formats/omega-status.md)). |
+| Fresnel `Min + Scale * (1 - N2.V)^Power` | `@0xb18-0xb58`, `@0xc5c`, `@0xe20-0xe24` | **90** | Same shape as `FrontEndConstantFranelBlend` ([omega-status.md](../../../formats/omega-status.md)). Live: with `Scale = 0, Min = 1` the sheen falls to the flat `Amount * Dm.a * cube`, and ours' full sheen over the mapped normal lands within x0.8 to x1.2 of the original's in seven boxes ("Live"). `Scale = 0` alone gives 0.41 to 0.77 of the flat state where `Min = 0.6` predicts 0.6 (one frame each, moving crowd and hull), so the two constants' roles are confirmed and their exact values are not. |
 | `N2` adds `cross(N, T)` to the bitangent | `@0x9c0`, `@0xa7c`, `@0xab0-0xad0` | **80** | Read literally; it looks like the source built the basis twice. With `B = cross(N, T) * w / scale` it doubles (or cancels) the `n.y` lane, so the fresnel's normal is not `Nw`. |
-| Cube lookup: `-R.z`, two array layers mixed by `fract(lod)` | `v_cubeid/sc/tc/ma` `@0xc40-0xd3c`, layers `v33 * 8 + face` `@0xdf4`, `@0xe8c` | **88** | The `* 8` is the hardware's cube-array face encoding. |
-| Diffuse alpha gates specular and reflection | `@0xde4`, `@0xe40` | **88** | The "alphaspec" of the name. |
+| Cube lookup: `-R.z`, two array layers mixed by `fract(lod)` | `v_cubeid/sc/tc/ma` `@0xc40-0xd3c`, layers `v33 * 8 + face` `@0xdf4`, `@0xe8c` | **92** | The `* 8` is the hardware's cube-array face encoding. Live: the road as a mirror (`Amount = 2, Min = 1, Scale = 0, Blurrines = 0`) on the original against ours' map built with this lookup agrees within x0.8 to x1.13 per channel in seven boxes of Sol's grid ("Live"), which a wrong flip, face order or level would not. One circuit. |
+| Diffuse alpha gates specular and reflection | `@0xde0-0xde4` (`v20`, the fourth lane of the `DiffuseMap` sample at `@0xcbc`/`@0xcd4`, times `ReflectivityAmount`), `@0xe40` | **94** | The "alphaspec" of the name. Live on two circuits: the mirror state shows the map's alpha as a mottle on the road, and only this lane (mean 0.195 over `track_a_floor_ds_disp`) reproduces the original's sheen ("Live"). Runtime trace on one binary. |
+| The sheen has no other weight: `refl = Amount * Dm.a * fres * cube`, added after the lighting | `@0xe34` (`v11 = v5 * v2`), `@0xeb0`, `@0xec4`, `@0xec8` (`+= v11 * cube`) | **92** | Re-read instruction by instruction for a lightmap, shadow or `Fsl` factor: none. Live: `Amount = 0` leaves the lit base, and the sheen scales x4.4 to x4.6 for `Amount` x4 with the blur also changed ("Live"). |
 | `_mask`: `(spec + refl) * ReflectionMask(uv).rgb`, mask at the unshifted `uv` | `_mask` program `0xe2c4` `@0xe8c-0xefc` | **85** | One program read. |
 | Fog and fp16 export | `@0xeb4-0xf18` | **88** | |
 | `shadow`: a cascaded exponential shadow map, `min(1, sample * exp(clamp(c12 + c13 * z, c14, c15)))` with `shadowCoeffs` | `@0x7b8-0x964`, `@0xb84-0xbac` | **60** | Structure only; cascade choice not taken apart. Not this family's own. |
@@ -223,9 +225,9 @@ Addresses are the **1.07 patch's**, with the base address beside each where it w
 | Its binding in the main scene pass | `Scene_PrepareFrame` (patch `0x015f2d30`), `015fd9a1`-`015fd9be`: `*(table + 0x600) = **0x020084b8`, version byte `+0x5f6` bumped | `0x01f8f688`, referenced at `015d06a0` and 16 more sites up to `015fafc7` (not disassembled) | A second pass (`FUN_01618bb0`, `0161998a`) binds `*0x020084c0` instead, and `cubeDistanceTex` from `*0x020084c8`. |
 | `g_cube_reflection_tex` | `0x020084b8` | `0x01f8f688` | Stored at `0162d399` (base `01601ead`) in the circuit loader `FUN_0162a390`, right after `FUN_013d0cc0(path, "skycube.rcsmodel", ..., "skyCube.gnf")` (strings `0x0188fe4a`, `0x0188fe70`; base `0x0182b987`, `0x0182b9ad`) and the texture load `FUN_017cc0d0`: **the circuit's `skycube.rcsmodel` path with the file name replaced by `skyCube.gnf`**. Released in `FUN_01636440` (`01636b06`). |
 
-Confidence: `g_reflective_blur_coeffs` and its value **88** (the slot is identified by hash
-on both ends and the bytes are in the file; a write through the pointer would not show in a
-reference scan, and no live read was made). `g_cube_reflection_tex` and the file it holds
+Confidence: `g_reflective_blur_coeffs` and its value **94** (the slot is identified by hash
+on both ends, the bytes are in the file, and the value was read live on the 1.07 build, both at
+the address and through the name table's pointer: "Live"; 88 before that read). `g_cube_reflection_tex` and the file it holds
 **85** (one load site read; the same instruction pattern at the base address).
 
 With `(1.72285, 2, 0, 1)`: `beta = Blurrines`, `lod = 2 * Blurrines`, and lane `.x` is not
@@ -260,6 +262,124 @@ levels, GNF texture type `0xB` (cube) in word 3 bits 31:28, array slices 0 to 23
 - Sol's and Altima's cubes are sky and a painted ground; Queens Mall's holds the city's
   buildings, so it is a capture from inside the circuit, not the sky dome alone.
 
+## Live: the reflection's terms knocked out on the native port
+
+2026-11-16, `sheen-re`. `scripts/wipeout-pc-road-sheen-live.py` on the `wipeout_pc` native port
+(1.07 eboot, commit `84690ed896ea`, its own headless sway, 1920x1080), Sol in the 2048 mode at
+A class (the `omega/sol-2048` pair's walk); Queens Mall, one boot. The script finds
+the road material's values in the guest through the model's own parameter records (the name hash
+`!crc32(name)`, a count of 1, and at `+0x10` a pointer to the float; Sol has eight such
+materials, their ten values neighbours in the order `Blurrines, Aspect, Depth, SlopeWidth,
+ReflectivityAmount, ReflectivityMin, ReflectivityPower, ReflectivityScale, SpecPower,
+SpecStrength`), writes them **while the race intro loops**, and starts the race, so the grid frame
+is the pair's own pose with the change in. Later states are written at the settled camera, about
+14 s after the grid.
+
+**What does not work** (three boots lost to it): the copies of the program's constant block
+(`__GLOBAL_CB__`, found by its first eight floats) are per-frame staging copies, in the guest and
+in the port's own caches. Writing them changes no frame, and writing an old value back into one
+that has been reused corrupts the heap (`double free or corruption`). The frame constants
+(`novaScaleBiasPower`, the two lights) are reached through the constant name table (entry: hash,
+then the value pointer at `+0x10`) and are refilled every frame, so a write there does not hold.
+
+**Frame constants read live** (Sol; from a staged block and through the name table, the two
+agreeing). Confidence **94** each as a value of this circuit (runtime read, one binary):
+
+| Constant | Sol | Queens Mall |
+| --- | --- | --- |
+| `reflectiveBlurCoeffs` | `(1.72285, 2, 0, 1)` at runtime `0x8010e3420` (patch `0x020e3420`) | same |
+| `novaScaleBiasPower` | `(1, 0, 1)` | `(2, 0, 2.5)` |
+| `liveLighting0diffuse` | `(7.608, 5.352, 3.72)` | `(9.625, 4.46, 2.38)` |
+| `liveLighting0specular` | `(6.096, 3.2627, 1.6)` | `(9, 6.444, 4.3765)` |
+| `liveLighting0direction` | `(-0.1053, 0.5740, -0.8120)` | `(0.2984, 0.4506, 0.8414)` |
+| `shadowLightSpecularDiffuse` | `(10, 1, 0, 0)` | `(10, 1, 0, 0)` |
+| `shadowLightDirection` | `(0.7908, -0.3750, -0.4838)` | `(-0.3068, 0.4453, -0.8412)` |
+| `fogColour` | `(0.364, 0.5, 0.604, 0.000109)` at the grid | not read (no staged block found in the intro) |
+| `fadeResCoeffs` | `(40000, 0, 1/1920, 1/1080)` | not read |
+
+So on Sol the shadow light points below the horizon (`y = -0.375`): `sat(dot(Nw, shadowLightDirection))`
+is 0 on a level road and `Fsl = 0.75 + sat(dot(R, shadowLightDirection))^10`, a prelit-coloured
+lobe toward `(0.79, -0.38, -0.48)`, weight 1.
+
+**Which program draws.** Every staged block of the road on Sol's grid (8 of 8, counted by where
+`Blurrines, SpecPower` sit) has the shadow-map layout: `shadowCoeffs` in dwords 12 to 27 (filled:
+`0, 1, 0, 1, 0, 1, 0, 1, 37.7, 0.4167, 108.5, 0.2083, -40.8, -799.2, -80, 0` after the first
+four) and `Blurrines` at dword 52. The variants without `shadowMap` (`0x10244`, `0x164e4`) put it
+at dword 36 and none is staged. So the race binds **`0xe144` or `0x14284`**, confidence **90**;
+the two share the block's layout and every literal and are not told apart here (they differ in
+three interpolant lanes).
+
+**The knockouts**, Sol, grid frame at the pair's pose, mean of a box in linear light (sRGB
+decoded, x100) less the same box with `ReflectivityAmount = 0`. `ours` is main's shader;
+`ours, alpha` is a scratch build whose gate is the diffuse sample's alpha (below). Boxes at
+1920x1080 as `(y0, y1, x0, x1)`: near left `(780, 920, 250, 500)`, near right
+`(780, 920, 1400, 1700)`, mid left `(600, 680, 200, 500)`, mid right `(620, 680, 1150, 1350)`,
+mid centre `(520, 560, 600, 900)`, far centre `(445, 470, 700, 1000)`, far left
+`(470, 500, 300, 600)`.
+
+| Box | Original's sheen | Ours | Ours / original | Ours, alpha | Ours, alpha / original |
+| --- | --- | --- | --- | --- | --- |
+| near left | (4.6, 5.5, 6.6) | (7.7, 9.8, 12.3) | 1.69, 1.80, 1.85 | (4.6, 5.6, 7.0) | 1.00, 1.03, 1.05 |
+| near right | (1.9, 3.3, 4.9) | (2.7, 4.9, 7.5) | 1.42, 1.47, 1.54 | (1.5, 2.8, 4.3) | 0.78, 0.83, 0.87 |
+| mid left | (4.0, 5.8, 7.5) | (8.2, 13.3, 17.5) | 2.06, 2.31, 2.34 | (4.4, 6.9, 9.0) | 1.10, 1.20, 1.21 |
+| mid right | (4.2, 6.2, 7.5) | (7.3, 11.2, 13.9) | 1.74, 1.81, 1.85 | (4.2, 6.3, 7.7) | 0.99, 1.01, 1.02 |
+| mid centre | (4.8, 6.6, 8.4) | (7.3, 12.7, 17.0) | 1.52, 1.92, 2.03 | (4.1, 6.9, 9.3) | 0.85, 1.05, 1.11 |
+| far centre | (10.3, 14.4, 17.6) | (19.3, 31.6, 38.5) | 1.87, 2.19, 2.19 | (10.9, 17.5, 21.4) | 1.06, 1.21, 1.22 |
+| far left | (11.3, 15.3, 18.6) | (16.1, 25.1, 30.7) | 1.43, 1.64, 1.65 | (9.2, 14.0, 17.2) | 0.81, 0.91, 0.92 |
+
+The mirror state (`Amount = 2, Min = 1, Scale = 0, Blurrines = 0`, so `2 * Dm.a * cube[0]`), same
+boxes, original then ours with the alpha gate, then the ratio: near left (13.2, 16.2, 20.2),
+(12.3, 15.3, 19.3), 0.93 to 0.96; near right (4.5, 7.9, 11.8), (3.5, 7.3, 12.2), 0.79 to 1.04;
+mid left (3.7, 6.7, 9.0), (4.2, 7.0, 9.3), 1.03 to 1.12; mid right (5.0, 7.9, 9.7),
+(5.4, 8.3, 10.2), 1.04 to 1.08; mid centre (4.8, 7.2, 9.4), (4.0, 6.9, 9.5), 0.84 to 1.00; far
+centre (5.2, 7.6, 9.5), (5.2, 8.6, 10.7), 1.00 to 1.13; far left (7.3, 11.6, 14.7),
+(5.9, 9.5, 12.1), 0.81 to 0.83. Main's shader reads 1.5 to 2.0 times the original there. By eye
+the original's mirror road is mottled (the alpha map) and ours' on main is an even pale blue.
+
+The lit base under the sheen, the original's `Amount = 0` frame against ours' (display values,
+% of full scale): near left (44.3, 25.4, 23.4) and, a second boot, (41.0, 22.7, 21.1), ours
+(41.1, 23.5, 23.6); mid right (30.3, 20.5, 21.4), ours within 1; the left and far boxes are
+1.2 to 2.3 times ours in linear red (far left (43.6, 29.0, 28.0) against ours' (29.7, 22.9, 24.5)),
+which is the size and place of the `Fsl` lobe ours does not draw. Boot to boot the original's
+boxes move by up to 3.
+
+At the settled camera (one boot, near box `(780, 920, 250, 500)`, linear x100 less the
+`Amount = 0` state): authored (4.8, 5.7, 6.8); `Scale = 0, Min = 1` (2.6, 3.4, 4.1); the mirror
+(11.8, 15.2, 18.2), x4.4 to x4.6 of the flat state for `Amount` x4 with the blur taken off;
+`Scale = 0` (1.1, 1.8, 2.3); `Blurrines = 0` (4.0, 5.7, 7.0); `SpecStrength = 0`
+(3.7, 5.5, 6.9), the sun lobe adding nothing visible; restored (4.5, 5.9, 7.2). The output is
+linear in the sheen's weight, so the frame is tone mapped by nothing stronger than the sRGB
+curve over this range.
+
+Queens Mall, one boot with `Amount = 0` against the pair's own frame (another boot), boxes on the
+panel road: near right `(820, 940, 1300, 1650)` original (8.0, 8.3, 5.3), ours (14.5, 14.7, 9.9),
+ours with the alpha gate (9.1, 8.8, 5.8), x1.06 to x1.14; mid right `(640, 720, 1200, 1500)`
+(2.8, 3.7, 2.4), (7.5, 7.2, 4.5), (4.7, 4.4, 2.7); mid centre `(560, 600, 700, 1000)`
+(5.9, 5.9, 4.0), (12.5, 11.4, 5.9), (7.3, 6.4, 3.2); far centre `(480, 510, 800, 1050)`
+(4.0, 5.2, 3.9), (9.9, 9.7, 7.3), (5.7, 5.5, 4.0). The original's base there is 10 to 35 %
+brighter than ours (near right (37.3, 15.2, 7.4) against (31.5, 12.6, 6.0) linear x100).
+
+**What it settles.** The sheen ours drew at 1.4 to 2.3 times the original's, bluer, was **the
+gate**: ours multiplied by the diffuse map's **red** lane where the program multiplies by its
+**alpha**. `shade.wesl`'s `texel.a` is `coverage[(slots >> 3) & 3]`, and a PS4 lightmapped
+material's slot word is `SECOND_IS_LIGHTMAP` alone (`mesh::rcs::psp2`), so the lane index is 0;
+a build whose gate is `first.r` is pixel-identical to main on Sol (0 pixels differ) and one whose
+gate is `first.a` gives the table above. `track_a_floor_ds_disp`'s alpha has mean 0.195 (10th to
+90th percentile 0.125 to 0.275); its red is the road's own red-brown, about 0.34 linear, which is
+the 1.75 and the missing mottle. The cube, its orientation, its level law and the fresnel were
+right. Confidence **92** that this is the whole of the overshoot (two circuits, seven boxes
+within x0.8 to x1.2, the residue the size of boot-to-boot noise and of the `Fsl` lobe).
+
+Scored with `compare-decompose.py --road road_alphaspec` (each build on its own masks, 16x):
+
+| Pair | Road `LF` | Road `bias` | Road `G` |
+| --- | --- | --- | --- |
+| `sol-2048` | 17.0 to 8.8 | +13.8 to -3.0 | 0.74 to 0.79 |
+| `queens-mall-2048` | 14.7 to 15.5 | +8.6 to -0.6 | 0.85 to 0.83 |
+
+Queens Mall's `LF` does not fall: with the sheen right, what is left there is the base, darker
+than the original's (above).
+
 ## 2048 against Omega
 
 **Checked, differs.** 2048 (Vita, `PCSF00007` base, 1.04 patch, both DLC packs: 24,434
@@ -275,11 +395,18 @@ K) and `Diffuse_Normal_Specular_panelmap2` (Sol 2).
 
 ## Open
 
-- Which of the four nova programs a draw selects, and the three extra interpolant lanes of
-  `0x14284`/`0x164e4`.
+- ~~Which of the four nova programs a draw selects~~: a shadow-map one, `0xe144` or `0x14284`
+  ("Live"). Which of the two, and the three extra interpolant lanes of `0x14284`/`0x164e4`, are open.
+- **The `Fsl` lobe** `sat(dot(R, shadowLightDirection))^10` on the prelit term (weight 1, live
+  constants above) is not drawn by ours; the original's base is 1.2 to 2.3 times ours in linear red
+  in Sol's left and far boxes and 10 to 35 % brighter on Queens Mall's road. The frame constants refill every frame, so a
+  knockout needs their source (the lighting object) or a patched program.
+- **Queens Mall's base** under the sheen is darker in ours than in the original; `novaScaleBiasPower`
+  is `(2, 0, 2.5)` there live. Compare ours' values before reading anything else.
 - The panel map's and the cube's sampler states (filter, addressing, anisotropy).
-- A live read of `g_reflective_blur_coeffs` on the native port (with the image mapped at
-  `0x800000000` the runtime address is the patch address plus `0x7ff000000`; expect `(1.72285, 2, 0, 1)`), which would lift it to 94.
+- ~~A live read of `g_reflective_blur_coeffs`~~: read on the native port at runtime `0x8010e3420`
+  (the patch address plus `0x7ff000000`) as `(1.72285, 2, 0, 1)`, six Sol boots and one Queens Mall boot, and through the name
+  table's value pointer; 94 ("Live").
 - The cube's orientation on a second circuit with a visible sun. **Sol checked a second way**
   (`panelmap-sun`): in the map as built (the `(R.x, R.y, -R.z)` composition), the brightest texel lies at
   `(-0.18, 0.43, -0.89)`, 0.15 rad from Sol's authored sun `(-0.105, 0.574, -0.812)`; the map reads 233
@@ -287,12 +414,15 @@ K) and `Diffuse_Normal_Specular_panelmap2` (Sol 2).
   the sun is. Altima, Queens Mall, Unity Square, Metro Park and Empire Climb's brightest texels do not
   sit at their suns (no usable glare in those cubes), so they decide nothing.
 - `N2`'s doubled bitangent, checked against a frame: it changes the fresnel only where the
-  normal map's green lane is far from 0.5.
+  normal map's green lane is far from 0.5. With the mapped normal ours lands within x0.8 to x1.2
+  of the original's sheen, so it is worth at most that.
+- The cube's orientation on a second circuit: Queens Mall's sheen agrees in size with the alpha
+  gate (x0.8 to x1.7 across four boxes, one boot against another), which does not test the flip.
 
 ## Names
 
-- `0x0202f080` `g_reflective_blur_coeffs` - 88. Data; the four floats bound as the shader
-  constant `reflectiveBlurCoeffs` (patch `0x020e3420`).
+- `0x0202f080` `g_reflective_blur_coeffs` - 94. Data; the four floats bound as the shader
+  constant `reflectiveBlurCoeffs` (patch `0x020e3420`). Read live ("Live").
 - `0x01f8f688` `g_cube_reflection_tex` - 85. Data; the handle of the circuit's `skyCube.gnf`,
   bound as `cubeReflectionTex` (patch `0x020084b8`).
 
@@ -322,6 +452,10 @@ What is chosen, not measured, or left out:
   the fragment stage has no free sampled-texture slot for a cube array, so the sky binding HD's
   glass already reads carries it.
 - **The fresnel takes the mapped normal**, not the doubled-bitangent `N2` (open above).
+- **The gate is the wrong lane** (found 2026-11-16, `sheen-re`, not yet fixed on this page's
+  date): `specular` and `sky_reflection` multiply by `texel.a`, which on this draw is the diffuse
+  sample's red, where the program's is its alpha ("Live", "What it settles"). The fix is the
+  panel branch reading the diffuse sample's fourth lane.
 - **The lip blend is left out** (inert, above), and the lighting is the generic Omega nova path:
   the `0.75 + 0.25 ...` shadow-light factor is not drawn.
 - **The sun lobe's colour is wired** (2026-11-16, `panelmap-sun`): `envsettings_light` fills
@@ -380,3 +514,13 @@ entries with Sol's authored values, the panel map binds as a half float, the sky
 four-level map), `crates/mesh/tests/omega_panel_map_lit_path.rs` (a GPU pixel test that fails
 with the march, the reflection weight or the emissive dropped). HD and 2048 frames are unchanged
 to the pixel (`hd-race/talons-pack`, `2048-vita/anulpha-pass`).
+
+## History
+
+- 2026-11-16 (`panelmap-re`): the law read from the microcode, no live run; scores to 88.
+- 2026-11-16 (`panelmap-sun`): the fresnel's normal, the blur level and the cube's flip probed in
+  ours; cause of the overshoot not found.
+- 2026-11-16 (`sheen-re`): knockouts on the native port. `g_reflective_blur_coeffs` 88 to 94 (live
+  read); the diffuse-alpha gate 88 to 94, the cube lookup 88 to 92, the fresnel 88 to 90 (live
+  states against ours); the drawing program narrowed to the shadow-map pair. The overshoot is
+  ours' gate lane, not a term of the program.
