@@ -8,8 +8,9 @@
 The route (measured on a fresh profile, `docs/tools/compare-page.md`, "Zone pairs: Wipeout Pure"): the Main Menu's SINGLE PLAYER,
 three downs to ZONE (Single Race, Tournament, Time Trial, Zone), `Zone Track Selection` (Pro Tozo, Mallavol, Coridon 12,
 Syncopia: `Data\\Zone\\01_Zone` to `04_Zone`; `--circuit-index` downs), and the race loads with no team or class step. A fresh
-profile lists Zone as selectable once the dev-unlock byte is written (`--unlock`, `psp-pure-walk.py`'s write at the Main Menu).
-`--from race` pauses and quits to the Main Menu first, as `psp-pure-walk.py` does.
+profile that has not unlocked Zone may need `--unlock` (`psp-pure-walk.py`'s write at the Main Menu; the pair states were made with it, and whether Zone is locked
+without it was not tested). Tested: `--from race --after 15` from a running Zone race (it quit to the Main Menu, walked to Pro Tozo and saved);
+`--from menu` (the default) is the same walk without the pause and quit, not run as a script. `--from race` pauses and quits to the Main Menu first, as `psp-pure-walk.py` does.
 
 The craft is then handed to the game's own driver: at the per-craft weapons loop's tail (`0x0884d0d4`) the player's Autopilot
 pickup record (`a1`) gets its running byte `+0x154` set and its timer `+0x15c` raised (`docs/ghidra/functions/psp-pure-usa/autopilot.md`;
