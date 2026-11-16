@@ -830,12 +830,12 @@ impl Race {
                 scheme: ControlScheme::default(),
             },
             #[cfg(not(feature = "view"))]
-            view: RaceView {
+            view: Box::new(RaceView {
                 slot_teams,
                 ..RaceView::default()
-            },
+            }),
             #[cfg(feature = "view")]
-            view: RaceView {
+            view: Box::new(RaceView {
                 chase_params,
                 chase_far: chase,
                 chase_close,
@@ -1034,7 +1034,7 @@ impl Race {
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [[0.0; 2]; MAX_SHIPS],
                 flap_graphics: setup.airbrake_graphics,
-            },
+            }),
             #[cfg(feature = "view")]
             replay: replay::ReplayState::requested(request),
             quiet: false,
