@@ -2300,9 +2300,11 @@ Ranked, by what each would remove:
      baked, pre-blurred cube array the engine loads beside every circuit (`skyCube.gnf`, four blur levels, layout
      decoded), plus a sun specular lobe under the same alpha; Sol authors a weight of 0.3 face-on and 2.35 at
      `N.V` 0.2, which is its 38.5 grey. **Wired 2026-11-16** (`mesh::rcs::psp2::panel_map`, the page's
-     "Implemented where"): the march, the cube sheen and the emissive draw; the lobe's shader term is in but
-     its colour (`Lighting.Sun specular colour * intensity`) is not yet read by the race loader, so it draws
-     zero. Road at 16x anisotropy, the before render's region masks: Sol `LF` 32.7 to 18.0, `bias` -32.4 to
+     "Implemented where"): the march, the cube sheen and the emissive draw; the lobe's colour
+     (`Lighting.Sun specular colour * intensity`) is read by the race loader (`panelmap-sun`, 2026-11-16) and
+     draws almost nothing at the pairs' poses: 339 pixels move on Sol (largest step 7 grey), 527 on Queens Mall
+     (1), the road scores unchanged; a x100 probe shows the path live, a highlight under the camera's reflection
+     of the sun only. Road at 16x anisotropy, the before render's region masks: Sol `LF` 32.7 to 18.0, `bias` -32.4 to
      +16.1, `G` 0.35 to 0.75; Queens Mall 30.7 to 14.5, -16.9 to +8.5, 0.71 to 0.85; Altima and Unity Square
      within 1.1 grey and 0.03 `G`. **2048: checked,
      differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
@@ -2333,7 +2335,7 @@ Ranked, by what each would remove:
 **Closed negatives.** Exposure is not still ramping at the grab: the static bias is the same at ticks 30, 100 and 300
 (Queens Mall -20.8, -20.9, -21.2). A scalar specular fed from `Sun specular intensity` (ours reads HD's `Sun specular
 scale`, absent on every Omega file, so specular is 0) raises Queens Mall to 55.2 and Empire Climb to 53.2: Omega's
-RGB specular is not HD's scalar term and stays unwired. `Lighting.Ship diffuse brightness` (0.25 to 1, registered at
+RGB specular is not HD's scalar term and does not feed it (its colour reaches only the panel-map road's lobe). `Lighting.Ship diffuse brightness` (0.25 to 1, registered at
 `+0x164`, key `0x0188d117`) is read by nothing here, but the hull's bias does not follow it (Sol, at 1.0, is the
 brightest hull, +69), so it is not the hull's cause; the hull is confounded by the port's livery anyway.
 
