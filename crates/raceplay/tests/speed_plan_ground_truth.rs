@@ -209,6 +209,9 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
+        // 2048 and Omega: no track art feeds the plan (a Pulse load without art loses its
+        // track statistics, so the Pulse loads above keep theirs).
+        ribbon: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-13
-summary: "test-data suite was 470 s over the 450 s ceiling; wrap independent races in in_parallel, 2048 sweeps, fewer speed plan learns"
+updated: 2026-11-16
+summary: "Suite 506 s of 450 at load 19; test-tail-4 removed ~300 CPU-s. Open: sim-only load, Pulse-safe ribbon, fewer speed plan learns"
 difficulty: medium (35)
 ---
 
@@ -34,8 +34,12 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 
 - **2026-11-13 `test-tail-3`.** Done: the texture decoders. `gxt_ground_truth` 27.8-29.6 to 13.7 s user CPU alone (`PVRTII4BPP` 51 to 145 M texel/s, BC1-3 about 2x, the GXT twiddle built once per surface), an `omega_gnf` slice 11.7 to 8.1 s (BC7 index reads, one multiply for RGBA, whole-block copies; `gnf` untile walks tiles in file order), `omega_normal_map` 18.4 to 16.2 s; all decoded bytes identical (numbers and proofs in `workspace-layout.md`, "What the `test-tail-3` pass measured"). Player-side: the same decoders run at 2048 and Omega load. Measured and not done: `hd_eliminator_hud_ground_truth` is 106 s of user CPU of pure simulation (12 races, 4 threads), nothing to remove without changing the sim; the hard-transition `PVRTII4BPP` quads (7 % of quads, a third of the remaining decode); `omega_wem` (310 s summed in the 2026-11-13 gate log, `atrac9dec`) and `omega_transparency` (259 s) were not touched, and a load average above 40 inflates a test's wall time by 2 to 4 times (`omega_normal_map` 81 s in the lead's gate, 62 s at load 58 and 22 s at load 7 alone), so judge by user CPU at a quiet load.
 
+- **2026-11-16 `test-tail-4`.** The lead's full run at `ed3bc1f24` read 506 s (12,686 tests, load about 19). Done: `hd_eliminator_hud_ground_truth`'s pace races fly `tick_sim_only` with `ribbon: true` (Novice 188-224 to 80-117 s of user CPU alone, Elite 62-95 to 32-46 s, all 36 outcomes identical), and `ribbon: true` on the HD, Omega and 2048 loads of `pilot_assist_levels`, `omega_original_ai`, `vita_2048_original_ai`, `hd_ai_craft_laws`, `speed_plan`'s ring plans, `ai_fork_split`'s 2048 run, `replay_ground_truth`'s Omega tick-zero recording and `spawn_heading`'s sweeps that read no texture. About 300 CPU-s in all, on the order of 12 s of a 24-thread suite's wall time, so **the suite is not shown to be back under 450 s**; numbers, the reasoning and what was measured and left are in `workspace-layout.md`, "What the `test-tail-4` pass measured". **The ribbon is not neutral on Pulse**: a Pulse PSP/PS2 load without art drops its track statistics, `finished_thrust.skill` reads 2.0 for 4.0 and the original AI falls back on it, so the Pulse-sourced AI files (`ai_clean_lap_gate`, `ai_roll`, `ai_dekonstruct_*`, `autopilot_original`) keep their art loads, about 60 CPU-s they could have saved. `ai_fork_split_ground_truth` is 2.9 s alone now (12 s in the lead's log) and needs no `in_parallel`.
+
 ## Next Steps
 
-1. Check `ai_fork_split_ground_truth` for independent races. If it has them, wrap them in `in_parallel::map` and diff the output.
+1. ~~Check `ai_fork_split_ground_truth` for independent races.~~ Done 2026-11-16: it is 2.9 s of user CPU alone, nothing to parallelise.
+1b. Make the ribbon safe on Pulse: either `pulse_psp` and `pulse_ps2_data` stop depending on `vex_geometry` in `oag-raceplay`'s `load` (the track statistics are not art; a production change with its own proof that the Pulse view is unchanged), or the Pulse tests keep their art loads. With it, the Pulse AI files save about 60 CPU-s. Prove it with the field-by-field `Setup` comparison described in `workspace-layout.md`, run over every Pulse circuit before and after.
+1c. A run-time sim-only load in `oag-raceplay::load` (no sound-bank ADPCM decode, no zlib of art entries): about 10 % of the Novice pace test after this pass and a similar share of every Omega load. Measure with `perf record -F 499` on `hd_eliminator_hud_ground_truth::an_elite_score_eliminator_takes_more_than_a_few_laps`.
 2. ~~Speed plan learning: find what a plan build repeats.~~ Done 2026-11-11 (`speed-plan`): a run from the grid reads back what the run before it drove, 15 to 28 % less CPU per learn with every plan identical (`workspace-layout.md`, "What the second `speed-plan` pass measured"). Not a 2x. What is left is not repeated work, so the next step there is fewer learns, not cheaper ones: a test that loads the same field several times learns the same plans each time (`ai_clean_lap_gate`'s five perturbed runs do so by design, the perturbation reaches the plans; others may not need to). Measure with `cargo nextest run -p oag-raceplay --lib --run-ignored all --no-capture speed_plan_overlap` for one learn, and a family's summed seconds in `target/test-data.log` for a suite effect.
 3. `atrac9dec` at `opt-level = 3` in the test profile, measured on one `omega_wem` shard; a Cargo profile change, so agree it with whoever owns the profiles.

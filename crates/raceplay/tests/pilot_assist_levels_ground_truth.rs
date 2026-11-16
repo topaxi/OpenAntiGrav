@@ -71,13 +71,20 @@ fn open(title: &str) -> Option<oag_assets::Archives> {
 }
 
 /// Loads `source`'s default team and track at `class`, and the report that came with it.
-fn load(source: &std::path::Path, class: &str, track: Option<&str>) -> (Race, Vec<String>) {
+/// `ribbon` skips the track's art, for a caller that reads a rule and not a flight.
+fn load(
+    source: &std::path::Path,
+    class: &str,
+    track: Option<&str>,
+    ribbon: bool,
+) -> (Race, Vec<String>) {
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::TimeTrial,
         weapons_override: Some(false),
         track: track.map(str::to_string),
+        ribbon,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -87,7 +94,7 @@ fn load(source: &std::path::Path, class: &str, track: Option<&str>) -> (Race, Ve
 
 fn laws(path: &str, class: &str) -> Option<(Laws, Vec<String>)> {
     let source = oag_testdata::exact(path).or_else(|| oag_testdata::image(path))?;
-    let (race, report) = load(&source, class, None);
+    let (race, report) = load(&source, class, None, true);
     Some((race.pilot_assist_laws(), report))
 }
 
@@ -145,7 +152,7 @@ fn titles_without_a_level_run_2048s_and_labelled_so() {
         return;
     };
     for class in CLASSES {
-        let (reference, report) = load(&v2048, class, None);
+        let (reference, report) = load(&v2048, class, None, true);
         let reference = reference.pilot_assist_laws();
         assert!(
             report
@@ -225,7 +232,7 @@ fn demo(title: &str, path: &str, track: Option<&str>) {
     };
     let mut results = Vec::new();
     for level in Level::ALL {
-        let (mut race, _) = load(&source, "VENOM", track);
+        let (mut race, _) = load(&source, "VENOM", track, false);
         race.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
         let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();
@@ -261,7 +268,7 @@ fn pulse_levels_off_normal_extreme() {
     };
     let mut results = Vec::new();
     for level in Level::ALL {
-        let (mut race, _) = load(&source, "VENOM", None);
+        let (mut race, _) = load(&source, "VENOM", None, false);
         race.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
         let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();

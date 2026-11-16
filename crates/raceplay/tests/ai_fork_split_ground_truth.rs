@@ -30,11 +30,12 @@ struct Forks {
 
 /// Runs a full grid, the player's craft on autopilot, for `ticks`, tallying
 /// every decision and checking the lap count as it goes.
-fn run(source: &str, track: &str, ticks: u32) -> Option<(Forks, usize)> {
+fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, usize)> {
     let loaded = race::load(&race::Options {
         source: source.to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
+        ribbon,
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("loading {track}: {e:#}"));
@@ -164,7 +165,7 @@ fn a_pulse_field_splits_at_the_fork_on_05_track() {
         .find(|t| t.id == "05_Track" && !t.reversed)
         .expect("05_Track is on the disc")
         .entry_name();
-    let Some((forks, routes)) = run(&source, &track, 60 * 150) else {
+    let Some((forks, routes)) = run(&source, &track, 60 * 150, false) else {
         return;
     };
     assert_eq!(routes, 1, "05_Track forks once");
@@ -178,7 +179,7 @@ fn a_2048_field_splits_at_both_forks_on_altima() {
         return;
     };
     let source = source.display().to_string();
-    let Some((forks, routes)) = run(&source, oag_2048::race::DEFAULT_TRACK, 60 * 210) else {
+    let Some((forks, routes)) = run(&source, oag_2048::race::DEFAULT_TRACK, 60 * 210, true) else {
         return;
     };
     assert_eq!(routes, 2, "altima forks twice");

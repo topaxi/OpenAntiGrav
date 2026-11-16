@@ -135,6 +135,8 @@ fn agreement_and_grid(
         class: "VENOM".to_string(),
         track: Some(track.to_string()),
         opponents: true,
+        // Only the PS2 sweep's extra claim reads the track model's textures.
+        ribbon: also.is_none(),
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
