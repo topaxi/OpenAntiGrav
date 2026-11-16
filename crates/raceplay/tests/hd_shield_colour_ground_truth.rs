@@ -54,6 +54,7 @@ fn every_hd_team_shield_settles_to_its_authored_shield_colour() {
                 own_shield: false,
                 zone_liveries: &[],
                 forced_skins: &[],
+                circuit_hull: None,
                 player_livery: None,
             },
             None,

@@ -75,6 +75,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // already names.
     effect_dir: r"Data\particles",
     effect_dir_by_circuit: &[(r"Data\environments2048\", r"Data\particles2048")],
+    hull_by_track_type: &[],
     circuit_lineages: LINEAGES,
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,

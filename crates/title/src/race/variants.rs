@@ -279,6 +279,17 @@ impl RaceDefaults {
             .map_or(self.effect_dir, |&(_, dir)| dir)
     }
 
+    /// The hull stem a circuit of `PI_Track` type `kind` forces on every craft
+    /// that races it, from [`Self::hull_by_track_type`] (case-insensitive, as the
+    /// original compares the attribute). `None` leaves the title's own hull.
+    #[must_use]
+    pub fn hull_for_track_type(&self, kind: &str) -> Option<&'static str> {
+        self.hull_by_track_type
+            .iter()
+            .find(|(declared, _)| declared.eq_ignore_ascii_case(kind))
+            .map(|&(_, stem)| stem)
+    }
+
     /// Which [`TeamVariants`] table a **bare** team id is offered variants
     /// from - this title's own [`Self::team_variants`], or
     /// [`Self::guest_roster`]'s, in that order. `None` when neither

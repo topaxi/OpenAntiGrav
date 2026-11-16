@@ -215,6 +215,10 @@ pub struct RaceDefaults {
     pub effect_dir: &'static str,
     /// Per-circuit overrides of [`Self::effect_dir`]; see [`Self::effect_dir_for`].
     pub effect_dir_by_circuit: &'static [(&'static str, &'static str)],
+    /// The hull file stem every craft of a circuit flies, keyed by the circuit's own
+    /// `PI_Track` `type` in the plugin definition: `(type, stem)`. See
+    /// [`Self::hull_for_track_type`]. Empty where no `type` swaps the model.
+    pub hull_by_track_type: &'static [(&'static str, &'static str)],
     /// Circuit families raced under another game's HUD and lap counts; see
     /// [`Self::circuit_lineage`]. Empty on a title with one game in it.
     pub circuit_lineages: &'static [CircuitLineage],

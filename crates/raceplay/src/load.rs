@@ -171,6 +171,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // The player's own alternate hull file, resolved where `team` is: `variant::resolve`.
     let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
+    let circuit_hull =
+        variant::circuit_hull(&mut archives, title, craft_title, &track, &mut report);
 
     // A Zone race on a title that reads a Zone file of its own flies that file's one class
     // (`oag_title::zone_handling`); every other race flies the team's own.
@@ -336,7 +338,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options,
         &team,
         &available,
-        (hull_variant, store),
+        (hull_variant, circuit_hull, store),
         &mut report,
     )?;
     #[cfg(not(feature = "view"))]
@@ -1225,7 +1227,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 craft_title,
                 &slot_teams,
                 options,
-                hull_variant,
+                (hull_variant, circuit_hull),
                 &mut report,
             ),
             #[cfg(feature = "view")]

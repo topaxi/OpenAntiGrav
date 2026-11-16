@@ -614,3 +614,60 @@ fn pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it() {
         }
     }
 }
+
+/// The Classic league flies the `VR\Ship.vex` hull, every slot of the grid, and the Alpha league the
+/// plain `Ship.vex`. `Ship_LoadModel` builds `%s\VR\Ship.vex` off the circuit's `PI_Track` `type`
+/// (`Classic` is flag 2), not off the team (`docs/ghidra/functions/psp-pure-usa/ship-models.md`,
+/// "What selects the VR hull"). The assertion is on geometry: the two files are separate models with
+/// different triangle counts (Feisar's are 450 and 797), so a Classic race that dropped
+/// [`oag_title::RaceDefaults::hull_by_track_type`] loads the plain hull and fails here.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_classic_circuit_flies_the_vr_hull_on_every_slot_and_an_alpha_circuit_does_not() {
+    for (label, image) in images() {
+        let classic = load(&image, r"Data\ClassicsNS\01_Karbonis\track.vex");
+        let alpha = load(&image, r"Data\Environments\01_Vineta_K\track.vex");
+        assert_eq!(classic.liveries.len(), alpha.liveries.len(), "{label}");
+        let triangles = |loaded: &race::Loaded, team: &str| {
+            loaded
+                .liveries
+                .iter()
+                .find(|livery| livery.team == team)
+                .map(|livery| livery.hull.indices.len() / 3)
+        };
+        assert_eq!(
+            triangles(&classic, "Feisar"),
+            Some(450),
+            "{label}: Karbonis is not flying Feisar's VR\\Ship.vex"
+        );
+        assert_eq!(
+            triangles(&alpha, "Feisar"),
+            Some(797),
+            "{label}: Vineta K is not flying Feisar's Ship.vex"
+        );
+        for (slot, (c, a)) in classic.liveries.iter().zip(&alpha.liveries).enumerate() {
+            assert_eq!(c.team, a.team, "{label}: slot {slot} flies another team");
+            assert_ne!(
+                c.hull.indices.len(),
+                a.hull.indices.len(),
+                "{label}: slot {slot} ({}) draws the same hull on both leagues' circuits",
+                c.team
+            );
+        }
+        assert!(
+            classic
+                .report
+                .iter()
+                .any(|line| line.contains("a Classic circuit") && line.contains(r"VR\Ship")),
+            "{label}: the load report does not say the circuit forced the hull: {:#?}",
+            classic.report
+        );
+        assert!(
+            alpha
+                .report
+                .iter()
+                .all(|line| !line.contains("a Classic circuit")),
+            "{label}: an Alpha circuit reported a forced hull"
+        );
+    }
+}

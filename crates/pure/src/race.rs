@@ -59,6 +59,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    // The Classic league flies `%s\VR\Ship.vex`: `Ship_LoadModel`'s own hull path is built off a
+    // flag the `PI_Track` constructor sets from `Values type` (`Race` 1, `Classic` 2, `Zone` 4;
+    // `docs/ghidra/functions/psp-pure-usa/ship-models.md`, "What selects the VR hull").
+    hull_by_track_type: &[("Classic", ships::VR_HULL)],
     circuit_lineages: &[],
     // `false`: Pure's own menu offers exactly its four `type="Zone"`
     // circuits and nothing else, checked directly against the disc in
