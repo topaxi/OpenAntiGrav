@@ -85,6 +85,8 @@ full comparison.
   which copy answers a path the base and the patch both carry.
 - [hull-shake.md](hull-shake.md) - the drawn hull's random shake is HD's, constant for
   constant; where it is called, and what switching it off in Vita3K does.
+- [engine-light.md](engine-light.md) - the engine light's producer and table on 2048, and the
+  vertex program's falloff.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's

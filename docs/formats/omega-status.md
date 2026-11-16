@@ -2213,7 +2213,15 @@ container's curves are unread, and the side cards drew dark teal because `fx350_
 Omega's loader reads `EngineLightData.xml` the way HD's does (`FUN_0130e090`: `Distance`
 to `ship+0xbc`, `Radius` to `ship+0xc0`; the `hdships` files hold HD's range, `-0.4` to
 `1.2` and `1.0` to `2.0`, not 2048's `3`/`30`), and with the light on a grid still
-gains the warm cast the original's hull has at the nozzle; its consumer is unread.
+gains the warm cast the original's hull has at the nozzle. **The consumer is read
+(2026-11-16, confidence 85), not wired**: `EngineFlare_SubmitVertexLight` appends one
+point light per craft to a 32-slot table, and each draw binds up to six as
+`DiffuseVertexLight<N>`. The colour is a constant picked by the craft: `(4, 10, 40)`,
+`(40, 10, 4)` on a Fury skin, `(3.0, 0.5, 0.1)` for a `GameVersion="2048"` team, and
+`(1.5, 0.1, 3.0)` over a mag strip in a 2048 mode
+([engine-light.md](../ghidra/functions/ps4-omega-eu/engine-light.md)). So HD's law is
+right for the `hdships` craft and wrong for the 2048-era ones, whose `3`/`30` light is
+red and dim, not white.
 `front_faces_only` changes nothing visible on either still, because the flame is not
 visible at these two ticks.
 
