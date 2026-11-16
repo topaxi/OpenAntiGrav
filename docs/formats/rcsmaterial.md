@@ -4355,3 +4355,43 @@ three pushbuffer reads and is not used).
 Modesto, ours would have matched and the threads closed; the original draws neither. The 75 and 70 stay below 80 until a
 wired build shows the pair closing: the check is the same boxes after the fix. **Modesto's closed (0.26 % against 0.1 to
 0.3 %, "After" above); Metropia's is still open.**
+
+## Omega's constant diffuse families: the Amphiseum's white stands and pad strips (2026-11-16, `omega-amph-crowd`)
+
+**Report:** on the worst Omega pair (`omega/the-amphiseum`, whole-frame mean grey 56.0) ours drew the stands washed to white and the
+track's pad strips as hard white bars; the original draws neither.
+
+**Method.** `OAG_SKIP_SLOT` ranges, binary-searched on near-white pixels in two boxes of the 1920x1080 frame, named slot 199
+(`metallic`, 5 submeshes) under the stands and slot 493 (`diffuse_spec_constant`, 1 submesh, a lightmap and nothing else) under
+the strips. Neither material names a colour texture, so the loader left them unbound and the draw was white times light.
+
+**Reading (confidence 85).** `gcn_dump` on the two `.rcsmaterial` files (Omega `data02`): every pixel program of `metallic` and of
+Moa Therma's `dc_metallic` has the constant buffer `[constantAmbientColour, DiffuseColour, fogColour, fadeResCoeffs]` and no sampler
+(45 instructions each); `diffuse_spec_constant`'s lightmapped program (`@0x9b24`) samples only `lightmapSampler` and ends
+`v_mac_f32 v1, s41, v16` ... `v_mad_f32 v1, v7, v1, s4`: the `diffuse` constant times the light sum, plus the specular, then the fog. The same
+combine HD's microcode has (`DIFFUSE_PARAMETER`, "Scenery that is a constant"), with the same parameter hashes (`0x512f8e65`,
+`0x515e298e`) in Omega's records. **Wired:** `psp2::flat_constant::diffuse` binds that constant as a one-texel picture, encoded for
+Omega's sRGB texels (`SceneStore::SrgbTexels.texel_encode`, the reason HD's rows are encoded). The `emissive` family (919 spectator
+figures, 29 materials above are the diffuse ones) is `EmissiveColour` mixed with the fog: constant buffer `[EmissiveColour, fogColour,
+fadeResCoeffs]`, no sampler, no light, the vertex's texcoord never interpolated (`@0x30e4`, 43 instructions). Drawn unlit in that colour
+(`flat_constant::emissive_colour`), through the Zone colour path.
+
+**Result (ours, same flags, before to after, mean absolute error 0-255 against `theirs.png`).** Box A, the stands band `0,150 1920x180`:
+84.2 to 65.4. Box B, the strips `400,380 1100x150`: 46.7 to 34.7 (the brief's wider `0,380 1920x220`: 49.5 to 34.1). Whole frame mean grey 56.0
+to 50.1, rmse 0.328 to 0.295. Other Omega pairs, same procedure: Talon's Junction 31.9 to 28.9 (same two families), Moa Therma
+38.12 to 38.04 (`dc_metallic`), Modesto Heights, Sebenco Climb, Metropia, Sol 2, Vineta K, Anulpha Pass, Chenghou, Ubermall and Tech de Ra
+pixel-identical (no unbound constant family of these in frame).
+
+**Left.** (1) The 919 `emissive` figures are the front-row spectators and draw as flat grey silhouettes where the original shows coloured
+people: their colour comes from something the material does not carry (unread, Ghidra); hiding them scores 63.2 on box A against 65.4 drawn,
+so they are drawn, as the program says. (2) The upper stands stay lighter than the original's and the far crowd's cutouts read as white
+speckle (`nr_crowd_bustle`, not read on Omega). (3) The red banner under the HUD is the gantry board (pair caveat). (4) Moa Therma's
+`dc_constantglow` and `dc_glowlightband`, Sebenco's `cf_constantcolourglow`: constant-only programs of the same shape (`dc_constantglow`
+`[ColourConstant, fogColour, fadeResCoeffs]`), now routable through the `emissive` path, not wired because HD's glow strips there score worse
+without the glow mask.
+
+**Cross-title.** HD: **ported already** (`skin::DIFFUSE_PARAMETER` holds `metallic`, `dc_metallic`, `diffuse_spec_constant`; `hd/the-amphiseum` is
+4.6 grey): Omega's loader lacked it. HD's `emissive` has a vertex-colour term (`f[TC1]`), Omega's does not: **checked, differs**. 2048: **checked,
+differs** for the three diffuse families (no `metallic`, `dc_metallic` or `diffuse_spec_constant` file in `data.psarc`, `dlc1`, `data1`,
+`data2`); `emissive` ships in two files (base, patch) and `cf_constantcolourglow`: **checked, applies, not wired** (the loader gate is `ps4`; the
+2048 program is unread and its store is gamma-2, so the encode would differ).
