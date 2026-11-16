@@ -81,6 +81,21 @@ def size_text(plat):
     return "%dx%d" % tuple(plat["output"])
 
 
+def profile_anisotropy_flags(flags, plat, kind=None):
+    """`flags` with `--anisotropy` at the profile's level. A recorded flag beats the settings file, so a race pair recorded before
+    the profile's level changed (Omega, `off` to `16x`) would otherwise re-render at the stored one. Menu and loading pairs keep
+    their recorded flags: only race grids were measured."""
+    if kind in ("menu", "loading"):
+        return list(flags)
+    flags = list(flags)
+    level = plat["ours"]["anisotropy"]
+    if "--anisotropy" in flags:
+        flags[flags.index("--anisotropy") + 1] = level
+    else:
+        flags += ["--anisotropy", level]
+    return flags
+
+
 def ppsspp_ini(plat):
     """The `[Graphics]` lines the instance's ini carries for this profile (PPSSPP picture settings)."""
     e = plat["emulator"]

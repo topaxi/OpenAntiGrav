@@ -2363,8 +2363,10 @@ of a `tarmac_*` circuit (Empire Climb, 2048 mode) and of Metro Park (brick) carr
 above 1x; "the capture had aniso" would be false if, in addition, the port's forced level was 0 (N = 1). Neither held.
 
 **What the port does** (`gpu/shadps4/video_core/texture_cache/sampler.cpp`, port commit `e56904d` read; the pairs were
-captured at `84690ed`, and `sampler.cpp`, `amdgpu/resource.h` and the settings reader differ between the two only by
-two HDR keys: `git diff --stat` empty for the sampler files). `Sampler::Sampler` sets `anisotropyEnable` when the game's
+captured at `84690ed`: `sampler.cpp` and `amdgpu/resource.h` are byte-identical between the two, the settings reader
+differs by two HDR keys, and in `texture_cache.cpp` (442 lines changed, `GetSampler`'s file) and `vk_rasterizer.cpp` the
+only diff line naming a sampler, LOD bias or anisotropy is a `GarbageCollectSamplers();` call; the stored Metro Park
+`theirs.png` also sits at this boot's shipped sharpness, below). `Sampler::Sampler` sets `anisotropyEnable` when the game's
 S# has `xy_mag_filter` or `xy_min_filter` in {`AnisoPoint`, `AnisoLinear`}, or when the menu's forced level
 (`Gow3Settings::startup_anisotropy`, `gow3.ini` key `anisotropy`, 0 = the game's own) is above 1 on a filtered,
 mipmapped colour sampler. `maxAnisotropy = clamp(max(S# max_aniso, forced), 1, device maximum)`. The capture script's
@@ -2402,8 +2404,9 @@ deviation of a road crop on the grid frames before GO (relative units; three gri
 
 Stripping the filter takes about 40 % off the road crop's Laplacian deviation (0.46 to 0.28) and reads as the blurry far field of an
 unfiltered trilinear lookup (the frames were read by eye: brick courses and tarmac cracks vanish into a smear at the
-distance where the shipped frame still resolves them). The stored pairs' `theirs.png` sit at the shipped value, so the
-pairs were captured with the filter on. Two boots agree to 0.005 (Metro Park), seen once on the other two circuits.
+distance where the shipped frame still resolves them). Metro Park's stored `theirs.png` sits at the shipped value (0.456 against 0.462-0.469), so that pair was captured with the
+filter on; Empire Climb's stored frame (0.383) is another pose and is not an A/B, so its evidence is the live boots and
+the decomposition `G` numbers below. Two boots agree to 0.005 (Metro Park), seen once on the other two circuits.
 
 **Ours.** `oag_mesh::mesh_render` builds its sampler with one `anisotropy_clamp` from the `--anisotropy` setting (`crates/mesh/src/mesh_render.rs:1082`),
 a single level for the whole model, where the game asks 16x on 5 to 8 of its 16 to 19 sampler states (31 to 47 %) and 1x on the rest.
@@ -2433,17 +2436,27 @@ binary (`6882828ba`), both settings on the same file.
 a platform-level `anisotropy` like `shadows`; `scripts/check-compare-environment.py` checks it, and that every other
 platform stays `off`). Ours is applied to every sampler of the model rather than only the 31 to 47 % the game asks it of; the
 other samplers are lightmaps, masks and point lookups of low frequency, so this is a superset that costs nothing the
-metric can see, and a per-sampler law is not wired. **Not changed:** the player-facing default (`--anisotropy`, the
+metric can see, and a per-sampler law is not wired. **Race grids only:** the `omega/` folder also holds front-end pairs (`menu-*`, `gap-*`); nothing there was measured, so
+`compare-rerender-ours.py` leaves a menu or loading pair's recorded `--anisotropy` as it is. **Ours at 16x slightly
+overshoots the original on Metro Park's brick crop** (Laplacian deviation 0.53 against 0.46 to 0.47), the road region's
+`G` being 0.97: the filter is closed, a small excess of high-frequency energy is left and not explained here.
+**Not changed:** the player-facing default (`--anisotropy`, the
 settings menu) stays the player's; whether Omega's `Title` data should default to 16x (the original's own request,
 like the HD LOD bias in `oag_hd::effects`) is a separate wiring item, named in the thread. Omega's looks carry no
 material LOD bias, consistent with the S# bias above. **The existing Omega pairs under `data/reference` still record
-`--anisotropy off`**: re-render them with `just compare-rerender-ours --only omega` after this merges (the lead's step;
-the recorded flags are re-derived from the profile by the pair script on a fresh pair).
+`--anisotropy off`, and a recorded flag beats the settings file**, so `compare-rerender-ours.py` now sets a race pair's
+`--anisotropy` to the profile's level (`compare_env.profile_anisotropy_flags`, checked by
+`scripts/check-compare-environment.py`) and records it in `settings_readback`. Verified on an unedited copy of
+`metro-park-2048` in scratch: the new `ours.flags` carry `16x`, mean grey 43.70 to 45.49 and road crop deviation 0.354
+to 0.530, the same render as the hand-edited A/B above. The lead's step after this merges:
+`just compare-rerender-ours --only omega` (`--only` is a substring of the pair directory path, so it matches the
+`omega/` folder; menu and loading pairs keep their flags).
 
-**2048 cross-check: not checkable for the Vita, checked for Omega.** These are Omega's samplers; the Vita 2048 builds its
-sampler state from its own GXM texture state, unread here, and Vita3K is the original of its pairs (its anisotropic
-override is a separate setting). The 2048 circuits on Omega, the re-shipped HD-mode circuit (Vineta K) and the
-2048-mode circuits all request 16x. **Open:** which S# each road material binds (the material's `+0x20` state word
+**2048 cross-check: not checked (Vita).** These are Omega's samplers, and Omega's 2048-mode circuits, like its HD-mode
+circuit (Vineta K), all request 16x. The Vita 2048 sets its sampler state through GXM texture calls that were not read
+for a filter or an anisotropy level (the Vita eboot is in Ghidra and Vita3K runs it, so it is checkable); the `2048`
+profile keeps `off`, an unmeasured default. The decisive check: the filter and anisotropy arguments of the GXM texture
+init calls on a road material's draw, and whether Vita3K honours one (its anisotropic override setting). **Open:** which S# each road material binds (the material's `+0x20` state word
 `0x522800` is the likely key and was not mapped to the S#); the same A/B on the Zone and the remaining HD-mode
 circuits (only Vineta K was logged in HD mode).
 
