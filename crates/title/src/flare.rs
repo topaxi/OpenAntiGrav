@@ -108,7 +108,7 @@ pub struct Authored {
     /// behind the nozzle, with the colours and falloff the executable carries
     /// (`EngineFlare_SubmitSpuLight` on HD, `EngineFlare_SubmitVertexLight` on
     /// 2048 and Omega), or `None` for a title whose light is unread.
-    pub engine_light: Option<EngineLightLaw>,
+    pub engine_light: Option<&'static EngineLightLaw>,
     /// Whether the original submits only the camera-facing triangles of the
     /// flare's shapes, so a draw is single-sided although its material
     /// disables culling. HD: **measured** (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`,

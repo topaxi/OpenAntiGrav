@@ -129,7 +129,7 @@ pub const TITLE: &Title = &Title {
         // (`docs/ghidra/functions/ps4-omega-eu/engine-light.md`, confidence 85; the falloff
         // 60, read on 2048's program). The wander is 0.2 in position and 1.0 in range
         // (confidence 75).
-        engine_light: Some(oag_title::flare::EngineLightLaw {
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
             classic: oag_title::flare::Tint::HD_CLASSIC,
             fury: oag_title::flare::Tint::HD_FURY,
             era_2048: Some(oag_title::flare::Era2048 {

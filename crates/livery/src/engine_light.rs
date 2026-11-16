@@ -116,7 +116,7 @@ pub(super) fn load(
         }
     ));
     Some(EngineLight {
-        law,
+        law: *law,
         era_2048,
         strip_circuit: false,
         data,

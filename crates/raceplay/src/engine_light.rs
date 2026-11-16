@@ -312,7 +312,7 @@ mod tests {
         let Flare::PerTeam(authored) = title.flare else {
             panic!("{}: no per-team flare", title.name);
         };
-        authored
+        *authored
             .engine_light
             .unwrap_or_else(|| panic!("{}: no engine light", title.name))
     }
@@ -336,7 +336,7 @@ mod tests {
     /// A Fury craft at rest is the literal the capture held 21 times.
     #[test]
     fn a_fury_engine_at_rest_is_forty_ten_four() {
-        let law = law_of(&oag_hd::TITLE);
+        let law = law_of(oag_hd::TITLE);
         let craft = Craft { fury: true, ..REST };
         assert_eq!(colour(light(law, 0.0, 1.0), craft), [40.0, 10.0, 4.0, 1.0]);
         let at = record(Mat4::IDENTITY, Vec3::ZERO, light(law, 0.0, 1.0), craft).unwrap();
@@ -346,7 +346,7 @@ mod tests {
     /// The snap: `blend = 1.0` is `(440, 110, 44)`, the capture's `k = 11`.
     #[test]
     fn the_boost_snap_is_eleven_times_the_base() {
-        let law = law_of(&oag_hd::TITLE);
+        let law = law_of(oag_hd::TITLE);
         let craft = Craft {
             fury: true,
             boost_blend: 1.0,
@@ -361,7 +361,7 @@ mod tests {
     /// A classic skin swaps the red and blue lanes, on every title that has the base.
     #[test]
     fn a_classic_hd_era_hull_is_blue_on_every_title() {
-        for title in [&oag_hd::TITLE, &oag_omega::TITLE, &oag_2048::TITLE] {
+        for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
             let law = law_of(title);
             assert_eq!(
                 colour(light(law, 0.0, 1.0), REST),
@@ -383,14 +383,14 @@ mod tests {
     /// HD, which has no such craft, never takes the branch.
     #[test]
     fn a_2048_era_craft_is_three_half_a_tenth_at_its_own_radius() {
-        for title in [&oag_omega::TITLE, &oag_2048::TITLE] {
+        for title in [oag_omega::TITLE, oag_2048::TITLE] {
             let mut craft = light(law_of(title), 3.0, 30.0);
             craft.era_2048 = true;
             assert_eq!(colour(craft, REST), [3.0, 0.5, 0.1, 30.0], "{}", title.name);
             let fury = Craft { fury: true, ..REST };
             assert_eq!(colour(craft, fury)[..3], [3.0, 0.5, 0.1], "{}", title.name);
         }
-        let mut hd = light(law_of(&oag_hd::TITLE), 3.0, 30.0);
+        let mut hd = light(law_of(oag_hd::TITLE), 3.0, 30.0);
         hd.era_2048 = true;
         assert_eq!(colour(hd, REST)[..3], [4.0, 10.0, 40.0]);
     }
@@ -398,7 +398,7 @@ mod tests {
     /// Over a mag strip on a gated circuit the colour swaps and the boost gain is a fifth.
     #[test]
     fn a_mag_strip_swaps_the_colour_and_scales_the_gain() {
-        for title in [&oag_omega::TITLE, &oag_2048::TITLE] {
+        for title in [oag_omega::TITLE, oag_2048::TITLE] {
             let mut hull = light(law_of(title), 0.0, 1.0);
             hull.strip_circuit = true;
             let over = Craft {
@@ -422,7 +422,7 @@ mod tests {
             hull.strip_circuit = false;
             assert_eq!(colour(hull, over)[..3], [4.0, 10.0, 40.0]);
         }
-        assert!(law_of(&oag_hd::TITLE).mag_strip.is_none());
+        assert!(law_of(oag_hd::TITLE).mag_strip.is_none());
     }
 
     /// `Distance` slides the anchor back along the locator's own axis, and
@@ -433,7 +433,7 @@ mod tests {
         let at = record(
             model,
             Vec3::new(0.0, 0.0, -4.0),
-            light(law_of(&oag_hd::TITLE), 2.0, 1.5),
+            light(law_of(oag_hd::TITLE), 2.0, 1.5),
             Craft { fury: true, ..REST },
         )
         .unwrap();
@@ -452,9 +452,9 @@ mod tests {
         };
         let craft = Craft { jitter, ..REST };
         for (title, position, range) in [
-            (&oag_hd::TITLE, 0.05, 0.1),
-            (&oag_omega::TITLE, 0.1, 1.0),
-            (&oag_2048::TITLE, 0.1, 1.0),
+            (oag_hd::TITLE, 0.05, 0.1),
+            (oag_omega::TITLE, 0.1, 1.0),
+            (oag_2048::TITLE, 0.1, 1.0),
         ] {
             let at = record(
                 Mat4::IDENTITY,
@@ -485,7 +485,7 @@ mod tests {
             },
             ..REST
         };
-        for title in [&oag_omega::TITLE, &oag_2048::TITLE] {
+        for title in [oag_omega::TITLE, oag_2048::TITLE] {
             let at = record(
                 Mat4::IDENTITY,
                 Vec3::ZERO,
@@ -499,7 +499,7 @@ mod tests {
         let at = record(
             Mat4::IDENTITY,
             Vec3::ZERO,
-            light(law_of(&oag_hd::TITLE), 0.0, 2.0),
+            light(law_of(oag_hd::TITLE), 0.0, 2.0),
             craft,
         )
         .unwrap();
@@ -519,7 +519,7 @@ mod tests {
             },
             ..REST
         };
-        let law = law_of(&oag_omega::TITLE);
+        let law = law_of(oag_omega::TITLE);
         assert!(record(Mat4::IDENTITY, Vec3::ZERO, light(law, 0.0, 1.0), craft).is_none());
         assert!(record(Mat4::IDENTITY, Vec3::ZERO, light(law, 0.0, 1.005), craft).is_none());
         assert!(record(Mat4::IDENTITY, Vec3::ZERO, light(law, 0.0, 1.02), craft).is_some());

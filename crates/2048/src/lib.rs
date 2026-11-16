@@ -134,7 +134,7 @@ pub const TITLE: &Title = &Title {
         // branches and constants as Omega's. The native `Ships\` roster is the 2048 era; the
         // HD-derived `hdships\` one is HD's. The wander is **inherited from Omega**: 2048's
         // ranges were not read.
-        engine_light: Some(oag_title::flare::EngineLightLaw {
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
             classic: oag_title::flare::Tint::HD_CLASSIC,
             fury: oag_title::flare::Tint::HD_FURY,
             era_2048: Some(oag_title::flare::Era2048 {

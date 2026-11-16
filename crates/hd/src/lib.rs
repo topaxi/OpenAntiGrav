@@ -178,7 +178,7 @@ pub const TITLE: &Title = &Title {
         // skin, `D` = `Radius` +- 0.1 (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
         // HD has no 2048-era craft and no mag-strip branch; whether it calms its jitter
         // by `1 - blend` is unread, so it does not.
-        engine_light: Some(oag_title::flare::EngineLightLaw {
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
             classic: oag_title::flare::Tint::HD_CLASSIC,
             fury: oag_title::flare::Tint::HD_FURY,
             era_2048: None,

@@ -128,7 +128,7 @@ fn the_circuits_switch_does_not_reach_the_hull() {
     };
     let mut race = hd_race();
     race.view.engine_lights = vec![Some(EngineLight {
-        law: authored.engine_light.expect("HD's engine light"),
+        law: *authored.engine_light.expect("HD's engine light"),
         era_2048: false,
         strip_circuit: false,
         data: EngineLightData {
