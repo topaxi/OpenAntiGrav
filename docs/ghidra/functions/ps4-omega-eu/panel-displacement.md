@@ -295,3 +295,58 @@ K) and `Diffuse_Normal_Specular_panelmap2` (Sol 2).
 (patch; the binder, base `Scene_BindFrameConstants`) are not renamed here: the first was read
 at one site only (hypothesis: the circuit load, confidence 45), the second already has its
 base name.
+
+## Implemented where
+
+2026-11-16. `oag_mesh::mesh::rcs::psp2::panel_map` admits both families by name and the four
+`Reflectivity*` parameters (PS4, with the material's normal map bound, since the march needs the
+tangent frame) and carries the law's numbers in three glow-table entries of mode 15
+(`PROGRAM_PANEL_MAP`); `crates/mesh/shaders/panel.wesl` is the march, `shade.wesl` the rest.
+Bindings: the normal map third, `EmissiveMap` fourth, the panel map fifth as one half-float
+channel (`BlockFormat::R16Float`, decoded by `oag_texture::gnf::Texture::half_floats`),
+`ReflectionMask` sixth on `_mask`. `psp2::sky_reflection` reads `skyCube.gnf` beside a PS4
+`skycube.rcsmodel` (the loader's own pairing, "The CPU side") with
+`oag_texture::gnf::Texture::cube_faces` into a four-level `mesh::sky_paraboloid` map, level `k`
+being cube `k`; it rides `Model::sky_reflection` to the scene's sky binding, and the shader mixes
+levels `floor(2B)` and `floor(2B) + 1` by `fract(2B)`. The paraboloid's address composes to the
+program's `(R.x, R.y, -R.z)` lookup (`sky_paraboloid`'s measured law).
+
+What is chosen, not measured, or left out:
+
+- **The cube is read at mip `2 + k`** (256 texels a face for the sharp cube) into the 512x256 map:
+  the fragment stage has no free sampled-texture slot for a cube array, so the sky binding HD's
+  glass already reads carries it.
+- **The fresnel takes the mapped normal**, not the doubled-bitangent `N2` (open above).
+- **The lip blend is left out** (inert, above), and the lighting is the generic Omega nova path:
+  the `0.75 + 0.25 ...` shadow-light factor is not drawn.
+- **The sun lobe draws zero**: its term is in the shader and reads `Light::sun_specular`
+  (`Lighting.Sun specular colour * intensity`, keys present on Sol and Queens Mall), but the race
+  loader does not fill it yet.
+
+Measured on the compare pairs at 16x anisotropy, scored on the region masks of the before
+render (`compare-decompose.py`'s law; the after build's own `sky` skip also removes the road's
+reflection, so its own masks move):
+
+| Pair | Road `LF` | Road `bias` | Road `G` |
+| --- | --- | --- | --- |
+| `sol-2048` | 32.7 to 18.0 | -32.4 to +16.1 | 0.35 to 0.75 |
+| `queens-mall-2048` | 30.7 to 14.5 | -16.9 to +8.5 | 0.71 to 0.85 |
+| `altima-2048` | 25.2 to 24.3 | +7.1 to +6.4 | 1.02 to 1.01 |
+| `square-2048` | 17.1 to 16.0 | -14.9 to -14.0 | 0.83 to 0.80 |
+
+By eye on Sol the sheen lands where the original's does (the far half, at grazing angles), and the
+near road overshoots toward grey-blue: mean colour of a near patch (45, 32, 34) % in the original,
+(48, 40, 43) % ours. Two probes on Sol: without the march the road scores `LF` 19.3, `bias` +18.0,
+`G` 0.77: the march reshapes the recessed strips (3.3 % of the frame's pixels move by more than 8
+levels, 1.3 % by more than 25; a debug render of the shift shows it across every strip), but the
+road's gradient ratio comes from the sheen, not from the march; with the lookup's `z` unflipped the road
+scores `LF` 16.0, `bias` +10.0, `G` 0.76, near better and right-hand mid worse, so the orientation
+is not settled by this pair and the page's flip stands. Queens Mall's cyan lines in the pair sit on
+the edge of a deep trench, not on the panel-map road: which material draws them is open.
+
+Tests: `crates/texture/tests/omega_gnf_ground_truth.rs` (the two decoders against the disc),
+`crates/mesh/tests/omega_panel_map_ground_truth.rs` (Sol's build: every panel vertex carries the
+entries with Sol's authored values, the panel map binds as a half float, the skycube carries the
+four-level map), `crates/mesh/tests/omega_panel_map_lit_path.rs` (a GPU pixel test that fails
+with the march, the reflection weight or the emissive dropped). HD and 2048 frames are unchanged
+to the pixel (`hd-race/talons-pack`, `2048-vita/anulpha-pass`).

@@ -81,6 +81,11 @@ pub struct Light {
     /// Read by `vs_main` alone, and only for a lit vertex - see
     /// [`crate::mesh_render::HullLights`].
     pub hull: crate::mesh_render::HullLights,
+    /// Omega's `liveLighting0specular`: `Lighting.Sun specular colour` times `Lighting.Sun
+    /// specular intensity`, the sun lobe's colour on the panel-map road
+    /// (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, "The law"). `.w` unused. Zero
+    /// on every other title, where nothing reads it. See [`Light::with_sun_specular`].
+    pub sun_specular: [f32; 4],
 }
 
 impl Light {
@@ -111,6 +116,7 @@ impl Light {
             specular_scale: 0.0,
             prelit_power: [1.0; 3],
             prelit_bias: 0.0,
+            sun_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
         }
     }
@@ -151,6 +157,7 @@ impl Light {
             // authors 1.0 to 2.0).
             prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
             prelit_bias: 0.0,
+            sun_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
         }
     }
@@ -188,6 +195,17 @@ impl Light {
             prelit_scale: [scale; 3],
             prelit_power: [power.max(1e-3); 3],
             prelit_bias: bias,
+            ..self
+        }
+    }
+
+    /// This rig with Omega's sun specular colour (already times its intensity): the product the
+    /// front end's light block shows (`docs/ghidra/functions/ps4-omega-eu/sun-intensity.md`); the race scene's own
+    /// upload of `liveLighting0specular` was not read, so the pairing is inherited from there.
+    #[must_use]
+    pub fn with_sun_specular(self, rgb: [f32; 3]) -> Self {
+        Self {
+            sun_specular: [rgb[0], rgb[1], rgb[2], 0.0],
             ..self
         }
     }

@@ -9,11 +9,12 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::own_shield::{own_shield, own_shield_shading};
+import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
-import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
 import package::types::{VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
 
@@ -119,6 +120,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let row_scale = emissive_scale((in.slots >> 24u) & 63u);
     let row_tint = emissive_tint((in.slots >> 24u) & 63u);
     let n = normalize(in.normal);
+    // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
+    // diffuse, normal and emissive are sampled at the coordinate the march into the panel map
+    // (fifth binding) lands on, with the unshifted coordinate's gradients. The next two entries
+    // hold the specular's and the march's numbers.
+    let panel_entry = (in.slots >> 24u) & 63u;
+    let panel = panel_entry != 0u && row_scale.z > 14.5 && row_scale.z < 15.5
+        && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    let uv_grad = uv_gradients(in.texcoord);
+    var panel_uv = in.texcoord;
+    if panel {
+        panel_uv = panel_march(in.texcoord, in.world, n, in.tangent, emissive_tint(panel_entry + 2u).xyz);
+    }
     // **HD's pads** (`slots::PAD_NE`): the `_ne` texel replaces the vertex
     // normal in the program's own `N.L` and `N.H` below, and its alpha gates
     // the glow added after the light. `n` itself stays the vertex normal for
@@ -155,6 +168,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             material_sample(MATERIAL_SIXTH_MAP, rock_uv),
             snow_mask,
         );
+        n_hull = hull_normal(bump, n, in.tangent);
+        n_lit = n_hull;
+    } else if panel {
+        let bump = material_sample_grad(MATERIAL_PAD_MASK, panel_uv, uv_grad[0], uv_grad[1]);
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
     } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
@@ -523,6 +540,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             0.0,
         );
         first = sample_at_slope_level(first_uv, lod);
+    } else if panel {
+        first = material_sample_grad(MATERIAL_ALBEDO, panel_uv, uv_grad[0], uv_grad[1]);
     } else {
         first = material_sample(MATERIAL_ALBEDO, first_uv);
     }
@@ -858,6 +877,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if tarmac {
         emissive_add = decode(material_sample(MATERIAL_WAVE_MAP, in.texcoord).rgb) * glow_tint_offset.x;
     }
+    // The panel-map road's `EmissiveMap` (mode 15), added unscaled at the marched coordinate, where
+    // the material has one (the second entry's tint `z`).
+    if panel && emissive_tint(panel_entry + 1u).z > 0.5 {
+        let e = material_sample_grad(MATERIAL_WAVE_MAP, panel_uv, uv_grad[0], uv_grad[1]);
+        emissive_add = decode(e.rgb);
+    }
     if glow_program > 7.5 && glow_program < 9.5 {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
@@ -1094,7 +1119,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             specular_mask = 1.0;
             specular_tint = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb);
         }
-        let specular = scene.light.sun
+        var specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * rig_on * in.lit * select(1.0, 0.0, emissive))
             * specular_tint
@@ -1162,6 +1187,45 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             if row_tint.w > 0.5 {
                 sky_reflection += emissive_tint(sky_entry + 1u).xyz * (1.0 - glow_mask.a);
             }
+        }
+
+        // **The panel-map road's sun lobe and sky sheen** (mode 15, `mesh::rcs::psp2::panel_map`),
+        // both gated by the diffuse alpha and, on `_mask`, multiplied by `ReflectionMask` (sixth
+        // binding, the unshifted coordinate):
+        //
+        //     spec = sun_specular SpecStrength Dm.a LM.a sat(R.L)^p 0.0698 / max(0.0698, 0.1745 min(1, B))
+        //     refl = Amount Dm.a (Min + Scale sat(1 - N.V)^Power) sky(R; level 2B)
+        //
+        // `p = SpecPower (1 - 0.75 min(1, B))`, `R` the view reflected about the mapped normal. The
+        // lobe replaces the generic specular. The sky is the circuit's `skyCube.gnf` as the sky
+        // map's four levels, read at the dual-paraboloid address, which composes to the program's
+        // `(R.x, R.y, -R.z)` cube lookup (`mesh::sky_paraboloid`). The fresnel takes the mapped
+        // normal where the program builds one with a doubled bitangent (`panel-displacement.md`,
+        // "Open").
+        if panel {
+            let reflectivity = row_tint;
+            let spec_row = emissive_tint(panel_entry + 1u);
+            let blur = row_scale.x * 0.5;
+            let r = reflect(-to_eye, n_lit);
+            let p = spec_row.y * (1.0 - 0.75 * min(1.0, blur));
+            let lobe = pow(clamp(dot(r, scene.light.direction), 0.0, 1.0), p)
+                * 0.06981317 / max(0.06981317, 0.17453294 * min(1.0, blur));
+            let gloss = texel.a;
+            var weight = vec3<f32>(1.0);
+            if row_scale.w > 0.5 {
+                weight = material_sample(MATERIAL_SIXTH_MAP, in.texcoord).rgb;
+            }
+            specular = scene.light.sun_specular.rgb * (spec_row.x * gloss * mask * lobe * rig_on) * weight;
+            let facing = clamp(1.0 - dot(n_lit, to_eye), 0.0, 1.0);
+            let fresnel = reflectivity.y + reflectivity.z * pow(facing, reflectivity.w);
+            let level = row_scale.x;
+            let at = env_probe_uv(r);
+            let sky = mix(
+                textureSampleLevel(sky_probe_tex, shadow_sampler, at, floor(level)).rgb,
+                textureSampleLevel(sky_probe_tex, shadow_sampler, at, floor(level) + 1.0).rgb,
+                vec3<f32>(fract(level)),
+            );
+            sky_reflection = sky * (reflectivity.x * gloss * fresnel) * weight;
         }
 
         // The authored path shades in linear light, as the RSX does: the samples

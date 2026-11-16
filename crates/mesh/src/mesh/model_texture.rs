@@ -196,6 +196,11 @@ pub enum BlockFormat {
     Bc3,
     /// BC7: 16 bytes, the PS4 Omega Collection's own.
     Bc7,
+    /// **Not compressed: one half-float channel**, a level being row-major little-endian IEEE half
+    /// bits, one texel to a "block". Omega's panel map, a distance field whose values must stay
+    /// floats (an 8-bit copy would quantise its 0.42 range coarser than the field's walls);
+    /// uploaded as `R16Float`, its one level, never decoded to RGBA8 (`decode_level` is `None`).
+    R16Float,
 }
 
 impl BlockFormat {
@@ -221,6 +226,7 @@ impl BlockFormat {
             Self::Bc2 => oag_texture::gtf::Format::Dxt23,
             Self::Bc3 => oag_texture::gtf::Format::Dxt45,
             Self::Bc7 => return oag_texture::gnf::decode_bc7_level(blocks, width, height),
+            Self::R16Float => return None,
         };
         // `linear` is inert: the decoder does not consult the flag for a
         // block-compressed format.
@@ -240,13 +246,15 @@ impl BlockFormat {
             Self::Bc2 => wgpu::TextureFormat::Bc2RgbaUnorm,
             Self::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
             Self::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
+            Self::R16Float => wgpu::TextureFormat::R16Float,
         }
     }
 
-    /// Bytes one 4x4 block occupies.
+    /// Bytes one 4x4 block occupies ([`Self::R16Float`]: one texel).
     #[must_use]
     pub const fn block_len(self) -> u32 {
         match self {
+            Self::R16Float => 2,
             Self::Bc1 => 8,
             Self::Bc2 | Self::Bc3 | Self::Bc7 => 16,
         }

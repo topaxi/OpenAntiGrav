@@ -116,6 +116,7 @@ fn model(albedo: Arc<ModelTexture>, reference: Option<f32>) -> Model {
         material_lod_bias: 0.0,
         material_state: Vec::new(),
         per_batch_cull: false,
+        sky_reflection: None,
         alpha_test_ref: reference,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

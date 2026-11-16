@@ -2299,7 +2299,12 @@ Ranked, by what each would remove:
      `ReflectivityAmount * albedo.a * (ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower)` of a
      baked, pre-blurred cube array the engine loads beside every circuit (`skyCube.gnf`, four blur levels, layout
      decoded), plus a sun specular lobe under the same alpha; Sol authors a weight of 0.3 face-on and 2.35 at
-     `N.V` 0.2, which is its 38.5 grey. Ours draws none of the three (march, cube, lobe). **2048: checked,
+     `N.V` 0.2, which is its 38.5 grey. **Wired 2026-11-16** (`mesh::rcs::psp2::panel_map`, the page's
+     "Implemented where"): the march, the cube sheen and the emissive draw; the lobe's shader term is in but
+     its colour (`Lighting.Sun specular colour * intensity`) is not yet read by the race loader, so it draws
+     zero. Road at 16x anisotropy, the before render's region masks: Sol `LF` 32.7 to 18.0, `bias` -32.4 to
+     +16.1, `G` 0.35 to 0.75; Queens Mall 30.7 to 14.5, -16.9 to +8.5, 0.71 to 0.85; Altima and Unity Square
+     within 1.1 grey and 0.03 `G`. **2048: checked,
      differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
    - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
      (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so

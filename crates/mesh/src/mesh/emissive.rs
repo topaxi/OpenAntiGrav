@@ -104,6 +104,11 @@ pub const PROGRAM_UV_OVERLAY: f32 = 13.0;
 /// dirt first. See `super::rcs::psp2`'s `tarmac`.
 pub const PROGRAM_TARMAC: f32 = 14.0;
 
+/// [`Emissive::program`]'s mode for Omega's `road_alphaspec_normal_emissive_panelmap1[_mask]`
+/// roads: the panel-map march, the sun lobe and the sky reflection, with two more entries
+/// following this one. See `super::rcs::psp2`'s `panel_map`.
+pub const PROGRAM_PANEL_MAP: f32 = 15.0;
+
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;

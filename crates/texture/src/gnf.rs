@@ -183,6 +183,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SurfaceFormat {
+    /// One 16-bit channel (`0x02`); with [`ChannelType::Float`] a half float.
+    Format16,
     /// Four 8-bit channels.
     Format8_8_8_8,
     /// BC1 (S3TC DXT1-shaped) block-compressed surface.
@@ -206,6 +208,7 @@ pub enum SurfaceFormat {
 impl SurfaceFormat {
     fn from_bits(bits: u32) -> Self {
         match bits {
+            0x02 => Self::Format16,
             0x0a => Self::Format8_8_8_8,
             0x23 => Self::Bc1,
             0x24 => Self::Bc2,
@@ -235,6 +238,8 @@ pub enum ChannelType {
     Unorm,
     /// Unsigned, normalized and gamma-encoded.
     Srgb,
+    /// IEEE floating point (`0x7`).
+    Float,
     /// A code this module does not name, kept as the raw 4-bit value.
     Other(u8),
 }
@@ -243,6 +248,7 @@ impl ChannelType {
     fn from_bits(bits: u32) -> Self {
         match bits {
             0x0 => Self::Unorm,
+            0x7 => Self::Float,
             0x9 => Self::Srgb,
             other => Self::Other(other as u8),
         }
@@ -410,6 +416,35 @@ impl Texture {
     /// [`Error::CorruptBlocks`] as above.
     pub fn block_levels(&self, blob: &[u8]) -> Result<Vec<Vec<u8>>> {
         decode::block_levels(self, blob)
+    }
+}
+
+impl Texture {
+    /// The texels of a one-channel half-float surface (`Format16`, `Float`, `Thin_1DThin`, one
+    /// level), row-major, as IEEE half bits. `docs/formats/gnf.md`, "A half-float channel and a
+    /// cube array": 8x8-texel micro tiles row-major, texels inside a tile in the BC7 blocks'
+    /// `x0 y0 x1 y1 x2 y2` order, two bytes each.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnsupportedFormat`] for any other format or channel type, [`Error::Tiled`] for
+    /// another tile mode, [`Error::DataOutOfBounds`] for a blob shorter than the surface.
+    pub fn half_floats(&self, blob: &[u8]) -> Result<Vec<u16>> {
+        decode::half_floats(self, blob)
+    }
+
+    /// Cube `cube`'s six faces (`+X, -X, +Y, -Y, +Z, -Z`) at mip `level` of a BC7 cube array,
+    /// each `max(1, width >> level)` square RGBA8. The layout is level-major, every level storing
+    /// its slice count rounded up to a power of two, slice `6 * cube + face`
+    /// (`docs/formats/gnf.md`, "A half-float channel and a cube array").
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnsupportedFormat`] for anything but BC7, [`Error::Tiled`] for another tile mode,
+    /// [`Error::ChainLayout`] when the data is not exactly that layout's size, and
+    /// [`Error::DataOutOfBounds`] for a level or cube past the descriptor's.
+    pub fn cube_faces(&self, blob: &[u8], level: u32, cube: u32) -> Result<[Vec<[u8; 4]>; 6]> {
+        decode::cube_faces(self, blob, level, cube)
     }
 }
 

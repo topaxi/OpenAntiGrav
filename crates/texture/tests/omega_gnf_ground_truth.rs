@@ -481,3 +481,132 @@ fn the_micro_tiled_bc1_grass_terrain_untiles_to_a_coherent_chain() {
         "{shifted} is not apart from {aligned}"
     );
 }
+
+/// `name` out of the first base archive that holds it.
+fn base_entry(name: &str) -> Option<Vec<u8>> {
+    let mut seen = false;
+    for archive in [
+        "data00.psarc",
+        "data01.psarc",
+        "data02.psarc",
+        "data03.psarc",
+        "data04.psarc",
+    ] {
+        let Some(mut archive) = open(BASE, archive) else {
+            continue;
+        };
+        seen = true;
+        if let Ok(bytes) = archive.read_path(name) {
+            return Some(bytes);
+        }
+    }
+    assert!(!seen, "{name}: in no base archive");
+    None
+}
+
+/// An IEEE half's value.
+fn half(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let mantissa = f32::from(bits & 0x3ff);
+    sign * match exponent {
+        0 => mantissa * 2f32.powi(-24),
+        31 => f32::INFINITY,
+        e => (1.0 + mantissa / 1024.0) * 2f32.powi(e - 15),
+    }
+}
+
+/// The panel map the panelmap road marches into (`docs/ghidra/functions/ps4-omega-eu/
+/// panel-displacement.md`, "The panel map") reads as a signed distance field in texture-height
+/// units: under `Texture::half_floats`' micro-tile order its gradient is one texture height per
+/// texture height (`1/256` a texel on a 256-high map) almost everywhere, which a wrong texel
+/// order breaks at nearly every texel, and it spans the measured range.
+#[test]
+#[ignore]
+fn the_panel_map_is_a_distance_field_in_texture_heights() {
+    let Some(bytes) = base_entry(
+        "Data/environments2048/shared/objectlibrary/Textures/Track_A_Floor_panel_df.gnf",
+    ) else {
+        return;
+    };
+    let texture = Texture::parse(&bytes).expect("parses");
+    assert_eq!(texture.surface_format, SurfaceFormat::Format16);
+    assert_eq!(texture.channel_type, gnf::ChannelType::Float);
+    assert_eq!((texture.width, texture.height), (1024, 256));
+    let field: Vec<f32> = texture
+        .half_floats(&bytes)
+        .expect("decodes")
+        .into_iter()
+        .map(half)
+        .collect();
+    let (w, h) = (1024usize, 256usize);
+    let mut gradients = Vec::new();
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let at = |x: usize, y: usize| field[y * w + x];
+            let gx = (at(x + 1, y) - at(x - 1, y)) / 2.0;
+            let gy = (at(x, y + 1) - at(x, y - 1)) / 2.0;
+            gradients.push((gx * gx + gy * gy).sqrt());
+        }
+    }
+    gradients.sort_by(f32::total_cmp);
+    let median = gradients[gradients.len() / 2];
+    assert!(
+        (median - 1.0 / 256.0).abs() < 0.0001,
+        "median gradient {median}, want 1/256"
+    );
+    let low = field.iter().copied().fold(f32::INFINITY, f32::min);
+    let high = field.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    assert!(
+        (low + 0.345).abs() < 0.01 && (high - 0.078).abs() < 0.01,
+        "range {low}..{high}"
+    );
+    let recessed = field.iter().filter(|&&d| d > 0.0).count() as f64 / field.len() as f64;
+    assert!((recessed - 0.14).abs() < 0.01, "recessed share {recessed}");
+}
+
+/// Sol's `skyCube.gnf` is a four-cube BC7 array under `Texture::cube_faces`' layout: the layout
+/// accounts for every byte (else `ChainLayout`), the four cubes are progressively blurred (detail
+/// falls cube by cube), and the sun's glare sits on the fifth slice, `+Z`, which with the
+/// program's `(R.x, R.y, -R.z)` lookup is the world's `-Z` the circuit's sun direction points
+/// into (`panel-displacement.md`, "`skyCube.gnf`").
+#[test]
+#[ignore]
+fn sols_sky_cube_is_four_ever_blurrier_cubes_with_the_sun_on_plus_z() {
+    let Some(bytes) = base_entry("Data/environments2048/sol/skyCube.gnf") else {
+        return;
+    };
+    let texture = Texture::parse(&bytes).expect("parses");
+    assert_eq!(texture.surface_format, SurfaceFormat::Bc7);
+    assert_eq!((texture.width, texture.height), (1024, 1024));
+    let luma =
+        |t: &[u8; 4]| 0.25 * f64::from(t[0]) + 0.5 * f64::from(t[1]) + 0.25 * f64::from(t[2]);
+    let side = 64usize;
+    let mut detail = Vec::new();
+    for cube in 0..4 {
+        let faces = texture.cube_faces(&bytes, 4, cube).expect("decodes");
+        let mut energy = 0.0;
+        for face in &faces {
+            assert_eq!(face.len(), side * side);
+            for y in 0..side {
+                for x in 1..side {
+                    energy += (luma(&face[y * side + x]) - luma(&face[y * side + x - 1])).abs();
+                }
+            }
+        }
+        detail.push(energy);
+        if cube == 0 {
+            let brightest = (0..6)
+                .max_by(|&a, &b| {
+                    let peak = |f: usize| faces[f].iter().map(luma).fold(0.0, f64::max);
+                    peak(a).total_cmp(&peak(b))
+                })
+                .expect("six faces");
+            assert_eq!(brightest, 4, "the sun's face");
+        }
+    }
+    assert!(
+        detail.windows(2).all(|pair| pair[1] < pair[0]),
+        "detail per cube {detail:?}"
+    );
+}

@@ -41,11 +41,13 @@ pub const DIRT_SWITCH: &str = "OAG_TARMAC_DIRT";
 /// The `EmissiveTexture` sampler's hash: `~crc32("EmissiveTexture")`.
 const EMISSIVE: u32 = 0xb1f2_a176;
 
-/// One admitted material: its glow-table slot (entry index plus one) and its two pictures.
+/// One admitted material: its glow-table slot (entry index plus one) and its fifth and sixth
+/// pictures (here the markings and the dirt; the panel-map road's panel map and reflection mask,
+/// `psp2::panel_map`, ride the same plan).
 pub(super) struct Layers {
     pub slot: u32,
-    pub markings: Arc<ModelTexture>,
-    pub dirt: Arc<ModelTexture>,
+    pub fifth: Option<Arc<ModelTexture>>,
+    pub sixth: Option<Arc<ModelTexture>>,
     /// `EmissiveTexture`, added after the light at the diffuse coordinate; `None` on the
     /// family without one.
     pub emissive: Option<Arc<ModelTexture>>,
@@ -158,8 +160,8 @@ pub(super) fn plan(
         };
         out.layers[index] = Some(Layers {
             slot,
-            markings,
-            dirt,
+            fifth: Some(markings),
+            sixth: Some(dirt),
             emissive: emissive_picture.flatten(),
         });
         report.tarmac_materials += 1;

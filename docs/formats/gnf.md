@@ -521,11 +521,15 @@ those maps are micro-tiled BC1 too.
 2048 against Omega: **checked, differs.** 2048's Vita textures are `.gxt`, not `.gnf`; its
 terrain grass is a `.gxt` that already decodes (no `decode_refused` on a 2048 circuit).
 
-## Two shapes the decoder does not read yet (2026-11-16)
+## A half-float channel and a cube array (2026-11-16)
 
-Both were taken apart in scratch for the panel-map road
+Both were taken apart for the panel-map road
 ([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), which holds the
-evidence); neither is in `oag_texture::gnf`.
+evidence). Both are read since 2026-11-16: `Texture::half_floats` and
+`Texture::cube_faces`, held against the disc by `omega_gnf_ground_truth.rs`
+(`the_panel_map_is_a_distance_field_in_texture_heights`: the median gradient is exactly `1/256`
+a texel; `sols_sky_cube_is_four_ever_blurrier_cubes_with_the_sun_on_plus_z`: the layout accounts
+for every byte, detail falls cube by cube, and the brightest face of cube 0 is slice 4, `+Z`).
 
 - **One 16-bit float channel**: surface format `0x02`, channel type `7`, `TileMode(13)`
   (`Track_A_Floor_panel_df.gnf`, `Track_A_Floor_RunOff_panel_df.gnf`). 8x8-texel micro tiles
@@ -537,8 +541,8 @@ evidence); neither is in `oag_texture::gnf`.
   rounded up to a power of two), each `max(8, w/4)^2` blocks, so
   `offset(level, slice) = sum over k < level of 32 * size(k) + slice * size(level)`; slice
   `6 * cube + face`. Confidence 92: the sizes sum to the file's 44,892,160 data bytes exactly and
-  the 24 slices decode to four progressively blurred sets of six faces. `block_levels` refuses the
-  file today (`ChainLayout`), which is the right answer until this layout is implemented.
+  the 24 slices decode to four progressively blurred sets of six faces. `block_levels` still
+  refuses the file (`ChainLayout`): it reads one 2D chain, and `cube_faces` reads this shape.
 
 ## Implemented where
 

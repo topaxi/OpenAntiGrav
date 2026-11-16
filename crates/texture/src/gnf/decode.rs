@@ -351,5 +351,104 @@ fn row_major_blocks(
     Ok(out)
 }
 
+pub(super) fn half_floats(texture: &Texture, blob: &[u8]) -> Result<Vec<u16>> {
+    if texture.surface_format != SurfaceFormat::Format16
+        || texture.channel_type != super::ChannelType::Float
+    {
+        return Err(Error::UnsupportedFormat {
+            format: texture.surface_format,
+        });
+    }
+    if texture.tile_mode.0 != super::TileMode::THIN_1D_THIN {
+        return Err(Error::Tiled {
+            tile_mode: texture.tile_mode.0,
+        });
+    }
+    let (w, h) = (texture.width, texture.height);
+    let tiles_x = w.div_ceil(8);
+    let mut out = vec![0u16; (w * h) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let at = texture.data_offset + micro_tiled_block_offset(x, y, tiles_x, 2) as usize;
+            let bytes = blob.get(at..at + 2).ok_or(Error::DataOutOfBounds {
+                need: at + 2,
+                got: blob.len(),
+            })?;
+            out[(y * w + x) as usize] = u16::from_le_bytes([bytes[0], bytes[1]]);
+        }
+    }
+    Ok(out)
+}
+
+/// Bytes one slice of level `level` occupies in a square BC7 cube array: whole micro tiles of
+/// `ceil(w/4)` blocks a side, so at least one tile.
+fn cube_slice_bytes(width: u32, level: u32) -> usize {
+    let blocks = (width >> level).max(1).div_ceil(4);
+    let tiles = blocks.div_ceil(8) as usize;
+    tiles * tiles * micro_tile_bytes(16) as usize
+}
+
+pub(super) fn cube_faces(
+    texture: &Texture,
+    blob: &[u8],
+    level: u32,
+    cube: u32,
+) -> Result<[Vec<[u8; 4]>; 6]> {
+    if texture.surface_format != SurfaceFormat::Bc7 {
+        return Err(Error::UnsupportedFormat {
+            format: texture.surface_format,
+        });
+    }
+    if texture.tile_mode.0 != super::TileMode::THIN_1D_THIN {
+        return Err(Error::Tiled {
+            tile_mode: texture.tile_mode.0,
+        });
+    }
+    let slices = u32::from(
+        texture
+            .last_array_slice
+            .saturating_sub(texture.base_array_slice),
+    ) + 1;
+    let stored = slices.next_power_of_two() as usize;
+    let levels = u32::from(
+        texture
+            .last_mip_level
+            .saturating_sub(texture.base_mip_level),
+    ) + 1;
+    let expected: usize = (0..levels)
+        .map(|k| stored * cube_slice_bytes(texture.width, k))
+        .sum();
+    let found = blob.len().saturating_sub(texture.data_offset);
+    if found != expected {
+        return Err(Error::ChainLayout { expected, found });
+    }
+    if level >= levels || 6 * (cube + 1) > slices {
+        return Err(Error::DataOutOfBounds {
+            need: expected + 1,
+            got: found,
+        });
+    }
+    let side = (texture.width >> level).max(1);
+    let blocks = side.div_ceil(4);
+    let base: usize = (0..level)
+        .map(|k| stored * cube_slice_bytes(texture.width, k))
+        .sum();
+    let slice_bytes = cube_slice_bytes(texture.width, level);
+    let mut faces: [Vec<[u8; 4]>; 6] = Default::default();
+    for (face, out) in faces.iter_mut().enumerate() {
+        let offset = base + (6 * cube as usize + face) * slice_bytes;
+        let grid = (blocks, blocks, blocks.div_ceil(8));
+        let (raw, corrupt) = untile_level(texture, blob, offset, grid, 16)?;
+        if corrupt > 0 {
+            return Err(Error::CorruptBlocks { count: corrupt });
+        }
+        *out = bc7_level(&raw, side, side).ok_or(Error::DataOutOfBounds {
+            need: raw.len() + 1,
+            got: raw.len(),
+        })?;
+    }
+    Ok(faces)
+}
+
 #[cfg(test)]
 mod tests;
