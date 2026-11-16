@@ -540,7 +540,7 @@ impl Stage {
             standing.and_then(|record| record.best_total_ticks),
             standing.and_then(|record| record.best_lap_ticks),
         );
-        let mut scene = race::Scene::new(
+        let mut scene = Box::new(race::Scene::new(
             gpu.device(),
             gpu.queue(),
             track_model,
@@ -583,7 +583,7 @@ impl Stage {
             shadows,
             shadow_hulls,
             behind_glass,
-        )?;
+        )?);
         scene.attach_ripples(ripples);
         scene.attach_mist(
             gpu.device(),
@@ -612,58 +612,14 @@ impl Stage {
             &liveries,
             ghost_static.as_ref(),
         );
-        // Against the **surface** format, like every other renderer here, because
-        // the HUD is composited into the offscreen target which shares it.
-        let overlay = oag_game::hud_overlay::Overlay::new(
-            gpu.device(),
-            gpu.queue(),
-            gpu.format(),
-            &hud,
-            settings.graphics.hud_scale,
-        )
-        .context("building the HUD overlay")?
-        .map(|mut overlay| {
-            overlay.set_dynamic_hud(settings.display.dynamic_hud);
-            overlay.with_safe_area(settings.graphics.hud_safe_area)
-        });
-        // The results table, built from the same assets and drawn into the same
-        // target - see `oag_game::scoreboard`, which is where the "this is ours,
-        // the disc's own Race End chain is not built" argument lives. Built with
-        // the race rather than when it ends: a load is the one moment a stage may
-        // stall, and doing it at the finish would drop frames on the lap the
-        // player is most likely to be watching.
-        let scoreboard =
-            oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
-                .context("building the scoreboard overlay")?;
-        // The countdown's own `<Mode3D>` model, when this mode's layout carries
-        // one - see `oag_game::hud_countdown`. Built the same way `overlay`
-        // just was, against the same surface format.
-        let countdown = countdown_model
-            .map(|(model, widget)| {
-                oag_game::hud_countdown::Countdown::new(
-                    gpu.device(),
-                    gpu.queue(),
-                    gpu.format(),
-                    model,
-                    &widget,
-                )
-            })
-            .transpose()
-            .context("building the countdown overlay")?;
-        // The track-description panel the original lays over the flyby, built the same way.
-        let track_panel = track_panel
-            .map(|assets| {
-                oag_game::track_panel::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), assets)
-            })
-            .transpose()
-            .context("building the track-description panel")?;
-        // The attract demo's screen, built the same way.
-        let demo_overlay = demo_overlay
-            .map(|assets| {
-                oag_game::demo_overlay::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &assets)
-            })
-            .transpose()
-            .context("building the demo screen")?;
+        // Each overlay is built in a function of its own, so the copies a `?`, a
+        // `.context()` and a `.map()` make of it in a debug build live in a frame
+        // that is gone before the next one is built, and this one holds a pointer.
+        let overlay = hud_overlay(gpu, &hud, settings)?;
+        let scoreboard = scoreboard_overlay(gpu, &hud)?;
+        let countdown = countdown_overlay(gpu, countdown_model)?;
+        let track_panel = track_panel_overlay(gpu, track_panel)?;
+        let demo_overlay = demo_screen_overlay(gpu, demo_overlay)?;
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
@@ -673,8 +629,8 @@ impl Stage {
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {
-            Some(race) => *race,
-            None => race::Race::start(setup),
+            Some(race) => race,
+            None => Box::new(race::Race::start(setup)),
         };
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -723,7 +679,7 @@ impl Stage {
             seed,
             launch.to_table(),
         );
-        let keeper = keeper_setup.map(|setup| race::timeline::Keeper::new(setup, &race));
+        let keeper = keeper_setup.map(|setup| Box::new(race::timeline::Keeper::new(setup, &race)));
         Ok(Box::new(RaceStage {
             scene,
             race,
@@ -776,4 +732,88 @@ impl Stage {
             demo: None,
         }))
     }
+}
+
+fn hud_overlay(
+    gpu: &impl GpuContext,
+    hud: &oag_hud::Assets,
+    settings: &settings::Settings,
+) -> Result<Option<Box<oag_game::hud_overlay::Overlay>>> {
+    // Against the **surface** format, like every other renderer here, because
+    // the HUD is composited into the offscreen target which shares it.
+    Ok(oag_game::hud_overlay::Overlay::new(
+        gpu.device(),
+        gpu.queue(),
+        gpu.format(),
+        hud,
+        settings.graphics.hud_scale,
+    )
+    .context("building the HUD overlay")?
+    .map(|mut overlay| {
+        overlay.set_dynamic_hud(settings.display.dynamic_hud);
+        Box::new(overlay.with_safe_area(settings.graphics.hud_safe_area))
+    }))
+}
+
+/// The results table, built from the same assets and drawn into the same
+/// target - see `oag_game::scoreboard`. Built with the race rather than when it
+/// ends: a load is the one moment a stage may stall, and doing it at the finish
+/// would drop frames on the lap the player is most likely to be watching.
+fn scoreboard_overlay(
+    gpu: &impl GpuContext,
+    hud: &oag_hud::Assets,
+) -> Result<Box<oag_game::scoreboard::Overlay>> {
+    Ok(Box::new(
+        oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), hud)
+            .context("building the scoreboard overlay")?,
+    ))
+}
+
+/// The countdown's own `<Mode3D>` model, when this mode's layout carries one -
+/// see `oag_game::hud_countdown`.
+fn countdown_overlay(
+    gpu: &impl GpuContext,
+    model: Option<(oag_mesh::mesh::Model, oag_hud::Model)>,
+) -> Result<Option<Box<oag_game::hud_countdown::Countdown>>> {
+    model
+        .map(|(model, widget)| {
+            oag_game::hud_countdown::Countdown::new(
+                gpu.device(),
+                gpu.queue(),
+                gpu.format(),
+                model,
+                &widget,
+            )
+            .map(Box::new)
+        })
+        .transpose()
+        .context("building the countdown overlay")
+}
+
+/// The track-description panel the original lays over the flyby.
+fn track_panel_overlay(
+    gpu: &impl GpuContext,
+    assets: Option<race::track_panel::Assets>,
+) -> Result<Option<Box<oag_game::track_panel::Overlay>>> {
+    assets
+        .map(|assets| {
+            oag_game::track_panel::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), assets)
+                .map(Box::new)
+        })
+        .transpose()
+        .context("building the track-description panel")
+}
+
+/// The attract demo's screen.
+fn demo_screen_overlay(
+    gpu: &impl GpuContext,
+    assets: Option<race::demo_overlay::Assets>,
+) -> Result<Option<Box<oag_game::demo_overlay::Overlay>>> {
+    assets
+        .map(|assets| {
+            oag_game::demo_overlay::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &assets)
+                .map(Box::new)
+        })
+        .transpose()
+        .context("building the demo screen")
 }
