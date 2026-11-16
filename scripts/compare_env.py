@@ -51,6 +51,8 @@ def platform(key):
     out["ours"] = dict(doc["ours_defaults"])
     if "shadows" in table:
         out["ours"]["shadows"] = table["shadows"]
+    if "anisotropy" in table:
+        out["ours"]["anisotropy"] = table["anisotropy"]
     if "pilot_assist" in table:
         out["ours"]["pilot_assist"] = table["pilot_assist"]
     if "hud_safe_area" in table:

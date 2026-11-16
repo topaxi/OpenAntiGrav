@@ -173,6 +173,20 @@ def tomllib_load(path):
     return tomllib.loads(Path(path).read_text())
 
 
+def check_anisotropy(root):
+    """Omega's original asks for 16x anisotropy on its mipmapped colour samplers and the port honours it, so its profile
+    runs ours at 16x, written to the settings file and read back; every other platform stays off."""
+    assert ce.platform("omega")["ours"]["anisotropy"] == "16x"
+    for key in ("pulse-psp", "pulse-ps2", "hd-fury", "2048"):
+        assert ce.platform(key)["ours"]["anisotropy"] == "off", key
+    plat = ce.platform("omega")
+    ce.write_ours_settings(plat, root / "omega")
+    assert tomllib_load(ce.settings_path(root / "omega"))["graphics"]["anisotropy"] == "16x"
+    got, bad = ce.read_back(plat, root / "omega")
+    assert got["anisotropy"] == "16x" and not bad, bad
+    assert ["--anisotropy", "16x"] == ce.ours_flags(plat)[ce.ours_flags(plat).index("--anisotropy"):][:2]
+
+
 def check_loading_bar(root):
     """`compare_menu.lit_bar_columns` counts the lit columns of HD's race-load bar, and the tick that states them follows."""
     from PIL import Image, ImageDraw
@@ -234,6 +248,8 @@ def main():
         check_ps2_world_clock(Path(t))
     with tempfile.TemporaryDirectory() as t:
         check_loading_bar(Path(t))
+    with tempfile.TemporaryDirectory() as t:
+        check_anisotropy(Path(t))
     print("compare environment: round trip ok")
 
 

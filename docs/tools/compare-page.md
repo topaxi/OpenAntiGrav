@@ -143,7 +143,7 @@ the page never shows a directory name. `manifest` no longer rewrites `pair.json`
 
 **Ours is the same on every platform** (`[ours_defaults]`): every render setting with an `original` value is set
 to it (shadows `original`, model and texture detail `original`, trail order `original`), upscaler, FSR, SMAA, MSAA, motion blur and screen
-filter off, render scale 100, anisotropic filtering off (no original forces it), the boost fov kick off (our own
+filter off, render scale 100, anisotropic filtering off (no original forces it; Omega's does, 16x on its mipmapped colour samplers, so the `omega` profile is `16x`: [omega-status.md](../formats/omega-status.md#the-ports-anisotropy-2026-11-16-port-aniso)), the boost fov kick off (our own
 effect), fov 100 %, an ungraded capture at exactly `--size` (no `--presented`), the HUD on (the original cannot
 switch it off), and the camera is the original's own pose and fov. The profile is written into the pair's private
 `settings.toml` **and** passed as flags where a flag exists, and the file the run rewrites is **read back** and
