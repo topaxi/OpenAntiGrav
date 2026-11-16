@@ -244,3 +244,7 @@
 # 2026-11-16 hull-tone-re: the SH probe manager the hull's ambient is read from (hull-tone.md); 1.07 address
 0x020084e8	data	g_sh_probes	80	hull-tone.md
 
+# 2026-11-16 hull-albedo-re: the vertex attribute fetch formats, by declaration type and component count (hull-tone.md); 1.07 addresses
+0x017f3ae0	function	VertexDecl_InitAttributeFormats	75	hull-tone.md
+0x022129c0	data	g_vertex_attribute_formats	80	hull-tone.md
+
