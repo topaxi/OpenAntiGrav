@@ -67,8 +67,9 @@ pub fn authored_light(
     };
     use oag_tables::envsettings::{
         AMBIENT_COLOUR, NOVA_PRELIT, NOVA_PRELIT_DEFAULT, OMEGA_SUN_DIFFUSE_INTENSITY,
-        PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR,
-        SUN_DIRECTION, SUN_SPECULAR_SCALE,
+        OMEGA_SUN_SPECULAR_COLOUR, OMEGA_SUN_SPECULAR_INTENSITY, PRELIT_POWER, PRELIT_SCALE,
+        PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR, SUN_DIRECTION,
+        SUN_SPECULAR_SCALE,
     };
     let ambient_key = if psp2 {
         PSP2_AMBIENT_COLOUR
@@ -140,6 +141,16 @@ pub fn authored_light(
     let light = match nova {
         Some([scale, bias, power]) => light.with_nova_prelit(scale, bias, power),
         None => light,
+    };
+    // **Omega's sun lobe colour** is the authored specular colour times its intensity
+    // (default 1.0), the product the executable builds beside the diffuse pair. A file that
+    // authors no colour leaves the lobe off (zero).
+    let light = match env.vec3(OMEGA_SUN_SPECULAR_COLOUR) {
+        Some(colour) if ps4 => {
+            let intensity = env.scalar(OMEGA_SUN_SPECULAR_INTENSITY).unwrap_or(1.0);
+            light.with_sun_specular(colour.map(|c| c * intensity))
+        }
+        _ => light,
     };
     let prelit = match nova {
         Some([scale, bias, power]) => format!("{scale:.1}*lightmap^{power:.1} + {bias:.2}"),

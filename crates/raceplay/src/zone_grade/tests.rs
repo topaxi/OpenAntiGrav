@@ -153,6 +153,17 @@ fn a_graded_omega_rig_keeps_its_prelit_combination() {
     assert_eq!(hd.prelit_bias, 0.0);
 }
 
+/// Omega's sun lobe colour survives a grade: `Light::authored` clears it.
+#[test]
+fn a_graded_omega_rig_keeps_its_sun_lobe_colour() {
+    let mut grade = grade();
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let omega = circuit_light().with_sun_specular([3.0, 2.0, 1.0]);
+    assert_eq!(grade.light(omega).sun_specular, [3.0, 2.0, 1.0, 0.0]);
+}
+
 /// A circuit with no authored rig is handed back untouched: a tint needs a
 /// direction to tint, and this file states none.
 #[test]

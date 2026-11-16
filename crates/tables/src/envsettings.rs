@@ -106,6 +106,16 @@ pub const PSP2_SUN_DIFFUSE_COLOUR: &str = "Lighting.Sun diffuse colour";
 /// Authored 0.3 to 20 over Omega's 29 circuit files.
 pub const OMEGA_SUN_DIFFUSE_INTENSITY: &str = "Lighting.Sun diffuse intensity";
 
+/// Omega's `"Lighting.Sun specular colour"`: an RGB term, where HD authors only the scalar
+/// [`SUN_SPECULAR_SCALE`]. The sun lobe of the panel-map road reads it times
+/// [`OMEGA_SUN_SPECULAR_INTENSITY`] (`docs/ghidra/functions/ps4-omega-eu/sun-intensity.md`,
+/// `013c2a7a`). 2048 authors the same key and has no consumer for it.
+pub const OMEGA_SUN_SPECULAR_COLOUR: &str = "Lighting.Sun specular colour";
+
+/// Omega's scalar the specular colour is multiplied by; its static default is `1.0`
+/// (`0x019404b0`).
+pub const OMEGA_SUN_SPECULAR_INTENSITY: &str = "Lighting.Sun specular intensity";
+
 /// `"Lighting.Prelit ambient colour scale"`. Three numbers: the scale in
 /// `prelit = scale * lightmap.rgb ^ power`, from the circuit's fragment
 /// microcode (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
