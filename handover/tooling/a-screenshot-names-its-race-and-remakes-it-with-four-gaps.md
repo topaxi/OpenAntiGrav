@@ -21,11 +21,20 @@ the text and `--from-png` re-simulates, checks the hash and draws the frame.
   that hides the HUD.
 - **A headless screenshot has no `serial`.** `Loaded` carries the platform and no serial;
   `boot::Shell::serial` is only on the session's path.
-- **DLC and mods are not identified.** A race with a DLC pack mounted rebuilds to another hash
+- **DLC packs are not identified.** A race with a DLC pack mounted rebuilds to another hash
   without it (the first test run desynced at tick 60 until `data/dlc` was passed). The text lists
-  the enabled mods but not the packs; a simulation mod makes the race unrecordable, so the shot
-  has no stream.
-- **A headless screenshot's text lacks `[[mods]]` and `[camera]`**; it has `[render]`. A drive
+  the enabled mods but not the packs. ~~A simulation mod makes the race unrecordable~~ (landed
+  2026-11-16, lane `shot-mods`): a modded race records, the header's `mods` list names each module
+  with its SHA-256 and `--from-png` refuses a missing or other build by name; a headless
+  screenshot's text now carries `[[mods]]` (id, version, sha256).
+- **Modded replays and shots, still open** (README 4.2, 4.4): the tune bytes (no `setup.tune`
+  exists), the lobby fingerprint's SHA-256, the cross-engine conformance test (a replay across
+  Cranelift, Pulley and the browser is unproven), host-local faults still enter the hash (a
+  recording whose module faulted on a pool or mmap failure desyncs elsewhere, reported by hash),
+  manifest tables a race reads (pickup odds) are covered by the mod's `version` and not hashed, a
+  ghost loaded with `--ghost` is still raced in a modded race, and the REPLAYS list's playback
+  attaches the mods that are on and refuses by name a file whose modules are missing.
+- **A headless screenshot's text lacks `[camera]`**; it has `[render]`. A drive
   `screenshot` outside photo mode has no `[camera]` either (take the eye and fov from
   `camera_position` and `camera_fov_degrees`, the look direction from the view matrix).
 - **A Race End Photo shot has no stream** (the recording stops at the finish): cut it to the

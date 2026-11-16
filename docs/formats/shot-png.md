@@ -52,9 +52,10 @@ because a shot is rarely on a stored one. About 0.6 KB for 400 ticks (the thrott
 for 1,237 ticks of a pad flown by the AI driver (`bytes/tick` 6.8 in `replay_ground_truth`).
 
 A shot made while photo mode was **rewound** carries the stream to the tick the race on screen
-stood at (the rewind holds the run), and the hash of that state; a shot of a race that records no
-input stream (a simulation mod runs in it: ADR-0087 decision 7) writes the text alone and says why
-in `no_stream_because`.
+stood at (the rewind holds the run), and the hash of that state; a shot of a race that was not recorded
+writes the text alone and says why in `no_stream_because`. A modded race records: the text's
+`[[mods]]` carries each module's id, version and SHA-256 and the stream's header names the same
+(`oag_replay::header::ModUse`).
 
 ## Reading it back
 
@@ -63,13 +64,15 @@ in `no_stream_because`.
 (`Options::apply_replay`), drives the recorded inputs to the tick in place of a held button, prints
 `from-png: state hash at tick N: MATCH` or `MISMATCH` with both hashes, and draws the frame from the
 camera the text names at the file's size. **The disc must be the title's, with the same DLC and
-mods** (a simulation mod makes a race unrecordable, and DLC packs change the race and are not in
-the text: `resimulate` takes their directories, the CLI mounts the settings'). The re-render draws
+mods**: DLC packs change the race and are not in the text (`resimulate` takes their directories, the
+CLI mounts the settings'), and a simulation mod is named in the header with its SHA-256, so the
+rebuild runs exactly the listed modules and **refuses by name**, before a tick, a module this
+machine lacks or has another build of. The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the
 mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so
-the race is MODDED, records no input and the shot carries the text alone with `no_stream_because`
-(ADR-0087 decision 7); the evidence below pins `OAG_MODS` to an empty directory. A shot from Race End
+the race is MODDED; it records its input and the shot carries the stream and the module hashes.
+A shot of an unmodded race, remade in a checkout that has those mods, runs none of them. A shot from Race End
 Photo is past the end of the recorded input (the recording stops at the finish) and has no stream
 either; its text says so.
 

@@ -13,8 +13,8 @@
 //! and the particles have settled by the target as they have by any played tick. The ticks are
 //! the recorded inputs and events of the race so far.
 //!
-//! With no recording (a modded race records none) there are no inputs to play, and a seek stops
-//! at the whole keyframe at or before the target ([`Timeline::seek`]).
+//! With no recording there are no inputs to play, and a seek stops at the whole keyframe at or
+//! before the target ([`Timeline::seek`]).
 //!
 //! **Chosen, not measured:** the pre-roll, the step of the row, and a rewind that is silent
 //! (its cues are dropped).

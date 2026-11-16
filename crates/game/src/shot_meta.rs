@@ -156,6 +156,10 @@ pub struct Mod {
     pub id: String,
     /// Its release.
     pub version: String,
+    /// SHA-256 of its simulation module, when it runs one in the race: the identity a rebuild
+    /// is held to.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sha256: String,
 }
 
 /// The build that drew the frame.

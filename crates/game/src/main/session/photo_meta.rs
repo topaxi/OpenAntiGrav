@@ -60,7 +60,7 @@ impl Session {
         } else {
             let run = rewind.map(|rewind| rewind.recording());
             match run {
-                Some(None) => (None, "this race records no input stream (a simulation mod runs in it)"),
+                Some(None) => (None, "this race was not recorded"),
                 run => match race.shot_record(run.flatten()) {
                     Some(record) => (Some(record), ""),
                     None if race.recording() => (
@@ -114,6 +114,12 @@ impl Session {
             .map(|listing| shot_meta::Mod {
                 id: listing.id.clone(),
                 version: listing.version.clone(),
+                sha256: race
+                    .mods_used()
+                    .iter()
+                    .find(|used| used.id == listing.id)
+                    .map(|used| used.sha256.clone())
+                    .unwrap_or_default(),
             })
             .collect();
         let meta = Meta {

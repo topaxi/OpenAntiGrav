@@ -50,8 +50,18 @@ impl Facts {
     }
 
     /// Starts the recording the frame's stream is cut from, unless one is running.
-    pub(super) fn arm(&self, race: &mut Race) {
+    ///
+    /// # Errors
+    ///
+    /// A shot being made again (`--from-png`) whose simulation modules this machine does not
+    /// have, or has another build of: the race would not be the shot's, and the error names the
+    /// module.
+    pub(super) fn arm(&self, race: &mut Race) -> anyhow::Result<()> {
         if let Some(record) = &self.context.restage {
+            oag_raceplay::extensions::check_recorded(&record.replay.header.mods, race.mods_used())
+                .map_err(|why| {
+                    anyhow::anyhow!("--from-png cannot make this shot again: {why}")
+                })?;
             if let Err(why) = oag_raceplay::replay::apply_recorded(race, &record.replay.header) {
                 log::warn!("--from-png: {why:#}");
             }
@@ -71,6 +81,7 @@ impl Facts {
                 race.set_ghost_visible(false);
             }
         }
+        Ok(())
     }
 
     /// Writes the frame with its description.
@@ -129,7 +140,7 @@ impl Facts {
                 no_stream_because: if record.is_some() {
                     String::new()
                 } else {
-                    "this race records no input stream (a simulation mod runs in it)".to_string()
+                    "this race was not recorded".to_string()
                 },
             },
             title: shot_meta::Title {
@@ -140,6 +151,15 @@ impl Facts {
             race: Some(race_info),
             craft: Some(craft),
             render: self.context.render.clone(),
+            mods: race
+                .mods_used()
+                .iter()
+                .map(|used| shot_meta::Mod {
+                    id: used.id.clone(),
+                    version: used.version.clone(),
+                    sha256: used.sha256.clone(),
+                })
+                .collect(),
             gpu: Some(shot_meta::Gpu {
                 adapter: adapter.name.clone(),
                 backend: format!("{:?}", adapter.backend),

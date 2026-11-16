@@ -59,7 +59,7 @@ impl Profile {
             .env("XDG_DATA_HOME", self.dir.join("data"))
             .env("XDG_STATE_HOME", self.dir.join("state"))
             .env("OAG_TRACKS", self.dir.join("no-tracks"))
-            // No simulation mod: a modded race records nothing (decision 7).
+            // No simulation mod: these races are the unmodded ones whatever mods the checkout has.
             .env("OAG_MODS", self.dir.join("no-mods"))
             .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .env_remove("WAYLAND_DISPLAY")

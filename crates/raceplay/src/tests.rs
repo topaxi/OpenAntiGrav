@@ -56,6 +56,8 @@ mod extension_examples;
 #[cfg(feature = "extensions")]
 mod extension_faults;
 #[cfg(feature = "extensions")]
+mod extension_replay;
+#[cfg(feature = "extensions")]
 mod extension_names;
 #[cfg(feature = "extensions")]
 mod extension_odds;

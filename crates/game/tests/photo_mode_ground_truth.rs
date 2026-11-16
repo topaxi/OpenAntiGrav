@@ -69,8 +69,8 @@ pub(crate) fn drive_binary(
     drive_binary_in(binary, image, tag, script, shots, args, false)
 }
 
-/// [`drive_with`] with no simulation mod mounted: a modded race records nothing (ADR-0087,
-/// decision 7), so the rewind of a race that must play its recording is run this way.
+/// [`drive_with`] with no simulation mod mounted, so the rewind of a race that must play its
+/// recording is the unmodded one whatever mods the checkout has.
 fn drive_unmodded(image: &Path, tag: &str, script: &str, shots: &Path, args: &[&str]) -> Run {
     drive_binary_in(
         env!("CARGO_BIN_EXE_oag-game"),

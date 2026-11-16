@@ -45,6 +45,7 @@ fn meta() -> Meta {
         mods: vec![Mod {
             id: "oag.extras".into(),
             version: "1.0.0".into(),
+            sha256: "ab".repeat(32),
         }],
         build: Build::this(),
         ..Meta::default()

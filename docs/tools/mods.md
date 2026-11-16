@@ -548,7 +548,8 @@ implies `extensions`, and the load logs the engine at `debug`. A build without i
 each mod that ships one.
 The manifest is read with the others; the `.wasm` is opened only by the race that
 runs it. No module runs in an original campaign or a network race. A race running a
-module is MODDED and records no replay. The ABI, the event and the command are in
+module is MODDED: it records its inputs, and the replay header names each module with its
+SHA-256, but sets no ghost. The ABI, the event and the command are in
 [docs/architecture/wasm-extensions/](../architecture/wasm-extensions/README.md)
 ("What is built").
 
