@@ -16,6 +16,7 @@ pub mod gpu;
 pub mod pose_hold;
 pub mod pose_lean;
 mod race_bench;
+mod shot;
 mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
@@ -412,6 +413,7 @@ pub fn capture(
 ) -> Result<()> {
     let (width, height) = options.size;
     let title_name = loaded.title.name;
+    let shot_facts = shot::Facts::of(&loaded, options);
     let Loaded {
         shadows,
         shadow_hulls,
@@ -548,6 +550,7 @@ pub fn capture(
         net.join(&mut race, title.name)?;
     }
     options.ghost.arm(&mut race)?;
+    shot_facts.arm(&mut race);
     if options.net.is_none() && options.intro_ticks > 0 && race.begin_intro() {
         crate::sound::prepare_intro_voice(audio, &options.music_discs, &race);
         for _ in 0..options.intro_ticks {
@@ -1485,15 +1488,11 @@ pub fn capture(
         drop(mapped);
         readback.unmap();
 
-        // A screenshot is opaque. The frame's alpha channel is the bloom mask and
-        // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
-        // straight from the readback writes a fully transparent PNG.
+        // `shot_meta::encode` makes the frame opaque: its alpha is the bloom mask, not
+        // coverage (`oag_mesh::capture::make_opaque`).
         oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
-        oag_mesh::capture::make_opaque(&mut pixels);
-        let png = oag_texture::png::encode_rgba(width, height, &pixels);
         let path = window_path(&options.path, window);
-        std::fs::write(&path, png).with_context(|| format!("writing {}", path.display()))?;
-        println!("wrote {} ({width}x{height})", path.display());
+        shot_facts.write(&path, (width, height), &pixels, &race, &adapter.get_info())?;
     }
     scene.dump_offscreen_if_asked(&device, &queue)?;
     Ok(())

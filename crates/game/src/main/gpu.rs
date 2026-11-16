@@ -316,6 +316,19 @@ pub(crate) struct Gpu {
     pub(crate) preview_pipelines: std::cell::RefCell<oag_mesh::mesh_render::KeptBuildCache>,
 }
 
+impl Gpu {
+    /// The adapter this session draws with, as a screenshot's text names it.
+    pub(crate) fn describe(&self) -> oag_game::shot_meta::Gpu {
+        let info = self.adapter.get_info();
+        oag_game::shot_meta::Gpu {
+            adapter: info.name,
+            backend: format!("{:?}", info.backend),
+            driver: info.driver,
+            driver_info: info.driver_info,
+        }
+    }
+}
+
 /// What one adapter has to hand over before it can be drawn with.
 ///
 /// A struct rather than four statements inline because **all four have to

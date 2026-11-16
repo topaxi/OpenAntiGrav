@@ -119,6 +119,8 @@ mod window_layout;
 pub(crate) mod devrun;
 #[path = "session/photo.rs"]
 mod photo;
+#[path = "session/photo_meta.rs"]
+pub(crate) mod photo_meta;
 #[path = "session/photo_rewind.rs"]
 mod photo_rewind;
 #[path = "session/pure_chain.rs"]
@@ -1044,6 +1046,8 @@ pub(crate) struct Shell {
     /// PS2-sourced Pulse race and a PSP-sourced one now read and write
     /// different `[render_profiles.<key>]` rows.
     pub(crate) platform: oag_disc::Platform,
+    /// The disc's serial, from `boot::Shell::serial`: what a screenshot names the pressing by.
+    pub(crate) serial: Option<String>,
     /// The grid that skin's numbers are in, and the one the rows are drawn in.
     ///
     /// Carried beside the skin for the reason the skin is carried at all: it is
@@ -1144,6 +1148,7 @@ impl Shell {
             menu_sfx: None,
             title,
             platform: boot_shell.platform,
+            serial: boot_shell.serial.clone(),
             circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),

@@ -189,6 +189,7 @@ impl Session {
             menu_sfx: None,
             title,
             platform: archives.layout.platform,
+            serial: archives.layout.serial.clone(),
             // 2048 is `oag_title::ZoneCircuit::SameCircuit` - a Zone race
             // runs whichever circuit is already picked, so the CIRCUIT row
             // offers the same list under either mode. See

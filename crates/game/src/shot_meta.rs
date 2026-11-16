@@ -264,6 +264,38 @@ pub fn flags(
     flags
 }
 
+/// The command line that made a capture, for the text: the arguments as they were given, less
+/// `--screenshot` and `--source` and every pair whose value is a filesystem path, so the text
+/// names none.
+#[must_use]
+pub fn own_flags(args: impl IntoIterator<Item = String>) -> Vec<String> {
+    let path_like = |arg: &str| {
+        arg.starts_with('/')
+            || arg.starts_with('~')
+            || arg.starts_with("./")
+            || arg.starts_with("../")
+            || arg.as_bytes().get(1..3) == Some(b":\\")
+    };
+    let args: Vec<String> = args.into_iter().collect();
+    let mut flags = Vec::new();
+    let mut at = 0;
+    while at < args.len() {
+        let arg = &args[at];
+        let value = args.get(at + 1).filter(|next| !next.starts_with("--"));
+        if matches!(arg.as_str(), "--screenshot" | "--source") {
+            at += 1 + usize::from(value.is_some());
+        } else if arg.starts_with("--") && value.is_some_and(|value| path_like(value)) {
+            at += 2;
+        } else if path_like(arg) {
+            at += 1;
+        } else {
+            flags.push(arg.clone());
+            at += 1;
+        }
+    }
+    flags
+}
+
 /// A camera's description from the pose the renderer draws with.
 #[must_use]
 pub fn camera_of(lens: &str, pose: &oag_raceplay::CameraOverride) -> Camera {

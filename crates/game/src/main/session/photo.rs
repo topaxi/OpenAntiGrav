@@ -40,7 +40,7 @@ pub(crate) struct Open {
     /// The last shot's result and the ticks it stays up.
     message: Option<(String, u32)>,
     /// A shot asked for this tick, read back by `Session::draw` once the frame is drawn.
-    shot: Option<std::path::PathBuf>,
+    shot: Option<(std::path::PathBuf, Option<super::photo_meta::Pending>)>,
     /// The project's words in the player's language and in English, read once when the mode
     /// opens: the screen is drawn every frame.
     own: StringTable,
@@ -338,13 +338,16 @@ impl super::Session {
             return;
         }
         let path = photo::shot_path(&dir, title, now);
+        // The description is taken now: an accumulated shot moves the race and puts it back
+        // before it writes.
+        let pending = self.shot_pending("photo mode");
         // Several frames when the title's shot accumulates and the controls ask for it, else the
         // frame on screen.
-        if self.start_photo_job(&path) {
+        let Err(pending) = self.start_photo_job(&path, pending) else {
             return;
-        }
+        };
         if let Some(open) = self.photo.as_mut() {
-            open.shot = Some(path);
+            open.shot = Some((path, pending));
         }
     }
 
@@ -360,13 +363,14 @@ impl super::Session {
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
         self.photo_job_collect();
-        let Some(path) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
+        let Some((path, pending)) = self.photo.as_mut().and_then(|open| open.shot.take()) else {
             return;
         };
         let result = self
             .read_photo_output()
-            .and_then(|(pixels, width, height)| {
-                oag_game::capture::write_png(&path, width, height, &pixels)
+            .and_then(|(pixels, width, height)| match pending {
+                Some(pending) => pending.write(&path, width, height, &pixels),
+                None => oag_game::capture::write_png(&path, width, height, &pixels),
             });
         match result {
             Ok(()) => {
