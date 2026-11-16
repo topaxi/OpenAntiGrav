@@ -94,6 +94,8 @@ full comparison.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's
   environment loader falls back to HD's own title-wide `effectSettings`, and
   the per-stage table it feeds runs every frame regardless.
+- [zone-speed-class-text.md](zone-speed-class-text.md) - the class name over `ZONE`: a second walker over HD's
+  fourteen-record table, not the seventeen-record `*_CLASS` ladder
 - [pickup-icon-uv-table.md](pickup-icon-uv-table.md) - the held pickup's one
   `PickupIcon` widget gets its per-weapon look from a 12-slot UV table, not
   thirteen named widgets; found alongside the shield fill's own update

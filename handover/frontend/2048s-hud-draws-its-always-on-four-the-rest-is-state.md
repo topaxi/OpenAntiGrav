@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [2048]
 updated: 2026-11-16
-summary: "2048 HUD: _HD layouts, grant announcement, fly, pop-in, frame colour and the XP value wired; class name, Tournament file, alpha pulse open"
+summary: "2048 HUD: layouts, class name, grant, fly, pop-in, XP wired; release shrink, next-class row, zone 0, score anchor open"
 difficulty: easy (30)
 ---
 
@@ -30,10 +30,17 @@ PSP's grid, twice the size, right-hand column off screen.
 ## Open
 
 - **~~HD and Fury `_HD` layouts~~ wired 2026-10-27 (`2048-hud-state`)**: `AddOn::hud`, `Options::add_on_campaign`,
-  `--add-on-campaign`. Left: the class name above `ZONE` (`HudArt::zone_speed_classes` is `None` for 2048; the
-  zone-to-class law and string ids are unread, compare `67-zone-grid.png` and `68-zone-5.png`), a campaign Tournament's
-  `Arcade_HUD_HD.xml` (`HudLayouts` has one `arcade` row), Zone Battle (no `Mode`). The Race event's `XP` and
-  `OBJECTIVE` lines are done (`Setup::campaign_event`).
+  `--add-on-campaign`. **The class name above `ZONE` is wired 2026-11-16 (`2048-hud-left`)**: `FUN_811538c2` walks HD's
+  fourteen-record table (`oag_2048::hud::ZONE_SPEED_CLASSES`,
+  [zone-speed-class-text.md](../../docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md)); zone 5 reads `FLASH`
+  as `68-zone-5.png`. Open from it: zone 0 (the original has no gate and would write SUB-VENOM; ours is blank like `Zone`,
+  and no zone 0 or 1 frame is on disk, `67-zone-grid.png` is missing), the next-class row (`hud+0x564`/`+0x568`, placed at
+  `record[i-1].threshold - counter` rows below), and Omega's `zone_speed_classes` (same table at `0x0197b8a0`, **checked,
+  applies, not wired**). **Tournament's `Arcade_HUD_HD.xml` is checked and not wired**: its one include adds
+  `MPWeaponIcon0`-`7`, bound hidden and shown only while `DAT_8153fd2f & 1` (meaning unread, `FUN_81151f0e`), so a single-player
+  Tournament is the Race frame ([race-hud-selection.md](../../docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md));
+  open: what sets that flag. Zone Battle (no `Mode`). The Race event's `XP` and `OBJECTIVE` lines are done (`Setup::campaign_event`).
+  **Zone `SCORE` value anchor**: ours left-anchors `4568` at x 480 where `68-zone-5.png` centres it under `SCORE`; not looked at.
 - **Seen in both 2048 pair originals and drawn by no widget of ours:** ~~the white ring round the hull at the grid~~ (the radar,
   `Radar`/`PlayerDot` always on since 2026-11-16, `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`; `RadarDot*` read, not wired) and the
   key-shaped icon left of the speed bar (matched as `PilotAssist`, see below); `TOTAL` ~~reads
@@ -70,7 +77,7 @@ PSP's grid, twice the size, right-hand column off screen.
   layer) is still genuinely open.
 - **The pickup grant announcement is wired 2026-10-27** (one second, `Readout::pickup_announcing`) **and the fly to the
   slot 2026-11-08** (`hud-2048-fly`: `dt * 1800.0` px a frame, `PickupBgFrame` widening with `y / slot y`,
-  `Readout::pickup_fly`; the settled icon is `(101.5, 404.5)`, the decompiled slot, not the measured 99.5). The pop-in scale and the frame's `0xFFA7A5A7` and 8 Hz blink are wired 2026-11-13. Open, read in `pickup-icon-uv-table.md` and drawn by nothing: the icon's alpha pulse (its trigger is not in `Hud_UpdatePickupIcon`), the release shrink, `DenyPickup`'s blink. Which edge of the frame holds as it widens is unmeasured (ours keeps the left); a Vita3K frame
+  `Readout::pickup_fly`; the settled icon is `(101.5, 404.5)`, the decompiled slot, not the measured 99.5). The pop-in scale and the frame's `0xFFA7A5A7` and 8 Hz blink are wired 2026-11-13. Read in `pickup-icon-uv-table.md`: **the icon's alpha pulse is inert** (no writer of `hud+0x22c` but the constructor), `DenyPickup`'s blink has no trigger found; open: **the release shrink** (icon height over 0.1 s, then the frame's width, about 12 frames, law read in full there, `SlotHud::pickup_pop` already runs the height). Which edge of the frame holds as it widens is unmeasured (ours keeps the left); a Vita3K frame
   mid-fly would settle it.
 - **Wired 2026-10-05**: the speed fills, `PilotAssist`'s draw and
   `ZoneLight0`-`9` - see `2048-hud.md` and `pickup-icon-uv-table.md`. Still

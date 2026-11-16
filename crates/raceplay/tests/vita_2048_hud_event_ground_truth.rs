@@ -173,6 +173,56 @@ fn the_hd_campaigns_zone_reads_its_hd_layout() {
         hd.report
     );
     assert_eq!(authored(&hd), [true; 4], "{:#?}", hd.report);
+    the_zone_line_names_the_class_in_the_players_language(&hd);
+}
+
+/// The class name over `ZONE` is the localised string of the table's id, off the zone counter
+/// (`FUN_811538c2`, `docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`): `FLASH` at
+/// zone 5 as `68-zone-5.png` reads, `SUB-FLASH` and `ZEN` and `SUPERSONIC` where the ids are
+/// `MSC_*`/`IG_HUD_*` keys of the language plugin. Runs on the load
+/// [`the_hd_campaigns_zone_reads_its_hd_layout`] already made.
+///
+/// Fails if `HudArt::zone_speed_classes` is dropped from 2048 (nothing is drawn), if the ids stop
+/// resolving against 2048's own plugins (the raw key is drawn), or if a threshold moves.
+fn the_zone_line_names_the_class_in_the_players_language(loaded: &oag_raceplay::Loaded) {
+    let context = loaded.hud.context().expect("the layout parses");
+    let drawn = |zone: u32| -> Vec<String> {
+        let frame = oag_hud::draw_list(
+            &context,
+            &oag_hud::Readout {
+                zone,
+                ..oag_hud::Readout::blank()
+            },
+        );
+        frame
+            .hud_text
+            .iter()
+            .chain(&frame.small_text)
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    for (zone, name) in [
+        (2, "VENOM"),
+        (3, "SUB-FLASH"),
+        (5, "FLASH"),
+        (35, "ZEN"),
+        (75, "SUPERSONIC"),
+    ] {
+        let text = drawn(zone);
+        assert!(
+            text.iter().any(|line| line == name),
+            "zone {zone}: {text:?}"
+        );
+        assert!(
+            !text
+                .iter()
+                .any(|line| line.starts_with("MSC_") || line.starts_with("IG_HUD_")),
+            "zone {zone} drew a raw string key: {text:?}"
+        );
+    }
 }
 
 /// The HD Campaign's grid with Pilot Assist Extreme on, as the original's frame
