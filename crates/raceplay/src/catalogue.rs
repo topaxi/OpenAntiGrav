@@ -666,6 +666,34 @@ fn read_zone_livery(team: &Node) -> Option<String> {
         .map(str::to_string)
 }
 
+impl Team {
+    /// `(team id, livery name)` for this team and each variant of it that races (a Fury `_c1`
+    /// craft wears its base team's livery): the rows [`oag_livery::zone_livery::swap`] reads.
+    /// Empty for a team with no [`Self::zone_livery`].
+    #[must_use]
+    pub fn zone_liveries(&self, race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+        let Some(livery) = &self.zone_livery else {
+            return Vec::new();
+        };
+        let mut out = vec![(self.id.clone(), livery.clone())];
+        if let Some(table) = race.team_variants_for(&self.id) {
+            for variant in table.variants {
+                out.push((table.join.combine(&self.id, variant.suffix), livery.clone()));
+            }
+        }
+        out
+    }
+}
+
+/// [`Team::zone_liveries`] of every team: what a Zone race's hull build is given.
+#[must_use]
+pub fn zone_liveries(teams: &[Team], race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+    teams
+        .iter()
+        .flat_map(|team| team.zone_liveries(race))
+        .collect()
+}
+
 /// Every `PI_TeamModel` under `team` that authors an `<FE>` - see
 /// [`Team::models`].
 fn read_models(team: &Node) -> Vec<TeamModel> {

@@ -621,7 +621,7 @@ use, and on Pulse the paint on the shared Zone hull. The original's
 `Team Selection` runs in Zone with the livery cycler replaced by a fixed `Zone`
 label and the four rating bars forced to 10
 (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`); the screen draws both, the
-preview is the team's own `Zone_FE.vex`, and the label has no arrows to press.
+preview is the team's own `Zone_FE.vex`, and the label has no arrows to press. On HD/Fury and Omega, whose Zone craft is one shared hull, the preview is that hull in the picked team's `zoneship_<x>` livery, by the decision the race's hull build takes (`oag_livery::zone_livery::swap`; `docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`, "Ship Select preview").
 `oag_title::ZoneTeamStep` is the per-title answer: Pure's own chain has no team
 step in Zone and keeps skipping it. HD/Fury, 2048 and Omega were not read in Zone; they take Pulse's
 rule without the ratings (maintainer, 2026-10-26: "the team matters for loyalty"). Back from Track Select is the RACE

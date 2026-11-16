@@ -183,9 +183,8 @@ pub fn zone_hull_file(title: &oag_title::Title, mode: oag_race::Mode) -> Option<
 /// other title and any other Zone craft.
 ///
 /// Without it HD's and Omega's screen drew the team's own race hull in Zone, a craft the race
-/// does not fly. The Zone hull is shared geometry, so every team previews the same model; Omega's
-/// and 2048's per-team paint on it (`oag_livery`'s `zone_livery`) is not applied here, so those
-/// two preview the hull's default livery.
+/// does not fly. The Zone hull is shared geometry, so every team previews the same model, painted
+/// in the team's livery by [`variant::zone_folders`], the decision the race's hull build takes.
 #[must_use]
 pub fn zone_race_hull_entry(
     title: &oag_title::Title,
@@ -554,25 +553,6 @@ pub fn model_in(
     model_named_in(archives, entry, livery).map(|(model, _)| model)
 }
 
-/// A texture a preview build asks for, read through `livery` when it names one. A texture the
-/// worn folder lacks is `None` (drawn untextured, and logged), never the own folder's paint.
-fn read_texture(
-    archives: &mut oag_assets::Archives,
-    path: &str,
-    livery: Option<oag_livery::LiveryFolder<'_>>,
-) -> Option<Vec<u8>> {
-    match livery.and_then(|livery| livery.rewrite(path)) {
-        Some(worn) => {
-            let blob = archives.read_name(&worn).ok();
-            if blob.is_none() {
-                log::debug!("preview: {worn} is not on the disc - drawn untextured");
-            }
-            blob
-        }
-        None => archives.read_name(path).ok(),
-    }
-}
-
 /// [`model`], and the `.gtf` path of each texture slot in order - what a caller
 /// that has to treat one texture's draws differently needs to find them. Empty
 /// for a PSP or PS2 model, whose textures are embedded and carry no path.
@@ -641,6 +621,7 @@ fn ps3_model(
     // The `.gtf` requests come in texture-slot order, which is how a draw
     // names its texture.
     let mut textures = Vec::new();
+    let mut reads = oag_livery::zone_livery::Reads::new(livery);
     let (mut model, report) = oag_mesh::mesh::rcs::build_scene(
         entry,
         blob,
@@ -651,13 +632,16 @@ fn ps3_model(
             {
                 textures.push(path.to_string());
             }
-            read_texture(archives, path, livery)
+            reads.read(archives, path)
         },
         // A menu preview draws into a gamma target, whose shaders decode with the plain power.
         Default::default(),
     )
     .with_context(|| format!("decoding the preview mesh {entry}"))?;
     log::debug!("preview {entry}: {}", report.describe());
+    if let Some(line) = reads.describe(entry) {
+        log::debug!("preview {line}");
+    }
     model.keep_nearest();
     Ok((model, textures))
 }

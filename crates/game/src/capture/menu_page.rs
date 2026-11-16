@@ -1095,7 +1095,11 @@ pub(super) fn picker_page(
                         )
                     })
                 }
-                _ => None,
+                // The live screen's rule, `session::picker::ship_source`.
+                Kind::Ship => teams
+                    .get(picker.index())
+                    .and_then(|team| crate::preview::variant::zone_folders(title, team, mode)),
+                Kind::Track => None,
             },
             race_hull: match kind {
                 Kind::Ship => teams

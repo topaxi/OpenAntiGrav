@@ -58,8 +58,11 @@ pub(crate) enum PreviewSource {
         /// (`oag_game::preview::race_hull_entry`); `None` where the title draws the race hull.
         race_hull: Option<String>,
         /// Each variant id the row offers that paints the hull from another livery folder, with
-        /// its `(own, worn)` folders (`oag_game::preview::variant::livery_folders`).
-        liveries: Vec<(String, (String, String))>,
+        /// its folders (`oag_game::preview::variant::livery_folders`).
+        liveries: Vec<(String, oag_game::preview::variant::Folders)>,
+        /// The team's livery on a Zone race's shared hull, whatever the variant row holds
+        /// (`oag_game::preview::variant::zone_folders`).
+        zone_livery: Option<oag_game::preview::variant::Folders>,
     },
 }
 
@@ -907,6 +910,7 @@ pub(crate) fn read_preview(
                 zone_entry: None,
                 race_hull: None,
                 liveries: Vec::new(),
+                zone_livery: None,
             }
             .entry_name(previews.ship_hull, previews.front_end)
         }
@@ -922,10 +926,18 @@ pub(crate) fn read_preview(
             PreviewSource::Track { .. } => None,
         };
         let livery = match (&source, variant) {
-            (PreviewSource::Ship { liveries, .. }, Some(variant)) => liveries
-                .iter()
-                .find(|(id, _)| id == variant)
-                .map(|(_, (own, worn))| oag_livery::LiveryFolder { own, worn }),
+            (
+                PreviewSource::Ship {
+                    liveries,
+                    zone_livery,
+                    ..
+                },
+                variant,
+            ) => variant
+                .and_then(|variant| liveries.iter().find(|(id, _)| id == variant))
+                .map(|(_, folders)| folders)
+                .or(zone_livery.as_ref())
+                .map(oag_game::preview::variant::Folders::folder),
             _ => None,
         };
         oag_game::preview::variant::model_or_default(
@@ -1035,6 +1047,7 @@ mod tests {
             zone_entry: None,
             race_hull: None,
             liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -1052,6 +1065,7 @@ mod tests {
             zone_entry: None,
             race_hull: None,
             liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(
             source.entry_name(None, None).as_deref(),
@@ -1079,6 +1093,7 @@ mod tests {
             zone_entry: None,
             race_hull: None,
             liveries: Vec::new(),
+            zone_livery: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),
@@ -1104,6 +1119,7 @@ mod tests {
                 zone_entry: Some(zone.clone()),
                 race_hull: None,
                 liveries: Vec::new(),
+                zone_livery: None,
             };
             assert_eq!(
                 source.entry_name(Some("ship.vex"), None).as_deref(),

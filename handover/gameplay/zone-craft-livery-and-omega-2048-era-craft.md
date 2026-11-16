@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [omega, 2048]
-updated: 2026-10-26
-summary: "Omega and 2048 Ship Select preview the Zone hull in default livery; ship_zone callers unread"
+updated: 2026-11-16
+summary: "Zone ship_zone callers unread; 2048-era craft livery fallback unread; HD/Omega/2048 Zone Team Selection unread"
 difficulty: hard (30)
 ---
 
@@ -23,11 +23,6 @@ blocks differ).
 
 ## Open
 
-- **Omega and 2048 Ship Select preview the Zone hull in its default livery**, not the picked team's
-  `zoneship_<x>` paint the race wears. The swap is `oag_livery`'s `zone_livery` (`pub(crate)`); the
-  preview builds its model in `oag_game::preview::psp2_scene`, whose texture resolver would take the
-  same path rewrite. 2048 has no Ship Select screen (its team is the RACE page's TEAM row), so this is
-  Omega's alone in practice.
 - **HD, Omega and 2048 `Team Selection` in Zone is unread** (`ZoneTeamStep::Offered` is Pulse's rule,
   chosen). Whether HD's own screen forces its rating bars full is unmeasured; they show the team's own.
   HD's model grid shows the one Zone hull, open, with no thumbnail (the disc's thumbnails are the team's
