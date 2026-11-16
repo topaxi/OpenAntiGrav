@@ -132,7 +132,7 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
 fn every_craft_visits_a_strip_and_its_edges_match_its_cues() {
-    if load().is_none() {
+    if oag_testdata::exact("data/extracted/vita/PCSF00007").is_none() {
         return;
     }
     let (log, _) = fly(false, None);
