@@ -258,3 +258,71 @@ fn the_kind_line_and_photo_follow_the_class_the_way_the_executable_does() {
         "Elimination's own word"
     );
 }
+
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_race_load_of_event_one_draws_its_card_a_real_tip_and_the_modes_paragraph() {
+    let Some(source) = source() else { return };
+    let boot = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = boot.frontend;
+    let card = frontend
+        .launch_event_card("2048 - Event 1", 0)
+        .expect("Launch on the open card leaves it");
+    assert_eq!(card.event().card.title, "EMPIRE CLIMB");
+
+    let assets = oag_game::loading::Assets::load(
+        &options(&source).source,
+        &boot.strings,
+        boot.entries.as_deref(),
+        None,
+    );
+    let tips = assets.game_tips.as_ref().expect("2048 names game tips");
+    for (row, tip) in tips.rows.iter().enumerate().take(34) {
+        let tip = tip
+            .as_ref()
+            .unwrap_or_else(|| panic!("row {row}: words did not resolve"));
+        assert!(!tip.title.is_empty() && !tip.body.is_empty(), "row {row}");
+        assert!(
+            boot.sprites.get(&tip.texture).is_some(),
+            "row {row}: {} is not in the sheet",
+            tip.texture
+        );
+    }
+    assert!(
+        boot.sprites
+            .get(&tips.rows[0].as_ref().unwrap().question_mark)
+            .is_some(),
+        "the ? mark"
+    );
+
+    let mut screen = oag_game::loading::Screen::new(&assets, boot.font.line_height, 0, None);
+    screen.set_card(card, assets.game_tips.as_ref(), 3);
+    let atlas = boot.font.clone();
+    let progress = oag_game::prefetch::Progress::default();
+    let words = |screen: &oag_game::loading::Screen| -> Vec<String> {
+        screen
+            .draw_list(oag_game::loading::Phase::Race, &progress, &atlas)
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    let tip = screen.card_tip().expect("a tip").clone();
+    let first = words(&screen);
+    assert!(first.contains(&"EMPIRE CLIMB".to_string()), "{first:?}");
+    assert!(first.contains(&tip.header), "GAME TIP header: {first:?}");
+    assert!(first.contains(&tip.title), "{first:?}");
+    assert!(first.iter().any(|text| text == "LOADING..."), "{first:?}");
+    assert!(first.contains(&"0%".to_string()), "{first:?}");
+
+    screen.set_load_stage(4);
+    let second = words(&screen);
+    let mode = "Race Events are classic Wipeout";
+    assert!(
+        second.iter().any(|text| text.starts_with(mode)),
+        "the mode page's paragraph: {second:?}"
+    );
+    assert!(!second.contains(&tip.title), "the tip is dropped");
+}

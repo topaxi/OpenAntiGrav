@@ -143,6 +143,35 @@ impl Draw {
         }
     }
 
+    /// Moves this draw `dx` along x, leaving its size and colour. The race load's card slides
+    /// with it.
+    pub fn shift_x(&mut self, dx: f32) {
+        match self {
+            Self::Fill { rect, .. }
+            | Self::ChamferedFill { rect, .. }
+            | Self::GradientFill { rect, .. }
+            | Self::Sprite { rect, .. }
+            | Self::RotatedSprite { rect, .. }
+            | Self::TiledSprite { rect, .. }
+            | Self::BlendedSprite { rect, .. }
+            | Self::GradientSprite { rect, .. }
+            | Self::Video { rect, .. }
+            | Self::GlowStamp { rect, .. } => rect[0] += dx,
+            Self::Text { x, .. } | Self::FacedText { x, .. } => *x += dx,
+            Self::Triangles(triangles) => {
+                for corner in triangles.iter_mut().flatten() {
+                    corner.at[0] += dx;
+                }
+            }
+            Self::SolidTriangles { triangles, .. } => {
+                for point in triangles.iter_mut().flatten() {
+                    point[0] += dx;
+                }
+            }
+            Self::FuryBackdrop(_) | Self::SceneBackdrop(_) | Self::GlowText { .. } => {}
+        }
+    }
+
     /// Multiplies this draw's alpha, leaving it where it is.
     ///
     /// Both edges of a [`Self::GradientFill`], which is the one variant

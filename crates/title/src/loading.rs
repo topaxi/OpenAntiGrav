@@ -67,6 +67,79 @@ pub struct Loading {
     /// layout this build chose, in the PSP's 480x272 grid
     /// (`docs/formats/screen-layout.md`).
     pub layout: Option<&'static str>,
+    /// The game tips the race load shows beside the event's card, when the title has them.
+    /// See [`GameTips`].
+    pub game_tips: Option<GameTips>,
+}
+
+/// One game tip: a picture, a title and a body, named by ids and a texture stem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameTip {
+    /// The texture's stem in [`GameTips::dir`].
+    pub texture: &'static str,
+    /// The string id of the title.
+    pub title: &'static str,
+    /// The string id of the body; `None` on a row the executable draws by another routine.
+    pub body: Option<&'static str>,
+}
+
+/// The class of an event, as a tip pick reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipClass {
+    /// A lap race.
+    Race,
+    /// A zone event.
+    Zone,
+    /// A combat event.
+    Combat,
+    /// A speed lap.
+    SpeedLap,
+    /// A time trial.
+    TimeTrial,
+}
+
+/// A title's game tips: the table and the pick's list of rows
+/// (`GameTip_Pick`, `docs/ghidra/functions/vita-2048-eu-v104/race-load.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameTips {
+    /// Where the pictures are, spelled as the front end spells every `Src=`.
+    pub dir: &'static str,
+    /// The `?` mark's stem in [`Self::dir`].
+    pub question_mark: &'static str,
+    /// The string id of the panel's header.
+    pub header: &'static str,
+    /// Every row.
+    pub rows: &'static [GameTip],
+    /// The rows every load may draw.
+    pub always: &'static [u8],
+    /// The row of each class, in [`TipClass`] order: race, zone, combat, speed lap, time trial.
+    pub class_rows: [u8; 5],
+    /// The extra row a combat event draws from.
+    pub combat_row: u8,
+    /// The row an offline event draws from.
+    pub offline_row: u8,
+}
+
+impl GameTips {
+    /// The rows the pick draws from for an event of `class`, in the executable's order. **No
+    /// weapon-pad rows**: they depend on the event's active weapon pads, which no event card
+    /// carries yet.
+    #[must_use]
+    pub fn candidates(&self, class: TipClass) -> Vec<u8> {
+        let mut rows = self.always.to_vec();
+        if class == TipClass::Combat {
+            rows.push(self.combat_row);
+        }
+        rows.push(self.offline_row);
+        rows.push(self.class_rows[class as usize]);
+        rows
+    }
+
+    /// A picture's entry name, `.gtf` as the front end spells every texture.
+    #[must_use]
+    pub fn entry(&self, stem: &str) -> String {
+        format!("{}{stem}.gtf", self.dir)
+    }
 }
 
 /// How a progression bar fills: a first target, the loader's milestones, and the

@@ -45,6 +45,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     labels: None,
     progression: None,
     layout: None,
+    game_tips: None,
 };
 
 /// The disc entry holding the **26** `<PI_LoadingScreen>` tips.

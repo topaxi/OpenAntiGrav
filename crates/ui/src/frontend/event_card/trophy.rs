@@ -45,7 +45,7 @@ const CALLOUT_DROP: f32 = 30.0;
 const LINE: f32 = 20.0;
 const CHARS_PER_LINE: usize = 24;
 
-impl Frontend {
+impl CardPaint<'_> {
     pub(super) fn draw_trophy_page(&self, event: &MapEvent, out: &mut Vec<Draw>) {
         let Some(trophy) = &event.card.trophy else {
             return;

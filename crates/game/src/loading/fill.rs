@@ -37,6 +37,8 @@ pub(super) struct Fill {
     stage: u8,
     /// Whether the rate has been frozen as the reset rate.
     frozen: bool,
+    /// Whether the load has reported the stage after the last milestone.
+    done: bool,
     /// Frames into the current step.
     phase: u8,
 }
@@ -52,6 +54,7 @@ impl Fill {
             reset: law.rate,
             stage: 0,
             frozen: false,
+            done: false,
             phase: 0,
         }
     }
@@ -69,6 +72,7 @@ impl Fill {
             self.set_target(fraction);
         }
         if usize::from(reached) > self.law.milestones.len() {
+            self.done = true;
             self.freeze_rate();
         }
     }
@@ -99,6 +103,12 @@ impl Fill {
             self.frozen = true;
             self.reset = self.rate;
         }
+    }
+
+    /// Whether every stage the title lists has been reached and one more: the load is done
+    /// building, which is when the original's race manager exists.
+    pub(super) fn stages_done(&self) -> bool {
+        self.done
     }
 
     /// One frame of the screen's own 60 Hz; a step is `frames_per_step` of them.

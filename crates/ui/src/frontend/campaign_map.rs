@@ -257,6 +257,8 @@ pub struct CampaignMap {
     pub(super) craft_seed: Option<String>,
     /// The per-event card, when one is open over the map.
     pub(super) card: Option<super::event_card::CardState>,
+    /// The card the last launch left, which the race load draws behind its box.
+    pub(super) launched: Option<super::event_card::CardState>,
     /// The pad's pointer on the map. See [`super::map_cursor`].
     pub(super) cursor: super::map_cursor::MapCursor,
     /// The d-pad's focus. See [`super::map_focus`].

@@ -158,9 +158,12 @@ impl Session {
             // title: its `Launch 2048` carries a request where every other
             // title's `Launch Game` opens the menus and stops. See
             // `oag_ui::frontend::Launch`.
-            let launch = match &self.stage {
-                Stage::Frontend(stage) => stage.frontend.launch().cloned(),
-                _ => None,
+            let (launch, card) = match &self.stage {
+                Stage::Frontend(stage) => (
+                    stage.frontend.launch().cloned(),
+                    stage.frontend.launched_card(),
+                ),
+                _ => (None, None),
             };
             let opening = web_time::Instant::now();
             if let Err(e) = self.open_menus() {
@@ -171,7 +174,7 @@ impl Session {
                     opening.elapsed().as_secs_f32() * 1000.0
                 );
                 println!("\n{}", hints::shell_keys(&hint_strings));
-                self.follow_launch(launch);
+                self.follow_launch(launch, card);
             }
         }
 

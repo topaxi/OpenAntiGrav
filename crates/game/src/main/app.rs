@@ -579,6 +579,7 @@ impl App {
             player_asked: false,
             soft_keyboard: false,
             pending_event: None,
+            pending_card: None,
             races_launched: 0,
             menu_source: Default::default(),
             opening_reads: Default::default(),

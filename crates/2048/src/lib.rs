@@ -65,6 +65,7 @@ pub mod hud;
 pub mod loading;
 pub mod main_menu;
 pub mod race;
+pub mod tips;
 
 /// Wipeout 2048, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {

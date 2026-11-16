@@ -110,6 +110,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     labels: Some(LABELS),
     progression: Some(PROGRESSION),
     layout: Some(r"Data\XML\LoadingScreen_HD.toml"),
+    game_tips: None,
 };
 
 /// The Bink clip in the mode icon's panel, by mode id, in the Fury styling.

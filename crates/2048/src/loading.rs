@@ -18,6 +18,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     labels: None,
     progression: Some(PROGRESSION),
     layout: Some(r"Data\XML\LoadingScreen_2048.toml"),
+    game_tips: Some(crate::tips::TIPS),
 };
 
 /// The three `Skin.xml` globals the box draws with (`Blue2048` the box, rule, caption and

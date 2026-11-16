@@ -71,6 +71,50 @@ fn cross_on_the_card_launches_the_event() {
 }
 
 #[test]
+fn a_launch_leaves_the_card_it_was_pressed_on_for_the_race_load() {
+    let (mut frontend, mut input) = on_the_card(card_event());
+    assert!(frontend.launched_card().is_none(), "nothing launched yet");
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Cross);
+    let card = frontend.launched_card().expect("the launch kept its card");
+    assert_eq!(card.event().name, "2048 - Event 1");
+    assert_eq!(card.event().card.title, "UNITY SQUARE");
+    // The card is closed on the front end, as the original's is, and still drawable.
+    assert!(!frontend.event_card_open());
+    let mut draws = Vec::new();
+    card.paint(false, None)
+        .draw_panel(crate::frontend::Backdrop::None, &mut draws);
+    assert!(
+        draws.iter().any(|draw| matches!(
+            draw,
+            Draw::Text { text, .. } if text == "UNITY SQUARE"
+        )),
+        "the panel names the event"
+    );
+}
+
+#[test]
+fn the_mode_page_is_the_last_page_and_draws_the_modes_paragraph() {
+    let mut events = card_event();
+    events[0].card.mode_body = Some("Race Events are classic Wipeout.".to_string());
+    let (mut frontend, mut input) = on_the_card(events);
+    press(&mut frontend, &mut input, Button::Cross);
+    let card = frontend.launched_card().unwrap();
+    let mut without = Vec::new();
+    card.paint(false, None)
+        .draw_panel(crate::frontend::Backdrop::None, &mut without);
+    let mut with = Vec::new();
+    card.paint(true, None)
+        .draw_panel(crate::frontend::Backdrop::None, &mut with);
+    let has = |list: &[Draw]| {
+        list.iter()
+            .any(|draw| matches!(draw, Draw::Text { text, .. } if text.starts_with("Race Events")))
+    };
+    assert!(!has(&without));
+    assert!(has(&with), "the race manager's page shows the paragraph");
+}
+
+#[test]
 fn the_three_buttons_answer_their_measured_hit_rects() {
     // Launch: x 812..954, y 422..538 - ten past the drawn 822..944 by 432..528,
     // its first 12 units shadowed by Back's own rect.

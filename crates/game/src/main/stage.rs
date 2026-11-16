@@ -192,6 +192,8 @@ impl Stage {
         // What the track being raced supplies of its own loading screen, when it is a track
         // file with a `[loading]` table.
         track: Option<&loading::TrackLoading>,
+        // The card the race was launched from, drawn behind the box on a title that does.
+        card: Option<oag_ui::frontend::LaunchedCard>,
     ) -> Result<Self> {
         // The mode icon's clip, where the title maps one for this mode: the
         // renderer's planes are sized from its header, and the clip itself is
@@ -222,6 +224,14 @@ impl Stage {
         );
         let mut screen = loading::Screen::for_mode(assets, font.line_height, draw, language, mode);
         screen.set_safe_area(safe_area);
+        match card {
+            Some(card) => screen.set_card(card, assets.game_tips.as_ref(), draw),
+            None if assets.game_tips.is_some() => log::debug!(
+                "race load: this race was not launched from an event card, so the box and the \
+                 meter draw over the ground and no card is made up"
+            ),
+            None => {}
+        }
         if let Some(track) = track {
             for note in &track.notes {
                 log::warn!("{note}");

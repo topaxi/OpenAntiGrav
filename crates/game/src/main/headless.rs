@@ -196,6 +196,24 @@ pub(crate) fn run_windowless(
                     )
             });
         }
+        progress.load_stage = cli.loading_stage;
+        let card = cli.loading_card.as_deref().and_then(|spec| {
+            let (name, page) = match spec.rsplit_once(':') {
+                Some((name, page)) if page.parse::<usize>().is_ok() => {
+                    (name, page.parse().unwrap_or(0))
+                }
+                _ => (spec, 0),
+            };
+            // A capture has no save: the events the map gates open as if the first were passed.
+            loaded.frontend.refresh_campaign_progress(|earned| {
+                (earned == "2048 - Event 1").then_some(oag_ui::frontend::EarnedTier::Pass)
+            });
+            let card = loaded.frontend.launch_event_card(name, page);
+            if card.is_none() {
+                log::warn!("--loading-card: no launchable event {name:?}; drawing no card");
+            }
+            card
+        });
         let assets = loading::Assets::load(
             &options.source,
             &loaded.strings,
@@ -241,6 +259,7 @@ pub(crate) fn run_windowless(
                     .hud_art
                     .safe_area_scale(settings.graphics.hud_safe_area),
                 title_font: loaded.title_font.clone(),
+                card,
                 renderer: settings.graphics.renderer.clone(),
                 aspect: settings.display.aspect,
             },

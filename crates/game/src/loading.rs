@@ -214,6 +214,8 @@ pub struct Screen {
     /// Whether the mode icon's clip has a picture to show: set by whoever
     /// feeds the clip, once its first frame is in the renderer's planes.
     mode_icon: bool,
+    /// The launched event's card behind the box, on a title that races from one. See [`card`].
+    card: Option<card::CardBackdrop>,
     /// The bar's stage-driven fill, on a title whose loader drives it. `None`
     /// keeps the time estimate. See [`fill::Fill`].
     fill: Option<fill::Fill>,
@@ -332,6 +334,7 @@ impl Screen {
             fade: 0,
             mode_icon: false,
             fill: assets.progression.map(fill::Fill::new),
+            card: None,
             layouts: assets.layout.clone(),
             layout_strings: assets.layout_strings.clone(),
             mode_name: mode.and_then(feature::mode_name),
@@ -357,6 +360,12 @@ impl Screen {
         if let Some(fill) = self.fill.as_mut() {
             fill.step();
         }
+        // The original's draws come at 30 a second: one in two frames, the same one a step is.
+        if self.frames % 2 == 1
+            && let Some(card) = self.card.as_mut()
+        {
+            card.step();
+        }
         if finished {
             self.wave.finish();
             self.fade = self.fade.saturating_add(1);
@@ -377,6 +386,11 @@ impl Screen {
     pub fn set_load_stage(&mut self, stage: u8) {
         if let Some(fill) = self.fill.as_mut() {
             fill.reach(stage);
+            if fill.stages_done()
+                && let Some(card) = self.card.as_mut()
+            {
+                card.show_mode_page();
+            }
         }
     }
 
@@ -773,6 +787,7 @@ pub use feature::executable_mode;
 pub use track::TrackLoading;
 use wording::{counted, counts, estimated_fraction, fraction, heading, percentage, step_line};
 
+mod card;
 #[cfg(test)]
 mod deck_tests;
 mod fill;

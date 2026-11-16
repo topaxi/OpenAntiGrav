@@ -545,6 +545,8 @@ pub(crate) struct Session {
     /// `Launch 2048` and taken by that one launch. `None` is an ordinary
     /// race from the menus' own options. See `oag_raceplay::load_event`.
     pub(crate) pending_event: Option<String>,
+    /// The card that event was launched from, which the race load draws behind its box.
+    pub(crate) pending_card: Option<oag_ui::frontend::LaunchedCard>,
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,

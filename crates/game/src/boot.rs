@@ -652,6 +652,18 @@ pub fn load_shell(
     // The menu blocks' three textures are the executable's own, named by no
     // screen - see `oag_title::MenuBlocks` - so they are asked for by name
     // alongside everything the screens name.
+    // The race load's game tips, in the sheet the card draws from (`oag_title::loading::GameTips`).
+    let tip_textures: Vec<String> = title
+        .loading
+        .and_then(|loading| loading.game_tips)
+        .map(|tips| {
+            tips.rows
+                .iter()
+                .map(|row| tips.entry(row.texture))
+                .chain(std::iter::once(tips.entry(tips.question_mark)))
+                .collect()
+        })
+        .unwrap_or_default();
     let mut block_textures: Vec<&str> = menu_skin
         .blocks
         .map(|blocks| {
@@ -677,6 +689,7 @@ pub fn load_shell(
         block_textures.extend(oag_ui::frontend::team_info_textures());
         block_textures.extend(campaign2048::card_textures(&campaign_events));
         block_textures.extend(tiers2048::card_textures(&tiers));
+        block_textures.extend(tip_textures.iter().map(String::as_str));
     }
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));

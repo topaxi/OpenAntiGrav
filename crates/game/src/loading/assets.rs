@@ -76,8 +76,20 @@ pub struct Assets {
     /// Every string id the layout's labels name, resolved in the chosen language: an id the
     /// table does not carry is absent and its label is not drawn.
     pub layout_strings: Vec<(String, String)>,
+    /// The title's game tips, resolved: see [`GameTipSet`]. `None` on a title with none.
+    pub game_tips: Option<GameTipSet>,
     /// Lines worth printing once, describing what was found or what was not.
     pub notes: Vec<String>,
+}
+
+/// A title's game tips with their words resolved out of the disc's string table, one entry a
+/// table row (`None` for a row whose title or body the table does not carry).
+#[derive(Debug, Clone)]
+pub struct GameTipSet {
+    /// The table and the pick's lists.
+    pub tips: oag_title::loading::GameTips,
+    /// Row `n`'s resolved tip.
+    pub rows: Vec<Option<oag_ui::frontend::GameTip>>,
 }
 
 /// A mode's icon clip: the Bink file the original plays in the loading
@@ -232,6 +244,7 @@ impl Default for Assets {
             caption: None,
             labels: None,
             mode_icons: Vec::new(),
+            game_tips: None,
             notes: Vec::new(),
         }
     }
@@ -640,6 +653,33 @@ impl Assets {
 
         let layout = read_layout(&mut archives, loading.layout, strings, &mut notes);
 
+        let game_tips = loading.game_tips.map(|tips| {
+            let header = strings.get(tips.header).map(str::to_string);
+            let question_mark = tips.entry(tips.question_mark);
+            let rows: Vec<_> = tips
+                .rows
+                .iter()
+                .map(|row| {
+                    Some(oag_ui::frontend::GameTip {
+                        header: header.clone()?,
+                        question_mark: question_mark.clone(),
+                        texture: tips.entry(row.texture),
+                        title: strings.get(row.title)?.to_string(),
+                        body: match row.body {
+                            Some(id) => strings.get(id)?.to_string(),
+                            None => String::new(),
+                        },
+                    })
+                })
+                .collect();
+            notes.push(format!(
+                "loading screen: {} of {} game tip(s) resolve",
+                rows.iter().flatten().count(),
+                rows.len()
+            ));
+            GameTipSet { tips, rows }
+        });
+
         let strip = strip.unwrap_or_else(|| {
             if loading.wave.is_some() {
                 notes.push(
@@ -665,6 +705,7 @@ impl Assets {
             caption,
             labels,
             mode_icons,
+            game_tips,
             notes,
         }
     }

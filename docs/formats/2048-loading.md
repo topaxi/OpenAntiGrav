@@ -5,8 +5,7 @@ Confidence 90: a call-site census and a decompile, and since 2026-11-16 three ca
 Vita3K with the screen's own fields read out of the guest's memory. The evidence is
 [vita-2048-eu-v104/loading-screen.md](../ghidra/functions/vita-2048-eu-v104/loading-screen.md) (the class and the
 census) and [vita-2048-eu-v104/race-load.md](../ghidra/functions/vita-2048-eu-v104/race-load.md) (what the race load
-draws and its meter's law). `oag_2048::TITLE.loading` is `None`, on purpose: the screen a Vita player sees is fully
-read and not yet built, and the one that is authored in full is never started.
+draws and its meter's law). `oag_2048::TITLE.loading` is `Some` since 2026-11-16 (lane `vita-race-load-wire`): the race load, kind 4, is built (box, rule, meter and law, the launched event's card with a game tip and the mode page, below); the one that is authored in full, kind 7, is never started and not drawn.
 
 ## Two screens in one class
 
@@ -48,6 +47,31 @@ Queens Mall (`2048 - Event 2`), three runs, 2026-11-16; every operand, address a
 The frames are not in the repository (they are the original's pixels). `scripts/vita-2048-race-load.py` reproduces
 them with the memory samples in about a minute on a private Vita3K profile.
 
+## What is built
+
+| piece | where | state |
+| --- | --- | --- |
+| box, caption, readout, rule | `assets/fallback/Data/XML/LoadingScreen_2048.toml` (`screen-layout` `fill`, `text` kinds), named by `oag_2048::loading::LOADING` | built, operands pinned by `loading::vita_tests` |
+| meter | `oag_ui::loading_meter` (`Draw::SolidTriangles`), the layout's `meter` kind | built |
+| law | `oag_title::loading::Rules` (rescale on a raise, a step per 1/30 s, rate frozen at the last stage) on `oag_2048::loading::PROGRESSION`; `loading::fill` | built, reproduces the rates of two captures (`fill::tests`) |
+| the launched event's card | `oag_ui::frontend::CardPaint` (the one painter, `Frontend::draw_event_card` calls it too); `Frontend::launched_card` keeps the card a Launch pressed; handed over through `Session::follow_launch` and `Stage::race_loading` | built |
+| game tip | `oag_2048::tips::TIPS` (the 37-row table, keys only), picked by `oag_title::loading::GameTips::candidates`, drawn by `CardPaint::draw_tip_panel` | built **without** the weapon-pad rows and without the profile-flag rows (below) |
+| mode page and slide | `CardPaint::draw_mode_page`, `loading::card` (turns on the load's last stage, slides `-(1 - (1 - s)^2) * 202`, `s += 0.08` a draw) | built |
+
+**Chosen, not measured.** Which of this build's load stages is which milestone (stages 1 to 3 are 0.75, 0.95 and 0.98,
+stage 4, the crafts built, is the race manager that freezes the rate and turns the card). The ground behind the card is
+`White2048` (the original's is the blurred campaign map, which a launch here has no map for). The bold face's scale carries
+a calibration of 0.927 (this build's `Default` face scaled by the line-height ratio is 8 % wider than `NEOSANS_BOLD`; one
+mode-page line, 370 units in the original). The tip's draw is a seeded pick (`races_launched`), not `rand()`.
+
+**Open** (none changes what the screen reads as): the weapon-pad tip rows (need the event's active weapon pads, which no
+`EventCard` carries), the first-load rows of a profile (`GameTip_Pick` steps 1 and 2: a counter and per-class flags in the
+profile, not persisted here), the controls diagrams (rows 34 to 36, `0x8106d3ce` unread), the prototype challenge's mode page
+(`Tut_Proto_Event_<team>`), the HD and Fury cells' own panel (`CampaignEventCard_DrawCellPanel`: a racebox or cell launch draws
+the box and meter over the ground and says so in the loader report, never a made-up card), and the **attract demo's still**
+(`Title_Screen.gxt` at (-32, 144), 1024 by 256; it ships, it is not wired: the demo's load draws the box and meter only).
+Replays and `--race` start loads with no card likewise.
+
 ## What ships (asserted)
 
 All nine pictures kind 4 names resolve, and all sixteen kind 7 names (six marks, **both arrows included**, and ten
@@ -79,5 +103,15 @@ ground that makes a base picture's overhang invisible is white. The kind draws t
 
 ## Looking at it
 
-Nothing of ours to look at yet: `oag-game data/extracted/vita/PCSF00007 --loading-screen ...` draws this build's generic
-counts screen. The original's is one command away (`scripts/vita-2048-race-load.py`).
+```sh
+oag-game data/extracted/vita/PCSF00007 --loading-screen 0/1 --loading-step race \
+  --loading-card "2048 - Event 2" --loading-stage 0 --ticks 232 --size 960x544 --screenshot tip.png
+```
+
+`--loading-card EVENT[:PAGE]` presses Launch on that event's card (a capture has no save, so the first event counts as
+passed); `--loading-stage N` is the load stage reported to the bar (0 to 4: 4 turns the card to its mode page); `--ticks`
+the screen's age at 60 Hz (232 is 8 %, 1760 is 61 %, a few thousand holds 98 %). The original's is one command away
+(`scripts/vita-2048-race-load.py`).
+
+Against Omega: **checked, differs** (unchanged: it never starts this screen). Against HD: **ported** for the law (HD's
+`Rules::HD` keeps its doubling, per-frame step and base-rate reset; HD's loading frames are byte-identical before and after).

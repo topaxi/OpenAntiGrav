@@ -44,6 +44,7 @@ pub static LOADING: oag_title::Loading = oag_title::Loading {
     labels: Some(LABELS),
     progression: None,
     layout: Some(LAYOUT),
+    game_tips: None,
 };
 
 /// The layout file: HD's, with the brand a string id. Served from the fallback layer.

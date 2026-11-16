@@ -296,6 +296,9 @@ impl Screen {
         let Some(layout) = self.layout() else {
             return out;
         };
+        if let Some(card) = &self.card {
+            card.draws(atlas, &mut out);
+        }
         let frame = Frame::new(layout, self.safe_area);
         for element in &layout.elements {
             self.element(element, &frame, phase, progress, atlas, fade, &mut out);
