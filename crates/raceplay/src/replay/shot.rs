@@ -30,7 +30,8 @@ impl Resimulated {
     }
 }
 
-/// The race of `record` rebuilt over `source` and driven to the shot's tick.
+/// The race of `record` rebuilt over `source` (with the DLC packs in `dlc` mounted, as the
+/// session that took the shot had them) and driven to the shot's tick.
 ///
 /// A mismatch is a result ([`Resimulated::matches`]), not an error: the race is still there to
 /// look at. The run stops at the first stored hash that disagrees, so a build that no longer
@@ -39,9 +40,16 @@ impl Resimulated {
 /// # Errors
 ///
 /// A header that cannot be rebuilt ([`super::rebuild`]'s), or an event this build does not apply.
-pub fn resimulate(record: &ShotRecord, source: &str) -> Result<Resimulated> {
+pub fn resimulate(
+    record: &ShotRecord,
+    source: &str,
+    dlc: &[std::path::PathBuf],
+) -> Result<Resimulated> {
     let replay = &record.replay;
-    let mut race = super::rebuild(&replay.header, source)?;
+    let mut options = crate::Options::for_replay(&replay.header, source)?;
+    options.dlc = dlc.to_vec();
+    let loaded = crate::load(&options).context("loading the shot's race")?;
+    let mut race = super::start_recorded(loaded.setup, &replay.header)?;
     let mut verifier = match Verifier::new(replay, race.sim.state_hash()) {
         Ok(verifier) => verifier,
         Err(desync) => {

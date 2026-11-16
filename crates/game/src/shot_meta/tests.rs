@@ -99,3 +99,35 @@ fn a_png_without_our_chunks_reads_as_nothing() {
     assert!(found.meta.is_none() && found.record.is_none());
     assert!(read(b"not a png").is_err());
 }
+
+#[test]
+fn the_command_line_loses_every_path() {
+    let args = [
+        "data/images/pulse.chd",
+        "--race",
+        "--track",
+        "Data\\Tracks\\Foo.vex",
+        "--screenshot",
+        "/home/me/out.png",
+        "--dump-audio",
+        "/tmp/a.wav",
+        "--ticks",
+        "700",
+        "--hold",
+        "cross",
+        "~/x.chd",
+    ];
+    let kept = own_flags(args.iter().map(ToString::to_string));
+    assert_eq!(
+        kept,
+        [
+            "--race",
+            "--track",
+            "Data\\Tracks\\Foo.vex",
+            "--ticks",
+            "700",
+            "--hold",
+            "cross"
+        ]
+    );
+}

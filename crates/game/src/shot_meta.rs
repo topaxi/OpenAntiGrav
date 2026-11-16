@@ -265,16 +265,12 @@ pub fn flags(
 }
 
 /// The command line that made a capture, for the text: the arguments as they were given, less
-/// `--screenshot` and `--source` and every pair whose value is a filesystem path, so the text
-/// names none.
+/// `--screenshot` and every argument or flag value that is a filesystem path (the disc image is
+/// a positional one), so the text names none. Archive entries spell their separator `\`.
 #[must_use]
 pub fn own_flags(args: impl IntoIterator<Item = String>) -> Vec<String> {
     let path_like = |arg: &str| {
-        arg.starts_with('/')
-            || arg.starts_with('~')
-            || arg.starts_with("./")
-            || arg.starts_with("../")
-            || arg.as_bytes().get(1..3) == Some(b":\\")
+        arg.contains('/') || arg.starts_with('~') || arg.as_bytes().get(1..3) == Some(b":\\")
     };
     let args: Vec<String> = args.into_iter().collect();
     let mut flags = Vec::new();
@@ -282,7 +278,7 @@ pub fn own_flags(args: impl IntoIterator<Item = String>) -> Vec<String> {
     while at < args.len() {
         let arg = &args[at];
         let value = args.get(at + 1).filter(|next| !next.starts_with("--"));
-        if matches!(arg.as_str(), "--screenshot" | "--source") {
+        if arg == "--screenshot" {
             at += 1 + usize::from(value.is_some());
         } else if arg.starts_with("--") && value.is_some_and(|value| path_like(value)) {
             at += 2;
