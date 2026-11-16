@@ -55,5 +55,28 @@ pub(super) fn spu_vertex_lights_enabled(
     }
 }
 
+/// Each slot's engine light with the circuit's half of the mag-strip gate
+/// settled: whether the original's mode test (`mode id >= 0x17`, 2048 modes)
+/// lets a strip recolour the light on `track`.
+pub(super) fn per_slot(
+    liveries: &[oag_livery::Livery],
+    title: &oag_title::Title,
+    track: &str,
+) -> Vec<Option<oag_livery::engine_light::EngineLight>> {
+    use oag_title::flare::StripGate;
+    let lineage = title.race.circuit_lineage(track).is_some();
+    liveries
+        .iter()
+        .map(|livery| {
+            let mut light = livery.engine_light?;
+            light.strip_circuit = light.law.mag_strip.is_some_and(|strip| match strip.gate {
+                StripGate::EveryCircuit => true,
+                StripGate::LineageCircuit => lineage,
+            });
+            Some(light)
+        })
+        .collect()
+}
+
 /// The key, as `docs/formats/envsettings.md` lists it.
 const KEY: &str = "Lighting.Enable spu vertex lights";

@@ -125,7 +125,28 @@ pub const TITLE: &Title = &Title {
         ],
         sprite: "/data/tex/engineflare/engine_flare_rich.gnf",
         // **Off, chosen, not measured**, as on 2048.
-        engine_light: false,
+        // `EngineFlare_SubmitVertexLight`, `0x0173e350` on the 1.07 eboot
+        // (`docs/ghidra/functions/ps4-omega-eu/engine-light.md`, confidence 85; the falloff
+        // 60, read on 2048's program). The wander is 0.2 in position and 1.0 in range
+        // (confidence 75).
+        engine_light: Some(oag_title::flare::EngineLightLaw {
+            classic: oag_title::flare::Tint::HD_CLASSIC,
+            fury: oag_title::flare::Tint::HD_FURY,
+            era_2048: Some(oag_title::flare::Era2048 {
+                tint: oag_title::flare::Tint::ERA_2048,
+                roster_dir: race::ERA_2048_SHIP_DIR,
+            }),
+            mag_strip: Some(oag_title::flare::MagStrip {
+                colour: [1.5, 0.1, 3.0],
+                gain_scale: 0.2,
+                gate: oag_title::flare::StripGate::LineageCircuit,
+            }),
+            wander: oag_title::flare::Wander {
+                position: 0.2,
+                range: 1.0,
+                calmed_by_boost: true,
+            },
+        }),
         front_faces_only: false,
     }),
     // **Split into three files, like 2048's, not combined like HD's or

@@ -1,5 +1,6 @@
-//! Where Wipeout HD hangs a craft's SPU vertex light: `EngineLightData.xml`
-//! beside the hull, and the `Engine Flare` locator's own Z axis.
+//! Where a craft's engine light hangs on Wipeout HD, 2048 and Omega:
+//! `EngineLightData.xml` beside the hull, and the `Engine Flare` locator's own
+//! Z axis.
 //!
 //! `EngineFlare_SubmitSpuLight` (`0x0029ff28` in `ps3-hdfury-eu`, confidence
 //! 85 - `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The captured
@@ -19,6 +20,15 @@ use super::*;
 /// One team's engine-light authoring, in the hull's own model space.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EngineLight {
+    /// The title's law: colours by base, the mag-strip swap, the wander.
+    pub law: oag_title::flare::EngineLightLaw,
+    /// Whether this craft is of the title's 2048-era roster
+    /// ([`oag_title::flare::Era2048::roster_dir`]), which colours it by the 2048
+    /// base rather than by its skin.
+    pub era_2048: bool,
+    /// Whether a mag strip recolours this craft's light on this circuit
+    /// ([`oag_title::flare::StripGate`]). Set by the loader, which knows the circuit.
+    pub strip_circuit: bool,
     /// `<Distance>` and `<Radius>`, as the ship directory authors them.
     pub data: oag_tables::enginelight::EngineLightData,
     /// The `Engine Flare` locator's Z axis, model space - row 2 of the same
@@ -40,6 +50,7 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     team: &str,
     ship_dir: &str,
+    roster_dir: &str,
     flare: &oag_title::flare::Flare,
     axis: Option<Vec3>,
     report: &mut Vec<String>,
@@ -47,7 +58,7 @@ pub(super) fn load(
     let oag_title::flare::Flare::PerTeam(authored) = flare else {
         return None;
     };
-    if !authored.engine_light {
+    let Some(law) = authored.engine_light else {
         // Said once per craft: a title that ships the file but whose light is
         // not read is an absence, not a silent skip.
         report.push(format!(
@@ -55,7 +66,7 @@ pub(super) fn load(
              PS3's and unread on this platform - no engine light (chosen, not measured)"
         ));
         return None;
-    }
+    };
     let name = oag_tables::enginelight::entry_name_in(ship_dir, team);
     let Ok(blob) = archives.read_name(&name) else {
         report.push(format!(
@@ -94,5 +105,14 @@ pub(super) fn load(
          Radius {} (EngineFlare_SubmitSpuLight, renderer.md, confidence 85)",
         data.distance, axis, data.radius
     ));
-    Some(EngineLight { data, axis })
+    let era_2048 = law
+        .era_2048
+        .is_some_and(|era| era.roster_dir.eq_ignore_ascii_case(roster_dir));
+    Some(EngineLight {
+        law,
+        era_2048,
+        strip_circuit: false,
+        data,
+        axis,
+    })
 }

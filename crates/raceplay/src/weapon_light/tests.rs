@@ -123,8 +123,14 @@ fn the_verification_switch_drops_the_weapons_alone() {
 fn the_circuits_switch_does_not_reach_the_hull() {
     use oag_livery::engine_light::EngineLight;
     use oag_tables::enginelight::EngineLightData;
+    let oag_title::flare::Flare::PerTeam(authored) = oag_hd::TITLE.flare else {
+        panic!("HD authors a per-team flare");
+    };
     let mut race = hd_race();
     race.view.engine_lights = vec![Some(EngineLight {
+        law: authored.engine_light.expect("HD's engine light"),
+        era_2048: false,
+        strip_circuit: false,
         data: EngineLightData {
             distance: 0.0,
             radius: 1.0,

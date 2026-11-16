@@ -129,8 +129,29 @@ pub const TITLE: &Title = &Title {
         boost_spikes: &["ef_SpikesLeftShape", "ef_SpikesRightShape"],
         boost_shapes: &[],
         sprite: "/data/tex/engineflare/engine_flare_rich.gxt",
-        // **Off, chosen, not measured.** See `Authored::engine_light`.
-        engine_light: false,
+        // `EngineFlare_SubmitVertexLight`, `0x812726d6`
+        // (`docs/ghidra/functions/vita-2048-eu-v104/engine-light.md`, confidence 82), the same
+        // branches and constants as Omega's. The native `Ships\` roster is the 2048 era; the
+        // HD-derived `hdships\` one is HD's. The wander is **inherited from Omega**: 2048's
+        // ranges were not read.
+        engine_light: Some(oag_title::flare::EngineLightLaw {
+            classic: oag_title::flare::Tint::HD_CLASSIC,
+            fury: oag_title::flare::Tint::HD_FURY,
+            era_2048: Some(oag_title::flare::Era2048 {
+                tint: oag_title::flare::Tint::ERA_2048,
+                roster_dir: race::SHIP_DIR,
+            }),
+            mag_strip: Some(oag_title::flare::MagStrip {
+                colour: [1.5, 0.1, 3.0],
+                gain_scale: 0.2,
+                gate: oag_title::flare::StripGate::EveryCircuit,
+            }),
+            wander: oag_title::flare::Wander {
+                position: 0.2,
+                range: 1.0,
+                calmed_by_boost: true,
+            },
+        }),
         // **Off, unmeasured**: HD's single-sided flare shapes (`Authored::front_faces_only`)
         // are checked against this title's file, not assumed - no Vita capture reads it.
         front_faces_only: false,

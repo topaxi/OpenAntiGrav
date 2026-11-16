@@ -606,6 +606,7 @@ fn one(
             archives,
             light_team,
             light_dir,
+            ships.dir,
             ctx.flare,
             nozzle_axis,
             report,
@@ -704,8 +705,15 @@ fn one(
     ));
 
     let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
-    let engine_light =
-        engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
+    let engine_light = engine_light::load(
+        archives,
+        team,
+        ships.dir,
+        ships.dir,
+        ctx.flare,
+        nozzle_axis,
+        report,
+    );
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
     // With our own shield on, a hull that cannot give one draws no shield (reported) rather than
