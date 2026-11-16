@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-16
-summary: "2048-mode pairs: road programs lead; crowd _shadow wired, plain crowd sprites still white; panelmap1 wired, lobe colour left"
+summary: "2048-mode pairs: road programs lead; plain crowd sprites white; panelmap1's sheen overshoot is ours' gate lane (red, not alpha): recipe in item 2"
 difficulty: medium (40)
 ---
 
@@ -33,12 +33,38 @@ a correct detail fix can raise it).
    - ~~**b. The sun lobe's colour.**~~ **Wired** (`panelmap-sun`, 2026-11-16): `envsettings_light` fills
      `Light::sun_specular`, carried through the zone grade; the lobe is live (a x100 probe moves 85,305 Sol pixels)
      but draws almost nothing at the pairs' poses (Sol 339 pixels, largest step 7 grey), so no road number moves.
-   - **Sol's near road overshoots** grey-blue (near patch (48, 35, 36) % original, (50, 41, 45) % ours) and the road
-     `bias` is +13.7 on main. **Ruled out** by probe (`panel-displacement.md`, "Measured"): the fresnel's normal and
-     the cube's blur level move the patch by under 2 %; the cube's orientation is settled for Sol (the glare sits at
-     the authored sun only with the flip) and unflipping it costs Queens Mall's road `LF` 14.6 to 19.7. Ours' sheen is
-     about 1.7 times the original's and bluer: next, find a missing weight on the sheen (the program's lightmap or
-     shadow terms) or what the sheen is added to; read the program's sky-add instructions again.
+   - **Sol's near road overshoot: cause found, ready to wire** (2026-11-16, `sheen-re`; live knockouts on the native
+     port, `panel-displacement.md`, "Live"). The sheen and the sun lobe are gated by the diffuse map's **red** lane in
+     ours and by its **alpha** in the program (`0xe144` `@0xde0-0xde4`, confidence 94): `shade.wesl`'s `texel.a` is
+     `coverage[(slots >> 3) & 3]` and a PS4 lightmapped material's slot word is `SECOND_IS_LIGHTMAP` alone, so the lane is
+     0. `track_a_floor_ds_disp`'s alpha has mean 0.195, its red about 0.34 linear: ours' sheen was 1.4 to 2.3 times the
+     original's in seven boxes and is x0.8 to x1.2 with the alpha lane; the cube, its flip, the level law and the fresnel
+     are confirmed by the same run (a mirror-road state agrees within x0.8 to x1.13). **Recipe** (15 minutes plus the
+     gate):
+     1. `crates/mesh/shaders/shade.wesl`, the `if panel` block that builds `specular` and `sky_reflection`: replace
+        `let gloss = texel.a;` with `let gloss = first.a;` (`first` is the diffuse sample at the marched coordinate, in
+        scope there). Change nothing else: do **not** give the PS4 slot word an alpha lane globally in this change
+        (`mesh::rcs::psp2`, `role`), which would move every lightmapped Omega and 2048 material that reads `texel.a`.
+     2. `crates/mesh/tests/omega_panel_map_lit_path.rs`: add a pixel check that fails with the red lane, a diffuse
+        texel whose red and alpha differ (red 0.8, alpha 0.2) and a sheen that follows the alpha.
+     3. Acceptance, `scripts/compare-decompose.py --pair data/reference/compare-page/omega/<id> --road road_alphaspec`
+        (16x): `sol-2048` road `LF` 17.0 to about 8.8, `bias` +13.8 to about -3.0, `G` 0.74 to about 0.79;
+        `queens-mall-2048` road `bias` +8.6 to about -0.6 with `LF` 14.7 to 15.5 and `G` 0.85 to 0.83 (measured on a
+        scratch build; Queens Mall's `LF` does not fall because its base is darker than the original's, next bullet).
+        Altima and Unity Square: re-measure, expect the road `bias` to fall (not measured here). HD and 2048 frames
+        must not move (`hd-race/talons-pack`, `2048-vita/anulpha-pass`).
+   - **Left after that, both the base under the sheen:** (a) the program's shadow-light factor
+     `Fsl = 0.75 + 0.25 sat(Nw.SL) + SLSD.y sat(R.SL)^SLSD.x` on the prelit term is not drawn; live `SLSD` is
+     `(10, 1, 0, 0)` on both circuits and `SL` `(0.791, -0.375, -0.484)` on Sol, `(-0.307, 0.445, -0.841)` on Queens Mall,
+     and the original's sheen-off base is 1.2 to 2.3 times ours in linear red in Sol's left and far boxes; (b) Queens
+     Mall's sheen-off road is 10 to 35 % brighter in the original (live `novaScaleBiasPower` `(2, 0, 2.5)`; Sol's is
+     `(1, 0, 1)`): compare with what ours binds there first. `scripts/wipeout-pc-road-sheen-live.py --pre
+     ReflectivityAmount=0` gives the original's base at the pair's pose (about 4 minutes a boot).
+   - **Wider, not measured:** every PS4 and Vita material whose slot word carries no alpha lane reads the first
+     texture's **red** as `texel.a` (`mesh::rcs::psp2` builds `role` as 0 or `SECOND_IS_LIGHTMAP`; whether another
+     path adds `slots::alpha_channel` for other families was not traced). Census
+     which Omega and 2048 programs gate a term by the diffuse alpha (the `*alphaspec*` and `fc16_phong_AlphaSpec*`
+     families first) before changing the default; 2048's own road was **not checked** here.
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
      on a pose that looks down at the road.
@@ -64,5 +90,5 @@ a correct detail fix can raise it).
 ## Next Steps
 
 1. Item 1: read what lights the plain crowd sprite (half a day, RE: one `Shdr` is read, the inputs are not).
-2. Item 2's lobe colour (15 minutes in `raceplay/src/load/environment/light.rs`, then a Sol measurement), then
-   Sol's near-road overshoot (an afternoon: a second sunny circuit's pair to settle the cube orientation).
+2. Item 2's gate lane (15 minutes plus the gate: one line in `shade.wesl`, one pixel test, the two pairs
+   re-measured), then the shadow-light factor on the prelit term (half a day: live constants are on the page).
