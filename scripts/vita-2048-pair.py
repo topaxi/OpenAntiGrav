@@ -830,7 +830,8 @@ def zone_main(args, out, pair, plat, profile_dir, which, env):
                 "history (exhaust, trail) starts cold and the speed readout shows 0; the "
                 "original's camera is not read; the guest was stopped for the grab, so its own clock lags the wall clock" % (zone_n, zone_score))
     if args.zone_camera == "chase":
-        pair.caveat("ours' camera is its own chase camera, which follows the spline, not the original's hull")
+        pair.caveat("ours' camera is its own chase camera at its rest position behind the posed craft; the original's camera is not read and is sprung")
+    pair.caveat("Pilot Assist's indicator is drawn on neither frame although the profile pins it on: the original's setting was not read for this pair")
     cp.build(pair, args, "zone", "cold_boot",  None,
              {"value": 0, "unit": "ticks", "basis": "not measured on Vita3K: the guest is stopped at the grab and the matrix read in the same stop, "
               "so the pose is the one the last submitted frame was drawn from; the picture on the glass may be one frame older",
@@ -844,7 +845,7 @@ def zone_main(args, out, pair, plat, profile_dir, which, env):
     pair.rec["ours"]["event"] = args.track
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
     base = [args.oag_game, args.source, "--race"] + which + ["--ticks", 0] + ce.ours_flags(plat)
-    hud = ["--hud-state", "1,1,0,0,0,100,0,%d,%d,0" % (zone_n, zone_score)]
+    hud = ["--hud-state", "1,1,0,0,0,%g,0,%d,%d,0" % (args.zone_shield, zone_n, zone_score)]
     if stage is not None:
         hud += ["--zone-stage", stage]
     if args.zone_camera == "rigid":
@@ -950,9 +951,11 @@ def main():
     ap.add_argument("--zone-capture", type=float, default=0.0, metavar="SECONDS",
                     help="with --walk and a Zone event: sample the race in flight for this long into `zone-frames/` (frame, hull matrices)")
     ap.add_argument("--zone-interval", type=float, default=5.0, help="seconds between two samples (the guest runs between them)")
-    ap.add_argument("--zone-camera", choices=("rigid", "chase"), default="rigid",
-                    help="with --zone: `rigid` puts ours' camera at the close chase rig's rest position behind the original's hull matrix "
-                         "(the original's own camera is not read); `chase` keeps ours' camera, which follows the spline")
+    ap.add_argument("--zone-camera", choices=("rigid", "chase"), default="chase",
+                    help="with --zone: `chase` (default) poses ours' craft on the original's exact hull matrix and keeps ours' own chase camera; `rigid` "
+                         "puts the close chase rig at rest behind a craft posed by position and yaw only (the matrix's tilt off the spline is dropped); "
+                         "the original's own camera is not read either way")
+    ap.add_argument("--zone-shield", type=float, default=100.0, help="with --zone: the shield percent the HUD shows, read off the grabbed frame")
     ap.add_argument("--zone-hull", type=int, default=None, help="with --zone: use this candidate of the sample's list instead of the first moving one")
     ap.add_argument("--zone-frame", type=int, default=None, help="with --zone: the sample whose HUD shows the zone")
     ap.add_argument("--zone-from", type=Path, default=None, help="with --zone: reuse the samples of an earlier --zone-capture run in this directory")

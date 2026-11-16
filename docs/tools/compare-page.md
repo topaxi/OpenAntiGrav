@@ -1309,28 +1309,35 @@ with a gap.** `vita-2048-pair.py --zone-capture SECONDS` (with `--walk`) flies a
   above its surface, against 130 to 4,200 units off the other nine base circuits' splines, `oag-game --pose` on each). A substituted event, as the DLC pairs
   of "Eleven pairs through a renamed grid cell": the mode (Zone), the Venom to Flash class ladder and the craft (Feisar HD) are the HD cell's, not a
   native 2048 Zone event's. The base campaign's own Zone events are rank gated and were not reached (confidence 60 that the rename carries the
-  authored circuit's data, as it did for the Race events).
+  authored circuit's data, as it did for the Race events). The save's `DATA.BIN` still carries its 2026-10-20 mtime after these runs: no race was finished, so no progress was written.
 - **The pose** is read, not guessed: the guest is stopped (`SIGSTOP`) for the frame grab and a scan of its memory (`/proc/<pid>/mem`) for drawn-hull matrices
   (orthonormal rows scaled 0.75, a zero fourth column, then the position, 0.5 s a stop). The craft is the candidate seen 38 times in the stop (the renderer's
   copies); other matrices stay put from sample to sample (a parked model, 178 copies) and are dropped. Ours renders at tick 0 with `--pose x,y,z,yaw`
   (the yaw solved against ours' own attitude, forward agreement 0.9992 and 0.9998; the hull's tilt off the spline, 1.2 to 2.3 degrees, is not carried).
-  **The original's camera is not read**: ours puts the close chase rig rigidly behind the hull (eye 2.775 up and 8.25 back, look-at 3 below and 18.75
-  ahead, fov 60; Feisar HD's `ExternalCameraClose`, the original's eye is sprung), `--zone-camera chase` keeps ours' own, which follows the spline and
-  shows the hull yawed against the view. Zone and score are read off the original's HUD by eye (2048's Zone counters are not located in RAM).
-- **Numbers** (rmse / edge correlation / mean grey, the page's own scores; boot 1 adopted, boot 2 in brackets): Altima zone 5 0.488 / 0.06 / 112.6
-  (0.303 / 0.07 / 45.9, another frame at the same place); Vineta K zone 5 0.368 / 0.03 / 86.4 (0.300 / 0.02 / 59.3). The boot-to-boot spread is the frame pick
+  **The original's camera is not read** (it is sprung): ours keeps its own chase camera (`--zone-camera chase`, the default, `--pose-from` with the exact hull
+  matrix); `--zone-camera rigid` puts the close chase rig at rest behind the hull instead (`--pose x,y,z,yaw` plus `--camera-pose`: eye 2.775 up and 8.25 back, look-at 3 below
+  and 18.75 ahead, fov 60, Feisar HD's `ExternalCameraClose` times the 0.75 craft scale; the matrix's tilt off the spline, 1.2 to 2.3 degrees, is dropped). The two renders of
+  one sample differ by 0.14 (Vineta K) and 0.07 (Altima) normalised rmse, so neither camera is the original's; on Altima ours' hull stands yawed against the view,
+  which the original's does not. Zone, score and shield are read off the original's HUD by eye (2048's Zone counters are not located in RAM) and passed to ours.
+- **Numbers** (rmse / edge correlation / mean grey, the page's own scores; boot 1 adopted, boot 2 in brackets, drawn with `--zone-camera rigid`): Altima zone 5 0.490 / 0.06 / 112.9
+  (0.303 / 0.07 / 45.9, another frame at the same place); Vineta K zone 5 0.367 / 0.02 / 86.0 (0.300 / 0.02 / 59.3). The boot-to-boot spread is the frame pick
   (the Altima mean grey difference moves from 112.6 to 45.9 with the view), so the scores are good to about 0.1, not to the second digit.
 - **What differs, read side by side (both PNGs read).** *Vineta K:* the geometry lines up (the purple tower, the lime wall and its trim, the road's curve); the original's
   road is a dark grey deck with purple glow and yellow lane lines under a dark purple sky, ours' road, wall and floor are one lime (the Scene colour): the **expected
   gap, the road is Scene-coloured**, and ours' purple tower and sky are right. *Altima:* the same landmarks (the rock face, the lake tower, the road's rise)
   are in both; the original is dark navy to grey with a red glow and a purple jet of exhaust, ours' road is black with large yellow slabs (the glow strip,
-  drawn as a surface) and a purple band for the water: **ours' Zone 5 grade of a native circuit paints road surfaces yellow where the original keeps them
-  dark**, so the native table and trackZone model are not a match at zone 5 either. *Both:* ours' HUD is the Zone caption "ZONE", the shield gauge
-  at 100 % and the speed arc; the original's is SCORE and its number at the top, the class name (FLASH), the zone number and the shield at the pair's value:
-  **ours draws no 2048 Zone HUD on either circuit** (a render with `--hud-state` zone, score and seconds set shows the same). The original's craft carries a red
-  rim light and an exhaust jet (a posed capture runs no tick, so ours has none). Pilot Assist's indicator is on neither frame.
-- **2048 and Omega.** Omega's Zone pairs are another lane's (`wipeout-pc-omega-pair.py`); a 2048 finding is not carried over unchecked: **not checkable here**,
-  no Omega frame was captured in this lane.
+  drawn as a surface) and a purple band for the water. **Ours' zone grade barely moves this frame**: the log reads `the Zone recolour draws nothing - the file authors no
+  Texture U/V scale` and the unpinned zone 5 commits stage 2, and the 12 stages pinned one by one differ from it by under 5 % of the pixels (0.42 to 0.46
+  rmse against the original at every stage, so no stage fits), so the yellow slabs are stage independent: **on a native circuit ours draws no Zone recolour of the
+  road, where the original recolours it dark**. *Vineta K's* grade does move (zone 1 against zone 5 differ in 16 % of the pixels, the unpinned zone 5 commits stage 4,
+  the ten stages tried give 0.30 to 0.44 rmse against the original): the lime road is not a wrong stage. *Both:* ours' HUD is the Zone caption "ZONE", the shield gauge
+  (at the frame's value) and the speed arc; the original's adds SCORE and its number at the top, the class name (FLASH) and the zone number: **ours draws no 2048 Zone
+  score, class or zone number on either circuit** (a render with zone, score and seconds set in `--hud-state` shows the same). The original's craft carries a red
+  rim light and an exhaust jet (a posed capture runs no tick, so ours has none). Pilot Assist's indicator is on neither frame (a caveat in both pairs).
+- **2048 and Omega: checked, differs on the grade, applies on the HUD.** Ours on Omega's `Environments2048\altima` in Zone mode (headless, same pose, `--hud-state` zone 1 against
+  zone 5): the two frames are pixel-identical, so the Zone grade is not drawn there at all (the held-back path of merge `19f18c1b6`), where 2048's own Altima draws a stage
+  that barely moves; the HUD is the same "ZONE" caption and shield only, so the missing score, class and zone number apply to Omega too. No Omega original frame was captured
+  in this lane (`zone-pair-omega` makes that one).
 - **Traps found.** A `vita3k-drive.py`/`vita3k-mem.py` display left over from an earlier run presents black frames (the guest runs, every shot is 0 grey): `vita3k-drive.py
   stop` and boot again. A Vita3K left running by an earlier run makes the next `--walk` attach to it ("already running", hull shake not patched): stop it first.
   `oag-game` takes a negative `--camera-pose` or `--pose` only as `--flag=VALUE`; `--camera-pose` refuses `--pose-from`.
