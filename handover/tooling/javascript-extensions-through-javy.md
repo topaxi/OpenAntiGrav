@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-11-16
-summary: "JS extensions via Javy: Wall Penalty ported to current main on branch javy-rebase (1.37 MB, 111k-188k of 200k fuel after the port, was 155k-228k); maintainer review before any merge"
+summary: "Wall Penalty in JS via Javy ported to main on javy-rebase: 1.37 MB, 111k-188k of 200k fuel (was 155k-228k); maintainer reviews before any merge"
 categories: [gameplay]
 size: M (40)
 difficulty: medium (40)
