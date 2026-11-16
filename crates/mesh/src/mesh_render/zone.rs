@@ -505,6 +505,10 @@ fn bind_group(
                 binding: 17,
                 resource: wgpu::BindingResource::TextureView(&kept.shadow.sky_probe_view),
             },
+            wgpu::BindGroupEntry {
+                binding: 18,
+                resource: kept.shadow.sh_probe_buffer.as_entire_binding(),
+            },
         ],
     })
 }
@@ -600,6 +604,8 @@ pub(super) fn scene_bind_group(
             // The circuit's sky reflection map, binding 17: the engine's
             // `paraboloidReflectionTex`, read by scenery glass.
             shadow_entries[8],
+            // The per-craft spherical-harmonic ambient, binding 18: Omega's `shCoeffs`.
+            shadow_entries[9],
         ],
     });
 

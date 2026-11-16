@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading, shield_shading};
-import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
+import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -69,6 +69,36 @@ fn env_probe_layer(which: i32) -> i32 {
 fn env_probe_irradiance_uv(uv: vec2<f32>) -> vec2<f32> {
     let clamped = clamp(uv, vec2<f32>(0.5 / 64.0, 0.5 / 32.0), vec2<f32>(1.0 - 0.5 / 64.0, 1.0 - 0.5 / 32.0));
     return clamped * 0.5;
+}
+
+// **Omega's hull ambient**, `(Ks + (K - Ks) * shadow) * max(0.01, SH9(n))`, from the craft's row of
+// `sh_probe_table` (`oag_raceplay::sh_probes`; `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`,
+// "The program"): nine rgb coefficients, then `(K, Ks, 1, 0)`. `.w` of the result is 1 where the
+// draw's craft has a row, 0 where it has none (the table is the placeholder or the row was never written) and the caller keeps its other ambient. `n` is the
+// normalised normal-mapped normal and `shadow` the hull's own sun shadow term.
+fn sh_hull_ambient(n: vec3<f32>, shadow: f32) -> vec4<f32> {
+    let row = i32(uniforms.env_layer + 0.5) - 1;
+    if row < 0 || row >= 8 {
+        return vec4<f32>(0.0);
+    }
+    let at = u32(row) * 10u;
+    let weights = sh_probe_table[at + 9u];
+    if weights.z < 0.5 {
+        return vec4<f32>(0.0);
+    }
+    let c0 = sh_probe_table[at].rgb;
+    let c1 = sh_probe_table[at + 1u].rgb;
+    let c2 = sh_probe_table[at + 2u].rgb;
+    let c3 = sh_probe_table[at + 3u].rgb;
+    let c4 = sh_probe_table[at + 4u].rgb;
+    let c5 = sh_probe_table[at + 5u].rgb;
+    let c6 = sh_probe_table[at + 6u].rgb;
+    let c7 = sh_probe_table[at + 7u].rgb;
+    let c8 = sh_probe_table[at + 8u].rgb;
+    let sh = c0 - c1 * n.z + c2 * n.y + c3 * n.x - c4 * (n.z * n.x) - c5 * (n.z * n.y)
+        + c6 * (2.0 * n.y * n.y - n.x * n.x - n.z * n.z) + c7 * (n.x * n.y) + c8 * (n.x * n.x - n.z * n.z);
+    let kmix = weights.y + (weights.x - weights.y) * shadow;
+    return vec4<f32>(kmix * max(vec3<f32>(0.01), sh), 1.0);
 }
 
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
@@ -399,8 +429,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // 22.5 ms opaque track at 3200x1800 on the Raphael iGPU. Only a hull
         // names a layer, and a hull is `ShadowReceiver::Mapped`.
         mask = baked.a * select(sun_mask, 1.0, colour_factor);
+        var hull_shadow = 1.0;
         if receives_shadow != 2.0 {
-            mask = mask * sun_occlusion(in.world);
+            hull_shadow = sun_occlusion(in.world);
+            mask = mask * hull_shadow;
         }
         let sun_diffuse = scene.light.sun * (ndl * mask);
         // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
@@ -445,9 +477,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // IBL variant of their own block.
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
-            hull_ambient = probe_tint(textureSampleLevel(
-                env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n_hull)), env_probe_layer(0), 0.0,
-            ).rgb);
+            let sh = sh_hull_ambient(normalize(n_hull), hull_shadow);
+            if sh.w > 0.5 {
+                hull_ambient = sh.rgb;
+            } else {
+                hull_ambient = probe_tint(textureSampleLevel(
+                    env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n_hull)), env_probe_layer(0), 0.0,
+                ).rgb);
+            }
         }
         let lit_sum = select(
             hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,

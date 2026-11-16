@@ -60,6 +60,15 @@ impl ProbeTint {
     }
 }
 
+/// The circuit's baked probes, whichever kind its title ships: HD's environment probes
+/// (`track.probes`, a paraboloid map blended per craft) or Omega's spherical-harmonic ones
+/// (`track.shprobes`, [`crate::sh_probes`]). At most one is `Some`.
+#[derive(Debug, Default)]
+pub struct Baked {
+    pub hd: Option<Probes>,
+    pub sh: Option<crate::sh_probes::HullSh>,
+}
+
 /// The probes of a circuit and the array they are blended into.
 #[derive(Debug)]
 pub struct EnvProbes {

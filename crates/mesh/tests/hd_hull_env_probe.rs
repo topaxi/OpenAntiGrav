@@ -13,8 +13,8 @@ use oag_mesh::mesh::{
     Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, REFLECTION_RATE, Texels, slots,
 };
 use oag_mesh::mesh_render::{
-    self, Anisotropy, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, Light, Scene, ShadowMaps,
-    UNIFORMS_SIZE,
+    self, Anisotropy, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, Light, SH_PROBE_BYTES,
+    SH_PROBE_ROW, Scene, ShadowMaps, UNIFORMS_SIZE,
 };
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -282,6 +282,119 @@ fn a_hull_is_lit_from_its_crafts_probe_and_reflects_where_tagged() {
     // Tagged, but no craft named: no reflection either.
     let off = draw(&device, &queue, &tagged, rig(), maps, 0.0);
     assert_eq!(off, constant);
+}
+
+/// The spherical-harmonic table with `rows[craft]` written as `(coefficients, K, Ks)`: nine rgb
+/// coefficients, then the `(K, Ks, 1, 0)` texel, a `vec4` each.
+fn sh_table(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    rows: &[(usize, [[f32; 3]; 9], f32, f32)],
+) -> wgpu::Buffer {
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("spherical-harmonic probes"),
+        size: SH_PROBE_BYTES,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    for (craft, sh, k, ks) in rows {
+        let mut row = [0.0f32; SH_PROBE_ROW * 4];
+        for (texel, rgb) in row.chunks_exact_mut(4).zip(sh) {
+            texel[..3].copy_from_slice(rgb);
+        }
+        row[(SH_PROBE_ROW - 1) * 4..].copy_from_slice(&[*k, *ks, 1.0, 0.0]);
+        queue.write_buffer(
+            &buffer,
+            (craft * SH_PROBE_ROW * 16) as u64,
+            bytemuck::cast_slice(&row),
+        );
+    }
+    buffer
+}
+
+/// Omega's hull ambient is `(Ks + (K - Ks) * shadow) * max(0.01, SH9(n))` from the craft's row:
+/// the hull takes its row (not the rig's constant ambient, and not the HD probe array), `K`
+/// scales it linearly, the basis puts coefficient 2 on the normal's `y`, and a craft with no
+/// flagged row keeps what it had. Dropping the binding, the row index, `K` or the basis turns a
+/// case red.
+#[test]
+fn an_omega_hull_is_lit_from_its_crafts_spherical_harmonic_row() {
+    let Some((device, queue)) = gpu() else { return };
+    let plain = |normal| model(slots::DEFAULT, Vec::new(), normal);
+    let mut flat = [[0.0f32; 3]; 9];
+    flat[0] = [1.0, 0.8, 0.6];
+    let at = |k: f32| sh_table(&device, &queue, &[(0, flat, k, k)]);
+    let tint = (1.0, [1.0, 0.0]);
+    let light = |table: &wgpu::Buffer, tint| {
+        let maps = ShadowMaps {
+            sh_probes: Some(table),
+            ..ShadowMaps::NONE
+        };
+        draw_tinted(&device, &queue, &plain(UP), rig(), maps, tint)
+    };
+
+    // The row, not the rig's flat 0.1: red above green above blue.
+    let (low, high) = (light(&at(0.2), tint), light(&at(0.8), tint));
+    assert!(
+        low[0] > low[1] && low[1] > low[2] && low[2] > 0,
+        "the row's hue: {low:?}"
+    );
+    // `K` scales the share linearly: four times the weight, four times the light (the target
+    // holds sRGB-encoded bytes, so the ratio is of the decoded values).
+    let linear = |byte: u8| {
+        let v = f32::from(byte) / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    for c in 0..3 {
+        let ratio = linear(high[c]) / linear(low[c]);
+        assert!(
+            (ratio - 4.0).abs() < 0.3,
+            "channel {c}: {low:?} -> {high:?}"
+        );
+    }
+
+    // The basis: coefficient 2 is the normal's `y` (`sh[2] n.y`), so facing up adds it and
+    // facing down takes it away.
+    let mut tilted = flat;
+    tilted[2] = [0.5, 0.5, 0.5];
+    let table = sh_table(&device, &queue, &[(0, tilted, 0.2, 0.2)]);
+    let maps = ShadowMaps {
+        sh_probes: Some(&table),
+        ..ShadowMaps::NONE
+    };
+    let up = draw_tinted(&device, &queue, &plain(UP), rig(), maps, tint);
+    let down = draw_tinted(&device, &queue, &plain(DOWN), rig(), maps, tint);
+    assert!(
+        linear(up[0]) > 2.0 * linear(down[0]),
+        "up {up:?}, down {down:?}"
+    );
+
+    // The floor: `max(0.01, SH)` keeps a hull whose probe sums to nothing off black.
+    let zero = sh_table(&device, &queue, &[(0, [[0.0; 3]; 9], 1.0, 1.0)]);
+    let dark = light(&zero, tint);
+    assert!(dark[0] >= 2, "0.01 of the weight: {dark:?}");
+
+    // Another craft's row: craft 1's row is unflagged, so its hull falls back to the rig's
+    // constant ambient (no probe array bound either), as every hull without a row does.
+    let other = light(&at(0.4), (2.0, [1.0, 0.0]));
+    let constant = draw_tinted(
+        &device,
+        &queue,
+        &plain(UP),
+        rig(),
+        ShadowMaps::NONE,
+        (0.0, [1.0, 0.0]),
+    );
+    assert_ne!(other, high, "craft 1 did not read craft 0's row");
+    assert_eq!(
+        other,
+        [0, 0, 0, other[3]],
+        "an unflagged row with no HD array reads black, not the rig: {other:?} (rig {constant:?})"
+    );
 }
 
 /// Identity camera and model, so clip space is model space.

@@ -96,6 +96,9 @@ pub struct Scene {
     /// The circuit's baked environment probes and the per-craft array they are blended
     /// into - `None` where the circuit ships none. See [`crate::env_probes`].
     env_probes: Option<crate::env_probes::EnvProbes>,
+    /// The circuit's spherical-harmonic ambient table, `None` where it ships no probes - see
+    /// [`crate::sh_probes`].
+    sh_ambient: Option<crate::sh_probes::ShAmbient>,
     /// The track's authored fog volumes, sampled at the camera each frame.
     ///
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
@@ -578,7 +581,7 @@ impl Scene {
         msaa: oag_display::display::Msaa,
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
-        probes: Option<oag_vex::probes::Probes>,
+        probes: crate::env_probes::Baked,
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_post::hd_bloom::Params>,
         omega_tonemap: Option<oag_post::omega_tonemap::Params>,
@@ -648,7 +651,12 @@ impl Scene {
         );
         // The circuit's baked environment probes, blended per craft each frame: only a
         // circuit that ships them (Wipeout HD's) has an array to bind.
-        let env_probes = probes.map(|probes| crate::env_probes::EnvProbes::new(device, probes));
+        let env_probes = probes
+            .hd
+            .map(|probes| crate::env_probes::EnvProbes::new(device, probes));
+        let sh_ambient = probes
+            .sh
+            .map(|hull| crate::sh_probes::ShAmbient::new(device, hull));
         // The circuit's sky as the engine's `paraboloidReflectionTex`, for the materials that read it.
         let sky_probe = sky_model
             .as_ref()
@@ -661,6 +669,7 @@ impl Scene {
             self_shadow: Some(sun_occlusion.self_shadow().view()),
             behind_glass: None,
             env_probes: env_probes.as_ref().map(crate::env_probes::EnvProbes::view),
+            sh_probes: sh_ambient.as_ref().map(crate::sh_probes::ShAmbient::buffer),
             sky_probe: sky_probe.as_ref(),
         };
         crate::stages::checkpoint()?;
@@ -1180,6 +1189,7 @@ impl Scene {
             fog_volumes,
             light,
             env_probes,
+            sh_ambient,
             authored_fog,
             zone_grade,
             exhaust,

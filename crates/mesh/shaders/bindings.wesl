@@ -129,6 +129,13 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // - see `mesh::sky_paraboloid` and `sky_probe`. A black placeholder where there is none.
 @group(2) @binding(17) var sky_probe_tex: texture_2d<f32>;
 
+// The per-craft spherical-harmonic ambient: Omega's `shCoeffs`, the blend of the circuit's
+// `track.shprobes` at the craft. Ten `vec4`s a row, one row per craft (`uniforms.env_layer - 1`):
+// nine rgb coefficients and then `(K, Ks, 1, 0)`; see `sh_hull_ambient`. A buffer rather than a
+// texture because the scene group's sixteen sampled textures are the WebGPU default limit. Zero
+// (no row flagged) where there is none.
+@group(2) @binding(18) var<uniform> sh_probe_table: array<vec4<f32>, 80>;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;

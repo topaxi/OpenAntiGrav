@@ -843,6 +843,10 @@ pub struct ShadowMaps<'a> {
     /// `Rgba8UnormSrgb`), a `D2` view: Wipeout HD's `paraboloidReflectionTex`, which its glass and
     /// water programs read by a reflection vector. Not a shadow either.
     pub sky_probe: Option<&'a wgpu::TextureView>,
+    /// The per-craft spherical-harmonic ambient table (`SH_PROBE_BYTES`), a uniform buffer read by
+    /// a hull whose uniform names a layer and whose row is flagged: Omega's `shCoeffs`. Not a
+    /// shadow either.
+    pub sh_probes: Option<&'a wgpu::Buffer>,
 }
 
 impl ShadowMaps<'_> {
@@ -855,6 +859,7 @@ impl ShadowMaps<'_> {
         behind_glass: None,
         env_probes: None,
         sky_probe: None,
+        sh_probes: None,
     };
 }
 

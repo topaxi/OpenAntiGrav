@@ -303,6 +303,8 @@ mod score_law;
 pub mod score_pace;
 pub mod scoreboard;
 #[cfg(feature = "view")]
+pub mod sh_probes;
+#[cfg(feature = "view")]
 mod shadow;
 mod sim;
 #[cfg(feature = "view")]
