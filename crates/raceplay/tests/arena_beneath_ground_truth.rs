@@ -1,7 +1,8 @@
-//! 2048's and Omega's `arena`: the authored line runs 21 units over a flat road
-//! from about ring sample 4520 to 4800, and every craft drives that road. The
-//! race's beneath rescue (`Race::beneath_the_line`) must not read a craft there
-//! as on a road under the circuit (`docs/gameplay/ai.md`, "A road under the
+//! 2048's and Omega's `arena`: from about ring sample 4560 to 4790 the authored
+//! line runs over a deck, and every craft drives the road 21 units under it,
+//! inside the corridor, which climbs back up to the line by 4810. The race's
+//! beneath rescue (`Race::beneath_too_long`) must not read a craft there as on
+//! a road under the circuit (`docs/gameplay/ai.md`, "A road under the
 //! line is a failure").
 //!
 //! A field of seven per class, race to the flag: no `Beneath` respawn. And the

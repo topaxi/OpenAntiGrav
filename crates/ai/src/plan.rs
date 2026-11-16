@@ -550,7 +550,7 @@ pub enum Failure {
     /// there: it ran wide onto another road, which the race rescues a craft
     /// from. A craft under its line inside its corridor all along is where
     /// the line's road is, as far as a speed can tell (2048 `arena`'s line
-    /// runs 21 units over its road for 250 samples). **Chosen, not measured**
+    /// runs over a deck the field drives 21 units under, for 230 samples). **Chosen, not measured**
     /// (`docs/gameplay/ai.md`, "A road under the line is a failure").
     Beneath,
 }

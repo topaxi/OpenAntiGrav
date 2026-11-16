@@ -5801,9 +5801,10 @@ done
   under the line). `square` verified, and 2048's `arena` (all four classes, at
   4555) and `sol` (three classes, at 4422) stopped verifying. `sol`'s line
   crosses a dip a craft climbs out of in under 90 ticks. `arena`'s line runs
-  21 units over a flat road from sample 4550 to 4800, the craft centred in a
-  corridor 12 units either side, and the road comes back up to the line by
-  itself.
+  over a deck from sample 4560 to 4790 and the craft drive the road 21 units
+  under it, centred in a corridor 12 units either side; that road comes back
+  up to the line by itself
+  ([what is there](#the-races-beneath-rescue-asks-the-same-2026-11-16)).
 - **The dwell alone.** `sol` verified again, `arena` did not: 250 samples is
   longer than 90 ticks at any speed a plan drives.
 - **The corridor test on the last tick before the craft is under the line.**
@@ -5834,11 +5835,85 @@ rows, 157 are identical; besides `square` and the five Pulse rows, 2048
 ticks). `OAG_ROUTE_PROBE_RING` now also probes every Pulse layout by catalogue
 id (`OAG_ROUTE_BOARD_ONLY=pulse-id/29_Track`).
 
-**The race's own beneath rescue fires on 2048 `arena`**, found on the way and
-not changed here: a lone opponent is put back once in three laps at sample
-4679 (VENOM) or 4699 (RAPIER), under the line on the road every craft drives.
-The plan's corridor test is why that does not fail `arena`'s plan; the race
-has no such test. Omega's `arena` was not raced.
+**The race's own beneath rescue fired on 2048 `arena`.** It was found on the
+way and fixed [below](#the-races-beneath-rescue-asks-the-same-2026-11-16).
+
+#### The race's beneath rescue asks the same (2026-11-16)
+
+Lane `arena-rescue`. `Race::beneath_too_long` (`crates/raceplay/src/respawn.rs`)
+now counts a craft under its line only if it **left the line's corridor to get
+there**. That is the plan's own latch, shared as `oag_ai::Line::outside_the_corridor`:
+the craft was outside the corridor when it was last on the ground and not
+beneath the line, or at any tick of the flight since. It is kept per slot as
+`RaceSim::beneath_wide`, which is hashed and cleared on every reseat. **Chosen,
+not measured**: the original has no beneath rescue, and its distance trigger
+does not reach 21 units.
+
+**What `arena` actually is.** The earlier reading said the line "runs 21 units
+over a flat road". It does not. A cast down from the line point at ring samples
+4560-4790 meets four things, all the full width of the corridor:
+
+- an upward floor 4 units down, the deck the line runs on;
+- a downward-facing `Wall` surface 13 down, the deck's underside;
+- the lower road 25 down;
+- at 4560-4580, a ceiling 14 up.
+
+At 4520 the road dives (normal 0.6 along up), at 4530 the floor is 32 down,
+and at 4800 a ramp (normal 0.4) brings the lower road back up to the line by
+4810. So the line jumps a gap onto a deck. Every craft follows the dive
+instead, drives the lower road under the deck inside the corridor, and
+rejoins. The samples are supported because the deck is there.
+
+**Candidate rejected: measuring depth against the surface under the line
+point.** The surface under the line point is the deck, and a craft on the
+lower road is 21 under it. That rule would fire exactly as before.
+
+**With the trigger off, nothing else catches the field there.** Fields of
+seven, seed 1, Ace, every class, on 2048 and Omega: no Distance, Stalled, Cage,
+Airborne or Reset respawn. Every craft not wrecked finishes. So the lower road
+is a road, not a pit.
+
+Census (`arena_beneath_ground_truth::beneath_census_all_titles`, `OAG_SWEEP`,
+`OAG_TITLE`, `OAG_SWEEP_CLASS`): every Pulse layout, 2048's ten circuits and
+Omega's ten `environments2048` circuits, four classes, field of seven, seed 1.
+Before the change it recorded every respawn by cause, line index and tick, and
+for each `Beneath` respawn the latch the new rule would have read:
+
+| | `Beneath` respawns | had left the corridor |
+| --- | --- | --- |
+| 2048 and Omega `arena` | 134 | 0 |
+| everywhere else (Pulse `05_Track`, `23_Track`; 2048 and Omega `square`, `park`) | 83 | 83 |
+
+The test "outside the corridor on the tick before" would not do: 2048 and
+Omega `square`'s rescues are mostly inside the corridor by then.
+
+After the change, all 168 non-`arena` rows are identical: ticks to the flag,
+laps, every respawn (cause, index, tick), and the field's bodies bit for bit.
+Only the race hash moves, because the latch enters it. A field of seven at
+Ace, `Beneath` respawns per lap (laps 1..n) before, then shields:
+
+| | before, per lap | after | mean shield at each lap's end, before / after | at the end, before / after |
+| --- | --- | --- | --- | --- |
+| 2048 VENOM (3 laps) | 6, 2, 4 | 0 | 85.7 86.2 93.1 / 104.4 82.1 85.7 | 79.8 / 85.5 |
+| 2048 FLASH (4) | 6, 1, 3, 2 | 0 | 87.9 95.5 83.4 83.4 / 96.7 86.4 83.8 83.2 | 68.2 / 70.3 |
+| 2048 RAPIER (4) | 6, 2, 4, 2 | 0 | 107.0 88.4 86.7 88.4 / 106.4 91.7 90.1 80.1 | 92.3 / 84.2 |
+| 2048 PHANTOM (5) | 5, 1, 4, 2, 2 | 0 | 98.7 73.4 64.5 64.4 76.0 / 101.1 92.9 82.3 86.2 80.4 | 52.0 / 79.5 |
+| Omega VENOM (4) | 6, 2, 4, 1 | 0 | 64.3 68.2 64.2 77.7 / 70.5 73.1 56.8 61.6 | 44.4 / 52.8 |
+| Omega FLASH (4) | 6, 2, 4, 2 | 0 | 83.6 75.1 76.5 75.1 / 84.7 75.7 66.0 52.1 | 76.4 / 44.7 |
+| Omega RAPIER (5) | 6, 2, 4, 2, 3 | 0 | 79.4 73.0 78.3 71.4 68.5 / 80.5 88.8 80.6 71.4 73.3 | 69.3 / 70.8 |
+| Omega PHANTOM (5) | 5, 2, 3, 2, 3 | 0 | 89.5 89.5 83.1 75.4 72.4 / 89.4 78.9 77.9 70.9 73.8 | 72.3 / 73.6 |
+
+Craft that did not finish after the change were wrecked, not stuck: one each
+in 2048 FLASH and Omega FLASH and VENOM. Pinned by
+`arena_beneath_ground_truth`: eight `arena` rows assert zero `Beneath`, and
+Pulse `05_Track` FLASH still has its two pit rescues (339 and 349). The unit
+pair is `an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell`
+and `an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost`.
+**2048 and Omega: ported**, one rule, both measured.
+
+Still open: the field never takes the line's jump onto the deck at 4520-4560.
+It follows the road's dive instead (a driver or plan matter, not the
+rescue's).
 
 ### What it costs
 
