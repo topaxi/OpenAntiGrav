@@ -55,6 +55,39 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     skins: &[],
 };
 
+/// The class name the HD-layout Zone HUD writes into `SpeedClass`, keyed on the zone counter.
+///
+/// `FUN_811538c2` (`0x811538c2`, v1.04) walks fourteen `{ zoneThreshold, stringId }` records at
+/// `0x8151f434` (v1.00: `0x8150c114`), descending from 75 to 0, takes the first whose threshold
+/// the zone counter (`*(*(hud + 0x3c) + 0x20)`, the number `ZoneNumber` prints) has reached, and
+/// writes its string into the `SpeedClass` widget. Thresholds and ids are HD's own table byte for
+/// byte (`docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md`); the names are the
+/// `MSC_*`/`IG_HUD_*` ids of that table, and the frame `68-zone-5.png` reads `FLASH` at zone 5.
+/// This is not [`crate::race::ZONE_STAGES`], the seventeen-record `*_CLASS` ladder that grades
+/// the circuit. See `docs/ghidra/functions/vita-2048-eu-v104/zone-speed-class-text.md`.
+///
+/// Rung `n` begins at `rung_zones[n]`. No caption blanks: `FUN_811538c2` writes none.
+pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpeedClasses {
+    ids: &[
+        Some("MSC_SVENOM"),
+        Some("Venom"),
+        Some("MSC_SFLASH"),
+        Some("Flash"),
+        Some("MSC_SRAPIER"),
+        Some("Rapier"),
+        Some("MSC_SPHANTOM"),
+        Some("Phantom"),
+        Some("MSC_SPPHANTOM"),
+        Some("MSC_ZEN"),
+        Some("IG_HUD_SUPZEN"),
+        Some("IG_HUD_SUBSON"),
+        Some("IG_HUD_MACH1"),
+        Some("IG_HUD_SUPSON"),
+    ],
+    rung_zones: Some(&[0, 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75]),
+    caption_hidden_from_zone: None,
+};
+
 /// The layouts the HD and Fury Campaigns' events read ([`oag_title::AddOn::hud`]): the
 /// single-player race managers' `_HD` files for the modes the campaigns race.
 ///
@@ -161,10 +194,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_models: None,
     time_ladder_captions: None,
     pickup_icon_uv: Some(PICKUP_ICON_UV),
-    // `None`: 2048's Zone HUD shows a class per *band* of zones off
-    // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
-    // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
-    zone_speed_classes: None,
+    // The class name above `ZONE`, off the zone: see [`ZONE_SPEED_CLASSES`].
+    zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     // **Measured `true`, 2026-09-16.** Every Vita3K race frame reads the
     // shield with a `%` - `100%` on the grid, `99%`/`95%`/`93%` after wall
     // hits, `27%` in Zone - under the silhouette at `EnergyText`'s authored
