@@ -228,6 +228,11 @@ impl Session {
             for button in SPENT {
                 buttons.consume_press(button);
             }
+            // The viewer and photo mode read their buttons apart from the menus', so a press
+            // that dismissed a notice over the viewer is spent there too.
+            for button in SPENT {
+                self.controls.view_take(button);
+            }
         }
     }
 

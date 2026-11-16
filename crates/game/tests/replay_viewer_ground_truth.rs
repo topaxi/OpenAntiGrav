@@ -906,6 +906,7 @@ fn a_dropped_screenshot_is_ignored_in_a_race_and_taken_in_a_demo() {
     let profile = Profile::new("shot-drop-race");
     let args: Vec<&str> = SHOT_ARGS.iter().copied().chain(["200"]).collect();
     let plain = profile.shoot(&image, &args, false, "plain");
+    std::fs::write(profile.dir.join("not-a-shot.txt"), "hello").expect("writing it");
     let (status, states) = profile.drive(
         &image,
         &format!("{TO_THE_RACE} drop DIR/plain.png; ticks 60; expect stage=race; quit"),
@@ -920,11 +921,18 @@ fn a_dropped_screenshot_is_ignored_in_a_race_and_taken_in_a_demo() {
     );
     let (status, states) = profile.drive(
         &image,
-        "until demo=running within 8000; drop DIR/plain.png; \
-         until replay=ended within 4000; ticks 5; quit",
+        "until demo=running within 8000; drop DIR/not-a-shot.txt; ticks 3; expect demo=running; \
+         drop DIR/plain.png; until replay=ended within 4000; ticks 5; quit",
         &["--demo"],
     );
     assert!(status.success());
+    // A refused drop leaves the demo running, with the band over it.
+    let refused = states
+        .iter()
+        .find(|state| text(state, "notice").is_some())
+        .expect("the refusal is shown over the demo");
+    assert_eq!(text(refused, "demo"), Some("running"));
+    assert!(text(refused, "notice").is_some_and(|n| n.contains("NEITHER A REPLAY NOR")));
     let at_shot = states
         .iter()
         .rfind(|state| text(state, "replay") == Some("ended"))
