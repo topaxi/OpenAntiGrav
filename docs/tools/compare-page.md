@@ -1295,6 +1295,46 @@ and a posed frame runs no tick, so a hit that happened before the frame cannot h
 
 A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.
 
+## Zone pairs: Wipeout 2048 (Vita, 2026-11-17, `zone-pair-2048`)
+
+**Claim: the page carries two 2048 Zone pairs at zone 5, one on a native circuit and one on an HD DLC circuit inside 2048, against Vita3K. True, both
+with a gap.** `vita-2048-pair.py --zone-capture SECONDS` (with `--walk`) flies a Zone race and samples it; `--zone ZONE,SCORE[,STAGE] --zone-frame N
+[--zone-from DIR]` builds the pair from one sample. Pair kind `zone`, `--autopilot off` (a 2048 Zone race is flown by the game, no pickup is armed).
+
+- **The state.** The HD Campaign's Uplift grid carries a Zone event on Vineta K that is open on a fresh save (`(600, 395)` on the map; a first-visit "NEW RANK"
+  tutorial box can swallow the first tap, so the walk dismisses it, `popup_up`). It needs no input: the craft flies itself and enters zone 5 about 30 s
+  after the HUD, zone 7 at about 55 s, then crashes. Two boots gave the same scores to within 0.3 % (zone 5 at score 4315 to 4598 on Vineta K both times).
+- **The native circuit** is the same cell with its circuit name overwritten (`vita3k-mem.py rename-track Vineta_K altima`, 10 records in a manual run on
+  this save): the card reads `39_Track`, the race loads Altima (read off the frames, and two sampled hull positions are 21 and 26 units off Altima's spline and 3.2 to 3.4
+  above its surface, against 130 to 4,200 units off the other nine base circuits' splines, `oag-game --pose` on each). A substituted event, as the DLC pairs
+  of "Eleven pairs through a renamed grid cell": the mode (Zone), the Venom to Flash class ladder and the craft (Feisar HD) are the HD cell's, not a
+  native 2048 Zone event's. The base campaign's own Zone events are rank gated and were not reached (confidence 60 that the rename carries the
+  authored circuit's data, as it did for the Race events).
+- **The pose** is read, not guessed: the guest is stopped (`SIGSTOP`) for the frame grab and a scan of its memory (`/proc/<pid>/mem`) for drawn-hull matrices
+  (orthonormal rows scaled 0.75, a zero fourth column, then the position, 0.5 s a stop). The craft is the candidate seen 38 times in the stop (the renderer's
+  copies); other matrices stay put from sample to sample (a parked model, 178 copies) and are dropped. Ours renders at tick 0 with `--pose x,y,z,yaw`
+  (the yaw solved against ours' own attitude, forward agreement 0.9992 and 0.9998; the hull's tilt off the spline, 1.2 to 2.3 degrees, is not carried).
+  **The original's camera is not read**: ours puts the close chase rig rigidly behind the hull (eye 2.775 up and 8.25 back, look-at 3 below and 18.75
+  ahead, fov 60; Feisar HD's `ExternalCameraClose`, the original's eye is sprung), `--zone-camera chase` keeps ours' own, which follows the spline and
+  shows the hull yawed against the view. Zone and score are read off the original's HUD by eye (2048's Zone counters are not located in RAM).
+- **Numbers** (rmse / edge correlation / mean grey, the page's own scores; boot 1 adopted, boot 2 in brackets): Altima zone 5 0.488 / 0.06 / 112.6
+  (0.303 / 0.07 / 45.9, another frame at the same place); Vineta K zone 5 0.368 / 0.03 / 86.4 (0.300 / 0.02 / 59.3). The boot-to-boot spread is the frame pick
+  (the Altima mean grey difference moves from 112.6 to 45.9 with the view), so the scores are good to about 0.1, not to the second digit.
+- **What differs, read side by side (both PNGs read).** *Vineta K:* the geometry lines up (the purple tower, the lime wall and its trim, the road's curve); the original's
+  road is a dark grey deck with purple glow and yellow lane lines under a dark purple sky, ours' road, wall and floor are one lime (the Scene colour): the **expected
+  gap, the road is Scene-coloured**, and ours' purple tower and sky are right. *Altima:* the same landmarks (the rock face, the lake tower, the road's rise)
+  are in both; the original is dark navy to grey with a red glow and a purple jet of exhaust, ours' road is black with large yellow slabs (the glow strip,
+  drawn as a surface) and a purple band for the water: **ours' Zone 5 grade of a native circuit paints road surfaces yellow where the original keeps them
+  dark**, so the native table and trackZone model are not a match at zone 5 either. *Both:* ours' HUD is the Zone caption "ZONE", the shield gauge
+  at 100 % and the speed arc; the original's is SCORE and its number at the top, the class name (FLASH), the zone number and the shield at the pair's value:
+  **ours draws no 2048 Zone HUD on either circuit** (a render with `--hud-state` zone, score and seconds set shows the same). The original's craft carries a red
+  rim light and an exhaust jet (a posed capture runs no tick, so ours has none). Pilot Assist's indicator is on neither frame.
+- **2048 and Omega.** Omega's Zone pairs are another lane's (`wipeout-pc-omega-pair.py`); a 2048 finding is not carried over unchecked: **not checkable here**,
+  no Omega frame was captured in this lane.
+- **Traps found.** A `vita3k-drive.py`/`vita3k-mem.py` display left over from an earlier run presents black frames (the guest runs, every shot is 0 grey): `vita3k-drive.py
+  stop` and boot again. A Vita3K left running by an earlier run makes the next `--walk` attach to it ("already running", hull shake not patched): stop it first.
+  `oag-game` takes a negative `--camera-pose` or `--pose` only as `--flag=VALUE`; `--camera-pose` refuses `--pose-from`.
+
 ## Menu pairs: HD/Fury and Omega front-end screens (2026-10-26, `menu-pairs-hd-omega`)
 
 A front-end screen is a still, so a menu pair has no pose, camera or race clock. What makes it a pair is the same screen,
