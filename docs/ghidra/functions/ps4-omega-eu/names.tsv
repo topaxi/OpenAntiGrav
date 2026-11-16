@@ -240,3 +240,7 @@
 0x01f8f688	data	g_cube_reflection_tex	85	panel-displacement.md
 # 2026-11-16 vita-race-load-re: the loading screen starter and the census of its kinds (loading-screen-start.md)
 0x01708fe0	function	LoadingScreen_Start	88	loading-screen-start.md
+
+# 2026-11-16 hull-tone-re: the SH probe manager the hull's ambient is read from (hull-tone.md); 1.07 address
+0x020084e8	data	g_sh_probes	80	hull-tone.md
+
