@@ -924,3 +924,20 @@ impl DemoArgs {
         self.wallpaper.then_some(self.wallpaper_fps)
     }
 }
+
+/// `--png-info` and `--from-png`: reading a screenshot's own description back.
+#[derive(clap::Args, Debug, Default)]
+pub(crate) struct ShotArgs {
+    /// Print the description a screenshot of ours carries (the `oag` text chunk: title, race,
+    /// camera, render settings, adapter, mods, build and the flags that draw it again) and
+    /// stop. Reads the file only; opens no disc and no window.
+    #[arg(long, value_name = "FILE.png")]
+    pub(crate) png_info: Option<PathBuf>,
+
+    /// Make a screenshot of ours again: rebuild its race from the input stream it carries,
+    /// re-simulate to its tick, say whether the state hash matches, and draw the frame to
+    /// `--screenshot` (default `<file>-rerender.png`). Needs the same title's disc, found as
+    /// every other run finds it.
+    #[arg(long, value_name = "FILE.png")]
+    pub(crate) from_png: Option<PathBuf>,
+}

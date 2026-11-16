@@ -1193,6 +1193,10 @@ pub(crate) struct Cli {
     #[command(flatten)]
     pub(crate) icon: extra::IconArgs,
 
+    /// `--png-info` and `--from-png` - see [`extra::ShotArgs`].
+    #[command(flatten)]
+    pub(crate) shot: extra::ShotArgs,
+
     /// `--ghost` and `--record-ghost` - see [`extra::GhostArgs`].
     #[command(flatten)]
     pub(crate) ghost: extra::GhostArgs,

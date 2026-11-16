@@ -10,6 +10,7 @@ use crate::shot_meta::{self, Meta};
 
 /// What a capture knows of its race that the race itself does not hold.
 pub(super) struct Facts {
+    restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
     title: &'static str,
     platform: String,
     circuit: String,
@@ -40,6 +41,7 @@ impl Facts {
         );
         header.options = launch.to_table();
         Self {
+            restage: options.restage.clone(),
             title: loaded.title.name,
             platform: loaded.platform.to_string(),
             circuit: loaded.circuit.clone(),
@@ -49,6 +51,18 @@ impl Facts {
 
     /// Starts the recording the frame's stream is cut from, unless one is running.
     pub(super) fn arm(&self, race: &mut Race) {
+        if let Some(record) = &self.restage {
+            if let Err(why) = oag_raceplay::replay::apply_recorded(race, &record.replay.header) {
+                log::warn!("--from-png: {why:#}");
+            }
+            let found = race.sim.state_hash();
+            if found != record.replay.initial_hash {
+                println!(
+                    "from-png: the rebuilt race differs before tick 0 ({:#018x}, the shot began at {:#018x})",
+                    found, record.replay.initial_hash
+                );
+            }
+        }
         if !race.recording() {
             race.start_recording(self.header.clone());
         }
@@ -66,6 +80,20 @@ impl Facts {
         use anyhow::Context as _;
         let record = race.shot_record(None);
         let tick = race.sim.world.tick;
+        if let Some(want) = &self.restage {
+            let found = race.sim.state_hash();
+            println!(
+                "from-png: state hash at tick {tick}: {} (recorded {:#018x} at tick {}, found {:#018x})",
+                if found == want.hash && tick == want.tick {
+                    "MATCH"
+                } else {
+                    "MISMATCH"
+                },
+                want.hash,
+                want.tick,
+                found
+            );
+        }
         let slot = race.player_slot();
         let body = &race.sim.world.ships[slot].physics.body;
         let race_info = shot_meta::Race {

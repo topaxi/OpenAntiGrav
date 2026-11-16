@@ -21,36 +21,48 @@ impl Options {
     /// A header with no `[setup]` (written before the table existed, or by a writer with no
     /// request to record), or a mode token this build does not know.
     pub fn for_replay(header: &Header, source: &str) -> Result<Self> {
+        let mut options = Self {
+            source: source.to_string(),
+            ..Self::default()
+        };
+        options.apply_replay(header)?;
+        Ok(options)
+    }
+
+    /// Sets what `header` records of the launch request on these options, leaving the rest (the
+    /// source, mods, texture packs) as they are: a caller that built its options from a command
+    /// line takes the recorded race's circuit, team, class, mode and seed this way.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::for_replay`].
+    pub fn apply_replay(&mut self, header: &Header) -> Result<()> {
         let Some(setup) = &header.setup else {
             bail!("the replay records no launch request ([setup]), so its race cannot be rebuilt");
         };
         let launch = Launch::from_table(&header.options)?;
-        let mode = oag_race::Mode::from_recorded_name(&setup.mode)
+        self.mode = oag_race::Mode::from_recorded_name(&setup.mode)
             .with_context(|| format!("the replay names the mode {:?}", setup.mode))?;
-        Ok(Self {
-            source: source.to_string(),
-            track: setup.track.clone(),
-            team: setup.team.clone(),
-            hull_variant: setup.hull_variant.clone(),
-            skin: setup.skin.clone(),
-            opponent_teams: setup.opponent_teams.clone(),
-            opponents: setup.opponents,
-            no_driver_for_class: setup.no_driver_for_class,
-            people: setup.people,
-            views: setup.views,
-            laps_override: setup.laps_override,
-            weapons_override: setup.weapons_override,
-            eliminator_kill_target: setup.eliminator_kill_target,
-            eliminator_score_target: setup.eliminator_score_target,
-            add_on_campaign: setup.add_on_campaign.clone(),
-            zone_model: setup.zone_model,
-            class: setup.class.clone(),
-            mode,
-            difficulty: launch.difficulty,
-            skill_level: launch.skill_level,
-            seed: Some(header.seed),
-            ..Self::default()
-        })
+        self.track = setup.track.clone();
+        self.team = setup.team.clone();
+        self.hull_variant = setup.hull_variant.clone();
+        self.skin = setup.skin.clone();
+        self.opponent_teams = setup.opponent_teams.clone();
+        self.opponents = setup.opponents;
+        self.no_driver_for_class = setup.no_driver_for_class;
+        self.people = setup.people;
+        self.views = setup.views;
+        self.laps_override = setup.laps_override;
+        self.weapons_override = setup.weapons_override;
+        self.eliminator_kill_target = setup.eliminator_kill_target;
+        self.eliminator_score_target = setup.eliminator_score_target;
+        self.add_on_campaign = setup.add_on_campaign.clone();
+        self.zone_model = setup.zone_model;
+        self.class = setup.class.clone();
+        self.difficulty = launch.difficulty;
+        self.skill_level = launch.skill_level;
+        self.seed = Some(header.seed);
+        Ok(())
     }
 
     /// The request a race loaded with these options is recorded under.

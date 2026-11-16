@@ -41,6 +41,8 @@ fn window_path(path: &std::path::Path, window: Option<usize>) -> std::path::Path
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
+    /// A screenshot's run, driven in place of `held` and checked at its tick (`--from-png`).
+    pub restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
     /// The device the load streamed its textures through; `None` opens one.
     pub gpu: Option<gpu::CaptureGpu>,
     /// Where to write the PNG.
@@ -1488,8 +1490,7 @@ pub fn capture(
         drop(mapped);
         readback.unmap();
 
-        // `shot_meta::encode` makes the frame opaque: its alpha is the bloom mask, not
-        // coverage (`oag_mesh::capture::make_opaque`).
+        // `shot_meta::encode` makes the frame opaque (the alpha is the bloom mask).
         oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
         let path = window_path(&options.path, window);
         shot_facts.write(&path, (width, height), &pixels, &race, &adapter.get_info())?;

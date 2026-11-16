@@ -597,6 +597,7 @@ pub(crate) fn run_race(
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
     net: Option<oag_game::net_play::NetPlay>,
+    restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
 ) -> Result<()> {
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
@@ -712,6 +713,7 @@ pub(crate) fn run_race(
         oag_game::race_capture::capture(
             loaded,
             &oag_game::race_capture::CaptureOptions {
+                restage,
                 gpu,
                 give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,
