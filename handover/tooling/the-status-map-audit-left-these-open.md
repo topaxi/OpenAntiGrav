@@ -51,7 +51,7 @@ built and checked against the original") picks the lower level unless noted:
   "Captures" matches the original's frames digit for digit, except one
   documented last-centisecond artefact.
 - **2048 Ships**: 22 submeshes and all 6 materials
-  (`crates/rcs/tests/psp2_rcsmodel_material_ground_truth.rs`), not the
+  (`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`), not the
   16/5-of-6 some pages still say.
 - Section 3 has no Omega column, although `oag-omega` boots to Language
   Selection and draws its main menu and campaign grid.

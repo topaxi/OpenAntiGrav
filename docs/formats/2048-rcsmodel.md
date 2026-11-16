@@ -542,7 +542,7 @@ The three words beside it are still unread: `-0x20` and `-0x1c` are `0`,
 
 Reproducers: `vita_rcsmodel_material_index_check.rs` (the
 craft and the circuit read out in full). Pinned by
-`crates/rcs/tests/psp2_rcsmodel_material_ground_truth.rs`.
+`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`.
 
 ## A texture bound also would not have painted, until the same day
 

@@ -128,7 +128,7 @@
 //! own entries all land on headers whose name pointer resolves to
 //! `.rcsmaterial` text on both (527 of 527 checked on the circuit), and the
 //! scan-based texture discovery resolves a `.gxt` on 83.1% of materials
-//! corpus-wide (`crates/formats/tests/psp2_rcsmodel_material_ground_truth.rs`).
+//! corpus-wide (`crates/rcs/tests/psp2_rcsmodel_ground_truth.rs`).
 //! **60** on ordinal-first being the right choice of texture when several are
 //! found - HD's own reading needed the sampler-name hash to answer that
 //! question correctly, and this reading does not have one. **90** on the

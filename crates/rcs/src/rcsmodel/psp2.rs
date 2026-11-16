@@ -98,7 +98,7 @@
 //!
 //! Every claim below closes arithmetically over **993 files** - every
 //! `.rcsmodel` the three EU packages ship - and
-//! `crates/formats/tests/psp2_rcsmodel_ground_truth.rs` is that argument,
+//! `crates/rcs/tests/psp2_rcsmodel_ground_truth.rs` is that argument,
 //! executable. All 993 have `A + B + C` equal to the file's own length. All
 //! **244,889** submeshes have an index buffer of exactly `index_count * 2`
 //! bytes rounded up to a 4-byte boundary, with `index_count` divisible by
