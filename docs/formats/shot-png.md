@@ -1,6 +1,6 @@
 # A screenshot's own description (`iTXt` `oag` and `oaGs`)
 
-Ours (maintainer's request, 2026-11-16): every PNG the engine writes of a race carries what is
+Maintainer's request, 2026-11-16: every PNG the engine writes of a race carries what is
 needed to make the shot again. A bug report about a render is a photo-mode shot, and the file says
 which title, race, camera and settings it was and holds the pilot's input stream. **Chosen, not
 measured**: nothing here is an original's format. Code: `oag_game::shot_meta` (text and chunks),
@@ -26,7 +26,7 @@ UTF-8, uncompressed, TOML text (`oag-game --png-info FILE` prints it). Sections:
 | `[render]` | the title's render profile as the settings file spells it (scale, MSAA, reconstruction, motion blur, ...) |
 | `[gpu]` | adapter, backend, driver, driver info |
 | `[[mods]]` | the enabled mods' ids and versions (photo mode) |
-| `[build]` | the short commit (baked at build time, `oag_net::GIT_HASH`) and the crate version |
+| `[build]` | the short commit (baked at build time, `oag_net::GIT_HASH`: check the repository out at it to reproduce), the crate version, and the submodule commits it pins. A tree with uncommitted changes is not marked, and a build made with the hash passed in (`just test-data` bakes `test-data`; a source tarball says `unknown`) names no commit |
 | `[reproduce]` | `exact` (`oag-game --from-png`) and `flags`: the `oag-game` command line that draws this race and camera without the stream, in the shape of a compare-page pair's `ours.flags` |
 
 **Nothing private is written**: no player name or tag, no filesystem path (the disc image is a
@@ -65,7 +65,13 @@ in `no_stream_because`.
 camera the text names at the file's size. **The disc must be the title's, with the same DLC and
 mods** (a simulation mod makes a race unrecordable, and DLC packs change the race and are not in
 the text: `resimulate` takes their directories, the CLI mounts the settings'). The re-render draws
-the HUD; a photo taken with its HUD row off (the default) differs from it there.
+the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
+there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the
+mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so
+the race is MODDED, records no input and the shot carries the text alone with `no_stream_because`
+(ADR-0087 decision 7); the evidence below pins `OAG_MODS` to an empty directory. A shot from Race End
+Photo is past the end of the recorded input (the recording stops at the finish) and has no stream
+either; its text says so.
 
 ## Evidence
 
@@ -83,6 +89,6 @@ the HUD; a photo taken with its HUD row off (the default) differs from it there.
 
 ## Checked against the other lineage
 
-2048 and Omega: **ported**, the chunks are written by the shared capture and photo code on every
-title; the raceplay ground truth runs 2048, the CLI run covers Pulse and HD (Omega's racing is
-incomplete: `omega-status.md`).
+2048: **ported**, the same capture and photo code writes the chunks, and the raceplay ground truth
+runs 2048 (shot at tick 1,237, hash found). Omega: **checked, applies, not run**: same code, and its
+racing is incomplete (`omega-status.md`), so no Omega shot was re-simulated.

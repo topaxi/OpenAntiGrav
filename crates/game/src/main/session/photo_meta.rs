@@ -63,6 +63,10 @@ impl Session {
                 Some(None) => (None, "this race records no input stream (a simulation mod runs in it)"),
                 run => match race.shot_record(run.flatten()) {
                     Some(record) => (Some(record), ""),
+                    None if race.recording() => (
+                        None,
+                        "the race ran on past the end of its recorded input (the finish)",
+                    ),
                     None => (None, "this race was not recorded"),
                 },
             }

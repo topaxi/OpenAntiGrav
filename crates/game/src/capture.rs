@@ -466,7 +466,7 @@ pub fn run(
         return crate::race_capture::capture(
             loaded,
             &crate::race_capture::CaptureOptions {
-                restage: None,
+                shot: crate::shot_meta::Context::default(),
                 gpu: None,
                 aspect: options.settings.display.aspect,
                 path: options.path.clone(),

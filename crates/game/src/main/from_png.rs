@@ -59,6 +59,10 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
         let stem = path.file_stem().map_or_else(|| "shot".into(), |s| s.to_string_lossy().into_owned());
         cli.screenshot = Some(format!("{stem}-rerender.png").into());
     }
+    // Photo mode draws every section whatever the circuit's visibility sets say.
+    if meta.shot.source == "photo mode" {
+        cli.pvs = Some(false);
+    }
     if meta.shot.width > 0 && meta.shot.height > 0 {
         cli.size = format!("{}x{}", meta.shot.width, meta.shot.height);
     }

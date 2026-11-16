@@ -41,8 +41,8 @@ fn window_path(path: &std::path::Path, window: Option<usize>) -> std::path::Path
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
-    /// A screenshot's run, driven in place of `held` and checked at its tick (`--from-png`).
-    pub restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+    /// What the screenshot's text and `--from-png` need beyond the race.
+    pub shot: crate::shot_meta::Context,
     /// The device the load streamed its textures through; `None` opens one.
     pub gpu: Option<gpu::CaptureGpu>,
     /// Where to write the PNG.

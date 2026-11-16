@@ -166,6 +166,9 @@ pub struct Build {
     pub commit: String,
     /// The crate version and suffix.
     pub version: String,
+    /// The submodule commits that build's commit pins, empty for a build with a hash passed in.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub submodules: String,
 }
 
 /// How to make the frame again.
@@ -186,6 +189,7 @@ impl Build {
         Self {
             commit: oag_net::GIT_HASH.to_string(),
             version: oag_net::BUILD_VERSION.to_string(),
+            submodules: oag_net::SUBMODULE_PINS.to_string(),
         }
     }
 }
@@ -326,6 +330,25 @@ pub fn encode(
         extra.push((oag_replay::shot::CHUNK, record.to_bytes()));
     }
     oag_texture::png::encode_rgba_with(width, height, &pixels, &extra)
+}
+
+/// What a headless capture is given beyond its race: the run to drive it by when it remakes a
+/// shot (`--from-png`), and the facts only the caller has.
+#[derive(Debug, Clone, Default)]
+pub struct Context {
+    /// A screenshot's run, driven in place of the held buttons and checked at its tick.
+    pub restage: Option<std::sync::Arc<ShotRecord>>,
+    /// The render settings in force, as the text carries them.
+    pub render: Option<toml::Table>,
+}
+
+/// A render profile as the text's `[render]` table.
+#[must_use]
+pub fn render_table(profile: &impl Serialize) -> Option<toml::Table> {
+    match toml::Value::try_from(profile).ok()? {
+        toml::Value::Table(table) => Some(table),
+        _ => None,
+    }
 }
 
 /// What a PNG carries of ours.

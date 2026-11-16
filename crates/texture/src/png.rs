@@ -139,12 +139,15 @@ impl std::fmt::Display for ChunkError {
 
 impl std::error::Error for ChunkError {}
 
+/// A chunk read back: its type and data.
+pub type Chunk<'a> = ([u8; 4], &'a [u8]);
+
 /// Every chunk of `png` in order as `(type, data)`, each checked against its CRC.
 ///
 /// # Errors
 ///
 /// [`ChunkError`] for a file that is not a whole PNG; nothing is returned of a damaged one.
-pub fn chunks(png: &[u8]) -> Result<Vec<([u8; 4], &[u8])>, ChunkError> {
+pub fn chunks(png: &[u8]) -> Result<Vec<Chunk<'_>>, ChunkError> {
     let mut rest = png
         .strip_prefix(b"\x89PNG\r\n\x1a\n")
         .ok_or(ChunkError::Signature)?;

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-16
-summary: "Race PNGs carry their race and --from-png remakes them; open: HUD row, headless serial, DLC identity, watched-replay shots"
+summary: "Race PNGs carry their race and --from-png remakes them; open: HUD row, serial, mods and camera in headless, DLC, finish and watched shots"
 size: S (70)
 difficulty: easy (80)
 categories: [tooling, rendering]
@@ -25,6 +25,11 @@ the text and `--from-png` re-simulates, checks the hash and draws the frame.
   without it (the first test run desynced at tick 60 until `data/dlc` was passed). The text lists
   the enabled mods but not the packs; a simulation mod makes the race unrecordable, so the shot
   has no stream.
+- **A headless screenshot's text lacks `[[mods]]` and `[camera]`**; it has `[render]`. A drive
+  `screenshot` outside photo mode has no `[camera]` either (take the eye and fov from
+  `camera_position` and `camera_fov_degrees`, the look direction from the view matrix).
+- **A Race End Photo shot has no stream** (the recording stops at the finish): cut it to the
+  finish and re-simulate the ticks after it with no input, or keep the reason in the text.
 - **A shot taken while watching a replay has no stream of its own**: its race is the replay's.
   The viewer holds the replay; cut it at the playhead the way a rewind does.
 

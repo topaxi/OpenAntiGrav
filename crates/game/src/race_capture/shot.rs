@@ -10,7 +10,7 @@ use crate::shot_meta::{self, Meta};
 
 /// What a capture knows of its race that the race itself does not hold.
 pub(super) struct Facts {
-    restage: Option<std::sync::Arc<oag_replay::ShotRecord>>,
+    context: crate::shot_meta::Context,
     title: &'static str,
     platform: String,
     circuit: String,
@@ -41,7 +41,7 @@ impl Facts {
         );
         header.options = launch.to_table();
         Self {
-            restage: options.restage.clone(),
+            context: options.shot.clone(),
             title: loaded.title.name,
             platform: loaded.platform.to_string(),
             circuit: loaded.circuit.clone(),
@@ -51,7 +51,7 @@ impl Facts {
 
     /// Starts the recording the frame's stream is cut from, unless one is running.
     pub(super) fn arm(&self, race: &mut Race) {
-        if let Some(record) = &self.restage {
+        if let Some(record) = &self.context.restage {
             if let Err(why) = oag_raceplay::replay::apply_recorded(race, &record.replay.header) {
                 log::warn!("--from-png: {why:#}");
             }
@@ -65,6 +65,11 @@ impl Facts {
         }
         if !race.recording() {
             race.start_recording(self.header.clone());
+            // The recording installs the run's own best lap as a drawn ghost once a lap
+            // beats it; a capture that asked for no ghost draws none, as it did unrecorded.
+            if race.ghost().is_none() {
+                race.set_ghost_visible(false);
+            }
         }
     }
 
@@ -80,7 +85,7 @@ impl Facts {
         use anyhow::Context as _;
         let record = race.shot_record(None);
         let tick = race.sim.world.tick;
-        if let Some(want) = &self.restage {
+        if let Some(want) = &self.context.restage {
             let found = race.sim.state_hash();
             println!(
                 "from-png: state hash at tick {tick}: {} (recorded {:#018x} at tick {}, found {:#018x})",
@@ -134,6 +139,7 @@ impl Facts {
             },
             race: Some(race_info),
             craft: Some(craft),
+            render: self.context.render.clone(),
             gpu: Some(shot_meta::Gpu {
                 adapter: adapter.name.clone(),
                 backend: format!("{:?}", adapter.backend),

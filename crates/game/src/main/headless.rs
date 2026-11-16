@@ -713,7 +713,10 @@ pub(crate) fn run_race(
         oag_game::race_capture::capture(
             loaded,
             &oag_game::race_capture::CaptureOptions {
-                restage,
+                shot: oag_game::shot_meta::Context {
+                    restage,
+                    render: oag_game::shot_meta::render_table(&render_profile),
+                },
                 gpu,
                 give: give_weapon(cli.give())?,
                 autopilot: cli.driver.autopilot,

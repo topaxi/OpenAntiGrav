@@ -55,8 +55,12 @@ pub(super) fn advance_one_tick(
     match (&options.net, &options.remote_correction) {
         (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
         (None, Some(scene)) => scene.tick(race, &snapshot, tick),
-        (None, None) if options.restage.is_some() => {
-            let record = options.restage.as_deref().expect("matched by the guard");
+        (None, None) if options.shot.restage.is_some() => {
+            let record = options
+                .shot
+                .restage
+                .as_deref()
+                .expect("matched by the guard");
             for event in record.replay.events_at(u64::from(tick)) {
                 if let Err(why) = race.apply_event(event) {
                     log::warn!("--from-png: {why}");
