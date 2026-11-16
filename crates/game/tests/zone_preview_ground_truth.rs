@@ -62,6 +62,7 @@ fn race_hull(
             own_shield: false,
             zone_liveries: liveries,
             forced_skins: &[],
+            circuit_hull: None,
             player_livery: None,
         },
         None,

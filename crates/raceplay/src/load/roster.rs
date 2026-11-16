@@ -343,7 +343,11 @@ pub(super) fn grid(
     options: &crate::Options,
     team: &str,
     available: &[String],
-    (hull_variant, store): (Option<&str>, oag_gpu::formats::SceneStore),
+    (hull_variant, circuit_hull, store): (
+        Option<&str>,
+        Option<&'static str>,
+        oag_gpu::formats::SceneStore,
+    ),
     report: &mut Vec<String>,
 ) -> anyhow::Result<Grid> {
     let skin = super::skin::resolve(
@@ -417,6 +421,7 @@ pub(super) fn grid(
             own_shield: own_shield(options, craft_title),
             zone_liveries: &zone_liveries,
             forced_skins: &forced_skins,
+            circuit_hull,
             player_livery: player_livery
                 .as_ref()
                 .map(|(own, worn)| oag_livery::LiveryFolder {

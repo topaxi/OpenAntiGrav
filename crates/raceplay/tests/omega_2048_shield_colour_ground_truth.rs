@@ -62,6 +62,7 @@ fn shield_of(
             own_shield: false,
             zone_liveries: &[],
             forced_skins: &[],
+            circuit_hull: None,
             player_livery: None,
         },
         None,

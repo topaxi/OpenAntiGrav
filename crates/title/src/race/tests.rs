@@ -363,6 +363,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     handling_dir: r"Data\HandlingStats",
     effect_dir: r"Data\Psys",
     effect_dir_by_circuit: &[],
+    hull_by_track_type: &[],
     circuit_lineages: &[],
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
@@ -550,6 +551,22 @@ fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
         DEFAULTS.effect_dir_for("Data/environments2048/x/track.vex"),
         DEFAULTS.effect_dir,
         "a title with no table keeps its one directory"
+    );
+}
+
+#[test]
+fn a_track_type_forces_its_hull_stem_into_the_entry_name() {
+    let mut defaults = DEFAULTS;
+    defaults.hull_by_track_type = &[("Classic", r"VR\Ship")];
+    let stem = defaults.hull_for_track_type("classic");
+    assert_eq!(stem, Some(r"VR\Ship"), "any case, as the type is compared");
+    assert_eq!(defaults.hull_for_track_type("Race"), None);
+    assert_eq!(DEFAULTS.hull_for_track_type("Classic"), None);
+    assert_eq!(
+        defaults
+            .ships_for("Feisar")
+            .hull_entry_name("Feisar", false, stem),
+        format!(r"{}\Feisar\VR\Ship.vex", defaults.ship_dir)
     );
 }
 

@@ -232,6 +232,10 @@ pub struct LoadContext<'a> {
     /// [`oag_title::RaceDefaults::eliminator_skin`], resolved per team. Empty outside an
     /// Eliminator race and for a title that forces none. See [`forced_paint`].
     pub forced_skins: &'a [(String, String)],
+    /// The hull stem the circuit forces on every craft, the player's pick included: the
+    /// `PI_Track` type's own ([`oag_title::RaceDefaults::hull_by_track_type`]). `None` flies each
+    /// slot's own.
+    pub circuit_hull: Option<&'static str>,
     /// The livery folder the player's craft (slot 0) is painted from in place of its own. See
     /// [`LiveryFolder`]. `None` keeps the hull's own.
     pub player_livery: Option<LiveryFolder<'a>>,
@@ -479,7 +483,11 @@ fn one(
     (skin, livery): (Option<&str>, Option<LiveryFolder>),
     report: &mut Vec<String>,
 ) -> Result<Livery> {
-    let hull_name = ships.hull_entry_name(team, ctx.mode == Mode::Zone, hull_variant);
+    let hull_name = ships.hull_entry_name(
+        team,
+        ctx.mode == Mode::Zone,
+        ctx.circuit_hull.or(hull_variant),
+    );
     let blob = archives
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;

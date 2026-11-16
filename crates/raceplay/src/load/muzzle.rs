@@ -20,7 +20,7 @@ pub(super) fn per_slot(
     title: &oag_title::Title,
     slot_teams: &[String],
     options: &crate::Options,
-    hull_variant: Option<&str>,
+    (hull_variant, circuit_hull): (Option<&str>, Option<&'static str>),
     report: &mut Vec<String>,
 ) -> Vec<Option<Vec3>> {
     let zone = options.mode == oag_race::Mode::Zone;
@@ -37,10 +37,11 @@ pub(super) fn per_slot(
                     .get(slot - 1)
                     .and_then(|pick| pick.hull_variant.as_deref()),
             };
-            let name = title
-                .race
-                .ships_for(team)
-                .hull_entry_name(team, zone, variant);
+            let name =
+                title
+                    .race
+                    .ships_for(team)
+                    .hull_entry_name(team, zone, circuit_hull.or(variant));
             match archives.read_name(&name) {
                 Ok(blob) => oag_vex::vex::ship_muzzle(&blob)
                     .or_else(|| beside_the_hull(archives, &name))

@@ -59,6 +59,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: oag_title::race::SHIP_DIR,
     effect_dir: oag_title::race::EFFECT_DIR,
     effect_dir_by_circuit: &[],
+    // The Classic league flies `%s\VR\Ship.vex`: `Ship_LoadModel`'s own hull path is built off a
+    // flag the `PI_Track` constructor sets from `Values type` (`Race` 1, `Classic` 2, `Zone` 4;
+    // `docs/ghidra/functions/psp-pure-usa/ship-models.md`, "What selects the VR hull").
+    hull_by_track_type: &[("Classic", ships::VR_HULL)],
     circuit_lineages: &[],
     // `false`: Pure's own menu offers exactly its four `type="Zone"`
     // circuits and nothing else, checked directly against the disc in
@@ -285,13 +289,13 @@ pub mod ships {
     /// (`Data\Ships\<Team>\VR\Textures\vr_<team>_01_shinemap.tga`) sharing one
     /// environment map, `Data\Tex\vr_env.tga`.
     ///
-    /// **The name is recovered; what `VR` means is not.** The prefix recurs
-    /// across the disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`,
-    /// `vr_shield.vex`, `Data\Tex\EngineFlare\vr_engine_noise.mip` - so it names
-    /// a whole alternate presentation set rather than one model, but no code
-    /// path that selects it has been read. Pulse carries exactly one member of
-    /// that set (`%s\vr_shield_cockpit.vex`) and no `VR\` craft directory at
-    /// all. Recording the spelling is safe; guessing the mode is not.
+    /// **The Classic league flies it**: `Ship_LoadModel` builds this path when the circuit's
+    /// `PI_Track` `Values type` is `Classic`, for every craft on the grid
+    /// ([`super::DEFAULTS`]'s `hull_by_track_type`; `docs/ghidra/functions/psp-pure-usa/ship-models.md`,
+    /// "What selects the VR hull"). The `VR` prefix names the Classic presentation set across the
+    /// disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`, `vr_shield.vex`, `Data\Tex\vr_env.tga` -
+    /// but those other members are switched by a separate flag, the circuit's own
+    /// `TrackStartup.xml` `<VrFx>`, and are not wired here.
     pub const VR_HULL: &str = r"VR\Ship";
 
     /// `%s\VR\Phantom.vex` at `0x08a7cb64`.
