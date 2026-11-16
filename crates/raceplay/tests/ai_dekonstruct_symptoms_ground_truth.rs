@@ -144,8 +144,6 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
         difficulty,
         track: Some(entry(id)?),
         seed: Some(1),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading {id} at {class}: {error}"));

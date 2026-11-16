@@ -105,8 +105,6 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         mode: oag_race::Mode::SingleRace,
         difficulty: level,
         track: Some(track.to_string()),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .ok()?;
@@ -227,8 +225,6 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Ve
         difficulty: level,
         track: Some(track.to_string()),
         seed: Some(seed),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .ok()?;
@@ -265,8 +261,6 @@ fn grid_rolls_mixed_on(
         mode: oag_race::Mode::SingleRace,
         difficulty: oag_ai::Difficulty::Ace,
         track: Some(track.to_string()),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .ok()?;

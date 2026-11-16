@@ -64,8 +64,6 @@ fn slice(class: &str, reversed: bool) {
             class: class.to_string(),
             mode: oag_race::Mode::SingleRace,
             track: Some(entry.clone()),
-            // The race is flown for its simulation, which no track art feeds.
-            ribbon: true,
             ..race::Options::default()
         })
         .unwrap_or_else(|error| panic!("loading {entry} at {class}: {error}"));
@@ -155,8 +153,6 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         class: "RAPIER".to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(entry),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .expect("loading 07_Track");
@@ -213,7 +209,8 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
-        // The race is flown for its simulation, which no track art feeds.
+        // 2048 and Omega: no track art feeds the plan (a Pulse load without art loses its
+        // track statistics, so the Pulse loads above keep theirs).
         ribbon: true,
         ..race::Options::default()
     })

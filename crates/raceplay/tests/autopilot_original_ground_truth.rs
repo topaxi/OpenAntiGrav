@@ -39,8 +39,6 @@ fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay
         track: Some(track.to_string()),
         seed: Some(1),
         weapons_override: weapons,
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
@@ -267,8 +265,6 @@ fn flies_the_original_autopilot(image: &str) {
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         seed: Some(1),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
@@ -336,8 +332,6 @@ fn opponent_fork(
         seed: Some(seed),
         difficulty,
         weapons_override: Some(false),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
@@ -478,8 +472,6 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         weapons_override: std::env::var_os("OAG_SWEEP_WEAPONS")
             .is_none()
             .then_some(false),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");

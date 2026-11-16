@@ -373,9 +373,10 @@ fn recorded_at_tick_zero(
     mode: oag_race::Mode,
 ) -> Option<(PathBuf, race::Race, Replay, race::Launch)> {
     let source = source(title)?;
-    // Not ticked, so no art is read; the rebuild under test loads the full race.
+    // Not ticked, so no art is read; the rebuild under test loads the full race. Omega only:
+    // a Pulse load without art drops its track statistics (`finished_thrust`).
     let loaded = race::load(&race::Options {
-        ribbon: true,
+        ribbon: title == "omega",
         ..options(&source, mode)
     })
     .unwrap_or_else(|e| panic!("loading {title} {}: {e:#}", mode.name()));

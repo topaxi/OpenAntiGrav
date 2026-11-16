@@ -55,8 +55,6 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<(u32, f32)> {
         difficulty: oag_ai::Difficulty::Ace,
         track: Some(entry),
         seed: Some(seed),
-        // The race is flown for its simulation, which no track art feeds.
-        ribbon: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading 05_Track at {class}: {error}"));
