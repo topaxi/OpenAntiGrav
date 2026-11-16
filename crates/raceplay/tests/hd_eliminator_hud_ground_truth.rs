@@ -109,6 +109,7 @@ fn a_single_race_carries_no_race_line() {
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         seed: Some(1),
+        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD single race");
@@ -211,6 +212,7 @@ fn an_opponents_first_lap_pays_through_the_tick() {
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Eliminator,
         seed: Some(1),
+        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
@@ -226,7 +228,7 @@ fn an_opponents_first_lap_pays_through_the_tick() {
     };
     let mut before = snapshot(&race);
     for _ in 0..4000 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         let after = snapshot(&race);
         for slot in 1..8 {
             if after[slot].0 > before[slot].0 {
@@ -255,6 +257,7 @@ fn a_score_race_ignores_a_stored_kill_pick() {
         mode: oag_race::Mode::Eliminator,
         eliminator_kill_target: Some(5),
         seed: Some(1),
+        ribbon: true,
         ..oag_raceplay::Options::default()
     };
     let picked = oag_raceplay::load(&options).expect("loading an HD Eliminator");
@@ -411,6 +414,8 @@ fn race_to_target(
         difficulty,
         seed: Some(seed),
         skill_level,
+        // The race is read for its score and its laps, which no art feeds.
+        ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
@@ -422,7 +427,7 @@ fn race_to_target(
     );
     race.set_autopilot(true);
     for tick in 0..60_000u64 {
-        race.tick(&PlayerInputs::none());
+        race.tick_sim_only(&PlayerInputs::none());
         if race.results().is_some() {
             assert_board_ranked_on_points(&race);
             return Outcome {
