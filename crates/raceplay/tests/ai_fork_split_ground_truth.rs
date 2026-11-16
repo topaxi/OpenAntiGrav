@@ -35,6 +35,8 @@ fn run(source: &str, track: &str, ticks: u32) -> Option<(Forks, usize)> {
         source: source.to_string(),
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("loading {track}: {e:#}"));
@@ -211,6 +213,8 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         source,
         mode: oag_race::Mode::SingleRace,
         track: Some(track),
+        // The race is flown for its simulation, which no track art feeds.
+        ribbon: true,
         ..race::Options::default()
     })
     .expect("loading 05_Track");
