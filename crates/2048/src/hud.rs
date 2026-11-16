@@ -353,7 +353,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 ///   Assist was switched to Extreme in the options; absent at Normal.
 /// - `ZoneLight0`-`9` and `ZoneSpeedLogo`: lit per zone, and never seen (the
 ///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
-/// - `Radar`, `PlayerDot`, `RadarDot*`: never seen in any state reached.
+/// - `RadarDot0`-`7`: the opponents behind the craft on the radar, placed and faded per tick
+///   (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`); not drawn yet.
 /// - `ManualShield`, `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
 ///   `ReverseShipPos*`, `VoiceCom*`, `ObjectivePoint*`, `GloryMoment*`,
 ///   `ProtoTypeShipLogo`, `SpeedPad*`, `RaceMedal`, `MissileSight*`,
@@ -368,6 +369,11 @@ pub const ALWAYS_ON: &[&str] = &[
     "EnergyBar",
     "EnergyBarDelay",
     "ZoneCounterBG",
+    // The radar under the craft (`HUD_half_radar.xml`, `HUD_full_radar.xml`): bound to a local
+    // and never hidden by the HUD's bind, and `PlayerDot` is never named by code, so both stay
+    // as authored (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`).
+    "Radar",
+    "PlayerDot",
 ];
 
 /// `PickupIcon`'s per-weapon source rectangle, as [`oag_title::HudArt::pickup_icon_uv`]
