@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-16
-summary: "HD Zone: chunks with render flags 0x0e00 (pads, signs) keep their plain program under the stage ambient; ours recolours them. Recipe inside"
+summary: "HD Zone plain chunks (flags 0x0e00) wired 2026-11-16; open: Track fog, gantry card stand-in, weapon pads, unflagged-surface lightmap"
 ---
 
 # HD's Zone speed pads keep their authored plate in the original; ours paints them road-teal with a white bar
@@ -42,35 +42,15 @@ Evidence page: `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`
 
 ## Recipe
 
-1. `crates/rcs/src/rcsmodel/render_block.rs`: `RENDER_ZONE_PLAIN: u16 = 0x0e00`
-   (bit 9 speed pad, bit 10 weapon pad, bit 11 authored "keeps its program")
-   and `Mesh::zone_plain()`, documented from the evidence page.
-2. `crates/mesh/src/mesh/rcs.rs`, beside `slots::ZONE_TRACK` (line 274): carry
-   the per-chunk flag to the shader. **Per chunk, not per material**: 30 of 646
-   flagged material slots also serve unflagged chunks (all bit 11; no pad slot
-   is mixed). `slots` has no free bit (0 to 31 are assigned), so the carrier is
-   the wiring lane's choice: a free vertex field, or a glow-table rate like
-   `ZONE_EXEMPT_RATE` for the unmixed slots plus a split of the 30 mixed ones.
-3. `crates/mesh/shaders/shade.wesl`, for a flagged chunk while `zone_on`:
-   `zone_weight = 0` (drops the Zone surface and `zone_glow_term`), and the
-   light is the `Ambient` case: `scene.light.ambient + sat(N.L) * sun`, with
-   the lightmap `prelit` term and the vertex-light curve off. `pad_glow`,
-   the specular and the `/2` stay as they are. Off a Zone race nothing changes.
-4. Fog (second, small at pad distance): a track-flagged chunk takes the
-   stage's `Lighting.Track Fog colour`/`density`, which `ZoneGrade::fog` does
-   not read (it reads the primary pair for everything).
-5. Tests: a disc-backed check in `crates/rcs/tests/rcsmodel_ground_truth.rs`
-   (Moa Therma 12 `speedup_material` at `0x0201`, 8 `weapon_pads` at `0x0401`,
-   22 at bit 11; bits 9 and 10 only on the three pad materials disc-wide), and
-   a GPU test beside `crates/mesh/tests/zone_recolour.rs` that draws a flagged
-   chunk in a Zone race and asserts `0.5 * albedo * ambient`, not the Zone
-   colour (fails if the flag or the ambient switch is dropped).
-6. Picture: `oag-game <hdfury image> --race --mode zone --track
-   /data/environments/03_track/track.vex --pose=-350,6.1,-405.6,0 --ticks 0
-   --screenshot x.png` against the original at the same pose (Racebox ZONE,
-   WEAPONS OFF, Moa Therma, craft placed at `-350, 6.1, -405.6` after the HUD
-   is up): two speed pads right of the craft, grey textured plates with a dark
-   outline and cyan tiles, no white bar.
+Steps 1 to 3 and 5 to 6 landed (branch `zone-pad-wire`): `RENDER_ZONE_PLAIN` and `Mesh::zone_plain()`
+in `render_block.rs`; the carrier is `slots::ZONE_PLAIN` (bit 30: the glow index is six bits, the
+seventh was free), set per chunk in `mesh::rcs::surface`; `shade.wesl` drops the Zone surface and
+lights the chunk `ambient + sat(N.L) * sun`. Tests and the pad-plate numbers are on
+`docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`, "Against this port". Step 4 is still open:
+
+4. Fog (second, small at pad distance): a track-flagged chunk takes the stage's
+   `Lighting.Track Fog colour`/`density`, which `ZoneGrade::fog` does not read (it reads the primary
+   pair for everything).
 
 ## Open
 
@@ -93,6 +73,5 @@ Evidence page: `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`
 
 ## Next Steps
 
-1. Steps 1 to 3 of the recipe, with step 5's tests.
-2. Render step 6's pose before and after, at the size a player sees.
-3. Then the gantry check and the Track fog.
+1. The gantry check (are its card chunks among the 54 `sign_emissive_glow` bit-11 chunks? then retire `ZONE_EXEMPT_RATE`) and the Track fog.
+2. A pad frame of ours against the original at a matched camera (the original's was at its settled pose with a wider view; ours differs by about 15 % in plate brightness).
