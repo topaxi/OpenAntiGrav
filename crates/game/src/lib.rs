@@ -93,6 +93,7 @@ pub mod rumble;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;
+pub mod shot_meta;
 pub mod sound;
 pub mod split_screen;
 pub mod team_hull;

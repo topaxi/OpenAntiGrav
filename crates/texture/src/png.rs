@@ -107,9 +107,7 @@ pub fn itxt(keyword: &str, text: &str) -> Vec<u8> {
 #[must_use]
 pub fn itxt_text<'a>(data: &'a [u8], keyword: &str) -> Option<&'a str> {
     let rest = data.strip_prefix(keyword.as_bytes())?.strip_prefix(&[0])?;
-    let (&[compressed, _method], rest) = rest.split_first_chunk::<2>()? else {
-        return None;
-    };
+    let (&[compressed, _method], rest) = rest.split_first_chunk::<2>()?;
     if compressed != 0 {
         return None;
     }
