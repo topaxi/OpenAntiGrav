@@ -174,7 +174,21 @@ pub const TITLE: &Title = &Title {
         ],
         // The literal at `0x0079bdd8` in `EBOOT.elf`.
         sprite: "/data/tex/engineflare/engine_flare_rich.gtf",
-        engine_light: true,
+        // Measured live: 40 records, all `(40, 10, 4) * (1 + 10 * blend)` on the Fury
+        // skin, `D` = `Radius` +- 0.1 (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
+        // HD has no 2048-era craft and no mag-strip branch; whether it calms its jitter
+        // by `1 - blend` is unread, so it does not.
+        engine_light: Some(&oag_title::flare::EngineLightLaw {
+            classic: oag_title::flare::Tint::HD_CLASSIC,
+            fury: oag_title::flare::Tint::HD_FURY,
+            era_2048: None,
+            mag_strip: None,
+            wander: oag_title::flare::Wander {
+                position: 0.1,
+                range: 0.1,
+                calmed_by_boost: false,
+            },
+        }),
         front_faces_only: true,
     }),
     // **The same file the soundtrack is declared in**, because on this title the

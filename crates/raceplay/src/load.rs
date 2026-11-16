@@ -1231,7 +1231,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 &mut report,
             ),
             #[cfg(feature = "view")]
-            engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
+            engine_lights: engine_light::per_slot(&liveries, title, &track),
             #[cfg(feature = "view")]
             spu_vertex_lights,
             #[cfg(feature = "view")]

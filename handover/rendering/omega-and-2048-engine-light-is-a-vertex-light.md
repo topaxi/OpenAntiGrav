@@ -1,16 +1,16 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [omega, 2048]
 updated: 2026-11-16
-summary: "Engine light confirmed live on Omega (hull is lit, flickers); held branch engine-light-wire is right in kind: merge recipe inside"
+summary: "Engine light wired on Omega/2048 and confirmed live (hull lit, flickers); open: warm-pixel acceptance test, forced-range curve, N scale"
 size: S (30)
 difficulty: easy (60)
 ---
 
 # Omega's and 2048's engine light is HD's light with two more colours and a wider reach
 
-2026-11-16. Three lanes: `engine-glow-re` read the producer, `engine-light-wire` wired it on a branch
-that is **held, unmerged** (its housing boxes got worse against the stored pairs), `engine-light-re`
+2026-11-16. Three lanes: `engine-glow-re` read the producer, `engine-light-wire` wired it (held,
+then merged once the live read showed its housing boxes had judged one flicker frame), `engine-light-re`
 measured the original live and read the receivers. Evidence:
 [Omega](../../docs/ghidra/functions/ps4-omega-eu/engine-light.md),
 [2048](../../docs/ghidra/functions/vita-2048-eu-v104/engine-light.md).
@@ -40,7 +40,14 @@ exposure term on the light.
 
 ## Open
 
-- **`engine-light-wire` is not merged.** Its `EngineLightLaw` needs no change: colours, ranges, the
+Wired 2026-11-16 (lane `engine-light-wire`): `oag_title::flare::EngineLightLaw` is `Title` data on HD, Omega
+and 2048; `oag_raceplay::engine_light::record` places it; the base is the 2048 era by roster directory,
+the Fury skin by `hd_trail_red`, the strip by `mag_floor_fx::Shown::on` on a gated circuit (Omega: a
+`circuit_lineages` circuit, 2048: all). 2048's strip gate is closed as read: `FUN_81000930(0x8153fc40, -1)`
+is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/ps4-omega-eu/engine-light.md`,
+"Wired". HD is pixel-identical on `hd/the-amphiseum`.
+
+- **`engine-light-wire` merged 2026-11-16 unchanged.** Its `EngineLightLaw` needed no change: colours, ranges, the
   `0.2` / `1.0` wander and the `0.01` floor are all confirmed live on Omega.
 - **Its acceptance was the wrong test.** The housing box against one stored frame cannot pass:
   the original's own frames span the whole range (warm-pixel count 142 to 16,232 over 60 frames, 447
@@ -66,8 +73,7 @@ exposure term on the light.
 
 ## Next Steps
 
-1. On `engine-light-wire`, keep `EngineLightLaw` and the receivers as they are. Replace the
-   acceptance: render `omega/modesto-heights` at 60 consecutive ticks and run
+1. Keep `EngineLightLaw` and the receivers as merged. Add the acceptance: render `omega/modesto-heights` at 60 consecutive ticks and run
    `scripts/engine-light-warm-census.py` over them. Pass: the count spreads from the unlit count to
    its maximum (the original: 10th to 90th percentile 368 to 12,458, median 2,700, mean 4,712,
    unlit 447); a constant count means the range draw is not reaching the shader.
@@ -83,5 +89,3 @@ exposure term on the light.
    Amphiseum and Moa Therma housing boxes are **not** judged against the stored frame; re-grab the
    three originals at a forced range (`scripts/wipeout-pc-engine-light-live.py --calibrate=0`) and
    render ours at the same range if a still comparison is wanted.
-5. This thread's file on `engine-light-wire` is older than this one: on merge, keep this text and
-   strike what the merge lands.

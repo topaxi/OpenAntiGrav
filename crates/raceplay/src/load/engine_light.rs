@@ -17,8 +17,8 @@
 
 /// Whether this circuit's `.envsettings` leaves the SPU vertex lights on.
 ///
-/// `true` on every title but Wipeout HD (the mechanism is HD's alone and the
-/// light list is empty elsewhere anyway), on an HD circuit with no
+/// `true` on every title but Wipeout HD (the switch is a PS3 `.envsettings` key;
+/// Omega's and 2048's circuits are not read for it), on an HD circuit with no
 /// `.envsettings`, and on one that does not author the key; `false` only on
 /// an authored `0`.
 pub(super) fn spu_vertex_lights_enabled(
@@ -53,6 +53,29 @@ pub(super) fn spu_vertex_lights_enabled(
             true
         }
     }
+}
+
+/// Each slot's engine light with the circuit's half of the mag-strip gate
+/// settled: whether the original's mode test (`mode id >= 0x17`, 2048 modes)
+/// lets a strip recolour the light on `track`.
+pub(super) fn per_slot(
+    liveries: &[oag_livery::Livery],
+    title: &oag_title::Title,
+    track: &str,
+) -> Vec<Option<oag_livery::engine_light::EngineLight>> {
+    use oag_title::flare::StripGate;
+    let lineage = title.race.circuit_lineage(track).is_some();
+    liveries
+        .iter()
+        .map(|livery| {
+            let mut light = livery.engine_light?;
+            light.strip_circuit = light.law.mag_strip.is_some_and(|strip| match strip.gate {
+                StripGate::EveryCircuit => true,
+                StripGate::LineageCircuit => lineage,
+            });
+            Some(light)
+        })
+        .collect()
 }
 
 /// The key, as `docs/formats/envsettings.md` lists it.

@@ -69,8 +69,8 @@ data proves it.
    material curves are unread"; that motion may be a `.vex` UV key block too (`psp2::build_billboard` is the reader).
    Details: `docs/rendering/start-gantry.md`, "Omega and 2048: the HD-lineage board counts down";
    `docs/ghidra/functions/ps4-omega-eu/billboards.md`, "The UV keys".
-5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
-   sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
+5. **Engine light (wired, see `docs/ghidra/functions/ps4-omega-eu/engine-light.md`) and front-face flag on the plume.** `crates/omega/src/lib.rs`
+   sets `front_faces_only: false` (the engine light was `false` when this was written) ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
    in `FUN_0130e090` (`Distance` to `ship+0xbc`, `Radius` to `ship+0xc0`); the
    consumer of those two fields is unread. **Read 2026-11-13, not finished:** `FUN_0130e090` (`0x0130e090`) writes `+0xbc`/`+0xc0`; an

@@ -3,7 +3,9 @@
 Read 2026-11-16, lane `engine-glow-re`, on `/2048/eboot-vita-2048-eu-v104.elf` and on the base
 package's `data.psarc`. The law, the constants' meaning and the cross-title table are on
 [Omega's page](../ps4-omega-eu/engine-light.md); this page holds what was read on 2048 itself.
-Static only. **Checked, applies, not wired.** The receiving hull programs are at the end of the page.
+Static only. **Ported: wired from Omega's page (lane `engine-light-wire`)**, see "Wired" on
+[Omega's page](../ps4-omega-eu/engine-light.md); the native `Ships\` roster is the 2048 era, the
+`hdships\` one HD's. The receiving hull programs are at the end of the page.
 
 ## The functions
 
@@ -41,9 +43,15 @@ VertexLight_AddCandidate(Radius + off.w * calm,      ; ship+0x100
                          anchor + off.xyz * calm, colour, -1)
 ```
 
+`FUN_81000930(0x8153fc40, -1)` is `GameMode_IsHdLineage` (mode id `< 0x17`, [ships-effects.md](ships-effects.md),
+[particle-paths.md](particle-paths.md), confidence 85) with the same argument, so `== 0` is Omega's
+`mode >= 0x17` test: a 2048-lineage mode, which is every event this port plays. The strip gate is
+open on every 2048 circuit (`StripGate::EveryCircuit`).
+
 Not read on 2048: who writes `ship+0x73fd` and `ship+0x73fc` (taken as Omega's two flags by their
-place in the law, confidence 70), what `vtable+0x3c` and `FUN_81000930(0x8153fc40, -1)` return
-(Omega tests the mag-strip predicate and the mode id there), and the jitter's ranges. 2048's flare
+place in the law, confidence 70), what `vtable+0x3c` returns (Omega tests the mag-strip predicate
+there), the jitter's ranges (inherited from Omega), and whether the HD-derived `hdships` roster
+carries `ship+0x73fd` clear on 2048 as it does on Omega. 2048's flare
 init (`FUN_81270228`) loads `data/Tex/EngineFlare/Engine_Flare_Rich.gxt` only; the executable names no
 red sprite.
 

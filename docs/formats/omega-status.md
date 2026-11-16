@@ -1862,8 +1862,8 @@ pointers - and decode through the same `psp2` reader. Verdict: **ported**, with
 asset names, node groups and material names are read off the data; the ribbon
 geometry, sprite flare law and boost reveal are HD's, **inherited, not measured
 on Omega**, and the load report says so. The flare's `2048_engine_additive`
-blend is chosen, not measured. The SPU engine light is off, chosen, not
-measured. Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
+blend is chosen, not measured. The engine light is wired (EngineLightLaw, see
+[engine-light.md](../ghidra/functions/ps4-omega-eu/engine-light.md), "Wired"). Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
 900): the nozzle glows and every rival's trail draws.
 
 ## Re-cooked, measured (2026-10-19, `asset-lineage-census`)
@@ -2209,12 +2209,12 @@ container's curves are unread, and the side cards drew dark teal because `fx350_
   Evidence, numbers and the box: `docs/rendering/start-gantry.md`, "Omega and 2048".
 - **2048: ported**, the same Altima through `oag-game <PCSF00007>`; `park` ships no `billboard8.gxt` in the base package.
 
-**The plume's two flags: open.** `engine_light` and `front_faces_only` stay `false`.
+**The plume's two flags.** `front_faces_only` stays `false` (open). `engine_light` is wired, below.
 Omega's loader reads `EngineLightData.xml` the way HD's does (`FUN_0130e090`: `Distance`
 to `ship+0xbc`, `Radius` to `ship+0xc0`; the `hdships` files hold HD's range, `-0.4` to
 `1.2` and `1.0` to `2.0`, not 2048's `3`/`30`), and with the light on a grid still
 gains the warm cast the original's hull has at the nozzle. **The consumer is read
-(2026-11-16, confidence 85), not wired**: `EngineFlare_SubmitVertexLight` appends one
+(2026-11-16, confidence 85) and wired (lane `engine-light-wire`)**: `EngineFlare_SubmitVertexLight` appends one
 point light per craft to a 32-slot table, and each draw binds up to six as
 `DiffuseVertexLight<N>`. The colour is a constant picked by the craft: `(4, 10, 40)`,
 `(40, 10, 4)` on a Fury skin, `(3.0, 0.5, 0.1)` for a `GameVersion="2048"` team, and
@@ -2228,6 +2228,7 @@ of exactly those colours, the hull's own programs take the light
 some frames and dark on others because the range is redrawn as `Radius +- 1.0`. The
 glow inside the nozzle is the flare model, not the light. A single captured frame is one
 draw of that flicker (same page, "Live check").
+Both are `Title` data now (`oag_omega::TITLE`'s `Flare`, lane `engine-light-wire`).
 `front_faces_only` changes nothing visible on either still, because the flame is not
 visible at these two ticks.
 

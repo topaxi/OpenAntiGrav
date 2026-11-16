@@ -884,8 +884,7 @@ fn an_omega_zone_race_takes_its_light_and_shells_from_the_zone_directory() {
         &path.display().to_string(),
         r"Data\art\published\hdships\Zone",
         "Omega",
-        // Omega's SPU vertex light is unread on this platform (engine_light.rs)
-        // and it draws no absorb shell (the title's rule is off).
-        &["shipshield.vex"],
+        // It draws no absorb shell (the title's rule is off).
+        &["EngineLightData.xml", "shipshield.vex"],
     );
 }

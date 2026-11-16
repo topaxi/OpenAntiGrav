@@ -6,7 +6,7 @@ Read 2026-11-16, lane `engine-glow-re`, on the **1.07 patch** eboot (Ghidra prog
 ([its page](../vita-2048-eu-v104/engine-light.md)) and against HD's
 `EngineFlare_SubmitSpuLight` ([renderer.md](../ps3-hdfury-eu/renderer.md), "the orange family's true
 call site"). The producer was read statically (lane `engine-glow-re`); the receivers' GCN programs
-and the live check on the native port are lane `engine-light-re`, the same day (see "Live check").
+and the live check on the native port are lane `engine-light-re`, the same day (see "Live check"). **Wired on Omega and 2048 the same day (lane `engine-light-wire`)**, see "Wired".
 
 ## Summary
 
@@ -220,9 +220,51 @@ no renormalisation, so a scaled hull matrix scales the light by the same factor.
 vertex colour: a dark panel takes little of it. The cube-map variants (`0x8c04`, `0xa224`) carry the
 same extra interpolant; their bodies were not read line by line.
 
+## Wired
+
+`oag_title::flare::EngineLightLaw` carries the table above as `Title` data (`Authored::engine_light`,
+`Some` on HD, Omega and 2048); `oag_raceplay::engine_light::record` is the arithmetic and binds
+through HD's path unchanged (`Race::hd_craft_engine_lights`, the `spu_lights` scene block, track and
+hull). Per craft: the 2048 era by the craft's roster directory against `Era2048::roster_dir`
+(Omega `Data\art\published\ships`, 2048 `Data\art\published\Ships`; the team's
+`GameVersion="2048"` is only authored on that roster), the Fury skin by `RaceView::hd_trail_red`,
+the strip by `mag_floor_fx::Shown::on` (this tick's mag-floor contact) on a gated circuit (Omega: a
+`circuit_lineages` circuit; 2048: every circuit). Wander 0.2 / 1.0 scaled by `1 - blend`; a range at
+or under `0.01` submits nothing. Not wired: the six-light cap (ours sums every light), the
+transition tint, the 21 other producers. Omega's own fragment combine of the light was not read, so
+the receivers' shader is HD's `SVC1` combine **inherited**.
+
+Boxes, ours against the original on the stored pairs. **MAE** is the mean absolute difference of the
+8-bit R, G and B values over the box's pixels (0-255). Ours is the pair's `ours.flags` re-run on the
+branch's `oag-game` (`--screenshot`, into a scratch directory; the shared reference is not written),
+before and after the wiring. Rectangles are `x0,y0 - x1,y1` in the pair's own pixels (1920x1080 Omega,
+960x544 2048); craft poses differ by a few pixels between the two sides and our hulls are paler than
+the original's before any light, so MAE moves with brightness more than with hue. The Amphiseum
+floor box sits beside the craft (right of it), not behind it: the original's flame fills the floor
+under the nozzle there.
+
+| Pair (craft) | Housing box | MAE | Floor box | MAE | What the crop shows |
+| --- | --- | --- | --- | --- | --- |
+| `omega/the-amphiseum` (Feisar_c1, Fury) | 880,690 - 1020,810 | 72.0 -> 77.3 | 1140,630 - 1240,760 | 53.4 -> 53.5 | the original's orange rim on the housing, vents and fins now appears on ours; housing R/B 0.86 -> 0.97 against the original's 1.04 |
+| `omega/modesto-heights` (Feisar_c1, Fury) | 890,690 - 1010,800 | 41.9 -> 50.5 | 1030,940 - 1140,1020 | 71.6 -> 72.8 | warm rim appears; stronger than the original's, whose housing is near-black (R/B 0.84, ours 0.90 -> 1.12) |
+| `omega/queens-mall-2048` (Feisar2048\3) | 920,800 - 1000,880 | 88.3 -> 88.7 | 1140,650 - 1260,800 | 25.4 -> 24.6 | the dim red light barely moves the housing (R/B 1.15 -> 1.17 against 1.81); the floor red rises 162 -> 167 against 179 |
+| `2048-vita/moa-therma` (Feisar, `hdships`) | 440,385 - 510,440 | 39.3 -> 48.5 | 460,450 - 560,500 | 19.7 -> 20.7 | blue glow on the nozzle housing and engine pipes as the original has, but stronger and wider (B/R 1.02 -> 1.61 against 1.16) |
+| `hd/the-amphiseum` | - | - | - | - | pixel-identical to before (`magick compare -metric AE` 0) |
+
+So the colour and place are right and the strength is not yet proven: all four housing boxes
+read worse in MAE because ours is brighter than the original's there. Not tuned. The six-light
+cap (ours sums every light) is not expected to explain it: an HD-era light reaches at most 3 units, so a
+hull draw on a grid overlaps few records (not counted); it can matter for the 2048 era's range 30.
+Open: Omega's and 2048's fragment combine, and a frame's own wander (the range is `Radius` +- 1, so one
+original frame may be anywhere from no light to twice the authored one). The wander flickers on
+ours: four consecutive ticks of the Amphiseum housing box differ by a mean 3.5 to 6.1 (0-255) with
+the box mean at 129 to 133, a few percent. The stored pairs hold one frame of the original, so
+whether it flickers by that much is not checkable from them; the jitter stays as read (confidence
+75).
+
 ## Cross-title
 
-- **2048: checked, applies.** The receivers too: 2048's copy of the same hull material has the same
+- **2048: ported** (same law, `crates/2048/src/lib.rs`, its own roster directory and a mag-strip gate on every circuit; wander inherited from Omega). The receivers too: 2048's copy of the same hull material has the same
   light-count family and the same combine ([its page](../vita-2048-eu-v104/engine-light.md), "The
   hull's own programs"). Not checked live on 2048 (no run of its executable in this lane), and its
   jitter sizes are still unread, so the flicker on 2048 is Omega's by inheritance. The same function is in 2048's own executable with the same

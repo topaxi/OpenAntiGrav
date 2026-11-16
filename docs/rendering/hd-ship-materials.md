@@ -1127,8 +1127,8 @@ lights off by it.
 
 **Wired.** `Race::hd_craft_engine_lights` is the engine light without the circuit's switch, bound into the craft's scene block
 (`ship_scene`, `oag_raceplay::scene::frame`); `Race::hd_engine_lights` (the track's) keeps the switch. Test:
-`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. HD only: `engine_lights` exist only where a title's `Flare`
-sets `engine_light`.
+`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. The switch is HD's alone: `engine_lights` exist where a title's `Flare`
+sets `engine_light` (HD, 2048, Omega), and only HD's circuits author the key.
 
 **Before and after** (1920x1080 pairs, `data/reference/compare-page/hd/<circuit>`, ours re-rendered with the pair's own flags on
 main and on this change; box `927,785 13x20`, the left bay wall above the shield band; mean RGB):
@@ -1144,8 +1144,8 @@ ours is about 1.3 times too bright, the same overshoot Talon's Junction already 
 (9.1, 16.0, 33.2)), so it belongs to the engine light's strength at the hull, not to this change (open: the light's `D` or
 the falloff exponent at the housing, or the vertex colours' multiplier).
 
-**Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
-them. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
+**Cross-title.** Omega and 2048 now carry the engine light (`EngineLightLaw` in their `Flare`; ported, with their own law, see
+[Omega's engine-light page](../ghidra/functions/ps4-omega-eu/engine-light.md)). The circuit's switch is HD's mechanism only: `spu_vertex_lights_enabled` reads it on PS3 geometry and is `true` elsewhere. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
 applies to every title that reads it.
 
 ## The drawn hull is not the body: a per-frame shake from `ship+0x6b00` (2026-10-22, `hd-hull-bay`)

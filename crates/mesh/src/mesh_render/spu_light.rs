@@ -90,7 +90,7 @@ pub struct SpuLights {
 }
 
 impl SpuLights {
-    /// No lights - what every draw outside a Wipeout HD race binds.
+    /// No lights - what every draw outside a race of a title with an engine light binds.
     #[must_use]
     pub const fn none() -> Self {
         Self {
