@@ -399,3 +399,20 @@
 0x811b663a	function	Ship_LoadEngineLightData	85	engine-light.md
 0x812726d6	function	EngineFlare_SubmitVertexLight	82	engine-light.md
 0x8103731c	function	VertexLight_AddCandidate	88	engine-light.md
+# 2026-11-16 vita-race-load-re: the race load's card, tip, meter and the attract mode test (race-load.md)
+0x815248c8	data	g_LoadingScreen	90	race-load.md
+0x81284550	function	LoadingScreen_SetCeiling	90	race-load.md
+0x812845b8	function	LoadingScreen_SetRate	88	race-load.md
+0x81284794	function	LoadingScreen_GetRate	88	race-load.md
+0x8128474c	function	LoadingScreen_SetProgress	82	race-load.md
+0x812846cc	function	LoadingScreen_Stop	78	race-load.md
+0x8105d4a8	function	FrontEnd_DrawLoadingMeter	85	race-load.md
+0x8105d1f0	function	FrontEnd_DrawLoadingMeterTriangle	85	race-load.md
+0x81051820	function	CampaignEventCard_EnterLoad	80	race-load.md
+0x810517ae	function	CampaignEventCard_ShowModePage	82	race-load.md
+0x8104fc5a	function	CampaignEventCard_DrawModePage	85	race-load.md
+0x8106dd36	function	GameTip_DrawPanel	85	race-load.md
+0x8106d1e6	function	GameTip_Select	80	race-load.md
+0x8106ce84	function	GameTip_Pick	80	race-load.md
+0x8151d230	data	g_GameTipTable	88	race-load.md
+0x812bd128	function	GameModeAttract_Construct	88	race-load.md
