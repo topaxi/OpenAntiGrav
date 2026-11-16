@@ -175,6 +175,23 @@ pub fn chunks(png: &[u8]) -> Result<Vec<Chunk<'_>>, ChunkError> {
     Ok(out)
 }
 
+/// `png` with every ancillary chunk left out: the picture alone, so two files of the same pixels
+/// are the same bytes whatever description each carries. A file that is not a whole PNG comes
+/// back as it was.
+#[must_use]
+pub fn picture_only(png: &[u8]) -> Vec<u8> {
+    let Ok(found) = chunks(png) else {
+        return png.to_vec();
+    };
+    let mut out = png[..8].to_vec();
+    for (kind, data) in found {
+        if kind[0].is_ascii_uppercase() {
+            chunk(&mut out, &kind, data);
+        }
+    }
+    out
+}
+
 /// Writes a length-prefixed, CRC-suffixed PNG chunk.
 fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend((data.len() as u32).to_be_bytes());
@@ -316,6 +333,15 @@ mod tests {
         assert_eq!(found[3].1, &[1, 2, 3]);
         let image = crate::replacer::decode_png(&png).expect("an ordinary decoder takes it");
         assert_eq!(image.rgba, pixels, "the extras leave the pixels alone");
+    }
+
+    #[test]
+    fn the_picture_alone_is_the_same_bytes_whatever_the_description() {
+        let plain = encode_rgba(2, 2, &[7; 16]);
+        let described = encode_rgba_with(2, 2, &[7; 16], &[(ITXT, itxt("oag", "a = 1"))]);
+        assert_ne!(plain, described);
+        assert_eq!(picture_only(&described), plain);
+        assert_eq!(picture_only(b"not a png"), b"not a png");
     }
 
     #[test]

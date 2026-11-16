@@ -67,7 +67,7 @@ fn capture_with(image: &Path, scratch: &Path, flag: Option<[&str; 2]>) -> Vec<u8
     }
     let status = command.status().expect("running oag-game");
     assert!(status.success(), "oag-game {flag:?}");
-    std::fs::read(&out).expect("reading the screenshot")
+    oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
 }
 
 fn scratch() -> PathBuf {
@@ -152,7 +152,7 @@ fn a_bush_hides_the_speed_pad_behind_it_under_both_trail_orders() {
             .status()
             .expect("running oag-game");
         assert!(status.success(), "oag-game {order}");
-        std::fs::read(&out).expect("reading the screenshot")
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
     };
     let original = shot("original");
     let over_floors = shot("over-floors");
@@ -202,7 +202,7 @@ fn the_debug_tint_repaints_the_blended_list_and_off_is_the_plain_frame() {
             None => command.env_remove("OAG_DEBUG_TINT_BLENDED"),
         };
         assert!(command.status().expect("running oag-game").success());
-        std::fs::read(&out).expect("reading the screenshot")
+        oag_texture::png::picture_only(&std::fs::read(&out).expect("reading the screenshot"))
     };
     let plain = shot(None);
     let zero = shot(Some("0"));
