@@ -3638,6 +3638,7 @@ dependencies = [
 name = "oag-replay"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "oag-bytes",
  "oag-core",
  "oag-gameplay",

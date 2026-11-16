@@ -44,6 +44,7 @@ pub mod file;
 pub mod header;
 pub mod pose;
 pub mod record;
+pub mod shot;
 pub mod track;
 pub mod verify;
 
@@ -52,5 +53,6 @@ pub use file::{FORMAT_VERSION, Read, ReadError, Replay};
 pub use header::Header;
 pub use pose::{GhostLap, Pose};
 pub use record::Recorder;
+pub use shot::ShotRecord;
 pub use track::{PoseRecorder, PoseTrack};
 pub use verify::{Desync, Verifier};
