@@ -11,6 +11,11 @@ Companion pages: [engine-light.md](engine-light.md) (the light that was ruled ou
 > driver's `[:12]` cap); the hull binds **no** `constantAmbientColour` in a race (its ambient is a probe); and ours' knockouts
 > were confounded by the adaptive exposure, not by `zone_grade` (a single race builds no Zone grade).
 
+> **2026-11-16, lane `hull-albedo-re`: the shared factor is the vertex colour; see ["The vertex colour"](#the-vertex-colour-2026-11-16-hull-albedo-re).**
+> Both race hull programs multiply `VertexColour1` (baked occlusion, a raw UNORM grey) into `albedo * light`, and ours' PS4
+> decoder draws it as white. It supersedes "Read 2: is the factor the albedo? No" below. The housing box alone still runs
+> `1.2` to `1.5` times after it (its sun term); the hull as a whole comes within 9 %.
+
 ## Summary
 
 | Question | Answer | Confidence |
@@ -318,6 +323,126 @@ sun-only cause. The earlier "albedo is about equal" (Read 2 above) compared the 
 `0.25 * SH`, which this read replaces; it should be redone with these numbers (confidence 55: the basis' axes are unverified
 and move the ambient by 10 to 20 %, and the `K = Ks = 0` states drift 25 %).
 
+## The vertex colour (2026-11-16, `hull-albedo-re`)
+
+Lane `hull-albedo-re`, the same pair, five boots of the native port (1.07), ours at `47f6c99b0` plus scratch knobs that are
+not in the tree. Driver: `scripts/wipeout-pc-hull-vcol-live.py`.
+
+| Question | Answer | Confidence |
+| --- | --- | --- |
+| What do the hull's ambient and sun both multiply that ours does not? | **`VertexColour1.rgb`**, a baked occlusion grey per vertex, raw. Both race hull programs end on `albedo.rgb * VertexColour1.rgb * light`; ours' PS4 decoder (`oag_mesh::mesh::rcs::psp2`) keeps the colour at `1` on every submesh that is not a Vita `NOVAColor` surface | 90 the law (static, four programs and the fetch format), 80 that it is the shared factor (live slopes below) |
+| Is the colour decoded (sRGB, squared) before the multiply? | **No.** The vertex programs export the fetched value untouched and the fetch format of declaration type 11 is `R8G8B8A8 UNORM` (`0x00fac00a`) in the engine's own table | 85 |
+| Does it close the acceptance? | **No, on the housing box; yes to 9 % over the hull.** Housing `(0.097, 0.102, 0.075)` becomes `(0.068, 0.074, 0.054)`, still `1.54, 1.45, 1.20` times the original's `(0.044, 0.051, 0.045)`. The hull body box `(820,560)-(1100,860)` becomes `(0.069, 0.092, 0.082)` against `(0.064, 0.085, 0.079)` | measured |
+| What is left on the housing box? | Its sun term: with the ambient off the box is `(0.056, 0.056, 0.031)` in ours (vertex colour on) against `(0.035, 0.040, 0.032)` in the original, where the original's value still holds the reflection ours lacks. The hull body's is equal (`(0.061, 0.080, 0.064)` against `(0.056, 0.074, 0.066)`). So it is where the sun falls on the rear panels (shadow or `N.L`), not a factor | 70 that it is local to the sun term, cause unread |
+| Is the hull's normal map bound in ours on Omega? | By the code, yes: `psp2::normal_map::plan` binds it third for a PS4 submesh with a tangent, and `diffuse_vcol` (the main hull, 19,752 of Feisar's vertices) has no normal map in the original either. Not measured against the original's `N.L` | 60 |
+| The second hull program's texel? | `diffuse_vcol`'s shadowed probe variant (`0x64a4`) is the same law with no specular, no reflection and no normal map: `texel.rgb * VertexColour1.rgb * (kmix * SH(n) + sun * sat(n . dir) * shadow)`, then the fog lerp. No other factor | 85 |
+
+### Static
+
+`data08.psarc`, `data/materials/ships/`, through `gcn_dump`:
+
+| Program | What it does with `VertexColour1` |
+| --- | --- |
+| `diffuse_with_specular_from_alpha_n_vcol` vertex `0x7404` (the shadowed variant's) | `fetch slot 4 -> v20..v22`, then `exp param3 v20, v21, v22, v0` at `@228`: exported as fetched |
+| the same material's vertex `0x1964` | `exp param2 v20, v21, v22, v0` at `@1c4` |
+| its pixel `0x7c44` | `attr3.xyz` is that export (`attr2.xy` is `Uv1`, the export before it); `@76c v_mul_f32 v1, v5, v2`, `@770`, `@774` multiply the diffuse sample's three lanes by it, and `@778`, `@784`, `@788` multiply the product by the light. The specular (`@790`-`@798`) and the reflection are added after and are not multiplied by it |
+| `diffuse_vcol` vertex `0x5d84` | `fetch slot 3 -> v16..v18`, `exp param3 v16, v17, v18, v0` at `@1b0` |
+| `diffuse_vcol` pixel `0x64a4` (263 instructions: `shadowCoeffs, shCoeffs, probeOffsetAndDiffuse, liveLighting0diffuse, liveLighting0direction`) | `@4b0 v_mad_f32 v7, v26, v3, s46` is `kmix`, `@4bc`-`@4d4` build `kmix * SH + sun * shadow * N.L` per lane, `@4dc`-`@50c` multiply the texel by the colour lanes (pre-multiplied by the fog factor) and `@4e0`-`@518` by the light and lerp the fog |
+
+The fetch format: `VertexDecl_InitAttributeFormats` (`0x017f3ae0`, was `FUN_017f3ae0`, a static initialiser, confidence 75) fills
+`g_vertex_attribute_formats` (`0x022129c0`, confidence 80), sixteen rows of four GNM data formats, row the declaration's type
+nibble and column the component count less one. Four rows are pinned by types `oag_rcs` already reads from the files:
+
+| Type | Row | Four-component format | Read by ours as |
+| --- | --- | --- | --- |
+| 0 | `0x022129c0` | `0x00fac70e` (32-bit float) | `PS4_FLOAT2` |
+| 1 | `0x022129d0` | `0x00fac70c` (16-bit float) | `PS4_HALF2` |
+| 11 | `0x02212a70` | `0x00fac00a` (8-bit, channel type 0, **UNORM**) | `PS4_UBYTE4_NORM`, `VertexColour1` |
+| 14 | `0x02212aa0` | `0x00fac10a` (8-bit, channel type 1, SNORM) | `PS4_SBYTE4_NORM`, `tangent` and `normal` |
+
+No row holds the sRGB channel type (`9`; `0x00fac90a` occurs 34 times in the image, all as immediates in code). The table's
+reader was not followed; the four rows agreeing is the evidence.
+
+The data (Feisar `c1`, the player's model of the pair, a print in the reader that is not in the tree): every hull submesh
+carries a grey colour with alpha 1. `diffuse_vcol`: 19,752 vertices mean `0.234`, 2,989 mean `0.522`, 1,934 mean `0.133`,
+1,206 mean `0.515`; `diffuse_with_specular_from_alpha_n_vcol`: 3,940 mean `0.406`, 681 mean `0.611`, 342 mean `0.438`,
+300 mean `0.483`, 180 mean `0.123`; `carbonfibre`: 682 mean `0.312` (its program was not read). The other seven craft of
+the grid read the same way (means `0.08` to `0.92`).
+
+### Live
+
+Every state below changes the hull alone, so the adaptive exposure holds (a sunlit track panel `(700,580)-(760,620)` reads
+`(0.352, 0.562, 0.509)` to `(0.369, 0.583, 0.526)` over the run, and ours `(0.318, 0.516, 0.498)`, `0.9` times). The probe
+records are written flat (`sh[0] = 1`, the other eight zero: the probe term is `kmix`), `K = Ks` at 1, 2 and 4, each less
+the `K = Ks = 0` state. Ours renders the same states through its probe row. Green lane, boot 5, three frames a state:
+
+| Box | | `K = 1` | `K = 2` | `K = 4` | Slope 1 to 4, ours over the original (R, G, B) |
+| --- | --- | --- | --- | --- | --- |
+| hull body `(820,560)-(1100,860)` | original | `0.0314` | `0.0767` | `0.1238` | |
+| | ours, vertex colour on | `0.0372` | `0.0740` | `0.1377` | `1.12, 1.09, 1.09` |
+| wide `(760,520)-(1160,900)` | original | `0.0153` | `0.0517` | `0.0854` | |
+| | ours, vertex colour on | `0.0263` | `0.0517` | `0.0945` | `1.02, 0.97, 0.98` |
+| housing `(890,690)-(1010,800)` | original | `0.0334` | `0.0885` | `0.1804` | |
+| | ours, vertex colour on | `0.0574` | `0.1217` | `0.2291` | `1.15, 1.17, 1.24` |
+
+At `K = 1` on the hull body ours is `1.14, 1.18, 1.29` times the original with the colour, `1.67, 1.67, 1.77` without it
+and `0.86, 0.92, 1.04` with the colour decoded by the sRGB curve first. On hand-placed panels of very different colour
+(run 4: the housing block's top, both wing panels, the spine block, the lower body; ours' colour factor `0.91, 0.67, 0.71,
+0.67, 0.36`) the raw colour gives `1.35` to `1.73` everywhere, none gives `1.5` to `4.3` and the decoded one `0.4` to `1.36`:
+only the raw colour makes the ratio the same on every panel. The original's response is not a line through zero (its
+`K = 2` over `K = 1` is `2.4` to `2.7`), which is why the slopes are quoted and the `K = 1` ratios run high; the cause (the
+curve's toe at these levels, or the frame's own motion) was not separated.
+
+With the flat probe at `K = 1` and no sun, **ours without the colour shows two round fittings beside the housing block as
+white discs and with it shows them shaded into the body, as the original's same state does**.
+
+Shipped state, engine light off, ours' tick 100 against the original's three shipped states of boot 5:
+
+| Box | Original | Ours, main | Ours, vertex colour on |
+| --- | --- | --- | --- |
+| housing `(890,690)-(1010,800)` | `(0.044, 0.051, 0.045)` | `(0.097, 0.102, 0.075)` | `(0.068, 0.074, 0.054)` |
+| hull body `(820,560)-(1100,860)` | `(0.064, 0.085, 0.079)` | `(0.087, 0.112, 0.097)` | `(0.069, 0.092, 0.082)` |
+| spine `(930,600)-(990,680)` | `(0.072, 0.074, 0.053)` to `(0.080, 0.083, 0.059)` | `(0.154, 0.158, 0.114)` | `(0.103, 0.106, 0.074)` |
+| left fin top `(800,640)-(880,700)` | `(0.19, 0.22, 0.20)`, frames `0.12` to `0.25` | `(0.141, 0.170, 0.135)` | `(0.132, 0.161, 0.130)` |
+| floor `(1140,650)-(1260,800)` | moves with time | `(0.113, 0.353, 0.363)` | `(0.112, 0.354, 0.364)` |
+
+The hull body and wide boxes take in track pixels at their edges; those pixels do not move with a hull-only state, so
+the slopes above are the hull's, and the shipped means are diluted by a track that ours draws within 10 %.
+
+Ours' shares on the housing with the colour on: ambient alone `(0.010, 0.014, 0.018)` (the original's `(0.010, 0.011,
+0.012)`), sun alone `(0.056, 0.056, 0.031)` (the original's about `(0.025, 0.022, 0.009)`). **The ambient share closes; the
+sun share on this box does not.**
+
+What did not work, so nobody repeats it:
+
+- **Whitening the colour bytes in the port's memory proves nothing.** The twelve buffers of the player's model are found in
+  guest memory by their first bytes (13 copies, near `0x10d36c6000`) and written through the port's memfd, and the frame does
+  not change (`0.96` to `1.04` on every box). The control says why: raising the 19,752-vertex buffer's positions by half a
+  unit does not move the hull either. The port draws from its own copy of the vertex data.
+- **The shadow term by the `K` / `Ks` split is noise at three frames a state.** `(K = 1, Ks = 0)` over `(K = Ks = 1)`,
+  each less `K = Ks = 0`, gives `0.39` on the hull body in one boot and `1.19` in the next: the craft sways at rest and the
+  three states are three poses. It needs a dozen frames a state, or the sway stopped.
+- The craft leaves the grid about 40 s after it appears, so a run has about 20 s of states after the 12 s settle; a scan of
+  all guest memory takes 24 s and has to be bounded (`--scan-lo`, `--scan-hi`).
+- The original's and ours' cameras differ on this pair (ours looks further down the hull's rear), so a box is not the same
+  panels on both sides; the hull-wide boxes are the safer comparison.
+
+### Recipe
+
+1. `crates/mesh/src/mesh/rcs/psp2.rs`, the vertex loop: for a PS4 submesh that is lit, is not a twin-blend, has no
+   `lightmapUV`, carries `VertexColour1` and draws a hull program that multiplies it (`diffuse_vcol`,
+   `diffuse_with_specular_from_alpha_n_vcol`; decide off the material's GCN vertex program naming the input, the way HD's
+   `skin::light_inputs::colour_factor` decides off its microcode, not off the file name), emit `colour = rgb / 255` raw and
+   `sun_mask = factor_sun_mask(1.0)`.
+2. No shader change: `shade.wesl`'s `colour_factor` arm (`in.colour.rgb * (hull_ambient + sun_diffuse + in.spu_light)`) is
+   the original's product, and it leaves the specular unmultiplied as the original does. The scratch build used exactly this.
+3. Tests that fail if it is dropped: a ground truth that Feisar `c1`'s Omega hull emits a non-white colour with the factor
+   marker on its `diffuse_vcol` vertices, and the box test on `omega/modesto-heights` tick 100: housing below
+   `(0.075, 0.080, 0.060)` (it is `(0.097, 0.102, 0.075)` without), hull body within 15 % of `(0.064, 0.085, 0.079)`.
+4. `carbonfibre` carries the same colour stream and its program is unread: read it (`gcn_dump`) before giving it the factor.
+5. Then the housing's sun term (the owed shadow read, with more frames a state), and the reflection after that: adding the
+   reflection first moves the housing the wrong way.
+
 ### Cross-title
 
 - **2048: checked, differs on the file, not wired.** (Wired on Omega above, including its ten 2048-lineage circuits, which ship
@@ -326,5 +451,11 @@ and move the ambient by 10 to 20 %, and the `K = Ks = 0` states drift 25 %).
   the weight exists there. It has no `shCoeffs` name and no `(shadow)` key, and its probe file is `track.probes` (`0x81422ba8`,
   1,112-byte records), not `.shprobes`: what `K` scales on the Vita is unread. Next address: the references to `0x815094e0`
   and the GXP hull program's use of the constant.
+- **2048, the vertex colour: checked, applies as far as the declaration, not wired.** The Vita's `Diffuse_Vcol` and
+  `Diffuse_With_Specular_From_Alpha_N_Vcol` vertex programs declare `VertexColour1` with four components
+  (`scripts/vita-gxp.py grep <data.psarc>:materials/ships/diffuse VertexColour1`: the base archive and both patch archives,
+  e.g. `Diffuse_Vcol.rcsmaterial` program 2 at `0xda0`), so the stream is there. What the fragment programs do with it is not
+  read (the GXP reader stops at the container). Ours reads no hull colour on the Vita: `vertex_colour1()` accepts the PS4
+  type only. HD multiplies it and is wired (`skin::light_inputs`).
 - **HD**: its hull ambient is `4 * irradiance` from `track.probes` and is wired (`docs/rendering/hd-ship-materials.md`,
   "Finding 5"); it has no `K`.
