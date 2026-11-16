@@ -316,6 +316,13 @@ reading by hand.
 | `0x01366760` | `QuakeManager_Update` | [weapon-instance-limits](weapon-instance-limits.md) | `0x01393eb0` | interpolated + mnemonics 0.93 (next 0.45) | 0.93 | 60 |
 | `0x01372ee0` | `WeaponManager_DispatchFire` | [weapon-instance-limits](weapon-instance-limits.md) | `0x013a2cd0` | string xrefs 12/12 | 0.95 | 80 |
 
+## The player's racer row: pose offsets (2026-11-17, `zone-pair-omega`)
+
+Row 0 of the racer table (`0x01a7ae00` above, runtime `0x800000000 + 0xa7ae00`) carries the live pose: `+0x10` position (xyz, w 1.0), `+0x20` up, `+0x30` forward,
+`+0x40` the third axis (unit, orthogonal to 1e-4), `+0x70` a second position a unit or so ahead along the forward (not identified). Read from the frozen port on
+Vineta K (Zone) and Capital Reach (2048 mode Zone) and checked against ours' track at the same position: up dot 0.9997 and forward dot 0.998 (Vineta K), forward 0.99995
+(Capital Reach). Confidence 85. The mode word at `0x0201280c` reads 6 (Zone) in HD mode and an unrelated value in 2048 mode. Method: `docs/tools/compare-page.md`, "Omega Zone pairs".
+
 ## 2048 cross-check
 
 **Not checkable as a translation**: 2048's executables are separate programs with their own base
