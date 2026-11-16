@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048, omega]
 updated: 2026-11-16
-summary: "2048 grid pairs: no frame term (fog, bloom, exposure, lighting) owns the dark bias; the bottom third is the craft box (pose, light; ring = radar, drawn)"
+summary: "2048 grid pairs: no frame term (fog, bloom, exposure, light) owns the dark bias; the bottom third is the craft box (pose, light; ring is the radar)"
 difficulty: medium (50)
 ---
 
