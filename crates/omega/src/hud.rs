@@ -178,6 +178,9 @@ const ALWAYS_ON_2048: &[&str] = &[
     "EnergyBar",
     "EnergyBarDelay",
     "ZoneCounterBG",
+    // `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`.
+    "Radar",
+    "PlayerDot",
 ];
 
 /// The default skin's roots with no skin list, what every other skin overrides.

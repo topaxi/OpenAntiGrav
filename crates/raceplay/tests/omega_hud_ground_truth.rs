@@ -706,3 +706,22 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
     let missing: Vec<&&str> = wanted.iter().filter(|n| !names.contains(**n)).collect();
     assert!(missing.is_empty(), "not authored by Omega: {missing:?}");
 }
+
+/// **Omega's 2048 mode draws 2048's radar round the craft** (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`):
+/// its `2048_hud\Arcade_HUD.xml` includes `HUD_half_radar.xml`, whose `Radar` and `PlayerDot` sit at
+/// `(480, 439)` in the 544-line space, and the bind (`FUN_012d1590`) never hides either. Dropping
+/// either name from `ART_2048.always_on` fails this.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_2048_mode_draws_the_half_radar_round_the_craft() {
+    let Some(mut archives) = open() else { return };
+    let layout = composed(&mut archives, r"Data\XML\2048_hud\Arcade_HUD.xml").layout;
+    let radar = layout.sprite("Radar").expect("Radar");
+    assert_eq!(radar.rect, [381.75, 439.0, 197.25, 54.0]);
+    assert_eq!(radar.uv, [8.0, 1676.0, 752.0, 208.0]);
+    let dot = layout.sprite("PlayerDot").expect("PlayerDot");
+    assert_eq!(dot.rect, [464.25, 433.0, 31.5, 12.0]);
+    for name in ["Radar", "PlayerDot"] {
+        assert!(oag_omega::hud::ART_2048.always_on.contains(&name), "{name}");
+    }
+}

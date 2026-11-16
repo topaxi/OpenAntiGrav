@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [2048, omega]
-updated: 2026-11-12
-summary: "2048 grid pairs: no frame term (fog, bloom, exposure, lighting) owns the dark bias; the bottom third is the craft box (pose, ring, light)"
+updated: 2026-11-16
+summary: "2048 grid pairs: no frame term (fog, bloom, exposure, light) owns the dark bias; the bottom third is the craft box (pose, light; ring is the radar)"
 difficulty: medium (50)
 ---
 
@@ -17,8 +17,8 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
 
 - **The bottom third is the craft's box.** The hull box is 37 % of the band and carries -15.9 of Empire Climb's -16.5 luma
   bias (Queens Mall -9.2 of -8.3, Vineta K -5.0 of -6.9); the band's scenery is -2.0 / +2.4 / -2.0. Three parts, not separated:
-  the pose offset (`pose_delta`); a white ring under the original's craft that ours does not draw (not the HUD's Pilot Assist
-  bracket, which both sides draw; unidentified); and the light on the paint. **The size is not a term**: the recorded 1.31 x 1.35
+  the pose offset (`pose_delta`); ~~a white ring under the original's craft that ours does not draw~~ (the 2048 HUD radar, drawn since 2026-11-16:
+  `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`, hull-box error 44.4 to 39.1 on Moa Therma); and the light on the paint. **The size is not a term**: the recorded 1.31 x 1.35
   was the yellow mask's box, and landmark boxes agree within 2 % on all three pairs with ours on `OPT_CLOSE` (step 0, struck). Yellow-paint median
   luma at baseline: Queens Mall ours 130.1 against 156.1 (same pixel count, ours 17 % dark: a light term), Empire Climb ours
   152.6 against 143.1 (not darker: the gap is the road glow, ring and pose). Ambient x3 to x4 on every no-lightmap material
@@ -55,8 +55,7 @@ of ours accounts for most of the dark bias on `2048-empire-climb-grid`, `2048-ma
    `rpcs3-capture.md`) and is not read here. Method and numbers: [compare-page.md](../../docs/tools/compare-page.md), "The chase
    camera and the craft's size". The maintainer can decide the setting outright from the Vita3K save's `CameraP1`.
 
-1. Match the craft's pose on the three pairs (`pose_delta`) and identify the
-   white ring under the original's craft; re-measure the hull box's bias and the pair's impact (method in exposure.md).
+1. Match the craft's pose on the three pairs (`pose_delta`) (~~identify the white ring~~: the radar, drawn); re-measure the hull box's bias and the pair's impact (method in exposure.md).
 2. Then read the 2048 craft's pixel program from Vita3K's SPIR-V by the container's SHA-256 (`scripts/vita-gxp.py`,
    `2048-composite-leftovers.md` has the recipe) and name the term that lights the paint past `ambient + sun * N.L`
    (Queens Mall, 17 % dark).

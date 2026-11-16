@@ -431,3 +431,30 @@ fn the_eliminator_lap_hexagon_is_authored_only_by_the_unplayed_bare_root() {
         "a name no played layout authors draws nothing"
     );
 }
+
+/// **The radar under the craft is always on** (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`):
+/// the played single race includes `HUD_half_radar.xml`, whose `Radar` (the white arc and the split
+/// bowl, 263 x 72 off `hud_2048.gxt`) and `PlayerDot` (the ringed dot at its centre) sit at
+/// `(480, 439)` in the 544-line space, round the craft's tail (Omega's copy of the file draws the
+/// same at 197.25 x 54 off its `.2x` atlas), and `Hud_BindWidgets` (`0x81192cd0`) never hides either. Dropping either
+/// name from `oag_2048::hud::ALWAYS_ON`, or the layout moving them, fails this.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_played_single_race_draws_the_half_radar_round_the_craft() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_2048::hud::skins::played::ARCADE).layout;
+    let radar = layout
+        .sprite("Radar")
+        .expect("the single race authors Radar");
+    assert_eq!(radar.rect, [349.0, 439.0, 263.0, 72.0]);
+    assert_eq!(radar.uv, [2.0, 419.0, 188.0, 52.0]);
+    let dot = layout
+        .sprite("PlayerDot")
+        .expect("the single race authors PlayerDot");
+    assert_eq!(dot.rect, [459.0, 431.0, 42.0, 16.0]);
+    for name in ["Radar", "PlayerDot"] {
+        assert!(oag_2048::hud::ALWAYS_ON.contains(&name), "{name}");
+    }
+}

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-11-13
+updated: 2026-11-16
 summary: "2048 HUD: _HD layouts, grant announcement, fly, pop-in, frame colour and the XP value wired; class name, Tournament file, alpha pulse open"
 difficulty: easy (30)
 ---
@@ -34,8 +34,9 @@ PSP's grid, twice the size, right-hand column off screen.
   zone-to-class law and string ids are unread, compare `67-zone-grid.png` and `68-zone-5.png`), a campaign Tournament's
   `Arcade_HUD_HD.xml` (`HudLayouts` has one `arcade` row), Zone Battle (no `Mode`). The Race event's `XP` and
   `OBJECTIVE` lines are done (`Setup::campaign_event`).
-- **Seen in both 2048 pair originals and drawn by no widget of ours:** the white ring round the hull at the grid and the
-  key-shaped icon left of the speed bar. Neither has been matched to a widget of the `2048_hud` set; `TOTAL` ~~reads
+- **Seen in both 2048 pair originals and drawn by no widget of ours:** ~~the white ring round the hull at the grid~~ (the radar,
+  `Radar`/`PlayerDot` always on since 2026-11-16, `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`; `RadarDot*` read, not wired) and the
+  key-shaped icon left of the speed bar (matched as `PilotAssist`, see below); `TOTAL` ~~reads
   `0.00.00` in the original and `0.00.0` in ours~~ is hundredths since 2026-10-29 (`HudArt::total_time_hundredths`, formatter
   `FUN_8106f784`, `2048-hud.md`). The `XP` value is drawn since 2026-11-13 (`Readout::race_xp`, a plain integer, `race-hud-selection.md`); the `+N` `AwardXP` popup is not.
 - **2048's Cannon rounds line is written by the game and held back here (`cannon-ammo-hud`,
