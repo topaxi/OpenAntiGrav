@@ -465,12 +465,17 @@ impl Report {
                 self.alpha_product_materials
             )
         };
-        let flat_constants = (self.emissive_colour_submeshes + self.constant_diffuse_materials > 0)
-            .then(|| {
-                let (e, d) = (self.emissive_colour_submeshes, self.constant_diffuse_materials);
-                format!("; {e} submesh(es) draw an EmissiveColour unlit, {d} material(s) a constant diffuse")
-            })
-            .unwrap_or_default();
+        let (e, d) = (
+            self.emissive_colour_submeshes,
+            self.constant_diffuse_materials,
+        );
+        let flat_constants = if e + d == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {e} submesh(es) draw an EmissiveColour unlit, {d} material(s) a constant diffuse"
+            )
+        };
         let uv_keys = if self.uv_keyed_meshes == 0 {
             String::new()
         } else {
