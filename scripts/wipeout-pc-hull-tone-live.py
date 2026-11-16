@@ -11,7 +11,7 @@ and grabs frames with one term forced at a time, each undone before the next:
         --track-steps 8 --sky-brightness 2.264 --ship-diffuse 0.25 --ambient 0.309804,0.258824,0.713726 \
         --sun-diffuse 4,3.607843,2.164706
 
-The values are the circuit's `track.EnvSettings` ones (`omega-hull-tone` report); the scan is by value, so a wrong value
+The values are the circuit's `track.EnvSettings` ones (`hull-tone.md`, "Method notes", has Modesto Heights'); the scan is by value, so a wrong value
 finds nothing and the run stops. Every write is to this run's own process. `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`.
 """
 

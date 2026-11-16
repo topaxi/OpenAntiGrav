@@ -60,7 +60,7 @@ unnamed rather than forced.
 - [engine-light.md](engine-light.md) - `EngineLightData.xml` feeds one vertex light per craft:
   its colour by era, Fury skin and mag strip, the 32-slot table, six lights a draw.
 - [hull-tone.md](hull-tone.md) - the unlit hull's 1.6x: live knockouts of the lighting object on the port;
-  constants equal, a factor common to ambient and sun left.
+  sun constant equal, the diffuse combination left.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [particle-paths.md](particle-paths.md) - the `Data/Particles` versus

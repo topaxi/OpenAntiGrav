@@ -55,11 +55,11 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
 - **Ours' lit panels are brighter than the original's brightest, and the hull's own tone is the cause (narrowed, 2026-11-16,
   `omega-hull-tone`, `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`).** Housing box `(890, 690)-(1010, 800)` on Modesto, engine
   light off both sides, linear light: original `(0.045, 0.051, 0.044)`, ours `(0.101, 0.097, 0.105)` (`2.2, 1.9, 2.4` times).
-  Measured on the original by writing the live lighting object: the light constants equal ours' (`sun * 1.6` is in the process);
-  `Ship diffuse brightness` is a live neutral term worth about 20 % of the box at `0.25` (ours reads it nowhere, so it lacks it);
-  specular, reflection, a premultiplied ambient are ruled out. What is left is a factor common to ours' ambient and sun terms,
-  `2.4` to `3.1` after the K term: the hull's albedo (texel times vertex colour) or the normal (confidence 55). Ours' knockouts
-  are confounded by `zone_grade`.
+  Measured on the original by writing the live lighting object: the sun constant equals ours' (`sun * 1.6` is in the process; the
+  hull's bound ambient was not verified); `Ship diffuse brightness` is a live neutral term worth about 20 % of the box at `0.25`
+  (ours reads it nowhere); specular, reflection and a premultiplied `K * ambient` or `K * sun` are ruled out. What is left is how
+  ours' hull combines its diffuse terms (`2.4` to `3.1` times after the K term): albedo, the unnormalised normal or the bound
+  ambient, not separated (confidence 55). Ours' knockouts are confounded by `zone_grade`.
 - **One term ours has and the original lacks: ours normalises `N`.** The original's vertex program
   uses the world matrix times the vertex normal as is. If the Omega or 2048 hull's world matrix
   carries a scale (HD's is 0.75), the original's light is that much weaker. The scale on Omega was
@@ -82,17 +82,17 @@ is `GameMode_IsHdLineage`. Results and per-box numbers: `docs/ghidra/functions/p
    curve at `Radius + w`: 1.0 gives 3,275 warm pixels, 1.5 gives 9,245, 2.0 gives 13,182 (summed
    excess 106,450, 355,657 and 550,931). Ours' count should follow the curve; its excess is expected
    to run high by the hull's own over-brightness until the hull tone is fixed.
-3. **Hull tone (ready to read, then wire).** Read the Feisar_c1 housing submesh's vertex colours and albedo texels from the Omega
-   archive; the housing's mean `vertex colour * texel`, divided by what ours' hull draw multiplies, should be about `1 / 2.8`
-   (`1 / 2.4` to `1 / 3.1` by channel). If it is: ours drops or misreads the vertex colour (or the texel): wire it, and the box
-   falls to the original's. If it is about `1`: the factor is the normal, so read the hull world matrix's scale in the port (the
-   unnormalised `N` below) and feed the sun and ambient sum the unnormalised normal. Then wire `Lighting.Ship diffuse brightness`
-   (`0x0188d117`) as a neutral additive term, about `+0.03` linear per unit of `K` on this box (original: `+0.012, +0.011, +0.009` at `0.25`; `K = 0 -> 1`
-   `+0.022` to `+0.039`; `1 -> 4` about `+0.026` per unit; three boots), times the hull albedo ours already has.
+3. **Hull tone (two reads, then wire).** Read 1: on the port write `Ship diffuse brightness` (`+0x164`, base `0x800eb2898`+12) to `0`
+   then `1` and diff the per-draw constant region around the `sun * 1.6` copies: what moves with it is where `K` enters and
+   the ambient the hull really binds. Read 2: the Feisar_c1 housing's vertex colour times albedo texel, divided by what ours' hull
+   multiplies, should be about `1 / 2.8` (`1 / 2.4` to `1 / 3.1` by channel) if the factor is albedo; about `1` if it is the
+   normal (read the hull world matrix scale in the port; feed the sun sum the unnormalised normal) or the ambient. Wire only what a
+   read names; `K` waits on read 1 (the `+0.03` per unit on this box is a fit, not a law).
    **Acceptance:** `omega/modesto-heights`, tick 100, engine light off, housing box `(890, 690)-(1010, 800)`: linear mean within
-   15 % of `(0.045, 0.051, 0.044)` (sRGB about `(37.7, 43.2, 42.2)`, ours today `(65.5, 63.2, 72.7)`), and the track panels
-   (`scripts/hull-tone-box-linear.py` on a floor box) unmoved. A second pair (Amphiseum, Moa Therma) must fall the same way.
-   Wire it only for the hull draw: `zone_grade.rs` builds its rig through `Light::authored` too (`panelmap-sun` owns it).
+   15 % of `(0.045, 0.051, 0.044)` (sRGB about `(37.7, 43.2, 42.2)`, ours today `(65.5, 63.2, 72.7)`), the track panels
+   (`scripts/hull-tone-box-linear.py` on a floor box) unmoved, and a second pair (Amphiseum, Moa Therma) falling the same way.
+   Wire it for the hull draw only: `zone_grade.rs` builds its rig through `Light::authored` too (`panelmap-sun` owns it).
+   Evidence and numbers: `docs/ghidra/functions/ps4-omega-eu/hull-tone.md`.
 4. Boxes for the merge: Queens Mall floor `(1140, 650)-(1260, 800)` must rise about `+3.6` red
    (the original, light on against off; the held branch gives `+4.8`, which passes). Modesto,
    Amphiseum and Moa Therma housing boxes are **not** judged against the stored frame; re-grab the

@@ -10,12 +10,11 @@ Companion pages: [engine-light.md](engine-light.md) (the light that was ruled ou
 
 | Question | Answer | Confidence |
 | --- | --- | --- |
-| Is it one term? | **No single term identified.** Narrowed: the excess sits in the factor ours' ambient and sun terms **share** (the hull's albedo: texel times vertex colour, or the normal's length and direction), not in a constant | 55 |
-| Are the light constants different? | **No.** The port's per-draw sun constant is exactly `Sun diffuse colour * Sun diffuse intensity` = `(6.4, 5.7725, 3.4635)` (12 copies read in the process); ours multiplies the same intensity (`light.rs`) | 90 |
-| Is it `Lighting.Ship diffuse brightness` (key `0x0188d117`, object `+0x164`, Modesto `0.25`)? | **No, and it is live-read by the hull.** It is a separate term that ours lacks, about 20 % of the box on the original at `0.25` (slope about `+0.03` linear per unit). Ours reading it would raise ours, not lower it | 90 (three boots) |
+| Is it one term? | **No single term identified.** Narrowed: the excess is in how ours' hull combines its diffuse terms (whole box `2.2, 1.9, 2.4` times, `3.1, 2.4, 2.9` after the K term the original has and ours lacks). Which term carries it is open: per term, only the sun's ratio was measured (`2.6, 2.7`, from knockouts confounded by ours' zone grade) | 55 |
+| Is the sun constant different? | **No.** The port's per-draw sun constant is exactly `Sun diffuse colour * Sun diffuse intensity` = `(6.4, 5.7725, 3.4635)` (12 copies in the process); ours multiplies the same intensity (`light.rs`). **The hull's bound ambient constant was not verified**: the 2181 raw-ambient copies may belong to other draws | 90 for the sun, unknown for the ambient |
+| Is it `Lighting.Ship diffuse brightness` (key `0x0188d117`, object `+0x164`, Modesto `0.25`)? | **Not as a multiplier, but the hull reads it live.** It is a separate neutral term worth about 20 % of the box on the original at `0.25` (ours reads it nowhere). The hull program as read has no `K` input and no `K * ambient` or `K * sun` constant exists in the process, so `K` reaches the hull through a bound constant ours does not compute; where is open | 90 for the live effect (three boots), 40 for its path |
 | Specular? | **No.** Specular power `60 -> 4` and `-> 1` moves the box by less than the frame noise | 85 |
 | Reflection (`Ship reflective scale` `1`, chrome `1.5`)? | **No.** Zeroing either or both leaves the box inside the noise | 80 |
-| Premultiplied ambient (`ambient * K`)? | **No.** The process holds no `0.25 * ambient` triple; it does hold `sun * 1.6` and no `sun * 1.6 * 0.25` | 85 |
 | Post (exposure, tonemap)? | **Not the cause of the hull's excess:** the same frames' other panels run `1.2` to `1.4` times in linear light, the hull's housing `1.8` to `2.3` | 70 |
 | Livery / texel? | **Not compared** (see "Livery"); the housing box sits on panels both models draw | n/a |
 
@@ -69,17 +68,20 @@ how the hull draw combines them.
 
 ## What this narrows
 
-The original's inputs (ambient, `sun * 1.6`) equal ours'. The hull is `(ambient + sun * N.L [+ vertex light]) * texture *
-vertex colour [+ the K term]` on the original's own programs ([engine-light.md](engine-light.md), "Evidence"). Both of ours'
-terms run `2.4` to `3.1` times the original's. A factor common to **both** is what the equation says they share:
+The sun's input equals ours' (ambient unverified). The hull is `(ambient + sun * N.L [+ vertex light]) * texture * vertex colour
+[+ the K term]` on the original's own programs ([engine-light.md](engine-light.md), "Evidence"). The whole box runs `2.4` to `3.1`
+times (K removed). Candidates, each with what it predicts:
 
-- the **albedo**: the hull texel and the **vertex colour** (the material is `diffuse_with_specular_from_alpha_n_vcol`: a baked
-  darkening in the recesses would be the vertex colour, and the housing is a recess);
-- the **normal**: the original uses the world matrix times the vertex normal unnormalised (the thread's note on `N`; a hull
-  scale below 1 weakens the sun and, through `N.L`, only that term).
+- **a grey albedo factor** (the vertex colour, the texel): predicts one ratio across channels and across the sun and ambient
+  terms. The per-channel spread (`3.1, 2.4, 2.9`) is larger than the per-state noise (about `0.004` in `0.04`, 10 %), so a pure
+  grey scalar is **not supported as it stands**: a coloured texel difference or a coloured ambient fits better;
+- **the normal's length** (the original does not normalise `N`; a hull world scale below 1 weakens `N.L`): scales the sun term
+  alone, so the ambient would have to be right and is unmeasured;
+- **the hull's bound ambient constant**: unverified; if it is lower than the raw ambient, the ambient term carries part of it;
+- **ours' own grade** (`zone_grade.rs`), which moves with the rig and confounds every ours-side knockout.
 
-Ruled out on the original: the constants, `K` as the cause, specular, reflection, a premultiplied ambient. Not separable here: texel
-against vertex colour against ours' own grade.
+Ruled out on the original: the sun constant, `K` as a hull multiplier, specular, reflection, a premultiplied `K * ambient` or
+`K * sun`. Not separable here: texel against vertex colour against ours' grade.
 
 ## Livery
 
@@ -89,14 +91,15 @@ panels in it (intake, spine, the two grilles) are drawn by both models, so the b
 housing was not compared** (our decoded hull texture against the port's bound one), because the port's bound texture was not read.
 The port's patch list carries "Bug Fix - Model slots"; which part set it loaded for this craft was not read either.
 
-## The discriminating read (not done)
+## The discriminating reads (not done; no new boot was spent), in this order
 
-Read the Feisar_c1 housing submesh's vertex colours and albedo texels from the Omega archive and take their product's mean over the
-housing's covered pixels. If it is about `1 / 2.8` (`1 / 2.4` to `1 / 3.1` by channel) of the value ours' draw multiplies (ours treats the vertex colour as `1`, or reads a
-different texel), the cause is the albedo factor; if it is about `1`, the cause is the normal (length or direction) and the next read
-is the hull's world matrix scale in the port (the flare object's `row2` length, or the live draw's constant buffer). One live
-read settles the other half: with the port's hull constants at hand, write the housing's vertex colour to `1` (the vertex buffer
-of the draw) and see whether the box rises by the factor.
+1. **Where `K` enters.** On the port, write `K` (`base+12`) to `0` and then `1` and diff the floats in the per-draw constant
+   region (where the 12 `sun * 1.6` copies and the raw-ambient copies sit): what changes with `K` is the constant the hull
+   binds, and the ambient the hull really uses is the one next to it.
+2. **The albedo.** Read the Feisar_c1 housing submesh's vertex colours and albedo texels from the Omega archive and take their
+   product's mean over the housing's covered pixels. About `1 / 2.8` of what ours' draw multiplies (ours treats the vertex colour
+   as `1`, or reads another texel) says albedo; about `1` says the normal or the ambient, and the next read is the hull world
+   matrix's scale in the port (the flare object's `row2` length).
 
 ## Method notes
 
@@ -107,5 +110,10 @@ of the draw) and see whether the box rises by the factor.
   per-state spread is in the run's `note.json`, so a difference under about `0.004` is noise.
 - Ours' knockouts were made with a local, uncommitted debug variable in `Light::authored` and in the engine-light list; it is not
   in the tree.
-- Not checked: 2048 (Vita). Its hull uses the same material family, but its executable was not run in this lane and the live object
-  is Omega's.
+- Modesto Heights (`data08.psarc` `data/environments/modesto_heights/track.EnvSettings`), the values the driver scans for:
+  `--sky-brightness 2.264 --ship-diffuse 0.25 --ambient 0.309804,0.258824,0.713726 --sun-diffuse 4,3.607843,2.164706` (the sun's
+  `Sun diffuse intensity` is `1.6`, its specular colour and `Sun color` `1 0.898039 0.541176`). `--track-steps 8` selects Modesto.
+  The port ran in the pair script's own headless sway on seat 2, not on an Xvfb display.
+- **2048 cross-check: checked, applies, not wired.** The 2048-lineage circuits Omega re-ships author the same key (Sol `1`,
+  Queens Mall `0.5`; the XML tables are byte-identical to 2048's, `docs/formats/omega-status.md`), and `engine-light.md` records the
+  2048 hull as the same material family. The Vita executable's reader of the key was not read and nothing is wired.
