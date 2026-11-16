@@ -511,7 +511,7 @@ Findings, in the order the question was asked:
   statement ran. The ported script has no top-level constant (the ABI's numbers sit in `// abi NAME = n`
   comments, which `just check-extensions` compares with the ABI crate), no `DataView` (the 0.25 factor is
   its four bytes) and one `Uint8Array.set` for the pool. A script that never runs its top level per tick
-  would save it all: see "Open" in the thread.
+  would save it all: evaluating the script inside the Wizer snapshot, or a custom plugin, is the next lever.
 - **The port.** Merging `main` into the branch changed the wire: events are 16 bytes and the state starts
   at byte 544 (was 8 and 288), a command that names a string points into a pool, and a module declares
   `oag_state_len`. Ported as it stood (the same 560-byte read and a reply of 220 bytes) the module's empty
