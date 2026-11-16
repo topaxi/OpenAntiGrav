@@ -560,7 +560,7 @@ pub(super) fn load_movie_sound(
             widget
                 .entry_name(movie_region)
                 .eq_ignore_ascii_case(movie_name)
-                && !widget.sound
+                && widget.sound == Some(false)
         });
     if silent {
         report.push(format!(

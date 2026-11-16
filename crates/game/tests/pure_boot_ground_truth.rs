@@ -349,8 +349,9 @@ fn pures_second_movie_declares_sound() {
                     .eq_ignore_ascii_case(oag_pure::names::fmv_intro_movie(region))
             })
             .unwrap_or_else(|| panic!("{label}: no widget names the second boot movie"));
-        assert!(
+        assert_eq!(
             widget.sound,
+            Some(true),
             "{label}: the widget is sound=\"true\", so the movie is heard"
         );
     }
