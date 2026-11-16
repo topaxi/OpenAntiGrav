@@ -167,7 +167,8 @@ lists `track_a_floor_panel_df` (`0x4736b3bf`, a 1024x256 single-channel `R16F` p
 map the decoder refuses) first, and Altima's whole road drew untextured. Omega: **ported**
 (altima unresolved draws 690 to 449). 2048's Vita road is
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` as `DiffuseMap`: **checked,
-differs**, unchanged. The R16F map's own use (a panel layout the shader reads) is unread.
+differs**, unchanged. The R16F map is a signed distance field the pixel program ray-marches (read 2026-11-16,
+[panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)).
 
 ## What scrolls, and what is acted on
 
