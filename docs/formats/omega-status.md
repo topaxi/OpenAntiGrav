@@ -2303,8 +2303,10 @@ Ranked, by what each would remove:
      differs** (no panel map or `_disp` texture on the Vita archives; the displaced road is a PS4 addition).
    - `tarmac_*` and the brick: anisotropy 16x takes the road's `G` from 0.84 to 1.07 (Empire Climb), 0.79 to 1.00
      (Metro Park), 0.67 to 0.89 (Capital Reach) with `LF` unchanged: their sharpness gap is texture filtering, so
-     the port runs anisotropic filtering where the pairs record ours with `--anisotropy off`. **A comparison-environment
-     row, not a render law**: the port's setting was not read. The dirt layer (`OAG_TARMAC_DIRT=1`) moves no pair.
+     the port runs anisotropic filtering where the pairs record ours with `--anisotropy off`. **Settled 2026-11-16
+     (`port-aniso`), [below](#the-ports-anisotropy-2026-11-16-port-aniso): the game itself asks for 16x and the port
+     honours it, so the `omega` profile now renders ours at 16x** (the numbers above are that run). The dirt layer
+     (`OAG_TARMAC_DIRT=1`) moves no pair.
 2. **The scenery: 30 to 62 %, no single term.** A frame gain fitted to ours (a ceiling for any exposure, light or tone
    term) removes 13 % of the static `LF` on Queens Mall and 27 % on Sol, and 0 to 1 % on Metro Park, Empire Climb
    and Capital Reach; on Queens Mall and Sol it lifts road and sky and makes the scenery worse. Static colour ratios
@@ -2350,6 +2352,113 @@ name. **2048:** not checked for this material (no lane fix landed on it).
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
 `tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## The port's anisotropy (2026-11-16, `port-aniso`)
+
+**Claim tested:** the native port samples track textures with anisotropic filtering at a level N read from its sampler
+creation. **True, N = 16, and it is the game's own request, not a setting of the port.**
+
+**Falsifier written first.** "The original requests anisotropy" would be false if no sampler built during the race load
+of a `tarmac_*` circuit (Empire Climb, 2048 mode) and of Metro Park (brick) carried an `Aniso*` filter or a `max_aniso`
+above 1x; "the capture had aniso" would be false if, in addition, the port's forced level was 0 (N = 1). Neither held.
+
+**What the port does** (`gpu/shadps4/video_core/texture_cache/sampler.cpp`, port commit `e56904d` read; the pairs were
+captured at `84690ed`: `sampler.cpp` and `amdgpu/resource.h` are byte-identical between the two, the settings reader
+differs by two HDR keys, and in `texture_cache.cpp` (442 lines changed, `GetSampler`'s file) and `vk_rasterizer.cpp` the
+only diff line naming a sampler, LOD bias or anisotropy is a `GarbageCollectSamplers();` call; the stored Metro Park
+`theirs.png` also sits at this boot's shipped sharpness, below). `Sampler::Sampler` sets `anisotropyEnable` when the game's
+S# has `xy_mag_filter` or `xy_min_filter` in {`AnisoPoint`, `AnisoLinear`}, or when the menu's forced level
+(`Gow3Settings::startup_anisotropy`, `gow3.ini` key `anisotropy`, 0 = the game's own) is above 1 on a filtered,
+mipmapped colour sampler. `maxAnisotropy = clamp(max(S# max_aniso, forced), 1, device maximum)`. The capture script's
+`gow3.ini` carries only `engine_fps` and `render_resolution`, so the forced level was 0 and every aniso sampler is the
+game's. The port's extra LOD bias is non-zero only with an upscaler (`SceneMipBias`, `vk_rasterizer.cpp:1675`); the
+pairs ran `upscaler none`, so it was 0 (the log's `extra` column is 0.0 on every sampler).
+
+**What the game asks** (`scripts/wipeout-pc-sampler-log.py`: the probe under `gdb`, a silent breakpoint on the sampler
+constructor, one line per unique S#, decoded with the S# layout of `resource.h`; port `e56904d` build, the Omega EU 1.07
+game folder; the boots are cold, on a fresh save, 2048 mode at C class, Feisar2048):
+
+| Boot | Unique samplers | `AnisoLinear` x16, mip Linear | of those with LOD bias +1.0 | Bilinear `max_aniso` 1x (mip None, Point or Linear) |
+| --- | --- | --- | --- | --- |
+| Metro Park 2048 (brick), boot 1 | 17 | 7 | 2 | 10 |
+| Metro Park 2048, boot 2 | 17 | 7 | 2 | 10 |
+| Empire Climb 2048 (`tarmac_*`) | 19 | 8 | 2 | 11 |
+| Vineta K, HD mode | 16 | 5 | 1 | 11 |
+
+The aniso samplers are always `AnisoLinear` mag and min, `mip Linear`, `max_aniso` field 4 (16x); the other samplers
+are `Bilinear` with `mip Point`/`None`/`Linear` and 1x (point-sampled lookups, render targets, depth compares). **No
+sampler anywhere has a negative LOD bias**: 0.0, and +1.0 (softer, not sharper) on 1 or 2 of each boot's aniso samplers. So the game's
+request is the whole story: there is no LOD sharpening hiding behind the filter. Confidence 85 that the road materials
+are among the aniso samplers (the A/B below shows it by the picture; which S# each material binds was not read, only
+that stripping the aniso samplers softens the road).
+
+**It is the filter that draws the road's sharpness.** The same boots with each S#'s `Aniso*` filter rewritten to
+`Point`/`Bilinear` by the breakpoint (`--strip`, so `anisotropyEnable` is false for that sampler), Laplacian standard
+deviation of a road crop on the grid frames before GO (relative units; three grid frames each):
+
+| Circuit (crop at 1920x1080) | as shipped | aniso stripped | stored pair `theirs.png` |
+| --- | --- | --- | --- |
+| Metro Park, brick (`800x90+700+400`) | 0.468 / 0.469 / 0.462 and, second boot, 0.467 / 0.464 / 0.464 | 0.284 / 0.289 / 0.278 | 0.456 |
+| Empire Climb, tarmac (`700x120+620+380`) | 0.454 / 0.456 / 0.455 | 0.276 / 0.278 / 0.279 | 0.383 (pose differs slightly) |
+| Vineta K, HD mode (`500x120+900+440`) | 0.432 / 0.436 | 0.303 / 0.303 | not stored at this crop |
+
+Stripping the filter takes about 40 % off the road crop's Laplacian deviation (0.46 to 0.28) and reads as the blurry far field of an
+unfiltered trilinear lookup (the frames were read by eye: brick courses and tarmac cracks vanish into a smear at the
+distance where the shipped frame still resolves them). Metro Park's stored `theirs.png` sits at the shipped value (0.456 against 0.462-0.469), so that pair was captured with the
+filter on; Empire Climb's stored frame (0.383) is another pose and is not an A/B, so its evidence is the live boots and
+the decomposition `G` numbers below. Two boots agree to 0.005 (Metro Park), seen once on the other two circuits.
+
+**Ours.** `oag_mesh::mesh_render` builds its sampler with one `anisotropy_clamp` from the `--anisotropy` setting (`crates/mesh/src/mesh_render.rs:1082`),
+a single level for the whole model, where the game asks 16x on 5 to 8 of its 16 to 19 sampler states (31 to 47 %) and 1x on the rest.
+The pairs' `omega` profile had it `off` (`compare-environment.toml` `[ours_defaults]`). Before and after, the same
+binary and pair, only `--anisotropy off` to `16x` in the recorded flags (`scripts/compare-decompose.py`, road family
+region; `LF` is unchanged to within 0.3 on every row, `G` is Sobel gradient energy ours / theirs):
+
+| Pair | road family | road `G` off | road `G` 16x | road `LF` off / 16x | raw mean grey off / 16x |
+| --- | --- | --- | --- | --- | --- |
+| Empire Climb | `tarmac_*` | 0.84 | **1.06** | 26.2 / 26.2 | 43.89 / 44.71 |
+| Capital Reach | `tarmac_*` | 0.68 | **0.91** | 27.7 / 27.5 | 46.86 / 47.12 |
+| Subway | `tarmac_*` | 0.70 | **0.82** | 21.4 / 21.8 | 35.79 / 35.86 |
+| Downtown | `tarmac_*` | 0.77 | **1.06** | 16.8 / 16.5 | 30.20 / 30.58 |
+| Metro Park | brick | 0.78 | **0.97** | 21.4 / 21.4 | 43.70 / 45.49 |
+| Queens Mall | `panelmap1` | 0.61 | 0.71 | 30.3 / 30.7 | 49.15 / 49.64 |
+| Sol (A class) | `panelmap1` | 0.27 | 0.35 | 32.5 / 32.7 | 43.42 / 43.63 |
+
+The five `tarmac_*`/brick pairs' road `G` goes from 0.68-0.84 to 0.82-1.06 with `LF` unchanged, the detail axis the
+filter owns; the two `panelmap1` pairs rise a little (their gap is the pixel program, not the filter). The raw mean grey
+rises on all seven, as the older note predicted (correct detail a few pixels out of phase scores worse on a frame whose
+edge correlation is about 0), so the raw score is not the test. The decomposition ran on the main checkout's debug
+binary (`6882828ba`), both settings on the same file.
+
+**Confidence:** 90 that the game requests 16x on mipmapped colour samplers and the port applies it (source read, then the live S# log, two boots on Metro Park and one each on Empire Climb and Vineta K); 85 that the road materials are among them (A/B by picture and by Laplacian deviation).
+
+**Decision.** `[platform.omega] anisotropy = "16x"` in `scripts/compare-environment.toml` (`scripts/compare_env.py` reads
+a platform-level `anisotropy` like `shadows`; `scripts/check-compare-environment.py` checks it, and that every other
+platform stays `off`). Ours is applied to every sampler of the model rather than only the 31 to 47 % the game asks it of; the
+other samplers are lightmaps, masks and point lookups of low frequency, so this is a superset that costs nothing the
+metric can see, and a per-sampler law is not wired. **Race grids only:** the `omega/` folder also holds front-end pairs (`menu-*`, `gap-*`); nothing there was measured, so
+`compare-rerender-ours.py` leaves a menu or loading pair's recorded `--anisotropy` as it is. **Ours at 16x slightly
+overshoots the original on Metro Park's brick crop** (Laplacian deviation 0.53 against 0.46 to 0.47), the road region's
+`G` being 0.97: the filter is closed, a small excess of high-frequency energy is left and not explained here.
+**Not changed:** the player-facing default (`--anisotropy`, the
+settings menu) stays the player's; whether Omega's `Title` data should default to 16x (the original's own request,
+like the HD LOD bias in `oag_hd::effects`) is a separate wiring item, named in the thread. Omega's looks carry no
+material LOD bias, consistent with the S# bias above. **The existing Omega pairs under `data/reference` still record
+`--anisotropy off`, and a recorded flag beats the settings file**, so `compare-rerender-ours.py` now sets a race pair's
+`--anisotropy` to the profile's level (`compare_env.profile_anisotropy_flags`, checked by
+`scripts/check-compare-environment.py`) and records it in `settings_readback`. Verified on an unedited copy of
+`metro-park-2048` in scratch: the new `ours.flags` carry `16x`, mean grey 43.70 to 45.49 and road crop deviation 0.354
+to 0.530, the same render as the hand-edited A/B above. The lead's step after this merges:
+`just compare-rerender-ours --only omega` (`--only` is a substring of the pair directory path, so it matches the
+`omega/` folder; menu and loading pairs keep their flags).
+
+**2048 cross-check: not checked (Vita).** These are Omega's samplers, and Omega's 2048-mode circuits, like its HD-mode
+circuit (Vineta K), all request 16x. The Vita 2048 sets its sampler state through GXM texture calls that were not read
+for a filter or an anisotropy level (the Vita eboot is in Ghidra and Vita3K runs it, so it is checkable); the `2048`
+profile keeps `off`, an unmeasured default. The decisive check: the filter and anisotropy arguments of the GXM texture
+init calls on a road material's draw, and whether Vita3K honours one (its anisotropic override setting). **Open:** which S# each road material binds (the material's `+0x20` state word
+`0x522800` is the likely key and was not mapped to the S#); the same A/B on the Zone and the remaining HD-mode
+circuits (only Vineta K was logged in HD mode).
 
 ## See also
 

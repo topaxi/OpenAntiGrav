@@ -67,9 +67,13 @@ a correct detail fix can raise it).
      shadow path; leave at ours).
    - 2048: **checked, differs** (no panel map on Vita). HD-mode siblings (`*PanelMap*` on Vineta K,
      `panelmap2` on Sol 2) are unread: a separate RE item if their pairs show the same gap.
-3. **`tarmac_*` and brick sharpness is filtering.** Anisotropy 16x closes their gradient gap with no low-frequency
-   change. Read the port's anisotropy setting and, if it is on, record it in the `omega` compare profile (and decide
-   whether the pairs should be rendered with it); not a render law.
+3. ~~**`tarmac_*` and brick sharpness is filtering.**~~ **Settled** (`port-aniso`, `docs/formats/omega-status.md`, "The port's
+   anisotropy"): the game's own S# asks `AnisoLinear` x16 on 5 to 8 of its 16 to 19 sampler states, the port honours it
+   (forced level 0, no extra LOD bias), and stripping it softens the road by about 40 % of its Laplacian deviation. The
+   `omega` compare profile now renders ours at `anisotropy = "16x"`, and `compare-rerender-ours.py` applies it to race pairs recorded with `off`; road `G` on the five tarmac/brick pairs goes 0.68-0.84
+   to 0.82-1.06 with `LF` unchanged. **Left:** 2048 (Vita) not checked, decisive check: the GXM texture init's filter arguments on a road draw and Vita3K's honouring of them; re-render the Omega pairs (`just compare-rerender-ours --only omega`, the
+   lead's step; verified on a copy); a per-sampler law and an Omega `Title` default of 16x are not wired (ours applies one level to the whole
+   model); which S# each road material binds was not mapped (`+0x20` state word `0x522800`).
 4. **Sky:** `Lighting.Sky brightness` unread; 1.07 registrar writes it at `+0x160` of `FUN_015eda20`'s object;
    find the reader.
 5. **Capital Reach's pose** differs from the original's (about 480 px at 1920 on the Auricom banner): match the grid

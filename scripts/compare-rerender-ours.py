@@ -121,6 +121,7 @@ def rerender(pj, binary):
     if rec["profile"] == "hd-fury" and "--gantry-seconds" in flags and orig.get("gantry_seconds") is not None and lag is not None:
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     plat = ce.platform(rec["profile"])
+    flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:
         flags += ce.exposure_hold_flags(plat["ours"])
@@ -175,6 +176,8 @@ def rerender(pj, binary):
     old = rec.get("overlap") or {}
     rec["previous_ours"] = {"overlap": old, "binary": rec["ours"].get("binary"), "rendered_at": rec["ours"].get("rendered_at")}
     rec["ours"]["flags"] = flags
+    if "anisotropy" in (rec["ours"].get("settings_readback") or {}) and rec.get("kind") not in ("menu", "loading"):
+        rec["ours"]["settings_readback"]["anisotropy"] = plat["ours"]["anisotropy"]
     rec["ours"]["image"] = image
     rec["ours"]["binary"] = ce.binary_record(binary)
     rec["ours"]["rendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")

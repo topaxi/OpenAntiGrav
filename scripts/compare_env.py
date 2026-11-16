@@ -51,6 +51,8 @@ def platform(key):
     out["ours"] = dict(doc["ours_defaults"])
     if "shadows" in table:
         out["ours"]["shadows"] = table["shadows"]
+    if "anisotropy" in table:
+        out["ours"]["anisotropy"] = table["anisotropy"]
     if "pilot_assist" in table:
         out["ours"]["pilot_assist"] = table["pilot_assist"]
     if "hud_safe_area" in table:
@@ -77,6 +79,21 @@ def go_tick(plat=None):
 
 def size_text(plat):
     return "%dx%d" % tuple(plat["output"])
+
+
+def profile_anisotropy_flags(flags, plat, kind=None):
+    """`flags` with `--anisotropy` at the profile's level. A recorded flag beats the settings file, so a race pair recorded before
+    the profile's level changed (Omega, `off` to `16x`) would otherwise re-render at the stored one. Menu and loading pairs keep
+    their recorded flags: only race grids were measured."""
+    if kind in ("menu", "loading"):
+        return list(flags)
+    flags = list(flags)
+    level = plat["ours"]["anisotropy"]
+    if "--anisotropy" in flags:
+        flags[flags.index("--anisotropy") + 1] = level
+    else:
+        flags += ["--anisotropy", level]
+    return flags
 
 
 def ppsspp_ini(plat):
