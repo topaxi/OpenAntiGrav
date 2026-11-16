@@ -616,9 +616,9 @@ page builds on them rather than re-deriving them.
   race's state (HUD widgets, and the frontend world's mod screens, section 2.3). Phase 2 opens the simulation hook; a mod that touches
   the simulation declares `simulation = true` and marks the session **MODDED**: no
   multiplayer, no ghosts, records in a separate modded table, MODDED on the HUD and the
-  MODS page. Replays: the maintainer's 2026-11-16 decision records a modded race's input
-  stream (a screenshot of it must be made again), the header's `mods` list carrying the
-  module hashes (section 4.4). Phase 3 lifts the rest once the lobby carries the hashes
+  MODS page. Replays: [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)
+  records a modded race's input stream (a screenshot of it must be made again), the
+  header's `mods` list carrying the module hashes (section 4.4). Phase 3 lifts the rest once the lobby carries the hashes
   and the cross-engine conformance test holds.
 - **Engine choice**: wasmtime with Cranelift on Linux, Windows, macOS and Android;
   wasmtime's Pulley interpreter on iOS (no JIT); the browser's own `WebAssembly` on
@@ -1485,7 +1485,7 @@ with wasmtime's own switches left on as a second line
   ([determinism-and-state.md](determinism-and-state.md#network-play)). Mod code
   arriving through a lobby is never auto-run (decision 6): the joiner must have the
   mod installed.
-- **Replays** (built, maintainer's decision 2026-11-16): `oag_replay::Header::mods`
+- **Replays** (built, [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)): `oag_replay::Header::mods`
   (`crates/replay/src/header.rs`), a dedicated list, not the opaque `options` map, editing
   format v1 in place: per module the id, version, module path, SHA-256, ABI major and
   layout revision, state bytes and `sim` picks. `Race::start_recording` fills it from the

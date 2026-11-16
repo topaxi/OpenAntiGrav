@@ -220,7 +220,7 @@ A mod's code is part of what re-simulates, so a replay must name it:
   not enough: the `mods` entry also carries the tune bytes (at most 4 KiB per mod),
   and playback feeds them to `race-start` in place of the local save. Without
   them a machine with another tune, or none, could not reproduce the run.
-- **The maintainer's decision of 2026-11-16 supersedes phase 2's "no replay"**: a modded
+- **[ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) supersedes phase 2's "no replay"**: a modded
   race records its input stream (a screenshot of it must be made again), and sets no ghost
   and offers none to save. The conformance test below is still owed: a replay across
   engines is unproven, and a host-local fault (README 4.2) desyncs a replay that

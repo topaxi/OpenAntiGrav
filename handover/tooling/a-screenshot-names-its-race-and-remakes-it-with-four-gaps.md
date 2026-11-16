@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
 updated: 2026-11-16
-summary: "Race PNGs carry their race and --from-png remakes them; open: HUD row, serial, mods and camera in headless, DLC, finish and watched shots"
+summary: "Race PNGs carry their race, --from-png remakes them; open: HUD row, serial, headless camera, DLC, finish and watched shots, modded tune bytes"
 size: S (70)
 difficulty: easy (80)
 categories: [tooling, rendering]

@@ -528,7 +528,7 @@ among the mod's own choice rows in file order, so adding a scope renumbers nothi
 | Reaches | the simulation tick | only the call whose outputs are drawn |
 | State hash | yes (`On::hash_into`: row and pick, only a pick off index 0, nothing for a mod with none) | never |
 | LAN and lobby fingerprint | yes (`Mods::content_fingerprint`: `id@version#row=pick`) | never: a Deck on Low and a desktop on High still race together |
-| Replay | in the state hash, so a replay run on another pick desyncs at tick 0 (a MODDED race records no replay yet, README 4.4) | stays per device |
+| Replay | in the state hash, so a replay run on another pick desyncs at tick 0; the header's `mods` entry records the `sim` picks and a rebuild is handed them (ADR-0091) | stays per device |
 | Server's or host's guest | the host's or lobby's pick (owner: whoever builds the race; none is carried yet, see below) | the row's default: no device draws there |
 
 How a `view` row cannot steer the race (`crates/raceplay/src/extensions/view_pass.rs`):

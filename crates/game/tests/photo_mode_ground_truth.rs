@@ -296,8 +296,8 @@ fn a_race_through_photo_mode_hashes_the_same_at_every_tick_as_one_without() {
 /// recording replays) hashes as the same tick of a race that was never visited, and the race
 /// resumes at the tick it left.
 fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &Path) {
-    // No mod is mounted (`drive_unmodded`): a modded race records nothing, so its rewind stops at
-    // whole keyframes and never plays the pre-roll from the first one. Both ways of flying are
+    // No mod is mounted (`drive_unmodded`): this check is of the unmodded rewind, which plays the
+    // pre-roll from the first keyframe. Both ways of flying are
     // checked: the autopilot, and the throttle held with no `--autopilot`.
     for (tag, throttle) in [("hash", false), ("hash-throttle", true)] {
         let to_the_race = if throttle {
@@ -532,8 +532,7 @@ fn a_live_race_played_from_a_scrub_and_left_hashes_as_it_was() {
     };
     let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-play-shots");
     // The throttle is held so the craft moves and every hash is sensitive. No mod is mounted
-    // (`drive_unmodded`): a modded race records nothing, and a rewind of a race that records
-    // nothing stops at whole keyframes, so it would never play the recording
+    // (`drive_unmodded`): the PLAY test is of the unmodded recording
     // (`docs/ui/photo-mode.md`, "Accumulated shots and rewind").
     let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 400; ");
     let control = drive_unmodded(

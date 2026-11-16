@@ -99,6 +99,7 @@ out to be wrong.
 | [0088](0088-the-replay-viewer-and-photo-mode-switch-both-ways.md) | The replay viewer and photo mode switch both ways at a tick the player chose | **Accepted** (2026-11-08); departs from ADR-0087 decision 5 for photo mode alone; holds the binding plan for shared keys, triggers and the right stick |
 | [0089](0089-a-mod-may-ship-turned-off.md) | A mod may ship turned off | **Proposed** (2026-11-03); amends ADR-0078's "on until named" and ADR-0083's "enabled unless named" |
 | [0090](0090-a-title-package-may-depend-on-the-title-it-inherits-from.md) | A title package may depend on the title it inherits from | **Accepted** (2026-11-11); amends ADR-0022's independent-tables reading (Omega -> HD, never the reverse or a cycle) |
+| [0091](0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) | A modded race records its inputs and its header names the modules | **Accepted** (2026-11-16); supersedes ADR-0087 decision 7's "modded races record nothing" and the phase-2 "no replay" rule of ADR-0079 |
 
 ## Format
 

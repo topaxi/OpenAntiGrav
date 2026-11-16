@@ -85,8 +85,7 @@ and split-screen beyond the one setup [the timeline's page](../architecture/repl
 proves (two people, Pulse); multi-window
 races (`seat_picks`); Race Remix (`craft_source`); DLC and
 foreign tracks (`dlc`, `foreign_track`); campaign events (`grid_teams`); capture aids (`pose`,
-`field`, `hud`); network races (a client records nothing) and modded races (`start_recording`
-returns early). None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
+`field`, `hud`); network races (a client records nothing). A modded race records, and its `[[mods]]` names the modules. None of these is in `[setup]` yet. [The viewer](../ui/replays.md) lists a mode outside the table as MODE NOT
 VERIFIED and tries it: Zone, Eliminator and Head to Head with one person each reproduced 752
 ticks on Pulse through WATCH.
 

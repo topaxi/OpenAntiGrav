@@ -88,7 +88,27 @@ either; its text says so.
   Both read back and re-simulate to their hashes.
 - CLI: `--race --screenshot` on Pulse (700 ticks, throttle held) and HD (900 ticks), then
   `--from-png`: `MATCH` on both, and the re-rendered pixels equal the original's (only the text
-  chunk differs, for the flags).
+  chunk differs, for the flags). Both were made with `OAG_MODS` pointed at an empty directory.
+- **A modded race** ([ADR-0091](../architecture/adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)):
+  `crates/raceplay/tests/energy_turbo_ground_truth.rs`,
+  `a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it`: a Pulse Single Race
+  with `oag.energy-turbo` (the pickup given by a recorded event, fire held, the shield spent) shot
+  at tick 600 re-simulates with the same module to the shot's hash, is refused naming
+  `oag.energy-turbo` with no module, and naming it again for a build whose bytes differ by one
+  custom section (same behaviour, other SHA-256); a recording that names no module runs none even
+  where one is on offer. Without a disc, `raceplay/src/tests/extension_replay.rs` checks the
+  header, the file round trip, a fresh modded race's `Verifier` run, every refusal reason and
+  that no ghost is set. CLI on Pulse EU with the default examples on (`--race --mode single_race
+  --class venom --give extension --hold cross --ticks 700 --size 640x360 --screenshot`): `--png-info`
+  lists two `[[mods]]` with their SHA-256 and `# oaGs: 700 ticks ... state hash
+  0x535974fd76a078bb at tick 700`; `--from-png` prints `state hash at tick 700: MATCH`, and the
+  pixels equal the original's. With `OAG_MODS` set to an empty directory it exits 1 with
+  `--from-png cannot make this shot again: the recording ran oag.energy-turbo
+  (ext/energy_turbo.wasm) 1.0.0 and this machine does not load it`. Before the refusal was an error
+  the same run drew a frame and printed `the rebuilt race differs before tick 0 (0x37cee5275358245f,
+  the shot began at 0x4a450830be533ae8)` and `MISMATCH`: the modules' state is in the hash
+  (`RaceSim::state_hash` calls `Extensions::hash_into`: blob, picks, fault tick, pending events).
+  An unmodded shot (made with `OAG_MODS` empty) remade where the examples are found: `MATCH`.
 
 ## Checked against the other lineage
 
