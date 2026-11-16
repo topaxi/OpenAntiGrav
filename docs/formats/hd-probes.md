@@ -89,7 +89,9 @@ Confidence 55: nothing here reads the bake.
   (`probes::Error::Stride`, `hd_env_probes_ground_truth`) and binds no probes. Whether 2048's hull
   programs sample a probe or the authored sky paraboloid is unread: open.
 - **Omega** (PS4): **checked, differs.** No `.probes` in any archive of the base package (`data00`-`data04`)
-  or the patch (`data05`, `data07`-`data09`), so an Omega load binds none and its hulls keep the constant ambient: nothing was
-  ported there by accident. Its two 2048-lineage circuits (`tower`, `mall`) carry a `track.shprobes` of 3.7 and 4.7 MB:
-  spherical-harmonic probes by the name, not read. HD-derived hull programs on Omega would sample a probe all the same;
-  not checkable without a PS4 emulator.
+  or the patch (`data05`, `data07`-`data09`), so an Omega load binds none of this page's maps. Its circuits ship a
+  `track.shprobes` instead (HD circuits too: Modesto Heights 1.1 MB, The Amphiseum 1.4 MB; Tower 3.7 MB, Mall 4.7 MB, Sol
+  3.4 MB): nine-coefficient spherical-harmonic probes that its hull programs read as their ambient, scaled by
+  `Ship diffuse brightness`. Layout, loader and the live match:
+  [hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md), "The probe file". Not wired: ours' Omega hull keeps the
+  constant ambient.
