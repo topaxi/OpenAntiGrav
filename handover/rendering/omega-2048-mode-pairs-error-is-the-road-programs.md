@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-16
-summary: "2048-mode pairs: road programs lead; crowd _shadow wired, plain crowd sprites still white (cause open); panelmap1 road wired (march, sheen, emissive), lobe colour left"
+summary: "2048-mode pairs: road programs lead; crowd _shadow wired, plain crowd sprites still white; panelmap1 wired, lobe colour left"
 difficulty: medium (40)
 ---
 
